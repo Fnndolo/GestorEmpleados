@@ -1,6 +1,7 @@
-import { requerirSesion } from '@/server/sesion'
+import { requerirSesion, tienePermiso } from '@/server/sesion'
 import { hrefsVisibles } from '@/lib/navegacion'
 import { sedesDisponibles, sedeActualId } from '@/server/sede-actual'
+import { prisma } from '@/lib/db'
 import { Logo } from '@/components/marca/logo'
 import { NavLinks } from '@/components/shell/nav-links'
 import { SelectorSede } from '@/components/shell/selector-sede'
@@ -18,6 +19,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const sedeActual = await sedeActualId()
   const datosUsuario = { nombre: usuario.nombre, email: usuario.email, rol: usuario.rolNombre }
 
+  // Módulos personalizados creados por el administrador (visibles para quien tenga el permiso)
+  const modulosCustom = (
+    await prisma.moduloPersonalizado.findMany({ where: { activo: true }, orderBy: { orden: 'asc' }, select: { slug: true, nombre: true } })
+  )
+    .filter((m) => tienePermiso(usuario, 'configuracion', 'VER') || tienePermiso(usuario, `custom:${m.slug}`, 'VER'))
+    .map((m) => ({ slug: m.slug, nombre: m.nombre }))
+
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
       <RegistrarSW />
@@ -31,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <SelectorSede sedes={sedes} actual={sedeActual} />
         </div>
         <div className="flex-1 overflow-y-auto p-3">
-          <NavLinks hrefsVisibles={visibles} />
+          <NavLinks hrefsVisibles={visibles} modulosCustom={modulosCustom} />
         </div>
         <div className="border-t p-2">
           <MenuUsuario {...datosUsuario} />
@@ -44,6 +52,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
           <DrawerMovil
             hrefsVisibles={visibles}
+            modulosCustom={modulosCustom}
             sedes={sedes}
             sedeActual={sedeActual}
             usuario={datosUsuario}

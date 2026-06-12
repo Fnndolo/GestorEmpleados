@@ -3,7 +3,7 @@ import { requerirPermiso } from '@/server/sesion'
 import { tienePermiso } from '@/server/sesion'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Building2, Users, ShieldCheck, MapPin, Bell, FileStack, ArrowRight } from 'lucide-react'
+import { Building2, Users, ShieldCheck, MapPin, Bell, FileStack, Layers, ArrowRight } from 'lucide-react'
 
 export const metadata = { title: 'Configuración · Smart Gadgets RH' }
 
@@ -14,6 +14,7 @@ const SECCIONES = [
   { titulo: 'Roles y permisos', desc: 'Define qué puede ver y hacer cada rol en cada módulo.', href: '/configuracion/roles', icono: ShieldCheck, modulo: 'usuarios' as const },
   { titulo: 'Tipos de documento', desc: 'Catálogo de documentos y cuáles son obligatorios por vínculo.', href: '/configuracion/tipos-documento', icono: FileStack, modulo: 'configuracion' as const },
   { titulo: 'Reglas de alerta', desc: 'Días de anticipación de las alertas de vencimiento por tipo.', href: '/configuracion/alertas', icono: Bell, modulo: 'configuracion' as const },
+  { titulo: 'Módulos personalizados', desc: 'Crea pestañas y módulos a la medida con campos propios.', href: '/configuracion/modulos', icono: Layers, modulo: 'configuracion' as const },
 ]
 
 export default async function ConfiguracionPage() {

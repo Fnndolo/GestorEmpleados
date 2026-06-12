@@ -1,10 +1,12 @@
 import Link from 'next/link'
-import { requerirSesion } from '@/server/sesion'
+import { requerirSesion, tienePermiso } from '@/server/sesion'
 import { seccionesVisibles } from '@/lib/navegacion'
 import { prisma } from '@/lib/db'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Encabezado } from '@/components/shell/encabezado'
-import { Building2, Users, ShieldCheck, ArrowRight } from 'lucide-react'
+import { Building2, Users, ShieldCheck, ArrowRight, Bell } from 'lucide-react'
+import { hoyBogota, formatFechaCorta } from '@/lib/fechas'
 
 export const metadata = { title: 'Inicio · Smart Gadgets RH' }
 
@@ -12,10 +14,21 @@ export default async function InicioPage() {
   const usuario = await requerirSesion()
   const secciones = seccionesVisibles(usuario)
 
-  const [sedes, usuarios, roles] = await Promise.all([
+  const verVencimientos = tienePermiso(usuario, 'vencimientos', 'VER')
+  const hoy = hoyBogota()
+  const en30 = new Date(hoy); en30.setUTCDate(en30.getUTCDate() + 30)
+
+  const [sedes, usuarios, roles, vencimientos] = await Promise.all([
     prisma.sede.count({ where: { activa: true } }),
     prisma.user.count({ where: { estado: 'ACTIVO' } }),
     prisma.rol.count(),
+    verVencimientos
+      ? prisma.vencimiento.findMany({
+          where: { estado: { notIn: ['RESUELTO', 'CANCELADO'] }, fechaVencimiento: { lte: en30 } },
+          orderBy: { fechaVencimiento: 'asc' },
+          take: 6,
+        })
+      : Promise.resolve([]),
   ])
 
   const hora = new Date().toLocaleTimeString('es-CO', {
@@ -36,6 +49,27 @@ export default async function InicioPage() {
         <TarjetaDato icono={Building2} etiqueta="Sedes" valor={sedes} />
         <TarjetaDato icono={ShieldCheck} etiqueta="Roles configurados" valor={roles} />
       </div>
+
+      {verVencimientos && vencimientos.length > 0 && (
+        <Card className="mb-8">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base flex items-center gap-2"><Bell className="size-4" /> Próximos vencimientos</CardTitle>
+            <Link href="/vencimientos" className="text-xs text-primary hover:underline">Ver todos</Link>
+          </CardHeader>
+          <CardContent className="p-0 divide-y border-t">
+            {vencimientos.map((v) => {
+              const vencido = v.fechaVencimiento < hoy
+              return (
+                <div key={v.id} className="flex items-center gap-3 px-6 py-2.5">
+                  <span className={`size-2 shrink-0 rounded-full ${vencido ? 'bg-destructive' : 'bg-amber-500'}`} />
+                  <p className="flex-1 min-w-0 text-sm truncate">{v.titulo}</p>
+                  <Badge variant={vencido ? 'destructive' : 'outline'} className="text-[10px]">{formatFechaCorta(v.fechaVencimiento)}</Badge>
+                </div>
+              )
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {secciones.map((seccion) => (
         <section key={seccion.titulo} className="mb-8">

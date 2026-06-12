@@ -2279,3 +2279,78 @@ model IndicadorSst {
   @@unique([anio, mes])
   @@map("indicador_sst")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULOS PERSONALIZADOS — el Administrador crea pestañas/módulos (requerimiento 1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum VinculoModulo {
+  GLOBAL
+  POR_COLABORADOR
+  POR_SEDE
+
+  @@map("vinculo_modulo")
+}
+
+model ModuloPersonalizado {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  slug        String        @unique // clave para permisos custom:{slug}
+  nombre      String
+  icono       String        @default("Layers")
+  seccion     String        @default("Personalizados")
+  vinculo     VinculoModulo @default(GLOBAL)
+  descripcion String?
+  activo      Boolean       @default(true)
+  orden       Int           @default(100)
+  creadoEn    DateTime      @default(now()) @map("creado_en")
+
+  campos    CampoPersonalizado[]
+  registros RegistroPersonalizado[]
+
+  @@map("modulo_personalizado")
+}
+
+enum TipoCampo {
+  TEXTO
+  TEXTO_LARGO
+  NUMERO
+  DECIMAL
+  MONEDA
+  FECHA
+  OPCION
+  SI_NO
+  COLABORADOR
+
+  @@map("tipo_campo")
+}
+
+model CampoPersonalizado {
+  id           String              @id @default(uuid(7)) @db.Uuid
+  moduloId     String              @map("modulo_id") @db.Uuid
+  modulo       ModuloPersonalizado @relation(fields: [moduloId], references: [id], onDelete: Cascade)
+  clave        String
+  etiqueta     String
+  tipo         TipoCampo
+  requerido    Boolean             @default(false)
+  opciones     String? // para OPCION: valores separados por coma
+  generaAlerta Boolean             @default(false) @map("genera_alerta") // FECHA → vencimiento
+  mostrarEnTabla Boolean           @default(true) @map("mostrar_en_tabla")
+  orden        Int                 @default(100)
+
+  @@unique([moduloId, clave])
+  @@map("campo_personalizado")
+}
+
+model RegistroPersonalizado {
+  id            String              @id @default(uuid(7)) @db.Uuid
+  moduloId      String              @map("modulo_id") @db.Uuid
+  modulo        ModuloPersonalizado @relation(fields: [moduloId], references: [id], onDelete: Cascade)
+  colaboradorId String?             @map("colaborador_id") @db.Uuid
+  sedeId        String?             @map("sede_id") @db.Uuid
+  datos         Json // { clave: valor }
+  creadoEn      DateTime            @default(now()) @map("creado_en")
+  actualizadoEn DateTime            @updatedAt @map("actualizado_en")
+
+  @@index([moduloId])
+  @@map("registro_personalizado")
+}
