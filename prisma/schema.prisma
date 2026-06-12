@@ -1,0 +1,258 @@
+// Esquema Prisma — Plataforma de Gestión Humana, Jurídica y SST · KUPOCELL S.A.S.
+// Convención: modelos en español PascalCase → tablas snake_case (ver docs/diseno/d1_datamodel.md).
+// Excepción: User/Session/Account/Verification los gestiona Better Auth (veredicto C2).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTENTICACIÓN (Better Auth) — User extendido con campos de la plataforma
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum EstadoUsuario {
+  ACTIVO
+  INACTIVO
+  BLOQUEADO
+
+  @@map("estado_usuario")
+}
+
+model User {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false) @map("email_verified")
+  image         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Plugin admin de Better Auth
+  role       String?   @default("user")
+  banned     Boolean?  @default(false)
+  banReason  String?   @map("ban_reason")
+  banExpires DateTime? @map("ban_expires")
+
+  // Campos de la plataforma
+  rolId                String        @map("rol_id") @db.Uuid
+  rol                  Rol           @relation(fields: [rolId], references: [id])
+  estado               EstadoUsuario @default(ACTIVO)
+  debeCambiarPassword  Boolean       @default(true) @map("debe_cambiar_password")
+  telefonoE164         String?       @map("telefono_e164")
+  whatsappOptIn        Boolean       @default(false) @map("whatsapp_opt_in")
+  whatsappOptInFecha   DateTime?     @map("whatsapp_opt_in_fecha")
+  ultimoAcceso         DateTime?     @map("ultimo_acceso")
+
+  sessions Session[]
+  accounts Account[]
+  sedes    UsuarioSede[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  expiresAt DateTime @map("expires_at")
+  token     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  impersonatedBy String? @map("impersonated_by")
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(uuid(7)) @db.Uuid
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  userId                String    @map("user_id") @db.Uuid
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RBAC — roles con matriz de permisos editable, alcance por permiso (C13)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum AccionPermiso {
+  VER
+  CREAR
+  EDITAR
+  ELIMINAR
+  APROBAR
+  EXPORTAR
+
+  @@map("accion_permiso")
+}
+
+enum AlcanceDatos {
+  TODAS_SEDES
+  SEDES_ASIGNADAS
+  EQUIPO
+  PROPIO
+
+  @@map("alcance_datos")
+}
+
+model Rol {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  nombre      String       @unique
+  descripcion String?
+  esSistema   Boolean      @default(false) @map("es_sistema")
+  creadoEn    DateTime     @default(now()) @map("creado_en")
+  actualizadoEn DateTime   @updatedAt @map("actualizado_en")
+
+  permisos RolPermiso[]
+  usuarios User[]
+
+  @@map("rol")
+}
+
+// `modulo` es String validado contra constantes tipadas (src/lib/permisos/modulos.ts)
+// para soportar módulos personalizados con clave `custom:{slug}` (veredicto C13).
+model RolPermiso {
+  id      String        @id @default(uuid(7)) @db.Uuid
+  rolId   String        @map("rol_id") @db.Uuid
+  rol     Rol           @relation(fields: [rolId], references: [id], onDelete: Cascade)
+  modulo  String
+  accion  AccionPermiso
+  alcance AlcanceDatos  @default(TODAS_SEDES)
+
+  @@unique([rolId, modulo, accion])
+  @@map("rol_permiso")
+}
+
+model UsuarioSede {
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sedeId String @map("sede_id") @db.Uuid
+  sede   Sede   @relation(fields: [sedeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, sedeId])
+  @@map("usuario_sede")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEDES / CIUDADES — separación transversal exigida por requerimiento 2.7
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Ciudad {
+  id           String  @id @default(uuid(7)) @db.Uuid
+  nombre       String
+  departamento String
+  codigoDane   String? @map("codigo_dane")
+  creadoEn     DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  sedes Sede[]
+
+  @@unique([nombre, departamento])
+  @@map("ciudad")
+}
+
+model Sede {
+  id          String  @id @default(uuid(7)) @db.Uuid
+  nombre      String  @unique
+  ciudadId    String  @map("ciudad_id") @db.Uuid
+  ciudad      Ciudad  @relation(fields: [ciudadId], references: [id])
+  direccion   String
+  telefono    String?
+  esPrincipal Boolean @default(false) @map("es_principal")
+  activa      Boolean @default(true)
+  creadoEn    DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  usuarios UsuarioSede[]
+
+  @@map("sede")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EMPRESA — singleton de configuración
+// ═══════════════════════════════════════════════════════════════════════════
+
+model ConfiguracionEmpresa {
+  id                 String  @id @default(uuid(7)) @db.Uuid
+  razonSocial        String  @map("razon_social")
+  nombreComercial    String  @map("nombre_comercial")
+  nit                String
+  representanteLegal String  @map("representante_legal")
+  emailContacto      String? @map("email_contacto")
+  telefono           String?
+  direccion          String?
+  sitioWeb           String? @map("sitio_web")
+  logoUrl            String? @map("logo_url")
+  // Días hábiles: el sábado cuenta como hábil salvo configuración contraria (C6)
+  sabadoHabil        Boolean @default(true) @map("sabado_habil")
+  actualizadoEn      DateTime @updatedAt @map("actualizado_en")
+
+  @@map("configuracion_empresa")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUDITORÍA — requerimiento general 2.5: quién creó/modificó/eliminó y cuándo
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum AccionAuditoria {
+  CREAR
+  EDITAR
+  ELIMINAR
+  LOGIN
+  LOGOUT
+  ACCESO
+  EXPORTAR
+
+  @@map("accion_auditoria")
+}
+
+model AuditLog {
+  id         String          @id @default(uuid(7)) @db.Uuid
+  creadoEn   DateTime        @default(now()) @map("creado_en")
+  userId     String?         @map("user_id") @db.Uuid
+  userEmail  String?         @map("user_email")
+  accion     AccionAuditoria
+  modelo     String
+  registroId String?         @map("registro_id")
+  // Diff JSON { campo: { antes, despues } } con campos sensibles redactados
+  diff       Json?
+  descripcion String?
+  ip         String?
+
+  @@index([modelo, registroId])
+  @@index([userId])
+  @@map("audit_log")
+}
