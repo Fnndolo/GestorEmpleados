@@ -545,6 +545,9 @@ model Colaborador {
   evaluaciones          EvaluacionDesempeno[]
   procesosDisciplinarios ProcesoDisciplinario[]
   autorizacionesDatos   AutorizacionDatos[]
+  examenesMedicos       ExamenMedico[]
+  accidentes            AccidenteTrabajo[]
+  entregasEpp           EntregaEpp[]
 
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
@@ -2082,4 +2085,197 @@ model OcurrenciaObligacion {
   @@index([obligacionId, fechaLimite])
   @@index([estado, fechaLimite])
   @@map("ocurrencia_obligacion")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SST — SG-SST (Decreto 1072/2015, Resolución 0312/2019) — requerimiento 5
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum TipoComite {
+  VIGIA_SST
+  COPASST
+  CONVIVENCIA
+
+  @@map("tipo_comite")
+}
+
+model Comite {
+  id               String     @id @default(uuid(7)) @db.Uuid
+  tipo             TipoComite
+  fechaConformacion DateTime  @map("fecha_conformacion") @db.Date
+  vigenciaHasta    DateTime   @map("vigencia_hasta") @db.Date // 2 años
+  sedeId           String?    @map("sede_id") @db.Uuid
+  activo           Boolean    @default(true)
+  creadoEn         DateTime   @default(now()) @map("creado_en")
+
+  miembros  MiembroComite[]
+  reuniones ReunionComite[]
+
+  @@map("comite")
+}
+
+model MiembroComite {
+  id            String  @id @default(uuid(7)) @db.Uuid
+  comiteId      String  @map("comite_id") @db.Uuid
+  comite        Comite  @relation(fields: [comiteId], references: [id], onDelete: Cascade)
+  colaboradorId String  @map("colaborador_id") @db.Uuid
+  rol           String // Presidente, Secretario, Miembro, Suplente
+  porEmpleador  Boolean @default(false) @map("por_empleador")
+
+  @@map("miembro_comite")
+}
+
+model ReunionComite {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  comiteId    String   @map("comite_id") @db.Uuid
+  comite      Comite   @relation(fields: [comiteId], references: [id], onDelete: Cascade)
+  fecha       DateTime @db.Date
+  temas       String
+  compromisos String?
+  actaDocId   String?  @map("acta_doc_id") @db.Uuid
+  creadoEn    DateTime @default(now()) @map("creado_en")
+
+  @@index([comiteId])
+  @@map("reunion_comite")
+}
+
+enum NivelRiesgoIpevr {
+  BAJO
+  MEDIO
+  ALTO
+  CRITICO
+
+  @@map("nivel_riesgo_ipevr")
+}
+
+model PeligroIpevr {
+  id        String           @id @default(uuid(7)) @db.Uuid
+  sedeId    String?          @map("sede_id") @db.Uuid
+  proceso   String
+  peligro   String
+  riesgo    String
+  nivel     NivelRiesgoIpevr
+  controles String?
+  creadoEn  DateTime         @default(now()) @map("creado_en")
+
+  @@map("peligro_ipevr")
+}
+
+enum TipoExamenMedico {
+  INGRESO
+  PERIODICO
+  EGRESO
+  POST_INCAPACIDAD
+
+  @@map("tipo_examen_medico")
+}
+
+enum ConceptoExamen {
+  APTO
+  APTO_CON_RECOMENDACIONES
+  NO_APTO
+  APLAZADO
+
+  @@map("concepto_examen")
+}
+
+// Datos clínicos sensibles (Ley 1581) — acceso con permiso colaboradores_salud / SST
+model ExamenMedico {
+  id              String           @id @default(uuid(7)) @db.Uuid
+  colaboradorId   String           @map("colaborador_id") @db.Uuid
+  colaborador     Colaborador      @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  tipo            TipoExamenMedico
+  fecha           DateTime         @db.Date
+  fechaVencimiento DateTime?       @map("fecha_vencimiento") @db.Date // periódicos → alerta
+  concepto        ConceptoExamen   @default(APTO)
+  recomendaciones String? // dato clínico sensible
+  restricciones   String? // dato clínico sensible
+  documentoId     String?          @map("documento_id") @db.Uuid
+  creadoEn        DateTime         @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("examen_medico")
+}
+
+enum EstadoAccidente {
+  REPORTADO
+  EN_INVESTIGACION
+  CERRADO
+
+  @@map("estado_accidente")
+}
+
+model AccidenteTrabajo {
+  id            String          @id @default(uuid(7)) @db.Uuid
+  colaboradorId String          @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador     @relation(fields: [colaboradorId], references: [id])
+  fecha         DateTime        @db.Date
+  hora          String?
+  sedeId        String?         @map("sede_id") @db.Uuid
+  descripcion   String
+  parteCuerpo   String?         @map("parte_cuerpo")
+  diasIncapacidad Int?          @map("dias_incapacidad")
+  furatReportado Boolean        @default(false) @map("furat_reportado")
+  investigacion String?
+  estado        EstadoAccidente @default(REPORTADO)
+  creadoEn      DateTime        @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("accidente_trabajo")
+}
+
+model ElementoEpp {
+  id       String  @id @default(uuid(7)) @db.Uuid
+  nombre   String  @unique
+  vidaUtilMeses Int? @map("vida_util_meses")
+  activo   Boolean @default(true)
+
+  entregas EntregaEpp[]
+
+  @@map("elemento_epp")
+}
+
+model EntregaEpp {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  elementoEppId String      @map("elemento_epp_id") @db.Uuid
+  elementoEpp   ElementoEpp @relation(fields: [elementoEppId], references: [id])
+  colaboradorId String      @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  cantidad      Int         @default(1)
+  fechaEntrega  DateTime    @map("fecha_entrega") @db.Date
+  reposicion    Boolean     @default(false)
+  soporteDocId  String?     @map("soporte_doc_id") @db.Uuid
+  creadoEn      DateTime    @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("entrega_epp")
+}
+
+model AutoevaluacionSst {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  anio          Int
+  puntaje       Decimal  @db.Decimal(5, 2) // 0-100
+  nivelEstandar Int      @map("nivel_estandar") // 7, 21 o 60 estándares
+  planMejora    String?  @map("plan_mejora")
+  documentoId   String?  @map("documento_id") @db.Uuid
+  creadoEn      DateTime @default(now()) @map("creado_en")
+
+  @@unique([anio])
+  @@map("autoevaluacion_sst")
+}
+
+// Indicadores SST mensuales (frecuencia, severidad, ausentismo)
+model IndicadorSst {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  anio            Int
+  mes             Int
+  numTrabajadores Int      @map("num_trabajadores")
+  horasHombre     Decimal  @map("horas_hombre") @db.Decimal(12, 2)
+  numAccidentes   Int      @default(0) @map("num_accidentes")
+  diasPerdidos    Int      @default(0) @map("dias_perdidos")
+  diasAusentismo  Int      @default(0) @map("dias_ausentismo")
+  creadoEn        DateTime @default(now()) @map("creado_en")
+
+  @@unique([anio, mes])
+  @@map("indicador_sst")
 }
