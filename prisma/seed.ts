@@ -9,6 +9,7 @@ import 'dotenv/config'
 import { prisma } from '../src/lib/db'
 import { ROLES_SEED } from '../src/lib/permisos/modulos'
 import { seedCatalogos } from './seed-catalogos'
+import { seedNomina } from './seed-nomina'
 
 const ADMIN_EMAIL = 'michaelmartinez0996@gmail.com'
 const ADMIN_PASSWORD_INICIAL = 'Kupocell.2026*'
@@ -136,6 +137,7 @@ async function main() {
   await seedEmpresa()
   await seedCatalogos()
   await seedReglasAlerta()
+  await seedNomina()
   await seedAdmin()
 }
 

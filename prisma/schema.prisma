@@ -533,6 +533,10 @@ model Colaborador {
   bonificaciones        Bonificacion[]
   solicitudes           Solicitud[]
   certificaciones       CertificacionLaboral[]
+  liquidaciones         LiquidacionNomina[]
+  novedadesHoras        NovedadHoras[]
+  comisiones            Comision[]
+  prestamos             Prestamo[]
 
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
@@ -1367,4 +1371,251 @@ model CertificacionLaboral {
 
   @@index([colaboradorId])
   @@map("certificacion_laboral")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NÓMINA (requerimiento 3.3) — parámetros con vigencias, conceptos, liquidación
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Parámetros legales clave/valor con vigencia (C7): SMMLV, auxilio transporte,
+// porcentajes de SS, etc. Los cambios legales no se alinean al año calendario.
+model ParametroLegal {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  clave         String // SMMLV, AUX_TRANSPORTE, SALUD_EMPLEADO, PENSION_EMPLEADO…
+  valor         Decimal   @db.Decimal(14, 4)
+  vigenciaDesde DateTime  @map("vigencia_desde") @db.Date
+  vigenciaHasta DateTime? @map("vigencia_hasta") @db.Date
+  fuenteLegal   String    @map("fuente_legal")
+  descripcion   String?
+
+  @@index([clave, vigenciaDesde])
+  @@map("parametro_legal")
+}
+
+enum TipoConcepto {
+  DEVENGADO
+  DEDUCCION
+  PROVISION
+  APORTE_PATRONAL
+
+  @@map("tipo_concepto")
+}
+
+enum TipoCalculoConcepto {
+  VALOR_FIJO
+  PORCENTAJE_BASE
+  CANTIDAD_POR_VALOR
+  SISTEMA // calculado por el motor en código
+
+  @@map("tipo_calculo_concepto")
+}
+
+model ConceptoNomina {
+  id                  String              @id @default(uuid(7)) @db.Uuid
+  codigo              String              @unique
+  nombre              String
+  tipo                TipoConcepto
+  tipoCalculo         TipoCalculoConcepto @default(SISTEMA) @map("tipo_calculo")
+  constitutivoSalario Boolean             @default(false) @map("constitutivo_salario")
+  afectaIbcSs         Boolean             @default(false) @map("afecta_ibc_ss")
+  basePrestaciones    Boolean             @default(false) @map("base_prestaciones")
+  baseVacaciones      Boolean             @default(false) @map("base_vacaciones")
+  afectaRetefuente    Boolean             @default(false) @map("afecta_retefuente")
+  porcentaje          Decimal?            @db.Decimal(8, 4) // para PORCENTAJE_BASE
+  valorFijo           Decimal?            @map("valor_fijo") @db.Decimal(14, 2)
+  cuentaContable      String?             @map("cuenta_contable")
+  esSistema           Boolean             @default(false) @map("es_sistema")
+  activo              Boolean             @default(true)
+  orden               Int                 @default(100)
+
+  @@map("concepto_nomina")
+}
+
+// Tipos de hora extra/recargo con factor (Ley 2466). El factor vigente se siembra
+// según la fecha; el clasificador deriva el tipo desde rangos horarios.
+model TipoHora {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  codigo    String // HED, HEN, RN, RD, RND, HEDD, HEND
+  nombre    String
+  factor    Decimal  @db.Decimal(6, 4) // 1.25 HED, 1.75 HEN, 0.35 RN, 0.80 RD…
+  vigenteDesde DateTime @map("vigente_desde") @db.Date
+  vigenteHasta DateTime? @map("vigente_hasta") @db.Date
+
+  @@index([codigo, vigenteDesde])
+  @@map("tipo_hora")
+}
+
+enum TipoPeriodoNomina {
+  MENSUAL
+  QUINCENAL
+
+  @@map("tipo_periodo_nomina")
+}
+
+enum EstadoPeriodoNomina {
+  BORRADOR
+  CALCULADA
+  APROBADA
+  CERRADA
+  PAGADA
+
+  @@map("estado_periodo_nomina")
+}
+
+model PeriodoNomina {
+  id                 String              @id @default(uuid(7)) @db.Uuid
+  nombre             String // "Junio 2026", "Junio 2026 - 1ra quincena"
+  tipo               TipoPeriodoNomina   @default(MENSUAL)
+  anio               Int
+  mes                Int
+  quincena           Int? // 1 o 2 si quincenal
+  fechaInicio        DateTime            @map("fecha_inicio") @db.Date
+  fechaFin           DateTime            @map("fecha_fin") @db.Date
+  diasPeriodo        Int                 @map("dias_periodo") // 15 o 30
+  estado             EstadoPeriodoNomina @default(BORRADOR)
+  parametrosSnapshot Json?               @map("parametros_snapshot")
+  esAjuste           Boolean             @default(false) @map("es_ajuste")
+  creadoEn           DateTime            @default(now()) @map("creado_en")
+  actualizadoEn      DateTime            @updatedAt @map("actualizado_en")
+
+  liquidaciones LiquidacionNomina[]
+  comisiones    Comision[]
+  novedadesHoras NovedadHoras[]
+
+  @@map("periodo_nomina")
+}
+
+model LiquidacionNomina {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  periodoId       String        @map("periodo_id") @db.Uuid
+  periodo         PeriodoNomina @relation(fields: [periodoId], references: [id], onDelete: Cascade)
+  colaboradorId   String        @map("colaborador_id") @db.Uuid
+  colaborador     Colaborador   @relation(fields: [colaboradorId], references: [id])
+  diasTrabajados  Decimal       @map("dias_trabajados") @db.Decimal(5, 2)
+  salarioBase     Decimal       @map("salario_base") @db.Decimal(14, 2)
+  ibc             Decimal       @db.Decimal(14, 2)
+  totalDevengado  Decimal       @map("total_devengado") @db.Decimal(14, 2)
+  totalDeducido   Decimal       @map("total_deducido") @db.Decimal(14, 2)
+  neto            Decimal       @db.Decimal(14, 2)
+  documentoId     String?       @map("documento_id") @db.Uuid // desprendible PDF
+  creadoEn        DateTime      @default(now()) @map("creado_en")
+
+  detalles DetalleNomina[]
+
+  @@unique([periodoId, colaboradorId])
+  @@index([colaboradorId])
+  @@map("liquidacion_nomina")
+}
+
+model DetalleNomina {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  liquidacionId  String            @map("liquidacion_id") @db.Uuid
+  liquidacion    LiquidacionNomina @relation(fields: [liquidacionId], references: [id], onDelete: Cascade)
+  conceptoCodigo String            @map("concepto_codigo")
+  conceptoNombre String            @map("concepto_nombre")
+  tipo           TipoConcepto
+  cantidad       Decimal?          @db.Decimal(8, 2)
+  base           Decimal?          @db.Decimal(14, 2)
+  factor         Decimal?          @db.Decimal(8, 4)
+  valor          Decimal           @db.Decimal(14, 2)
+  cuentaContable String?           @map("cuenta_contable")
+
+  @@index([liquidacionId])
+  @@map("detalle_nomina")
+}
+
+model NovedadHoras {
+  id            String        @id @default(uuid(7)) @db.Uuid
+  colaboradorId String        @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador   @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  periodoId     String?       @map("periodo_id") @db.Uuid
+  periodo       PeriodoNomina? @relation(fields: [periodoId], references: [id])
+  fecha         DateTime      @db.Date
+  horaInicio    String        @map("hora_inicio") // "19:00"
+  horaFin       String        @map("hora_fin") // "22:00"
+  tipoHora      String        @map("tipo_hora") // HED/HEN/RN/RD/RND clasificado
+  horas         Decimal       @db.Decimal(5, 2)
+  observaciones String?
+  creadoEn      DateTime      @default(now()) @map("creado_en")
+
+  @@index([colaboradorId, periodoId])
+  @@map("novedad_horas")
+}
+
+enum TipoComision {
+  VENTA
+  RECAUDO
+
+  @@map("tipo_comision")
+}
+
+model Comision {
+  id            String        @id @default(uuid(7)) @db.Uuid
+  colaboradorId String        @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador   @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  periodoId     String?       @map("periodo_id") @db.Uuid
+  periodo       PeriodoNomina? @relation(fields: [periodoId], references: [id])
+  tipo          TipoComision
+  baseCalculo   Decimal       @map("base_calculo") @db.Decimal(14, 2)
+  valor         Decimal       @db.Decimal(14, 2)
+  descripcion   String?
+  creadoEn      DateTime      @default(now()) @map("creado_en")
+
+  @@index([colaboradorId, periodoId])
+  @@map("comision")
+}
+
+enum EstadoPrestamo {
+  ACTIVO
+  PAGADO
+  CANCELADO
+
+  @@map("estado_prestamo")
+}
+
+model Prestamo {
+  id            String         @id @default(uuid(7)) @db.Uuid
+  colaboradorId String         @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador    @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  valorTotal    Decimal        @map("valor_total") @db.Decimal(14, 2)
+  numeroCuotas  Int            @map("numero_cuotas")
+  valorCuota    Decimal        @map("valor_cuota") @db.Decimal(14, 2)
+  saldo         Decimal        @db.Decimal(14, 2)
+  fechaInicio   DateTime       @map("fecha_inicio") @db.Date
+  estado        EstadoPrestamo @default(ACTIVO)
+  descripcion   String?
+  creadoEn      DateTime       @default(now()) @map("creado_en")
+
+  cuotas CuotaPrestamo[]
+
+  @@index([colaboradorId, estado])
+  @@map("prestamo")
+}
+
+model CuotaPrestamo {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  prestamoId    String    @map("prestamo_id") @db.Uuid
+  prestamo      Prestamo  @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
+  numero        Int
+  valor         Decimal   @db.Decimal(14, 2)
+  pagada        Boolean   @default(false)
+  periodoId     String?   @map("periodo_id") @db.Uuid
+  fechaPago     DateTime? @map("fecha_pago") @db.Date
+
+  @@index([prestamoId])
+  @@map("cuota_prestamo")
+}
+
+// Planilla PILA mensual (registro del pago y su vencimiento)
+model PlanillaPila {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  periodo      String    @unique // "2026-06"
+  fechaLimite  DateTime  @map("fecha_limite") @db.Date
+  fechaPago    DateTime? @map("fecha_pago") @db.Date
+  valorTotal   Decimal?  @map("valor_total") @db.Decimal(14, 2)
+  pagada       Boolean   @default(false)
+  documentoId  String?   @map("documento_id") @db.Uuid
+  creadoEn     DateTime  @default(now()) @map("creado_en")
+
+  @@map("planilla_pila")
 }
