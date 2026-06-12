@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { signIn } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,7 +11,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Eye, EyeOff, LogIn } from 'lucide-react'
 
 export function LoginForm() {
-  const router = useRouter()
   const params = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -27,18 +26,23 @@ export function LoginForm() {
     e.preventDefault()
     setError(null)
     setCargando(true)
-    const { error: err } = await signIn.email({ email, password })
-    if (err) {
-      setError(
-        err.code === 'INVALID_EMAIL_OR_PASSWORD'
-          ? 'Correo o contraseña incorrectos.'
-          : 'No fue posible iniciar sesión. Intenta de nuevo.',
-      )
+    try {
+      const { error: err } = await signIn.email({ email, password })
+      if (err) {
+        setError(
+          err.code === 'INVALID_EMAIL_OR_PASSWORD'
+            ? 'Correo o contraseña incorrectos.'
+            : 'No fue posible iniciar sesión. Intenta de nuevo.',
+        )
+        setCargando(false)
+        return
+      }
+      // Navegación dura para re-establecer la sesión de forma confiable
+      window.location.assign('/inicio')
+    } catch {
+      setError('No fue posible iniciar sesión. Intenta de nuevo.')
       setCargando(false)
-      return
     }
-    router.push('/inicio')
-    router.refresh()
   }
 
   return (

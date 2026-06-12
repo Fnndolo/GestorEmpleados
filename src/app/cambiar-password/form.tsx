@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { authClient } from '@/lib/auth-client'
 import { marcarPasswordCambiada } from './acciones'
 import { Button } from '@/components/ui/button'
@@ -12,7 +11,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { toast } from 'sonner'
 
 export function CambiarPasswordForm({ obligatorio }: { obligatorio: boolean }) {
-  const router = useRouter()
   const [actual, setActual] = useState('')
   const [nueva, setNueva] = useState('')
   const [confirmar, setConfirmar] = useState('')
@@ -31,24 +29,29 @@ export function CambiarPasswordForm({ obligatorio }: { obligatorio: boolean }) {
       return
     }
     setCargando(true)
-    const { error: err } = await authClient.changePassword({
-      currentPassword: actual,
-      newPassword: nueva,
-      revokeOtherSessions: true,
-    })
-    if (err) {
-      setError(
-        err.code === 'INVALID_PASSWORD'
-          ? 'La contraseña actual es incorrecta.'
-          : 'No fue posible cambiar la contraseña.',
-      )
+    try {
+      const { error: err } = await authClient.changePassword({
+        currentPassword: actual,
+        newPassword: nueva,
+      })
+      if (err) {
+        setError(
+          err.code === 'INVALID_PASSWORD'
+            ? 'La contraseña actual es incorrecta.'
+            : 'No fue posible cambiar la contraseña.',
+        )
+        setCargando(false)
+        return
+      }
+      // Limpia el flag de cambio obligatorio (no debe bloquear la navegación si falla)
+      await marcarPasswordCambiada().catch(() => {})
+      toast.success('Contraseña actualizada correctamente.')
+      // Navegación dura: re-establece sesión y cookies de forma confiable
+      window.location.assign('/inicio')
+    } catch {
+      setError('No fue posible cambiar la contraseña. Intenta de nuevo.')
       setCargando(false)
-      return
     }
-    await marcarPasswordCambiada()
-    toast.success('Contraseña actualizada correctamente.')
-    router.push('/inicio')
-    router.refresh()
   }
 
   return (
