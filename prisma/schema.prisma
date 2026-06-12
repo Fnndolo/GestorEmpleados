@@ -202,6 +202,7 @@ model Sede {
   colaboradores Colaborador[]
   contratos     Contrato[]
   contratosOps  ContratoOps[]
+  activos       Activo[]
 
   @@map("sede")
 }
@@ -538,6 +539,10 @@ model Colaborador {
   comisiones            Comision[]
   prestamos             Prestamo[]
   terminaciones         Terminacion[]
+  asignacionesActivo    AsignacionActivo[]
+  entregasDotacion      EntregaDotacion[]
+  asistencias           AsistenciaCapacitacion[]
+  evaluaciones          EvaluacionDesempeno[]
 
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
@@ -1720,4 +1725,124 @@ model PazYSalvoItem {
 
   @@index([pazYSalvoId])
   @@map("paz_y_salvo_item")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ACTIVOS, DOTACIÓN, CAPACITACIONES Y EVALUACIONES (requerimiento 3.6)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum EstadoActivo {
+  DISPONIBLE
+  ASIGNADO
+  EN_MANTENIMIENTO
+  DADO_DE_BAJA
+
+  @@map("estado_activo")
+}
+
+model Activo {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  codigo        String       @unique
+  nombre        String
+  tipo          String // Celular, Computador, Escritorio, Silla ergonómica…
+  marca         String?
+  serie         String?
+  valor         Decimal?     @db.Decimal(14, 2)
+  sedeId        String?      @map("sede_id") @db.Uuid
+  sede          Sede?        @relation(fields: [sedeId], references: [id])
+  estado        EstadoActivo @default(DISPONIBLE)
+  observaciones String?
+  creadoEn      DateTime     @default(now()) @map("creado_en")
+
+  asignaciones AsignacionActivo[]
+
+  @@index([estado])
+  @@map("activo")
+}
+
+model AsignacionActivo {
+  id                 String      @id @default(uuid(7)) @db.Uuid
+  activoId           String      @map("activo_id") @db.Uuid
+  activo             Activo      @relation(fields: [activoId], references: [id])
+  colaboradorId      String      @map("colaborador_id") @db.Uuid
+  colaborador        Colaborador @relation(fields: [colaboradorId], references: [id])
+  fechaEntrega       DateTime    @map("fecha_entrega") @db.Date
+  fechaDevolucion    DateTime?   @map("fecha_devolucion") @db.Date
+  actaEntregaDocId   String?     @map("acta_entrega_doc_id") @db.Uuid
+  actaDevolucionDocId String?    @map("acta_devolucion_doc_id") @db.Uuid
+  observaciones      String?
+  creadoEn           DateTime    @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@index([activoId])
+  @@map("asignacion_activo")
+}
+
+model EntregaDotacion {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  colaboradorId String      @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  anio          Int
+  corte         String // "Abril", "Agosto", "Diciembre" (3 entregas/año)
+  items         String // descripción de las prendas
+  fechaEntrega  DateTime    @map("fecha_entrega") @db.Date
+  recibidoDocId String?     @map("recibido_doc_id") @db.Uuid
+  creadoEn      DateTime    @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("entrega_dotacion")
+}
+
+enum TipoCapacitacion {
+  INDUCCION
+  REINDUCCION
+  FORMACION
+  SST
+
+  @@map("tipo_capacitacion")
+}
+
+model Capacitacion {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  titulo      String
+  tipo        TipoCapacitacion @default(FORMACION)
+  fecha       DateTime         @db.Date
+  duracionHoras Decimal?       @map("duracion_horas") @db.Decimal(5, 1)
+  facilitador String?
+  descripcion String?
+  creadoEn    DateTime         @default(now()) @map("creado_en")
+
+  asistencias AsistenciaCapacitacion[]
+
+  @@map("capacitacion")
+}
+
+model AsistenciaCapacitacion {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  capacitacionId String       @map("capacitacion_id") @db.Uuid
+  capacitacion   Capacitacion @relation(fields: [capacitacionId], references: [id], onDelete: Cascade)
+  colaboradorId  String       @map("colaborador_id") @db.Uuid
+  colaborador    Colaborador  @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  asistio        Boolean      @default(true)
+  evaluacion     Decimal?     @db.Decimal(5, 2) // nota de la evaluación de la capacitación
+
+  @@unique([capacitacionId, colaboradorId])
+  @@map("asistencia_capacitacion")
+}
+
+model EvaluacionDesempeno {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  colaboradorId String      @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  periodo       String // "2026-S1"
+  evaluadorId   String?     @map("evaluador_id") @db.Uuid
+  puntaje       Decimal     @db.Decimal(5, 2) // 0-100
+  fortalezas    String?
+  oportunidades String?
+  compromisos   String?
+  fecha         DateTime    @db.Date
+  creadoEn      DateTime    @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("evaluacion_desempeno")
 }
