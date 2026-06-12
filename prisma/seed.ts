@@ -10,6 +10,7 @@ import { prisma } from '../src/lib/db'
 import { ROLES_SEED } from '../src/lib/permisos/modulos'
 import { seedCatalogos } from './seed-catalogos'
 import { seedNomina } from './seed-nomina'
+import { seedObligaciones } from './seed-obligaciones'
 
 const ADMIN_EMAIL = 'michaelmartinez0996@gmail.com'
 const ADMIN_PASSWORD_INICIAL = 'Kupocell.2026*'
@@ -138,6 +139,7 @@ async function main() {
   await seedCatalogos()
   await seedReglasAlerta()
   await seedNomina()
+  await seedObligaciones()
   await seedAdmin()
 }
 

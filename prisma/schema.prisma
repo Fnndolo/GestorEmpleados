@@ -543,6 +543,8 @@ model Colaborador {
   entregasDotacion      EntregaDotacion[]
   asistencias           AsistenciaCapacitacion[]
   evaluaciones          EvaluacionDesempeno[]
+  procesosDisciplinarios ProcesoDisciplinario[]
+  autorizacionesDatos   AutorizacionDatos[]
 
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
@@ -1845,4 +1847,239 @@ model EvaluacionDesempeno {
 
   @@index([colaboradorId])
   @@map("evaluacion_desempeno")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// JURÍDICA (requerimiento 4) — documentos legales, disciplinarios, denuncias,
+// habeas data y calendario de obligaciones legales
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum CategoriaDocLegal {
+  REGLAMENTO_INTERNO
+  POLITICA
+  CONVENIO_FINANCIERA
+  POLIZA
+  ARRIENDO
+  MARCA
+  DOMINIO_WEB
+  LICENCIA_SOFTWARE
+  ACUERDO_TRANSMISION_DATOS
+  PERMISO_ESTABLECIMIENTO
+  OTRO
+
+  @@map("categoria_doc_legal")
+}
+
+// Documento legal con versionado y vigencia (los que tienen vigenciaFin publican Vencimiento)
+model DocumentoLegal {
+  id          String            @id @default(uuid(7)) @db.Uuid
+  categoria   CategoriaDocLegal
+  titulo      String
+  descripcion String?
+  vigenciaInicio DateTime?      @map("vigencia_inicio") @db.Date
+  vigenciaFin DateTime?         @map("vigencia_fin") @db.Date
+  sedeId      String?           @map("sede_id") @db.Uuid
+  documentoId String?           @map("documento_id") @db.Uuid // archivo PDF
+  creadoEn    DateTime          @default(now()) @map("creado_en")
+  actualizadoEn DateTime        @updatedAt @map("actualizado_en")
+
+  versiones VersionDocumentoLegal[]
+
+  @@index([categoria])
+  @@map("documento_legal")
+}
+
+model VersionDocumentoLegal {
+  id               String         @id @default(uuid(7)) @db.Uuid
+  documentoLegalId String         @map("documento_legal_id") @db.Uuid
+  documentoLegal   DocumentoLegal @relation(fields: [documentoLegalId], references: [id], onDelete: Cascade)
+  version          Int
+  vigente          Boolean        @default(true)
+  archivoDocId     String?        @map("archivo_doc_id") @db.Uuid
+  cambios          String?
+  creadoEn         DateTime       @default(now()) @map("creado_en")
+
+  @@unique([documentoLegalId, version])
+  @@map("version_documento_legal")
+}
+
+enum EtapaDisciplinaria {
+  CITACION_DESCARGOS
+  DESCARGOS
+  DECISION
+  RECURSO
+  CERRADO
+
+  @@map("etapa_disciplinaria")
+}
+
+model ProcesoDisciplinario {
+  id            String             @id @default(uuid(7)) @db.Uuid
+  colaboradorId String             @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador        @relation(fields: [colaboradorId], references: [id])
+  asunto        String
+  descripcion   String?
+  etapa         EtapaDisciplinaria @default(CITACION_DESCARGOS)
+  fechaApertura DateTime           @map("fecha_apertura") @db.Date
+  decision      String?
+  cerrado       Boolean            @default(false)
+  creadoEn      DateTime           @default(now()) @map("creado_en")
+  actualizadoEn DateTime           @updatedAt @map("actualizado_en")
+
+  etapas EtapaProceso[]
+
+  @@index([colaboradorId])
+  @@map("proceso_disciplinario")
+}
+
+model EtapaProceso {
+  id        String               @id @default(uuid(7)) @db.Uuid
+  procesoId String               @map("proceso_id") @db.Uuid
+  proceso   ProcesoDisciplinario @relation(fields: [procesoId], references: [id], onDelete: Cascade)
+  etapa     EtapaDisciplinaria
+  fecha     DateTime             @db.Date
+  detalle   String?
+  documentoId String?            @map("documento_id") @db.Uuid
+  creadoEn  DateTime             @default(now()) @map("creado_en")
+
+  @@index([procesoId])
+  @@map("etapa_proceso")
+}
+
+enum EstadoDenuncia {
+  RECIBIDA
+  EN_INVESTIGACION
+  RESUELTA
+  ARCHIVADA
+
+  @@map("estado_denuncia")
+}
+
+// Canal de denuncias anti-acoso (acceso restringido a Comité de Convivencia/Jurídica)
+model DenunciaAcoso {
+  id          String         @id @default(uuid(7)) @db.Uuid
+  codigo      String         @unique // código anónimo para seguimiento
+  anonima     Boolean        @default(true)
+  denuncianteNombre String?  @map("denunciante_nombre")
+  hechos      String
+  fechaHechos DateTime?      @map("fecha_hechos") @db.Date
+  sedeId      String?        @map("sede_id") @db.Uuid
+  estado      EstadoDenuncia @default(RECIBIDA)
+  resolucion  String?
+  creadoEn    DateTime       @default(now()) @map("creado_en")
+  actualizadoEn DateTime     @updatedAt @map("actualizado_en")
+
+  @@map("denuncia_acoso")
+}
+
+// Habeas data (Ley 1581): autorización de tratamiento por persona
+model AutorizacionDatos {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  colaboradorId String      @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  fechaAutorizacion DateTime @map("fecha_autorizacion") @db.Date
+  finalidad     String
+  documentoId   String?     @map("documento_id") @db.Uuid
+  revocada      Boolean     @default(false)
+  creadoEn      DateTime    @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("autorizacion_datos")
+}
+
+enum TipoConsultaReclamo {
+  CONSULTA
+  RECLAMO
+}
+
+enum EstadoConsultaReclamo {
+  ABIERTO
+  EN_TRAMITE
+  RESUELTO
+}
+
+model ConsultaReclamoDatos {
+  id           String                @id @default(uuid(7)) @db.Uuid
+  tipo         TipoConsultaReclamo
+  titular      String
+  descripcion  String
+  fechaRadicacion DateTime           @map("fecha_radicacion") @db.Date
+  fechaLimite  DateTime?             @map("fecha_limite") @db.Date
+  estado       EstadoConsultaReclamo @default(ABIERTO)
+  respuesta    String?
+  creadoEn     DateTime              @default(now()) @map("creado_en")
+
+  @@map("consulta_reclamo_datos")
+}
+
+enum PeriodicidadObligacion {
+  MENSUAL
+  BIMESTRAL
+  CUATRIMESTRAL
+  SEMESTRAL
+  ANUAL
+  CADA_N_ANIOS
+  POR_EVENTO
+
+  @@map("periodicidad_obligacion")
+}
+
+enum CategoriaObligacion {
+  SOCIETARIO
+  TRIBUTARIO
+  LABORAL
+  HABEAS_DATA
+  COMERCIAL
+  SST
+  CONTRACTUAL
+
+  @@map("categoria_obligacion")
+}
+
+model ObligacionLegal {
+  id             String                 @id @default(uuid(7)) @db.Uuid
+  nombre         String
+  categoria      CategoriaObligacion
+  periodicidad   PeriodicidadObligacion
+  descripcion    String?
+  responsableRol String?                @map("responsable_rol")
+  porSede        Boolean                @default(false) @map("por_sede") // ICA, matrícula por sede
+  cadaNAnios     Int?                   @map("cada_n_anios")
+  // Fecha base de vencimiento: mes (1-12) y día. Para mensual, diaBase = día del mes.
+  // Para semestral, mesesBase guarda los meses (ej. [2,8]) separados por coma.
+  mesBase        Int?                   @map("mes_base")
+  diaBase        Int?                   @map("dia_base")
+  mesesBase      String?                @map("meses_base") // "2,8" para semestral
+  fuenteLegal    String?                @map("fuente_legal")
+  activa         Boolean                @default(true)
+  creadoEn       DateTime               @default(now()) @map("creado_en")
+
+  ocurrencias OcurrenciaObligacion[]
+
+  @@map("obligacion_legal")
+}
+
+enum EstadoOcurrencia {
+  PENDIENTE
+  CUMPLIDA
+  VENCIDA
+
+  @@map("estado_ocurrencia")
+}
+
+model OcurrenciaObligacion {
+  id            String           @id @default(uuid(7)) @db.Uuid
+  obligacionId  String           @map("obligacion_id") @db.Uuid
+  obligacion    ObligacionLegal  @relation(fields: [obligacionId], references: [id], onDelete: Cascade)
+  fechaLimite   DateTime         @map("fecha_limite") @db.Date
+  sedeId        String?          @map("sede_id") @db.Uuid
+  estado        EstadoOcurrencia @default(PENDIENTE)
+  fechaCumplido DateTime?        @map("fecha_cumplido") @db.Date
+  evidenciaDocId String?         @map("evidencia_doc_id") @db.Uuid
+  observaciones String?
+  creadoEn      DateTime         @default(now()) @map("creado_en")
+
+  @@index([obligacionId, fechaLimite])
+  @@index([estado, fechaLimite])
+  @@map("ocurrencia_obligacion")
 }
