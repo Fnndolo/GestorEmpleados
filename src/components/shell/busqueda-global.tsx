@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search } from 'lucide-react'
+import { Search, User } from 'lucide-react'
 import {
+  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -13,13 +14,17 @@ import {
 } from '@/components/ui/command'
 import { SECCIONES } from '@/lib/navegacion'
 
+type ResultadoColaborador = { id: string; nombre: string; detalle: string }
+
 /**
- * Búsqueda global (Ctrl/Cmd+K). En F1 navega entre módulos; en F2 se le añade
- * la búsqueda de colaboradores por nombre/cédula (pg_trgm) respetando alcance.
+ * Búsqueda global (Ctrl/Cmd+K): navega entre módulos y busca colaboradores por
+ * nombre o documento (respetando el alcance del usuario en el servidor).
  */
 export function BusquedaGlobal() {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
+  const [texto, setTexto] = useState('')
+  const [personas, setPersonas] = useState<ResultadoColaborador[]>([])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -32,8 +37,27 @@ export function BusquedaGlobal() {
     return () => document.removeEventListener('keydown', onKey)
   }, [])
 
+  useEffect(() => {
+    if (texto.trim().length < 2) {
+      setPersonas([])
+      return
+    }
+    const ctrl = new AbortController()
+    const t = setTimeout(async () => {
+      try {
+        const resp = await fetch(`/api/colaboradores/buscar?q=${encodeURIComponent(texto.trim())}`, { signal: ctrl.signal })
+        const json = await resp.json()
+        setPersonas(json.resultados ?? [])
+      } catch {
+        /* abortado */
+      }
+    }, 200)
+    return () => { clearTimeout(t); ctrl.abort() }
+  }, [texto])
+
   function ir(href: string) {
     setAbierto(false)
+    setTexto('')
     router.push(href)
   }
 
@@ -50,24 +74,41 @@ export function BusquedaGlobal() {
         </kbd>
       </button>
       <CommandDialog open={abierto} onOpenChange={setAbierto}>
-        <CommandInput placeholder="Buscar módulo o persona…" />
+        <Command shouldFilter={false}>
+        <CommandInput placeholder="Buscar módulo o colaborador…" value={texto} onValueChange={setTexto} />
         <CommandList>
           <CommandEmpty>Sin resultados.</CommandEmpty>
-          {SECCIONES.map((seccion) => (
-            <CommandGroup key={seccion.titulo} heading={seccion.titulo}>
-              {seccion.items.map((item) => (
-                <CommandItem
-                  key={item.href}
-                  value={item.titulo}
-                  onSelect={() => ir(item.href)}
-                >
-                  <item.icono className="size-4" />
-                  {item.titulo}
+          {personas.length > 0 && (
+            <CommandGroup heading="Colaboradores">
+              {personas.map((p) => (
+                <CommandItem key={p.id} value={`col-${p.id}`} onSelect={() => ir(`/colaboradores/${p.id}`)}>
+                  <User className="size-4" />
+                  <div className="flex flex-col">
+                    <span>{p.nombre}</span>
+                    <span className="text-xs text-muted-foreground">{p.detalle}</span>
+                  </div>
                 </CommandItem>
               ))}
             </CommandGroup>
-          ))}
+          )}
+          {SECCIONES.map((seccion) => {
+            const items = seccion.items.filter((i) =>
+              !texto.trim() || i.titulo.toLowerCase().includes(texto.trim().toLowerCase()),
+            )
+            if (items.length === 0) return null
+            return (
+              <CommandGroup key={seccion.titulo} heading={seccion.titulo}>
+                {items.map((item) => (
+                  <CommandItem key={item.href} value={item.href} onSelect={() => ir(item.href)}>
+                    <item.icono className="size-4" />
+                    {item.titulo}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )
+          })}
         </CommandList>
+        </Command>
       </CommandDialog>
     </>
   )

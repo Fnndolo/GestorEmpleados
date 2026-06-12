@@ -48,9 +48,10 @@ model User {
   whatsappOptInFecha   DateTime?     @map("whatsapp_opt_in_fecha")
   ultimoAcceso         DateTime?     @map("ultimo_acceso")
 
-  sessions Session[]
-  accounts Account[]
-  sedes    UsuarioSede[]
+  sessions    Session[]
+  accounts    Account[]
+  sedes       UsuarioSede[]
+  colaborador Colaborador?
 
   @@map("user")
 }
@@ -178,7 +179,8 @@ model Ciudad {
   creadoEn     DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
 
-  sedes Sede[]
+  sedes         Sede[]
+  colaboradores Colaborador[]
 
   @@unique([nombre, departamento])
   @@map("ciudad")
@@ -196,7 +198,8 @@ model Sede {
   creadoEn    DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
 
-  usuarios UsuarioSede[]
+  usuarios      UsuarioSede[]
+  colaboradores Colaborador[]
 
   @@map("sede")
 }
@@ -255,4 +258,400 @@ model AuditLog {
   @@index([modelo, registroId])
   @@index([userId])
   @@map("audit_log")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CATÁLOGOS — entidades de seguridad social, bancos, estructura organizacional
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum TipoEntidadSS {
+  EPS
+  ARL
+  AFP
+  FONDO_CESANTIAS
+  CAJA_COMPENSACION
+
+  @@map("tipo_entidad_ss")
+}
+
+model EntidadSeguridadSocial {
+  id     String        @id @default(uuid(7)) @db.Uuid
+  tipo   TipoEntidadSS
+  nombre String
+  codigo String? // código PILA del operador
+  activa Boolean       @default(true)
+
+  colaboradoresEps            Colaborador[] @relation("ColEps")
+  colaboradoresArl            Colaborador[] @relation("ColArl")
+  colaboradoresAfp            Colaborador[] @relation("ColAfp")
+  colaboradoresFondoCesantias Colaborador[] @relation("ColFondoCesantias")
+  colaboradoresCaja           Colaborador[] @relation("ColCaja")
+
+  @@unique([tipo, nombre])
+  @@map("entidad_seguridad_social")
+}
+
+model Banco {
+  id            String        @id @default(uuid(7)) @db.Uuid
+  nombre        String        @unique
+  codigoAch     String?       @map("codigo_ach")
+  activo        Boolean       @default(true)
+  colaboradores Colaborador[]
+
+  @@map("banco")
+}
+
+enum ClaseRiesgoArl {
+  I
+  II
+  III
+  IV
+  V
+
+  @@map("clase_riesgo_arl")
+}
+
+model Area {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  nombre        String       @unique
+  padreId       String?      @map("padre_id") @db.Uuid
+  padre         Area?        @relation("AreaJerarquia", fields: [padreId], references: [id])
+  hijas         Area[]       @relation("AreaJerarquia")
+  responsableId String?      @map("responsable_id") @db.Uuid
+  responsable   Colaborador? @relation("AreaResponsable", fields: [responsableId], references: [id])
+  activa        Boolean      @default(true)
+  creadoEn      DateTime     @default(now()) @map("creado_en")
+  actualizadoEn DateTime     @updatedAt @map("actualizado_en")
+
+  cargos        Cargo[]
+  colaboradores Colaborador[]
+
+  @@map("area")
+}
+
+model Cargo {
+  id                 String          @id @default(uuid(7)) @db.Uuid
+  nombre             String
+  areaId             String          @map("area_id") @db.Uuid
+  area               Area            @relation(fields: [areaId], references: [id])
+  nivel              String? // directivo / coordinación / operativo…
+  funciones          String? // alimenta certificación CON_FUNCIONES
+  claseRiesgoDefecto ClaseRiesgoArl? @map("clase_riesgo_defecto")
+  activo             Boolean         @default(true)
+  creadoEn           DateTime        @default(now()) @map("creado_en")
+  actualizadoEn      DateTime        @updatedAt @map("actualizado_en")
+
+  colaboradores Colaborador[]
+
+  @@unique([nombre, areaId])
+  @@map("cargo")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COLABORADORES — ficha completa (requerimiento 3.1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum TipoDocumentoIdentidad {
+  CC
+  CE
+  TI
+  PASAPORTE
+  PPT
+  NIT
+
+  @@map("tipo_documento_identidad")
+}
+
+enum Genero {
+  MASCULINO
+  FEMENINO
+  OTRO
+  PREFIERE_NO_DECIR
+
+  @@map("genero")
+}
+
+enum EstadoCivil {
+  SOLTERO
+  CASADO
+  UNION_LIBRE
+  SEPARADO
+  DIVORCIADO
+  VIUDO
+
+  @@map("estado_civil")
+}
+
+enum GrupoSanguineo {
+  A_POS
+  A_NEG
+  B_POS
+  B_NEG
+  AB_POS
+  AB_NEG
+  O_POS
+  O_NEG
+
+  @@map("grupo_sanguineo")
+}
+
+enum NivelEducativo {
+  PRIMARIA
+  BACHILLER
+  TECNICO
+  TECNOLOGO
+  PREGRADO
+  ESPECIALIZACION
+  MAESTRIA
+  DOCTORADO
+
+  @@map("nivel_educativo")
+}
+
+enum TipoCuentaBancaria {
+  AHORROS
+  CORRIENTE
+  BILLETERA_DIGITAL
+
+  @@map("tipo_cuenta_bancaria")
+}
+
+enum TipoVinculo {
+  TERMINO_INDEFINIDO
+  TERMINO_FIJO
+  OBRA_LABOR
+  APRENDIZ_SENA
+  OPS
+  PRACTICANTE
+
+  @@map("tipo_vinculo")
+}
+
+enum ModalidadTrabajo {
+  PRESENCIAL
+  REMOTO
+  HIBRIDO
+  TELETRABAJO
+
+  @@map("modalidad_trabajo")
+}
+
+enum EstadoColaborador {
+  ACTIVO
+  INACTIVO
+  RETIRADO
+
+  @@map("estado_colaborador")
+}
+
+model Colaborador {
+  id                 String                 @id @default(uuid(7)) @db.Uuid
+  // Identificación
+  tipoDocumento      TipoDocumentoIdentidad @map("tipo_documento")
+  numeroDocumento    String                 @map("numero_documento")
+  fechaExpedicionDoc DateTime?              @map("fecha_expedicion_doc") @db.Date
+  lugarExpedicionDoc String?                @map("lugar_expedicion_doc")
+  nombres            String
+  apellidos          String
+  fechaNacimiento    DateTime?              @map("fecha_nacimiento") @db.Date
+  lugarNacimiento    String?                @map("lugar_nacimiento")
+  genero             Genero?
+  estadoCivil        EstadoCivil?           @map("estado_civil")
+  grupoSanguineo     GrupoSanguineo?        @map("grupo_sanguineo")
+  fotoPath           String?                @map("foto_path")
+  // Contacto
+  direccion          String?
+  barrio             String?
+  ciudadResidenciaId String?                @map("ciudad_residencia_id") @db.Uuid
+  ciudadResidencia   Ciudad?                @relation(fields: [ciudadResidenciaId], references: [id])
+  celular            String
+  telefono           String?
+  emailPersonal      String?                @map("email_personal")
+  emailCorporativo   String?                @map("email_corporativo")
+  // Contacto de emergencia
+  emergenciaNombre     String? @map("emergencia_nombre")
+  emergenciaParentesco String? @map("emergencia_parentesco")
+  emergenciaTelefono   String? @map("emergencia_telefono")
+  // Educación
+  nivelEducativoMax NivelEducativo?        @map("nivel_educativo_max")
+  educacion         EducacionColaborador[]
+  // Salud / seguridad social (datos sensibles: módulo colaboradores_salud)
+  epsId              String?         @map("eps_id") @db.Uuid
+  eps                EntidadSeguridadSocial? @relation("ColEps", fields: [epsId], references: [id])
+  afpId              String?         @map("afp_id") @db.Uuid
+  afp                EntidadSeguridadSocial? @relation("ColAfp", fields: [afpId], references: [id])
+  fondoCesantiasId   String?         @map("fondo_cesantias_id") @db.Uuid
+  fondoCesantias     EntidadSeguridadSocial? @relation("ColFondoCesantias", fields: [fondoCesantiasId], references: [id])
+  cajaCompensacionId String?         @map("caja_compensacion_id") @db.Uuid
+  cajaCompensacion   EntidadSeguridadSocial? @relation("ColCaja", fields: [cajaCompensacionId], references: [id])
+  arlId              String?         @map("arl_id") @db.Uuid
+  arl                EntidadSeguridadSocial? @relation("ColArl", fields: [arlId], references: [id])
+  claseRiesgoArl     ClaseRiesgoArl? @map("clase_riesgo_arl")
+  // Datos bancarios
+  bancoId      String?             @map("banco_id") @db.Uuid
+  banco        Banco?              @relation(fields: [bancoId], references: [id])
+  tipoCuenta   TipoCuentaBancaria? @map("tipo_cuenta")
+  numeroCuenta String?             @map("numero_cuenta")
+  // Organizacional
+  tipoVinculo      TipoVinculo      @map("tipo_vinculo")
+  sedeId           String           @map("sede_id") @db.Uuid
+  sede             Sede             @relation(fields: [sedeId], references: [id])
+  areaId           String?          @map("area_id") @db.Uuid
+  area             Area?            @relation(fields: [areaId], references: [id])
+  cargoId          String?          @map("cargo_id") @db.Uuid
+  cargo            Cargo?           @relation(fields: [cargoId], references: [id])
+  jefeInmediatoId  String?          @map("jefe_inmediato_id") @db.Uuid
+  jefeInmediato    Colaborador?     @relation("JefeInmediato", fields: [jefeInmediatoId], references: [id])
+  subordinados     Colaborador[]    @relation("JefeInmediato")
+  modalidadTrabajo ModalidadTrabajo @default(PRESENCIAL) @map("modalidad_trabajo")
+  fechaIngreso     DateTime         @map("fecha_ingreso") @db.Date
+  fechaRetiro      DateTime?        @map("fecha_retiro") @db.Date
+  estado           EstadoColaborador @default(ACTIVO)
+  // Dotación
+  tallaCamisa   String? @map("talla_camisa")
+  tallaPantalon String? @map("talla_pantalon")
+  tallaCalzado  String? @map("talla_calzado")
+  // Acceso
+  usuarioId String? @unique @map("usuario_id") @db.Uuid
+  usuario   User?   @relation(fields: [usuarioId], references: [id])
+
+  // Búsqueda insensible a tildes/mayúsculas (nombres + apellidos + documento)
+  busquedaNormalizada String @default("") @map("busqueda_normalizada")
+
+  areasResponsable Area[] @relation("AreaResponsable")
+
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  @@unique([tipoDocumento, numeroDocumento])
+  @@index([sedeId, estado])
+  @@index([areaId])
+  @@index([cargoId])
+  @@index([jefeInmediatoId])
+  @@index([tipoVinculo, estado])
+  @@index([busquedaNormalizada])
+  @@map("colaborador")
+}
+
+model EducacionColaborador {
+  id            String         @id @default(uuid(7)) @db.Uuid
+  colaboradorId String         @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador    @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  nivel         NivelEducativo
+  titulo        String
+  institucion   String
+  fechaGrado    DateTime?      @map("fecha_grado") @db.Date
+  enCurso       Boolean        @default(false) @map("en_curso")
+
+  @@index([colaboradorId])
+  @@map("educacion_colaborador")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GESTIÓN DOCUMENTAL — Documento polimórfico (requerimiento general 2.2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum NivelAccesoDocumento {
+  GENERAL
+  RRHH
+  SST_MEDICO
+  JURIDICA
+  ADMIN
+
+  @@map("nivel_acceso_documento")
+}
+
+model TipoDocumento {
+  id                  String               @id @default(uuid(7)) @db.Uuid
+  nombre              String               @unique
+  descripcion         String?
+  requiereVencimiento Boolean              @default(false) @map("requiere_vencimiento")
+  nivelAcceso         NivelAccesoDocumento @default(GENERAL) @map("nivel_acceso")
+  // Override de días de alerta (si null, usa el default del tipo de vencimiento)
+  diasPrimeraAlerta   Int?                 @map("dias_primera_alerta")
+  diasUltimaAlerta    Int?                 @map("dias_ultima_alerta")
+  activo              Boolean              @default(true)
+  creadoEn            DateTime             @default(now()) @map("creado_en")
+
+  requeridos DocumentoRequerido[]
+  documentos Documento[]
+
+  @@map("tipo_documento")
+}
+
+model DocumentoRequerido {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  tipoVinculo     TipoVinculo   @map("tipo_vinculo")
+  tipoDocumentoId String        @map("tipo_documento_id") @db.Uuid
+  tipoDocumento   TipoDocumento @relation(fields: [tipoDocumentoId], references: [id], onDelete: Cascade)
+  obligatorio     Boolean       @default(true)
+
+  @@unique([tipoVinculo, tipoDocumentoId])
+  @@map("documento_requerido")
+}
+
+model Documento {
+  id               String               @id @default(uuid(7)) @db.Uuid
+  entidadTipo      String               @map("entidad_tipo")
+  entidadId        String               @map("entidad_id") @db.Uuid
+  tipoDocumentoId  String?              @map("tipo_documento_id") @db.Uuid
+  tipoDocumento    TipoDocumento?       @relation(fields: [tipoDocumentoId], references: [id])
+  nombre           String
+  descripcion      String?
+  bucket           String               @default("documentos")
+  storagePath      String               @map("storage_path")
+  mimeType         String               @map("mime_type")
+  tamanoBytes      Int                  @map("tamano_bytes")
+  fechaVencimiento DateTime?            @map("fecha_vencimiento") @db.Date
+  nivelAcceso      NivelAccesoDocumento @default(GENERAL) @map("nivel_acceso")
+  sedeId           String?              @map("sede_id") @db.Uuid
+  subidoPorId      String               @map("subido_por_id") @db.Uuid
+  creadoEn         DateTime             @default(now()) @map("creado_en")
+
+  @@index([entidadTipo, entidadId])
+  @@index([fechaVencimiento])
+  @@index([sedeId])
+  @@map("documento")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IMPORTACIÓN Y SALDOS INICIALES (requerimiento: importador Excel + V9)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum EstadoImportacion {
+  PROCESANDO
+  COMPLETADA
+  FALLIDA
+
+  @@map("estado_importacion")
+}
+
+model ImportacionDatos {
+  id            String            @id @default(uuid(7)) @db.Uuid
+  tipo          String // "colaboradores"
+  archivoNombre String            @map("archivo_nombre")
+  storagePath   String?           @map("storage_path")
+  totalFilas    Int               @map("total_filas")
+  insertadas    Int               @default(0)
+  errores       Int               @default(0)
+  detalleErrores Json?            @map("detalle_errores")
+  estado        EstadoImportacion @default(PROCESANDO)
+  importadoPorId String           @map("importado_por_id") @db.Uuid
+  creadoEn      DateTime          @default(now()) @map("creado_en")
+
+  @@map("importacion_datos")
+}
+
+// Saldo inicial de vacaciones para migración (V9) y ajustes manuales auditados
+model AjusteVacaciones {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  colaboradorId String   @map("colaborador_id") @db.Uuid
+  dias          Decimal  @db.Decimal(6, 2) // positivo suma, negativo resta
+  motivo        String
+  esSaldoInicial Boolean @default(false) @map("es_saldo_inicial")
+  fecha         DateTime @default(now())
+  registradoPorId String? @map("registrado_por_id") @db.Uuid
+
+  @@index([colaboradorId])
+  @@map("ajuste_vacaciones")
 }
