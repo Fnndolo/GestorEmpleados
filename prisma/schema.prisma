@@ -521,11 +521,18 @@ model Colaborador {
   // Búsqueda insensible a tildes/mayúsculas (nombres + apellidos + documento)
   busquedaNormalizada String @default("") @map("busqueda_normalizada")
 
-  areasResponsable      Area[]              @relation("AreaResponsable")
+  areasResponsable      Area[]                 @relation("AreaResponsable")
   contratos             Contrato[]
   contratosOps          ContratoOps[]
-  opsSupervisados       ContratoOps[]       @relation("SupervisorOps")
+  opsSupervisados       ContratoOps[]          @relation("SupervisorOps")
   variacionesSalariales VariacionSalarial[]
+  incapacidades         Incapacidad[]
+  licencias             Licencia[]
+  permisos              Permiso[]
+  vacaciones            Vacaciones[]
+  bonificaciones        Bonificacion[]
+  solicitudes           Solicitud[]
+  certificaciones       CertificacionLaboral[]
 
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
@@ -1130,4 +1137,234 @@ model PlantillaDocumento {
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
 
   @@map("plantilla_documento")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NOVEDADES (requerimiento 3.4)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum TipoIncapacidad {
+  ENFERMEDAD_GENERAL
+  ACCIDENTE_TRABAJO
+  ENFERMEDAD_LABORAL
+  LICENCIA_MATERNIDAD
+  LICENCIA_PATERNIDAD
+
+  @@map("tipo_incapacidad")
+}
+
+model Incapacidad {
+  id            String          @id @default(uuid(7)) @db.Uuid
+  colaboradorId String          @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador     @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  tipo          TipoIncapacidad
+  fechaInicio   DateTime        @map("fecha_inicio") @db.Date
+  fechaFin      DateTime        @map("fecha_fin") @db.Date
+  dias          Int
+  diagnosticoCie10 String?      @map("diagnostico_cie10") // dato clínico sensible (Ley 1581)
+  entidad       String? // EPS/ARL que la emite
+  esProrroga    Boolean         @default(false) @map("es_prorroga")
+  observaciones String?
+  creadoEn      DateTime        @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("incapacidad")
+}
+
+enum TipoLicencia {
+  MATERNIDAD
+  PATERNIDAD
+  LUTO
+  CALAMIDAD
+  MATRIMONIO
+  ESTUDIO
+  NO_REMUNERADA
+  DIA_DE_LA_FAMILIA
+  OTRA
+
+  @@map("tipo_licencia")
+}
+
+model Licencia {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  colaboradorId String       @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador  @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  tipo          TipoLicencia
+  fechaInicio   DateTime     @map("fecha_inicio") @db.Date
+  fechaFin      DateTime     @map("fecha_fin") @db.Date
+  dias          Int
+  remunerada    Boolean      @default(true)
+  observaciones String?
+  creadoEn      DateTime     @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("licencia")
+}
+
+model Permiso {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  colaboradorId String      @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  fecha         DateTime    @db.Date
+  horas         Decimal?    @db.Decimal(4, 1)
+  diaCompleto   Boolean     @default(false) @map("dia_completo")
+  motivo        String
+  remunerado    Boolean     @default(true)
+  creadoEn      DateTime    @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("permiso")
+}
+
+enum EstadoVacaciones {
+  SOLICITADA
+  APROBADA
+  EN_DISFRUTE
+  DISFRUTADA
+  RECHAZADA
+  CANCELADA
+
+  @@map("estado_vacaciones")
+}
+
+model Vacaciones {
+  id            String           @id @default(uuid(7)) @db.Uuid
+  colaboradorId String           @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador      @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  fechaInicio   DateTime         @map("fecha_inicio") @db.Date
+  fechaFin      DateTime         @map("fecha_fin") @db.Date
+  diasHabiles   Decimal          @map("dias_habiles") @db.Decimal(5, 2)
+  estado        EstadoVacaciones @default(SOLICITADA)
+  observaciones String?
+  creadoEn      DateTime         @default(now()) @map("creado_en")
+
+  @@index([colaboradorId, estado])
+  @@map("vacaciones")
+}
+
+enum EstadoBonificacion {
+  PENDIENTE
+  PAGADO
+
+  @@map("estado_bonificacion")
+}
+
+model Bonificacion {
+  id                  String             @id @default(uuid(7)) @db.Uuid
+  colaboradorId       String             @map("colaborador_id") @db.Uuid
+  colaborador         Colaborador        @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  concepto            String
+  valor               Decimal            @db.Decimal(14, 2)
+  constitutivoSalario Boolean            @default(false) @map("constitutivo_salario")
+  estadoPago          EstadoBonificacion @default(PENDIENTE) @map("estado_pago")
+  fechaPago           DateTime?          @map("fecha_pago") @db.Date
+  observaciones       String?
+  creadoEn            DateTime           @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("bonificacion")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTOSERVICIO Y APROBACIONES (requerimiento 3.5)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum TipoSolicitud {
+  VACACIONES
+  PERMISO
+  CERTIFICACION_LABORAL
+  LICENCIA
+  OTRA
+
+  @@map("tipo_solicitud")
+}
+
+enum EstadoSolicitud {
+  PENDIENTE
+  EN_APROBACION
+  APROBADA
+  RECHAZADA
+  CANCELADA
+
+  @@map("estado_solicitud")
+}
+
+model Solicitud {
+  id            String          @id @default(uuid(7)) @db.Uuid
+  colaboradorId String          @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador     @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  tipo          TipoSolicitud
+  datos         Json // contenido específico (fechas de vacaciones, tipo de certificación…)
+  estado        EstadoSolicitud @default(EN_APROBACION)
+  resultado     String? // referencia al objeto creado o motivo de rechazo
+  creadoEn      DateTime        @default(now()) @map("creado_en")
+  actualizadoEn DateTime        @updatedAt @map("actualizado_en")
+
+  pasos PasoAprobacion[]
+
+  @@index([colaboradorId, estado])
+  @@index([estado])
+  @@map("solicitud")
+}
+
+enum EstadoPasoAprobacion {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+  OMITIDO
+
+  @@map("estado_paso_aprobacion")
+}
+
+model PasoAprobacion {
+  id            String               @id @default(uuid(7)) @db.Uuid
+  solicitudId   String               @map("solicitud_id") @db.Uuid
+  solicitud     Solicitud            @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  orden         Int
+  // Rol o usuario que puede resolver este paso (jefe inmediato o RRHH/Subgerencia)
+  rolAprobador  String? // "Jefe de área", "Recursos Humanos", "Subgerencia"
+  usaJefeInmediato Boolean           @default(false) @map("usa_jefe_inmediato")
+  estado        EstadoPasoAprobacion @default(PENDIENTE)
+  decididoPorId String?              @map("decidido_por_id") @db.Uuid
+  decididoEn    DateTime?            @map("decidido_en")
+  comentario    String?
+
+  @@index([solicitudId, orden])
+  @@map("paso_aprobacion")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CERTIFICACIONES LABORALES (requerimiento 6.7)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum TipoCertificacion {
+  SIMPLE
+  CON_SALARIO
+  CON_FUNCIONES
+  ENTIDAD_FINANCIERA
+
+  @@map("tipo_certificacion")
+}
+
+enum EstadoCertificacion {
+  SOLICITADA
+  GENERADA
+  ENTREGADA
+
+  @@map("estado_certificacion")
+}
+
+model CertificacionLaboral {
+  id            String              @id @default(uuid(7)) @db.Uuid
+  colaboradorId String              @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador         @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  tipo          TipoCertificacion
+  dirigidaA     String?             @map("dirigida_a")
+  estado        EstadoCertificacion @default(GENERADA)
+  documentoId   String?             @map("documento_id") @db.Uuid // PDF guardado
+  generadoPorId String?             @map("generado_por_id") @db.Uuid
+  creadoEn      DateTime            @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("certificacion_laboral")
 }

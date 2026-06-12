@@ -1,0 +1,47 @@
+import { StyleSheet } from '@react-pdf/renderer'
+
+/** Estilos base compartidos por todos los documentos PDF. */
+export const estilos = StyleSheet.create({
+  page: {
+    paddingTop: 48,
+    paddingBottom: 64,
+    paddingHorizontal: 56,
+    fontSize: 10.5,
+    fontFamily: 'Helvetica',
+    color: '#1e293b',
+    lineHeight: 1.5,
+  },
+  membrete: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderBottomWidth: 2,
+    borderBottomColor: '#0f172a',
+    paddingBottom: 12,
+    marginBottom: 24,
+  },
+  empresaNombre: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: '#0f172a' },
+  empresaRazon: { fontSize: 9, color: '#64748b' },
+  empresaDatos: { fontSize: 8, color: '#64748b', textAlign: 'right' },
+  titulo: { fontSize: 14, fontFamily: 'Helvetica-Bold', textAlign: 'center', marginBottom: 20, color: '#0f172a' },
+  parrafo: { marginBottom: 12, textAlign: 'justify' },
+  negrita: { fontFamily: 'Helvetica-Bold' },
+  pie: {
+    position: 'absolute',
+    bottom: 32,
+    left: 56,
+    right: 56,
+    fontSize: 8,
+    color: '#94a3b8',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 8,
+    textAlign: 'center',
+  },
+  firma: { marginTop: 48 },
+  firmaLinea: { borderTopWidth: 1, borderTopColor: '#1e293b', width: 220, paddingTop: 4 },
+  tabla: { marginTop: 8, marginBottom: 12 },
+  fila: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#e2e8f0', paddingVertical: 3 },
+  celdaLabel: { width: '40%', color: '#64748b' },
+  celdaValor: { width: '60%' },
+})

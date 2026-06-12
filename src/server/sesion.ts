@@ -28,6 +28,7 @@ export const obtenerSesion = cache(async (): Promise<UsuarioSesion | null> => {
     include: {
       rol: { include: { permisos: true } },
       sedes: true,
+      colaborador: { select: { id: true } },
     },
   })
   if (!usuario) return null
@@ -40,7 +41,7 @@ export const obtenerSesion = cache(async (): Promise<UsuarioSesion | null> => {
     rolNombre: usuario.rol.nombre,
     estado: usuario.estado,
     debeCambiarPassword: usuario.debeCambiarPassword,
-    colaboradorId: null, // se completa en F2 cuando exista el modelo Colaborador
+    colaboradorId: usuario.colaborador?.id ?? null,
     sedeIds: usuario.sedes.map((s) => s.sedeId),
     permisos: usuario.rol.permisos.map((p) => ({
       modulo: p.modulo,

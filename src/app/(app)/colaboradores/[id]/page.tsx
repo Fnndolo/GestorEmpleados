@@ -11,6 +11,7 @@ import { Pencil, Mail, Phone, MapPin, Briefcase, Calendar, ShieldAlert } from 'l
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { FotoUploader } from './foto-uploader'
 import { EducacionLista } from './educacion-lista'
+import { BotonCertificacion } from './boton-certificacion'
 import { formatFechaLarga, formatFechaISO, calcularEdad, antiguedad, hoyBogota } from '@/lib/fechas'
 import {
   TIPO_VINCULO, MODALIDAD_TRABAJO, ESTADO_COLABORADOR, TIPO_DOCUMENTO_IDENTIDAD,
@@ -84,9 +85,12 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
         titulo="Ficha del colaborador"
         acciones={
           puedeEditar && (
-            <Button asChild size="sm">
-              <Link href={`/colaboradores/${id}/editar`}><Pencil className="size-4" /> Editar</Link>
-            </Button>
+            <div className="flex gap-2">
+              <BotonCertificacion colaboradorId={id} />
+              <Button asChild size="sm">
+                <Link href={`/colaboradores/${id}/editar`}><Pencil className="size-4" /> Editar</Link>
+              </Button>
+            </div>
           )
         }
       />
