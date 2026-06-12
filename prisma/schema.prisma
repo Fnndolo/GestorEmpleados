@@ -200,6 +200,8 @@ model Sede {
 
   usuarios      UsuarioSede[]
   colaboradores Colaborador[]
+  contratos     Contrato[]
+  contratosOps  ContratoOps[]
 
   @@map("sede")
 }
@@ -342,6 +344,7 @@ model Cargo {
   actualizadoEn      DateTime        @updatedAt @map("actualizado_en")
 
   colaboradores Colaborador[]
+  contratos     Contrato[]
 
   @@unique([nombre, areaId])
   @@map("cargo")
@@ -518,7 +521,11 @@ model Colaborador {
   // Búsqueda insensible a tildes/mayúsculas (nombres + apellidos + documento)
   busquedaNormalizada String @default("") @map("busqueda_normalizada")
 
-  areasResponsable Area[] @relation("AreaResponsable")
+  areasResponsable      Area[]              @relation("AreaResponsable")
+  contratos             Contrato[]
+  contratosOps          ContratoOps[]
+  opsSupervisados       ContratoOps[]       @relation("SupervisorOps")
+  variacionesSalariales VariacionSalarial[]
 
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
@@ -840,4 +847,287 @@ model MensajeSaliente {
 
   @@index([estado])
   @@map("mensaje_saliente")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTRATACIÓN LABORAL (requerimiento 3.2 / 6.3)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum TipoContratoLaboral {
+  TERMINO_FIJO
+  TERMINO_INDEFINIDO
+  OBRA_LABOR
+  APRENDIZAJE_SENA
+  PRACTICA
+
+  @@map("tipo_contrato_laboral")
+}
+
+enum TipoSalario {
+  ORDINARIO
+  INTEGRAL
+
+  @@map("tipo_salario")
+}
+
+enum Jornada {
+  TIEMPO_COMPLETO
+  MEDIO_TIEMPO
+  POR_DIAS
+
+  @@map("jornada")
+}
+
+enum EstadoContrato {
+  BORRADOR
+  ACTIVO
+  SUSPENDIDO
+  TERMINADO
+
+  @@map("estado_contrato")
+}
+
+enum EtapaAprendizaje {
+  LECTIVA
+  PRODUCTIVA
+
+  @@map("etapa_aprendizaje")
+}
+
+model Contrato {
+  id                 String              @id @default(uuid(7)) @db.Uuid
+  numero             String              @unique
+  colaboradorId      String              @map("colaborador_id") @db.Uuid
+  colaborador        Colaborador         @relation(fields: [colaboradorId], references: [id])
+  tipo               TipoContratoLaboral
+  cargoId            String?             @map("cargo_id") @db.Uuid
+  cargo              Cargo?              @relation(fields: [cargoId], references: [id])
+  sedeId             String              @map("sede_id") @db.Uuid
+  sede               Sede                @relation(fields: [sedeId], references: [id])
+  jornada            Jornada             @default(TIEMPO_COMPLETO)
+  horasSemanales     Int?                @map("horas_semanales")
+  modalidadTrabajo   ModalidadTrabajo    @map("modalidad_trabajo")
+  salarioBase        Decimal             @map("salario_base") @db.Decimal(14, 2)
+  tipoSalario        TipoSalario         @default(ORDINARIO) @map("tipo_salario")
+  fechaInicio        DateTime            @map("fecha_inicio") @db.Date
+  fechaFin           DateTime?           @map("fecha_fin") @db.Date
+  objetoObraLabor    String?             @map("objeto_obra_labor")
+  etapaAprendizaje   EtapaAprendizaje?   @map("etapa_aprendizaje")
+  apoyoSostenimiento Decimal?            @map("apoyo_sostenimiento") @db.Decimal(14, 2)
+  periodoPruebaDias  Int?                @map("periodo_prueba_dias")
+  periodoPruebaFin   DateTime?           @map("periodo_prueba_fin") @db.Date
+  estado             EstadoContrato      @default(BORRADOR)
+  observaciones      String?
+  creadoEn           DateTime            @default(now()) @map("creado_en")
+  actualizadoEn      DateTime            @updatedAt @map("actualizado_en")
+
+  prorrogas    ProrrogaContrato[]
+  otrosis      OtrosiContrato[]
+  suspensiones SuspensionContrato[]
+
+  @@index([colaboradorId, estado])
+  @@index([tipo, estado, fechaFin])
+  @@index([sedeId])
+  @@map("contrato")
+}
+
+model ProrrogaContrato {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  contratoId  String    @map("contrato_id") @db.Uuid
+  contrato    Contrato  @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  numero      Int
+  fechaInicio DateTime  @map("fecha_inicio") @db.Date
+  fechaFin    DateTime  @map("fecha_fin") @db.Date
+  fechaFirma  DateTime? @map("fecha_firma") @db.Date
+
+  @@unique([contratoId, numero])
+  @@map("prorroga_contrato")
+}
+
+enum TipoCambioOtrosi {
+  SALARIO
+  CARGO
+  SEDE
+  MODALIDAD_TRABAJO
+  JORNADA
+  FUNCIONES
+  DURACION
+  OTRO
+
+  @@map("tipo_cambio_otrosi")
+}
+
+model OtrosiContrato {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  contratoId        String   @map("contrato_id") @db.Uuid
+  contrato          Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  numero            Int
+  fecha             DateTime @db.Date
+  tiposCambio       TipoCambioOtrosi[] @map("tipos_cambio")
+  descripcion       String
+  valoresAnteriores Json?    @map("valores_anteriores")
+  valoresNuevos     Json?    @map("valores_nuevos")
+
+  @@unique([contratoId, numero])
+  @@map("otrosi_contrato")
+}
+
+enum CausaSuspension {
+  SANCION_DISCIPLINARIA
+  LICENCIA_NO_REMUNERADA
+  FUERZA_MAYOR
+  OTRO
+
+  @@map("causa_suspension")
+}
+
+// Suspensión del contrato (V1) — afecta días en nómina
+model SuspensionContrato {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  contratoId  String          @map("contrato_id") @db.Uuid
+  contrato    Contrato        @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  fechaInicio DateTime        @map("fecha_inicio") @db.Date
+  fechaFin    DateTime?       @map("fecha_fin") @db.Date
+  causa       CausaSuspension
+  descripcion String?
+  creadoEn    DateTime        @default(now()) @map("creado_en")
+
+  @@index([contratoId])
+  @@map("suspension_contrato")
+}
+
+// Variaciones salariales con histórico (requerimiento 3.4)
+model VariacionSalarial {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  colaboradorId  String   @map("colaborador_id") @db.Uuid
+  colaborador    Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  salarioAnterior Decimal @map("salario_anterior") @db.Decimal(14, 2)
+  salarioNuevo   Decimal  @map("salario_nuevo") @db.Decimal(14, 2)
+  fechaVigencia  DateTime @map("fecha_vigencia") @db.Date
+  motivo         String?
+  creadoEn       DateTime @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("variacion_salarial")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTRATISTAS OPS (prestación de servicios) — flujo separado de nómina (3.2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum EstadoContratoOps {
+  BORRADOR
+  ACTIVO
+  TERMINADO
+
+  @@map("estado_contrato_ops")
+}
+
+model ContratoOps {
+  id            String            @id @default(uuid(7)) @db.Uuid
+  numero        String            @unique
+  colaboradorId String            @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador       @relation(fields: [colaboradorId], references: [id])
+  objeto        String
+  valorTotal    Decimal           @map("valor_total") @db.Decimal(14, 2)
+  valorMensual  Decimal?          @map("valor_mensual") @db.Decimal(14, 2)
+  supervisorId  String?           @map("supervisor_id") @db.Uuid
+  supervisor    Colaborador?      @relation("SupervisorOps", fields: [supervisorId], references: [id])
+  sedeId        String            @map("sede_id") @db.Uuid
+  sede          Sede              @relation(fields: [sedeId], references: [id])
+  fechaInicio   DateTime          @map("fecha_inicio") @db.Date
+  fechaFin      DateTime          @map("fecha_fin") @db.Date
+  rut           String?
+  estado        EstadoContratoOps @default(ACTIVO)
+  creadoEn      DateTime          @default(now()) @map("creado_en")
+  actualizadoEn DateTime          @updatedAt @map("actualizado_en")
+
+  entregables   EntregableOps[]
+  cuentasCobro  CuentaCobroOps[]
+
+  @@index([colaboradorId, estado])
+  @@index([sedeId])
+  @@map("contrato_ops")
+}
+
+model EntregableOps {
+  id           String      @id @default(uuid(7)) @db.Uuid
+  contratoOpsId String     @map("contrato_ops_id") @db.Uuid
+  contratoOps  ContratoOps @relation(fields: [contratoOpsId], references: [id], onDelete: Cascade)
+  descripcion  String
+  fechaEntrega DateTime?   @map("fecha_entrega") @db.Date
+  cumplido     Boolean     @default(false)
+
+  @@index([contratoOpsId])
+  @@map("entregable_ops")
+}
+
+enum EstadoCuentaCobro {
+  RADICADA
+  EN_VERIFICACION_SS
+  BLOQUEADA_SS
+  APROBADA
+  PAGADA
+  RECHAZADA
+
+  @@map("estado_cuenta_cobro")
+}
+
+enum EstadoVerificacionSS {
+  PENDIENTE
+  VALIDA
+  INVALIDA
+
+  @@map("estado_verificacion_ss")
+}
+
+model CuentaCobroOps {
+  id            String            @id @default(uuid(7)) @db.Uuid
+  contratoOpsId String            @map("contrato_ops_id") @db.Uuid
+  contratoOps   ContratoOps       @relation(fields: [contratoOpsId], references: [id])
+  numero        String
+  periodo       String // "2026-06"
+  valor         Decimal           @db.Decimal(14, 2)
+  fechaRadicacion DateTime        @map("fecha_radicacion") @db.Date
+  estado        EstadoCuentaCobro @default(RADICADA)
+  observaciones String?
+  fechaPago     DateTime?         @map("fecha_pago") @db.Date
+  creadoEn      DateTime          @default(now()) @map("creado_en")
+  actualizadoEn DateTime          @updatedAt @map("actualizado_en")
+
+  soporteSs SoporteSsOps?
+
+  @@unique([contratoOpsId, periodo])
+  @@index([estado])
+  @@map("cuenta_cobro_ops")
+}
+
+// Verificación obligatoria del pago de seguridad social del independiente (legal)
+model SoporteSsOps {
+  id                 String               @id @default(uuid(7)) @db.Uuid
+  cuentaCobroId      String               @unique @map("cuenta_cobro_id") @db.Uuid
+  cuentaCobro        CuentaCobroOps       @relation(fields: [cuentaCobroId], references: [id], onDelete: Cascade)
+  operador           String? // operador PILA
+  periodoCotizado    String               @map("periodo_cotizado")
+  ibcDeclarado       Decimal?             @map("ibc_declarado") @db.Decimal(14, 2)
+  estadoVerificacion EstadoVerificacionSS @default(PENDIENTE) @map("estado_verificacion")
+  verificadoPorId    String?              @map("verificado_por_id") @db.Uuid
+  verificadoEn       DateTime?            @map("verificado_en")
+  observaciones      String?
+
+  @@map("soporte_ss_ops")
+}
+
+// Plantillas de documentos (contratos, cartas) por modalidad — Jurídica las usa
+model PlantillaDocumento {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  nombre      String
+  categoria   String // "contrato", "carta_preaviso", "certificacion"…
+  tipoVinculo TipoVinculo?  @map("tipo_vinculo")
+  contenido   String // texto con variables {{colaborador.nombres}}…
+  activa      Boolean  @default(true)
+  creadoEn    DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  @@map("plantilla_documento")
 }
