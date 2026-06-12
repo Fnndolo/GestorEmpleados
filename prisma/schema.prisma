@@ -537,6 +537,7 @@ model Colaborador {
   novedadesHoras        NovedadHoras[]
   comisiones            Comision[]
   prestamos             Prestamo[]
+  terminaciones         Terminacion[]
 
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
@@ -1618,4 +1619,105 @@ model PlanillaPila {
   creadoEn     DateTime  @default(now()) @map("creado_en")
 
   @@map("planilla_pila")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TERMINACIONES, LIQUIDACIÓN DEFINITIVA Y PAZ Y SALVO (requerimiento 6.2/6.6)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum TipoTerminacion {
+  RENUNCIA_VOLUNTARIA
+  SIN_JUSTA_CAUSA
+  CON_JUSTA_CAUSA
+  TERMINACION_ANTICIPADA
+  MUTUO_ACUERDO
+  VENCIMIENTO_PLAZO
+  PERIODO_PRUEBA
+  FIN_OPS
+
+  @@map("tipo_terminacion")
+}
+
+enum EstadoTerminacion {
+  EN_PROCESO
+  LIQUIDADA
+  CERRADA
+
+  @@map("estado_terminacion")
+}
+
+model Terminacion {
+  id            String            @id @default(uuid(7)) @db.Uuid
+  colaboradorId String            @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador       @relation(fields: [colaboradorId], references: [id])
+  tipo          TipoTerminacion
+  fechaRetiro   DateTime          @map("fecha_retiro") @db.Date
+  preavisoDias  Int?              @map("preaviso_dias")
+  indemnizacion Decimal?          @db.Decimal(14, 2)
+  motivo        String?
+  estado        EstadoTerminacion @default(EN_PROCESO)
+  creadoEn      DateTime          @default(now()) @map("creado_en")
+  actualizadoEn DateTime          @updatedAt @map("actualizado_en")
+
+  liquidacion LiquidacionDefinitiva?
+  pazYSalvo   PazYSalvo?
+
+  @@index([colaboradorId])
+  @@map("terminacion")
+}
+
+model LiquidacionDefinitiva {
+  id              String      @id @default(uuid(7)) @db.Uuid
+  terminacionId   String      @unique @map("terminacion_id") @db.Uuid
+  terminacion     Terminacion @relation(fields: [terminacionId], references: [id], onDelete: Cascade)
+  diasLiquidados  Int         @map("dias_liquidados")
+  salarioBase     Decimal     @map("salario_base") @db.Decimal(14, 2)
+  cesantias       Decimal     @db.Decimal(14, 2)
+  interesesCesantias Decimal  @map("intereses_cesantias") @db.Decimal(14, 2)
+  prima           Decimal     @db.Decimal(14, 2)
+  vacaciones      Decimal     @db.Decimal(14, 2)
+  indemnizacion   Decimal     @db.Decimal(14, 2)
+  otros           Decimal     @default(0) @db.Decimal(14, 2)
+  deducciones     Decimal     @default(0) @db.Decimal(14, 2)
+  total           Decimal     @db.Decimal(14, 2)
+  detalle         Json?
+  documentoId     String?     @map("documento_id") @db.Uuid
+  creadoEn        DateTime    @default(now()) @map("creado_en")
+
+  @@map("liquidacion_definitiva")
+}
+
+enum EstadoPazYSalvo {
+  PENDIENTE
+  COMPLETO
+
+  @@map("estado_paz_y_salvo")
+}
+
+model PazYSalvo {
+  id            String          @id @default(uuid(7)) @db.Uuid
+  terminacionId String          @unique @map("terminacion_id") @db.Uuid
+  terminacion   Terminacion     @relation(fields: [terminacionId], references: [id], onDelete: Cascade)
+  estado        EstadoPazYSalvo @default(PENDIENTE)
+  documentoId   String?         @map("documento_id") @db.Uuid
+  creadoEn      DateTime        @default(now()) @map("creado_en")
+
+  items PazYSalvoItem[]
+
+  @@map("paz_y_salvo")
+}
+
+model PazYSalvoItem {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  pazYSalvoId String    @map("paz_y_salvo_id") @db.Uuid
+  pazYSalvo   PazYSalvo @relation(fields: [pazYSalvoId], references: [id], onDelete: Cascade)
+  area        String // "Activos", "Cartera", "Documentos", "Sistemas"…
+  concepto    String
+  cumplido    Boolean   @default(false)
+  observacion String?
+  verificadoPorId String? @map("verificado_por_id") @db.Uuid
+  verificadoEn DateTime? @map("verificado_en")
+
+  @@index([pazYSalvoId])
+  @@map("paz_y_salvo_item")
 }
