@@ -655,3 +655,189 @@ model AjusteVacaciones {
   @@index([colaboradorId])
   @@map("ajuste_vacaciones")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOTOR DE VENCIMIENTOS Y ALERTAS — transversal (requerimiento 6.1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Origen polimórfico del vencimiento (la fuente que lo publicó)
+enum OrigenVencimiento {
+  DOCUMENTO
+  CONTRATO_FIJO
+  PERIODO_PRUEBA
+  EXAMEN_MEDICO
+  PLANILLA_SS_OPS
+  OBLIGACION_LEGAL
+  POLIZA
+  ARRIENDO
+  CONVENIO_FINANCIERA
+  MARCA
+  DOMINIO_WEB
+  LICENCIA_SOFTWARE
+  COMITE
+  ACCION_CORRECTIVA
+  EPP
+  DOTACION
+  MODULO_PERSONALIZADO
+  MANUAL
+
+  @@map("origen_vencimiento")
+}
+
+enum EstadoVencimiento {
+  PENDIENTE
+  PRIMERA_ALERTA
+  ULTIMA_ALERTA
+  VENCIDO
+  RESUELTO
+  CANCELADO
+
+  @@map("estado_vencimiento")
+}
+
+// Configuración de días de alerta por tipo (clave = origen o "GLOBAL").
+// Default global: 10 días hábiles y 3 días hábiles antes.
+// Calendario legal: 5 días hábiles y 1 día calendario antes.
+model ReglaAlerta {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  clave             String   @unique // "GLOBAL", "OBLIGACION_LEGAL", o un OrigenVencimiento
+  descripcion       String
+  diasPrimeraAlerta Int      @map("dias_primera_alerta")
+  primeraEnHabiles  Boolean  @default(true) @map("primera_en_habiles")
+  diasUltimaAlerta  Int      @map("dias_ultima_alerta")
+  ultimaEnHabiles   Boolean  @default(true) @map("ultima_en_habiles")
+  creadoEn          DateTime @default(now()) @map("creado_en")
+  actualizadoEn     DateTime @updatedAt @map("actualizado_en")
+
+  @@map("regla_alerta")
+}
+
+model Vencimiento {
+  id               String            @id @default(uuid(7)) @db.Uuid
+  origen           OrigenVencimiento
+  entidadTipo      String            @map("entidad_tipo")
+  entidadId        String            @map("entidad_id") @db.Uuid
+  titulo           String
+  detalle          String?
+  fechaVencimiento DateTime          @map("fecha_vencimiento") @db.Date
+  sedeId           String?           @map("sede_id") @db.Uuid
+  estado           EstadoVencimiento @default(PENDIENTE)
+  resueltoEn       DateTime?         @map("resuelto_en")
+  creadoEn         DateTime          @default(now()) @map("creado_en")
+  actualizadoEn    DateTime          @updatedAt @map("actualizado_en")
+
+  alertas      AlertaVencimiento[]
+  responsables ResponsableVencimiento[]
+
+  @@unique([entidadTipo, entidadId, origen])
+  @@index([estado, fechaVencimiento])
+  @@index([sedeId, estado])
+  @@map("vencimiento")
+}
+
+// Responsables que reciben la alerta (usuario y/o rol; principal o copia)
+model ResponsableVencimiento {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  vencimientoId String      @map("vencimiento_id") @db.Uuid
+  vencimiento   Vencimiento @relation(fields: [vencimientoId], references: [id], onDelete: Cascade)
+  userId        String?     @map("user_id") @db.Uuid
+  rol           String? // nombre de rol (todos los usuarios con ese rol)
+  esPrincipal   Boolean     @default(true) @map("es_principal")
+
+  @@index([vencimientoId])
+  @@map("responsable_vencimiento")
+}
+
+enum PasoAlerta {
+  PRIMERA
+  ULTIMA
+  VENCIDO
+
+  @@map("paso_alerta")
+}
+
+// Pasos materializados de alerta (idempotencia estructural: una fila por paso)
+model AlertaVencimiento {
+  id              String      @id @default(uuid(7)) @db.Uuid
+  vencimientoId   String      @map("vencimiento_id") @db.Uuid
+  vencimiento     Vencimiento @relation(fields: [vencimientoId], references: [id], onDelete: Cascade)
+  paso            PasoAlerta
+  fechaProgramada DateTime    @map("fecha_programada") @db.Date
+  despachada      Boolean     @default(false)
+  despachadaEn    DateTime?   @map("despachada_en")
+
+  @@unique([vencimientoId, paso])
+  @@index([despachada, fechaProgramada])
+  @@map("alerta_vencimiento")
+}
+
+// Festivos decretados fuera del calendario Emiliani (ADD) o removidos (REMOVE)
+enum TipoExcepcionFestivo {
+  ADD
+  REMOVE
+
+  @@map("tipo_excepcion_festivo")
+}
+
+model FestivoExcepcion {
+  id     String               @id @default(uuid(7)) @db.Uuid
+  fecha  DateTime             @unique @db.Date
+  tipo   TipoExcepcionFestivo
+  nombre String?
+
+  @@map("festivo_excepcion")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTIFICACIONES — centro in-app + outbox (correo / WhatsApp preparado)
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Notificacion {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  titulo      String
+  mensaje     String
+  enlace      String?
+  leida       Boolean  @default(false)
+  // Evita duplicar la misma notificación si el cron corre dos veces
+  dedupeKey   String   @unique @map("dedupe_key")
+  creadoEn    DateTime @default(now()) @map("creado_en")
+
+  @@index([userId, leida, creadoEn])
+  @@map("notificacion")
+}
+
+enum CanalMensaje {
+  EMAIL
+  WHATSAPP
+
+  @@map("canal_mensaje")
+}
+
+enum EstadoMensaje {
+  EN_COLA
+  ENVIADO
+  FALLIDO
+  DESCARTADO
+
+  @@map("estado_mensaje")
+}
+
+// Outbox de mensajes salientes (idempotente por dedupeKey, con reintentos)
+model MensajeSaliente {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  canal       CanalMensaje
+  destino     String // email o teléfono E.164
+  asunto      String?
+  cuerpo      String
+  estado      EstadoMensaje @default(EN_COLA)
+  intentos    Int           @default(0)
+  proveedorRef String?      @map("proveedor_ref")
+  error       String?
+  dedupeKey   String        @unique @map("dedupe_key")
+  creadoEn    DateTime      @default(now()) @map("creado_en")
+  enviadoEn   DateTime?     @map("enviado_en")
+
+  @@index([estado])
+  @@map("mensaje_saliente")
+}

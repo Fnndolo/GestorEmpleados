@@ -1,0 +1,6 @@
+# Normaliza finales de línea: el repo usa LF, el working copy en Windows usa CRLF.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.svg text eol=lf
+*.docx binary

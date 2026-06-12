@@ -105,11 +105,37 @@ async function seedAdmin() {
   console.log(`  Contraseña inicial: ${ADMIN_PASSWORD_INICIAL} (se exigirá cambiarla al primer ingreso)`)
 }
 
+async function seedReglasAlerta() {
+  const reglas = [
+    {
+      clave: 'GLOBAL',
+      descripcion: 'Regla por defecto para todos los vencimientos',
+      diasPrimeraAlerta: 10, primeraEnHabiles: true,
+      diasUltimaAlerta: 3, ultimaEnHabiles: true,
+    },
+    {
+      clave: 'OBLIGACION_LEGAL',
+      descripcion: 'Calendario de obligaciones legales (5 días hábiles y 1 día antes)',
+      diasPrimeraAlerta: 5, primeraEnHabiles: true,
+      diasUltimaAlerta: 1, ultimaEnHabiles: false,
+    },
+  ]
+  for (const r of reglas) {
+    await prisma.reglaAlerta.upsert({
+      where: { clave: r.clave },
+      create: r,
+      update: { descripcion: r.descripcion },
+    })
+  }
+  console.log('Reglas de alerta listas (GLOBAL 10/3 hábiles, calendario legal 5h/1)')
+}
+
 async function main() {
   await seedRoles()
   await seedSedes()
   await seedEmpresa()
   await seedCatalogos()
+  await seedReglasAlerta()
   await seedAdmin()
 }
 

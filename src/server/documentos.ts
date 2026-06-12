@@ -4,7 +4,8 @@ import { dbAuditado } from '@/lib/auditoria'
 import { subirArchivo, eliminarArchivo } from '@/server/storage'
 import type { UsuarioSesion } from '@/server/sesion'
 import { tienePermiso } from '@/server/sesion'
-import { parseFechaISO } from '@/lib/fechas'
+import { parseFechaISO, formatFechaISO } from '@/lib/fechas'
+import { publicarVencimiento, cancelarVencimiento } from '@/server/vencimientos/servicio'
 
 const NIVEL_PERMISO: Record<string, { modulo: string }> = {
   SST_MEDICO: { modulo: 'colaboradores_salud' },
@@ -63,12 +64,30 @@ export async function guardarDocumento(
       subidoPorId: usuario.id,
     },
   })
+
+  // Si el documento tiene fecha de vencimiento, publica un Vencimiento (alertas)
+  if (doc.fechaVencimiento) {
+    const tipoNombre = doc.tipoDocumentoId
+      ? (await prisma.tipoDocumento.findUnique({ where: { id: doc.tipoDocumentoId } }))?.nombre
+      : null
+    await publicarVencimiento({
+      origen: 'DOCUMENTO',
+      entidadTipo: 'Documento',
+      entidadId: doc.id,
+      titulo: `${tipoNombre ?? doc.nombre}`,
+      detalle: doc.descripcion,
+      fechaVencimientoISO: formatFechaISO(doc.fechaVencimiento),
+      sedeId: doc.sedeId,
+    })
+  }
+
   return doc
 }
 
 export async function eliminarDocumento(id: string) {
   const doc = await prisma.documento.findUnique({ where: { id } })
   if (!doc) return
+  await cancelarVencimiento('Documento', doc.id, 'DOCUMENTO')
   await eliminarArchivo(doc.storagePath)
   await dbAuditado.documento.delete({ where: { id } })
 }
