@@ -17,9 +17,14 @@ pnpm install                 # instala dependencias
 cp .env.example .env         # configura variables (los valores por defecto sirven para desarrollo)
 pnpm db:start                # arranca PostgreSQL embebido (dejar esta terminal abierta)
 pnpm db:migrate              # crea las tablas
-pnpm db:seed                 # siembra roles, sede principal, empresa y usuario administrador
+pnpm db:seed                 # siembra roles, sede, empresa, catálogos, parámetros de nómina,
+                             # obligaciones legales y el usuario administrador
+pnpm db:seed:demo            # (opcional) datos de demostración: 10 colaboradores en 2 sedes
 pnpm dev                     # arranca la app en http://localhost:3000
 ```
+
+> En otra terminal puedes correr `pnpm test` (23 pruebas: días hábiles de Colombia y motor de
+> nómina) y `pnpm db:studio` para inspeccionar la base de datos.
 
 **Usuario administrador inicial** (creado por el seed):
 - Correo: `michaelmartinez0996@gmail.com`
@@ -30,17 +35,36 @@ servidor en lugar de enviarse (`EMAIL_DRIVER=console`).
 
 ## Despliegue (producción)
 
-- **Base de datos y archivos**: Supabase (PostgreSQL + Storage + backups diarios). Plan Pro
-  recomendado. Usar el *pooler* en `DATABASE_URL` (con `?pgbouncer=true`) y la conexión directa en
-  `DIRECT_URL`.
-- **App**: Vercel (plan Pro por los cron jobs y los tiempos de ejecución).
-- **Correo**: Resend (`EMAIL_DRIVER=resend`, `RESEND_API_KEY`, dominio verificado).
-- Aplicar migraciones con `pnpm db:deploy` y sembrar con `pnpm db:seed`.
+1. **Base de datos y archivos — Supabase** (plan Pro: backups diarios + 100 GB Storage):
+   - Crea el proyecto y un bucket privado llamado `documentos`.
+   - En `.env`: `STORAGE_DRIVER=supabase`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+   - `DATABASE_URL` = pooler de Supabase con `?pgbouncer=true`; `DIRECT_URL` = conexión directa.
+2. **App — Vercel** (plan Pro por los cron y tiempos de ejecución):
+   - Importa el repo; define las variables de entorno (incluida `CRON_SECRET`).
+   - Los dos cron (`vercel.json`) ya quedan configurados: calendario legal (10:30 UTC) y alertas
+     de vencimiento (11:00 UTC ≈ 6:00 a.m. Bogotá).
+3. **Correo — Resend**: `EMAIL_DRIVER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` con dominio verificado.
+4. **Migrar y sembrar**: `pnpm db:deploy` y luego `pnpm db:seed`.
+5. **WhatsApp** (opcional): la interfaz de mensajería está desacoplada; al activar, conecta una
+   cuenta de WhatsApp Business API (Meta/Twilio).
 
-Consulta `docs/diseno/d0_plan.md` para el plan completo de fases y `CLAUDE.md` para las convenciones.
+Consulta `docs/diseno/d0_plan.md` para el plan completo, `docs/VERIFICACION.md` para el recorrido
+requerimiento por requerimiento, y `CLAUDE.md` para las convenciones del código.
 
 ## Estado del desarrollo
 
-El proyecto se construye en fases incrementales; cada fase deja la aplicación desplegable y
-verificable. La **Fase 1** (fundaciones: autenticación, roles y permisos, auditoría, shell
-responsive + PWA, gestión de usuarios/roles/sedes y configuración de empresa) está completa.
+Las **11 fases** están completas, cada una desplegable y verificada con build de producción:
+
+1. Fundaciones (auth, RBAC, auditoría, shell responsive + PWA, administración)
+2. Colaboradores, gestión documental, organigrama e importador Excel
+3. Motor de vencimientos, notificaciones y cron de alertas (días hábiles de Colombia)
+4. Contratación laboral, OPS y cuentas de cobro con verificación de seguridad social
+5. Novedades, autoservicio, aprobaciones y certificaciones laborales PDF
+6. Nómina colombiana (Ley 2466), desprendibles PDF y Resumen PILA — con golden tests
+7. Terminaciones, liquidación definitiva y paz y salvo
+8. Activos (actas PDF), dotación, capacitaciones y evaluación de desempeño
+9. Jurídica y calendario de obligaciones legales
+10. Seguridad y Salud en el Trabajo (SG-SST)
+11. Módulos personalizados, reportes y dashboards
+
+El recorrido requerimiento por requerimiento está en [docs/VERIFICACION.md](docs/VERIFICACION.md).
