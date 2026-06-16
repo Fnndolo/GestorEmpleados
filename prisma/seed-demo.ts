@@ -26,6 +26,44 @@ const PERSONAS: {
   { nombres: 'Sofía', apellidos: 'Mendoza Quintero', doc: '1144990011', vinculo: 'PRACTICANTE', modalidad: 'HIBRIDO', cargo: 'Auxiliar de Talento Humano', salario: 1_400_000, sede: 'Bogotá', ingreso: D(2026, 2, 1) },
 ]
 
+/**
+ * Cuentas de acceso de prueba vinculadas a colaboradores demo.
+ * Contraseña común; sin cambio forzado para facilitar las pruebas.
+ * - Laura (Jefe de área) es jefe inmediato de Andrés → permite probar el flujo
+ *   permiso: empleado → jefe inmediato → Talento Humano.
+ * - Felipe (OPS) sirve para probar cuentas de cobro de autoservicio.
+ */
+const PASSWORD_DEMO = 'Empleado.2026*'
+const USUARIOS_DEMO: { doc: string; email: string; nombre: string; rol: string }[] = [
+  { doc: '52234567', email: 'laura.martinez@kupocell.test', nombre: 'Laura Martínez', rol: 'Jefe de área' },
+  { doc: '1015445566', email: 'andres.rojas@kupocell.test', nombre: 'Andrés Rojas', rol: 'Empleado' },
+  { doc: '1020889900', email: 'felipe.naranjo@kupocell.test', nombre: 'Felipe Naranjo', rol: 'Empleado' },
+]
+
+async function seedUsuariosDemo() {
+  const { auth } = await import('../src/lib/auth')
+  const idsPorDoc: Record<string, { colaboradorId: string }> = {}
+  for (const u of USUARIOS_DEMO) {
+    const rol = await prisma.rol.findUnique({ where: { nombre: u.rol } })
+    const colab = await prisma.colaborador.findUnique({ where: { tipoDocumento_numeroDocumento: { tipoDocumento: 'CC', numeroDocumento: u.doc } } })
+    if (!rol || !colab) continue
+    let user = await prisma.user.findUnique({ where: { email: u.email } })
+    if (!user) {
+      const creado = await auth.api.createUser({
+        body: { email: u.email, password: PASSWORD_DEMO, name: u.nombre, role: 'user', data: { rolId: rol.id, estado: 'ACTIVO', debeCambiarPassword: false } },
+      })
+      user = await prisma.user.findUnique({ where: { id: creado.user.id } })
+    }
+    await prisma.colaborador.update({ where: { id: colab.id }, data: { usuarioId: user!.id } })
+    idsPorDoc[u.doc] = { colaboradorId: colab.id }
+  }
+  // Laura es jefe inmediato de Andrés (flujo de aprobación de permisos)
+  if (idsPorDoc['52234567'] && idsPorDoc['1015445566']) {
+    await prisma.colaborador.update({ where: { id: idsPorDoc['1015445566'].colaboradorId }, data: { jefeInmediatoId: idsPorDoc['52234567'].colaboradorId } })
+  }
+  console.log(`Usuarios demo listos (contraseña: ${PASSWORD_DEMO}): ${USUARIOS_DEMO.map((u) => u.email).join(', ')}`)
+}
+
 async function main() {
   const bogota = await prisma.ciudad.findFirstOrThrow({ where: { nombre: 'Bogotá' } })
   const medellin = await prisma.ciudad.findFirstOrThrow({ where: { nombre: 'Medellín' } })
@@ -80,6 +118,7 @@ async function main() {
     }
   }
   console.log(`Datos demo: ${creados} colaborador(es) creado(s) en Bogotá y Medellín con sus contratos.`)
+  await seedUsuariosDemo()
 }
 
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1) })

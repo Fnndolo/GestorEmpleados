@@ -6,7 +6,7 @@ import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Palmtree, FileCheck, Inbox, Download, CalendarDays, Gavel, Receipt } from 'lucide-react'
+import { Palmtree, FileCheck, Inbox, Download, Gavel, Receipt } from 'lucide-react'
 import { formatFechaCorta } from '@/lib/fechas'
 import { NuevaSolicitud } from './nueva-solicitud'
 
@@ -44,9 +44,6 @@ export default async function AutoservicioPage() {
         descripcion="Solicita vacaciones, permisos y certificaciones. Todo pasa por aprobación de tu jefe inmediato y Talento Humano."
         acciones={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/autoservicio/calendario"><CalendarDays className="size-4" /> Mi calendario</Link>
-            </Button>
             <Button variant="outline" size="sm" asChild>
               <Link href="/autoservicio/disciplinarios"><Gavel className="size-4" /> Disciplinarios{disciplinariosAbiertos > 0 && <Badge variant="destructive" className="ml-1">{disciplinariosAbiertos}</Badge>}</Link>
             </Button>

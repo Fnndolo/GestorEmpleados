@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Pencil, Mail, Phone, MapPin, Briefcase, Calendar, ShieldAlert } from 'lucide-react'
+import { Pencil, Phone, Briefcase, ShieldAlert, CalendarDays } from 'lucide-react'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { FotoUploader } from './foto-uploader'
 import { EducacionLista } from './educacion-lista'
@@ -84,14 +84,19 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
       <Encabezado
         titulo="Ficha del colaborador"
         acciones={
-          puedeEditar && (
-            <div className="flex gap-2">
-              <BotonCertificacion colaboradorId={id} />
-              <Button asChild size="sm">
-                <Link href={`/colaboradores/${id}/editar`}><Pencil className="size-4" /> Editar</Link>
-              </Button>
-            </div>
-          )
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/colaboradores/${id}/calendario`}><CalendarDays className="size-4" /> Calendario</Link>
+            </Button>
+            {puedeEditar && (
+              <>
+                <BotonCertificacion colaboradorId={id} />
+                <Button asChild size="sm">
+                  <Link href={`/colaboradores/${id}/editar`}><Pencil className="size-4" /> Editar</Link>
+                </Button>
+              </>
+            )}
+          </div>
         }
       />
 
