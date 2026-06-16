@@ -35,7 +35,8 @@ const TIPO_INCAP: Record<string, string> = {
 }
 const TIPO_LIC: Record<string, string> = {
   MATERNIDAD: 'Maternidad', PATERNIDAD: 'Paternidad', LUTO: 'Luto', CALAMIDAD: 'Calamidad', MATRIMONIO: 'Matrimonio',
-  ESTUDIO: 'Estudio', NO_REMUNERADA: 'No remunerada', DIA_DE_LA_FAMILIA: 'Día de la familia', OTRA: 'Otra',
+  ESTUDIO: 'Estudio', NO_REMUNERADA: 'No remunerada', DIA_DE_LA_FAMILIA: 'Día de la familia',
+  DIA_COMPENSATORIO_VOTACION: 'Día compensatorio (votación)', OTRA: 'Otra',
 }
 const ESTADO_VAC: Record<string, string> = {
   SOLICITADA: 'Solicitada', APROBADA: 'Aprobada', EN_DISFRUTE: 'En disfrute', DISFRUTADA: 'Disfrutada', RECHAZADA: 'Rechazada', CANCELADA: 'Cancelada',

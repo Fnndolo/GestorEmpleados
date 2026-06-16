@@ -107,6 +107,24 @@ async function seedAdmin() {
   console.log(`  Contraseña inicial: ${ADMIN_PASSWORD_INICIAL} (se exigirá cambiarla al primer ingreso)`)
 }
 
+async function seedPlantillaCuentaCobro() {
+  const existe = await prisma.plantillaCuentaCobro.findFirst()
+  if (!existe) {
+    await prisma.plantillaCuentaCobro.create({
+      data: {
+        nombre: 'Servicios (general)',
+        esDefecto: true,
+        encabezado: 'Señores {{empresa}} (NIT {{nit}}). {{ciudad}}.',
+        cuerpo:
+          'Por concepto de {{concepto}} correspondiente al periodo {{periodo}}, por valor de {{valor}}. ' +
+          'Declaro que me encuentro al día en el pago de mis aportes al Sistema de Seguridad Social Integral como trabajador independiente, conforme a la ley.',
+        pieLegal: 'Esta cuenta de cobro se expide para los fines tributarios y contables correspondientes.',
+      },
+    })
+  }
+  console.log('Plantilla de cuenta de cobro por defecto lista')
+}
+
 async function seedReglasAlerta() {
   const reglas = [
     {
@@ -140,6 +158,7 @@ async function main() {
   await seedReglasAlerta()
   await seedNomina()
   await seedObligaciones()
+  await seedPlantillaCuentaCobro()
   await seedAdmin()
 }
 

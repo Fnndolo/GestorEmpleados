@@ -16,7 +16,7 @@ export type IncapacidadInput = z.infer<typeof incapacidadSchema>
 
 export const licenciaSchema = z.object({
   colaboradorId: z.uuid(),
-  tipo: z.enum(['MATERNIDAD', 'PATERNIDAD', 'LUTO', 'CALAMIDAD', 'MATRIMONIO', 'ESTUDIO', 'NO_REMUNERADA', 'DIA_DE_LA_FAMILIA', 'OTRA']),
+  tipo: z.enum(['MATERNIDAD', 'PATERNIDAD', 'LUTO', 'CALAMIDAD', 'MATRIMONIO', 'ESTUDIO', 'NO_REMUNERADA', 'DIA_DE_LA_FAMILIA', 'DIA_COMPENSATORIO_VOTACION', 'OTRA']),
   fechaInicio: fecha,
   fechaFin: fecha,
   remunerada: z.boolean(),

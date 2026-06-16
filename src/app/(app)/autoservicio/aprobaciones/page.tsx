@@ -34,6 +34,18 @@ export default async function AprobacionesPage() {
     return pasoActual.rolAprobador === usuario.rolNombre
   })
 
+  // Documentos adjuntos de las solicitudes visibles
+  const docs = await prisma.documento.findMany({
+    where: { entidadTipo: 'Solicitud', entidadId: { in: visibles.map((s) => s.id) } },
+    select: { id: true, entidadId: true, nombre: true },
+  })
+  const docsPorSolicitud = new Map<string, { id: string; nombre: string }[]>()
+  for (const d of docs) {
+    const arr = docsPorSolicitud.get(d.entidadId) ?? []
+    arr.push({ id: d.id, nombre: d.nombre })
+    docsPorSolicitud.set(d.entidadId, arr)
+  }
+
   return (
     <div className="mx-auto max-w-3xl">
       <Encabezado titulo="Solicitudes por aprobar" descripcion="Aprueba o rechaza las solicitudes de autoservicio de tu equipo." />
@@ -48,10 +60,14 @@ export default async function AprobacionesPage() {
               id: s.id,
               pasoId: pasoActual.id,
               tipo: s.tipo,
+              esPasoJefe: pasoActual.usaJefeInmediato,
               colaborador: `${s.colaborador.nombres} ${s.colaborador.apellidos}`,
               sede: s.colaborador.sede.nombre,
               creadoEn: formatFechaISO(s.creadoEn),
               detalle: detalleSolicitud(s.tipo, datos),
+              fechaInicio: datos.fechaInicio ?? '',
+              fechaFin: datos.fechaFin ?? '',
+              documentos: docsPorSolicitud.get(s.id) ?? [],
             }
           })}
         />

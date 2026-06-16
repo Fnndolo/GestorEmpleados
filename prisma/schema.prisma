@@ -1109,11 +1109,14 @@ model CuentaCobroOps {
   contratoOps   ContratoOps       @relation(fields: [contratoOpsId], references: [id])
   numero        String
   periodo       String // "2026-06"
+  concepto      String? // descripción de lo cobrado (días laborados, bono…)
   valor         Decimal           @db.Decimal(14, 2)
   fechaRadicacion DateTime        @map("fecha_radicacion") @db.Date
   estado        EstadoCuentaCobro @default(RADICADA)
   observaciones String?
   fechaPago     DateTime?         @map("fecha_pago") @db.Date
+  documentoId   String?           @map("documento_id") @db.Uuid // PDF de la cuenta de cobro
+  creadaPorContratista Boolean    @default(false) @map("creada_por_contratista")
   creadoEn      DateTime          @default(now()) @map("creado_en")
   actualizadoEn DateTime          @updatedAt @map("actualizado_en")
 
@@ -1122,6 +1125,22 @@ model CuentaCobroOps {
   @@unique([contratoOpsId, periodo])
   @@index([estado])
   @@map("cuenta_cobro_ops")
+}
+
+// Plantilla de cuenta de cobro editable por el administrador (logo, textos, varias)
+model PlantillaCuentaCobro {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  nombre      String // "Días laborados", "Bonos", "Servicios"…
+  logoPath    String?  @map("logo_path")
+  encabezado  String? // texto sobre el cuerpo (ciudad, fecha, destinatario…)
+  cuerpo      String // texto con variables {{contratista}}, {{valor}}, {{periodo}}, {{concepto}}
+  pieLegal    String?  @map("pie_legal")
+  esDefecto   Boolean  @default(false) @map("es_defecto")
+  activa      Boolean  @default(true)
+  creadoEn    DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  @@map("plantilla_cuenta_cobro")
 }
 
 // Verificación obligatoria del pago de seguridad social del independiente (legal)
@@ -1195,6 +1214,7 @@ enum TipoLicencia {
   ESTUDIO
   NO_REMUNERADA
   DIA_DE_LA_FAMILIA
+  DIA_COMPENSATORIO_VOTACION
   OTRA
 
   @@map("tipo_licencia")
