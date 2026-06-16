@@ -21,17 +21,21 @@ export async function whereColaboradores(
     return cond
   }
   if (alcance === 'EQUIPO') {
-    // Su equipo directo (jefe inmediato = su colaborador) o él mismo
+    // Su equipo directo (jefe inmediato = su colaborador) o él mismo.
+    // El equipo ES el alcance; NO se filtra además por la sede global del shell
+    // (esa cookie puede venir de otra sesión y ocultaría a todo el equipo).
     cond.OR = [
       { jefeInmediatoId: usuario.colaboradorId ?? '∅' },
       { id: usuario.colaboradorId ?? '∅' },
     ]
-  } else if (alcance === 'SEDES_ASIGNADAS') {
+    return cond
+  }
+  if (alcance === 'SEDES_ASIGNADAS') {
     cond.sedeId = { in: usuario.sedeIds.length ? usuario.sedeIds : ['∅'] }
   }
   // TODAS_SEDES: sin restricción por alcance
 
-  // Filtro adicional por la sede seleccionada en el shell
+  // Filtro adicional por la sede seleccionada en el shell (solo roles que navegan por sede)
   if (sedeActiva) {
     cond.sedeId = sedeActiva
   }

@@ -40,7 +40,10 @@ export async function eventosDelMes(colaboradorId: string, anio: number, mes: nu
   }
   for (const i of incapacidades) expandir(i.fechaInicio, i.fechaFin, 'incapacidad', 'Incapacidad')
   for (const s of suspensiones) expandir(s.fechaInicio, s.fechaFin, 'suspension', 'Suspensión')
-  for (const p of permisos) eventos.push({ dia: p.fecha.getUTCDate(), tipo: 'permiso', etiqueta: p.motivo || 'Permiso' })
+  for (const p of permisos) {
+    const horas = !p.diaCompleto && p.horaInicio ? ` ${p.horaInicio}–${p.horaFin ?? ''}`.trimEnd() : ''
+    eventos.push({ dia: p.fecha.getUTCDate(), tipo: 'permiso', etiqueta: `${p.motivo || 'Permiso'}${horas}` })
+  }
 
   return eventos
 }

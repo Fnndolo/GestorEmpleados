@@ -12,15 +12,36 @@ import { avisar } from '@/server/notificaciones/avisar'
 import type { UsuarioSesion } from '@/server/sesion'
 
 const crearSolicitudSchema = z.object({
-  tipo: z.enum(['VACACIONES', 'PERMISO', 'CERTIFICACION_LABORAL']),
-  // Vacaciones / permiso
+  tipo: z.enum(['VACACIONES', 'PERMISO', 'INCAPACIDAD', 'CERTIFICACION_LABORAL']),
+  // Vacaciones (rango) · Permiso (un solo día en fechaInicio) · Incapacidad (rango)
   fechaInicio: z.string().optional(),
   fechaFin: z.string().optional(),
   motivo: z.string().optional(),
+  // Permiso: día completo u horas (desde-hasta)
+  permisoTipo: z.enum(['DIA', 'HORAS']).optional(),
+  horaInicio: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  horaFin: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  // Incapacidad
+  incapacidadTipo: z.enum(['ENFERMEDAD_GENERAL', 'ACCIDENTE_TRABAJO', 'ENFERMEDAD_LABORAL', 'LICENCIA_MATERNIDAD', 'LICENCIA_PATERNIDAD']).optional(),
+  entidad: z.string().optional(),
   // Certificación
   tipoCertificacion: z.enum(['SIMPLE', 'CON_SALARIO', 'CON_FUNCIONES', 'ENTIDAD_FINANCIERA']).optional(),
   dirigidaA: z.string().optional(),
 })
+
+/** Horas decimales entre dos "HH:MM" (mismo día). */
+function horasEntre(ini: string, fin: string): number {
+  const [hi, mi] = ini.split(':').map(Number)
+  const [hf, mf] = fin.split(':').map(Number)
+  return Math.max(0, Math.round(((hf * 60 + mf - (hi * 60 + mi)) / 60) * 10) / 10)
+}
+
+/** Días calendario inclusivos entre dos fechas ISO (yyyy-mm-dd). */
+function diasCalendario(ini: string, fin: string): number {
+  const a = Date.parse(`${ini}T00:00:00Z`)
+  const b = Date.parse(`${fin}T00:00:00Z`)
+  return Math.max(1, Math.floor((b - a) / 86_400_000) + 1)
+}
 
 async function colaboradorDe(usuario: UsuarioSesion): Promise<string> {
   if (!usuario.colaboradorId) throw new ErrorNegocio('Tu usuario no está vinculado a una ficha de colaborador.')
@@ -40,10 +61,15 @@ export const crearSolicitud = accion(
       data: { colaboradorId, tipo: d.tipo, datos: d as object, estado: 'EN_APROBACION' },
     })
 
-    // Pasos: jefe inmediato (si existe) → RRHH/Subgerencia
+    // Pasos de aprobación según el tipo:
+    //  - Incapacidad: la valida y registra Talento Humano (no se "aprueba" al jefe);
+    //    el jefe solo recibe aviso informativo.
+    //  - Resto: jefe inmediato (si existe) → Talento Humano (RRHH/Subgerencia).
     const pasos: { orden: number; usaJefeInmediato: boolean; rolAprobador: string | null }[] = []
     let orden = 1
-    if (colab.jefeInmediatoId) pasos.push({ orden: orden++, usaJefeInmediato: true, rolAprobador: null })
+    if (d.tipo !== 'INCAPACIDAD' && colab.jefeInmediatoId) {
+      pasos.push({ orden: orden++, usaJefeInmediato: true, rolAprobador: null })
+    }
     pasos.push({ orden: orden++, usaJefeInmediato: false, rolAprobador: 'Recursos Humanos' })
 
     await prisma.pasoAprobacion.createMany({
@@ -52,6 +78,19 @@ export const crearSolicitud = accion(
 
     // Avisar a los aprobadores del primer paso
     await avisarAprobadoresDelPaso(solicitud.id, 1)
+
+    // Incapacidad: avisar también al jefe inmediato (informativo)
+    if (d.tipo === 'INCAPACIDAD' && colab.jefeInmediatoId) {
+      const jefe = await prisma.colaborador.findUnique({ where: { id: colab.jefeInmediatoId }, select: { usuarioId: true } })
+      const yo = await prisma.colaborador.findUnique({ where: { id: colaboradorId }, select: { nombres: true, apellidos: true } })
+      if (jefe?.usuarioId) {
+        await avisar(jefe.usuarioId, {
+          titulo: 'Tu colaborador reportó una incapacidad',
+          mensaje: `${yo?.nombres ?? ''} ${yo?.apellidos ?? ''} reportó una incapacidad. Talento Humano la validará y registrará.`,
+          enlace: '/autoservicio/aprobaciones',
+        })
+      }
+    }
     revalidatePath('/autoservicio')
     return { id: solicitud.id }
   },
@@ -170,10 +209,29 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string) {
     })
     resultado = `Vacaciones aprobadas (${dias} días hábiles)`
   } else if (s.tipo === 'PERMISO' && datos.fechaInicio) {
+    const porHoras = datos.permisoTipo === 'HORAS' && !!datos.horaInicio && !!datos.horaFin
     await prisma.permiso.create({
-      data: { colaboradorId: s.colaboradorId, fecha: parseFechaISO(datos.fechaInicio)!, diaCompleto: true, motivo: datos.motivo ?? 'Permiso', remunerado: true },
+      data: {
+        colaboradorId: s.colaboradorId, fecha: parseFechaISO(datos.fechaInicio)!,
+        diaCompleto: !porHoras,
+        horaInicio: porHoras ? datos.horaInicio : null,
+        horaFin: porHoras ? datos.horaFin : null,
+        horas: porHoras ? horasEntre(datos.horaInicio!, datos.horaFin!) : null,
+        motivo: datos.motivo ?? 'Permiso', remunerado: true,
+      },
     })
-    resultado = 'Permiso aprobado'
+    resultado = porHoras ? `Permiso aprobado (${datos.horaInicio}–${datos.horaFin})` : 'Permiso aprobado (día completo)'
+  } else if (s.tipo === 'INCAPACIDAD' && datos.fechaInicio && datos.fechaFin) {
+    const dias = diasCalendario(datos.fechaInicio, datos.fechaFin)
+    await prisma.incapacidad.create({
+      data: {
+        colaboradorId: s.colaboradorId,
+        tipo: (datos.incapacidadTipo as 'ENFERMEDAD_GENERAL') ?? 'ENFERMEDAD_GENERAL',
+        fechaInicio: parseFechaISO(datos.fechaInicio)!, fechaFin: parseFechaISO(datos.fechaFin)!,
+        dias, entidad: datos.entidad || null, observaciones: datos.motivo || null,
+      },
+    })
+    resultado = `Incapacidad registrada (${dias} día(s))`
   } else if (s.tipo === 'CERTIFICACION_LABORAL') {
     const { documentoId } = await generarCertificacion({
       colaboradorId: s.colaboradorId,
@@ -208,5 +266,5 @@ async function avisarSolicitante(solicitudId: string, titulo: string, mensaje: s
 }
 
 function etiquetaTipo(tipo: string): string {
-  return tipo === 'VACACIONES' ? 'vacaciones' : tipo === 'PERMISO' ? 'permiso' : 'certificación'
+  return tipo === 'VACACIONES' ? 'vacaciones' : tipo === 'PERMISO' ? 'permiso' : tipo === 'INCAPACIDAD' ? 'incapacidad' : 'certificación'
 }

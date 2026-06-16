@@ -18,7 +18,7 @@ type Solicitud = {
   creadoEn: string; detalle: string; fechaInicio: string; fechaFin: string
   documentos: { id: string; nombre: string }[]
 }
-const TIPO: Record<string, string> = { VACACIONES: 'Vacaciones', PERMISO: 'Permiso', CERTIFICACION_LABORAL: 'Certificación', LICENCIA: 'Licencia' }
+const TIPO: Record<string, string> = { VACACIONES: 'Vacaciones', PERMISO: 'Permiso', INCAPACIDAD: 'Incapacidad', CERTIFICACION_LABORAL: 'Certificación', LICENCIA: 'Licencia' }
 
 export function BandejaAprobaciones({ solicitudes }: { solicitudes: Solicitud[] }) {
   const router = useRouter()
@@ -72,11 +72,15 @@ export function BandejaAprobaciones({ solicitudes }: { solicitudes: Solicitud[] 
             {/* Formulario de cambio de fechas (solo el jefe inmediato) */}
             {cambioFechas === s.pasoId ? (
               <div className="mt-3 rounded-lg border p-3 space-y-3">
-                <p className="text-sm font-medium">Aprobar proponiendo otras fechas</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label>Nueva fecha inicio</Label><Input type="date" value={nuevaIni} onChange={(e) => setNuevaIni(e.target.value)} /></div>
-                  <div className="space-y-1.5"><Label>Nueva fecha fin</Label><Input type="date" value={nuevaFin} onChange={(e) => setNuevaFin(e.target.value)} /></div>
-                </div>
+                <p className="text-sm font-medium">{s.tipo === 'PERMISO' ? 'Aprobar proponiendo otro día' : 'Aprobar proponiendo otras fechas'}</p>
+                {s.tipo === 'PERMISO' ? (
+                  <div className="space-y-1.5"><Label>Nuevo día</Label><Input type="date" value={nuevaIni} onChange={(e) => setNuevaIni(e.target.value)} /></div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5"><Label>Nueva fecha inicio</Label><Input type="date" value={nuevaIni} onChange={(e) => setNuevaIni(e.target.value)} /></div>
+                    <div className="space-y-1.5"><Label>Nueva fecha fin</Label><Input type="date" value={nuevaFin} onChange={(e) => setNuevaFin(e.target.value)} /></div>
+                  </div>
+                )}
                 <Textarea rows={2} placeholder="Comentario para el colaborador (opcional)" value={comentario} onChange={(e) => setComentario(e.target.value)} />
                 <div className="flex justify-end gap-2">
                   <Button size="sm" variant="ghost" onClick={() => { setCambioFechas(null); setNuevaIni(''); setNuevaFin('') }}>Cancelar</Button>

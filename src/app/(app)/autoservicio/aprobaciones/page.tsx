@@ -76,9 +76,18 @@ export default async function AprobacionesPage() {
   )
 }
 
+const TIPO_INCAP: Record<string, string> = {
+  ENFERMEDAD_GENERAL: 'Enfermedad general', ACCIDENTE_TRABAJO: 'Accidente de trabajo',
+  ENFERMEDAD_LABORAL: 'Enfermedad laboral', LICENCIA_MATERNIDAD: 'Lic. maternidad', LICENCIA_PATERNIDAD: 'Lic. paternidad',
+}
+
 function detalleSolicitud(tipo: string, datos: Record<string, string>): string {
   if (tipo === 'VACACIONES') return `Del ${datos.fechaInicio} al ${datos.fechaFin}`
-  if (tipo === 'PERMISO') return `${datos.fechaInicio} · ${datos.motivo ?? ''}`
+  if (tipo === 'PERMISO') {
+    const cuando = datos.permisoTipo === 'HORAS' && datos.horaInicio ? `${datos.fechaInicio} · ${datos.horaInicio}–${datos.horaFin}` : `${datos.fechaInicio} · día completo`
+    return `${cuando}${datos.motivo ? ` · ${datos.motivo}` : ''}`
+  }
+  if (tipo === 'INCAPACIDAD') return `${TIPO_INCAP[datos.incapacidadTipo] ?? 'Incapacidad'} · del ${datos.fechaInicio} al ${datos.fechaFin}${datos.entidad ? ` · ${datos.entidad}` : ''}`
   if (tipo === 'CERTIFICACION_LABORAL') return `${datos.tipoCertificacion ?? 'Simple'}${datos.dirigidaA ? ` · para ${datos.dirigidaA}` : ''}`
   return ''
 }

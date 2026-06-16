@@ -1242,6 +1242,8 @@ model Permiso {
   colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
   fecha         DateTime    @db.Date
   horas         Decimal?    @db.Decimal(4, 1)
+  horaInicio    String?     @map("hora_inicio") // "08:00" (permiso por horas)
+  horaFin       String?     @map("hora_fin") // "12:00" (permiso por horas)
   diaCompleto   Boolean     @default(false) @map("dia_completo")
   motivo        String
   remunerado    Boolean     @default(true)
@@ -1307,6 +1309,7 @@ model Bonificacion {
 enum TipoSolicitud {
   VACACIONES
   PERMISO
+  INCAPACIDAD
   CERTIFICACION_LABORAL
   LICENCIA
   OTRA
