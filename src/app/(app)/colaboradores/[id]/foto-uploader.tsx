@@ -7,6 +7,10 @@ import { toast } from 'sonner'
 import { Camera, X } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Spinner } from '@/components/ui/spinner'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 
 export function FotoUploader({
   colaboradorId, iniciales, tieneFoto, puedeEditar,
@@ -39,7 +43,6 @@ export function FotoUploader({
   }
 
   async function eliminar() {
-    if (!confirm('¿Eliminar la foto de perfil?')) return
     setSubiendo(true)
     try {
       const resp = await fetch(`/api/colaboradores/${colaboradorId}/foto`, { method: 'DELETE' })
@@ -71,14 +74,27 @@ export function FotoUploader({
             {subiendo ? <Spinner className="size-3.5" /> : <Camera className="size-3.5" />}
           </button>
           {tieneFoto && (
-            <button
-              onClick={eliminar}
-              disabled={subiendo}
-              className="absolute -top-1 -right-1 flex size-6 items-center justify-center rounded-full bg-destructive text-white shadow ring-2 ring-background"
-              aria-label="Eliminar foto"
-            >
-              <X className="size-3.5" />
-            </button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  disabled={subiendo}
+                  className="absolute -top-1 -right-1 flex size-6 items-center justify-center rounded-full bg-destructive text-white shadow ring-2 ring-background"
+                  aria-label="Eliminar foto"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Eliminar foto de perfil</AlertDialogTitle>
+                  <AlertDialogDescription>Se eliminará la foto del colaborador. Esta acción no se puede deshacer.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={eliminar} className="bg-destructive text-white hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
           <input ref={inputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={onSeleccion} />
         </>

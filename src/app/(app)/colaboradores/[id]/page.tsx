@@ -56,12 +56,14 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
     prisma.tipoDocumento.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
   ])
 
-  const verNomina = tienePermiso(usuario, 'nomina', 'VER')
+  // Los desprendibles los ve quien tiene permiso de nómina o el propio colaborador (su ficha)
+  const esPropia = usuario.colaboradorId === id
+  const mostrarPagos = tienePermiso(usuario, 'nomina', 'VER') || esPropia
   const [contratos, contratosOps, eduDocs, liquidaciones] = await Promise.all([
     prisma.contrato.findMany({ where: { colaboradorId: id }, include: { cargo: true, sede: true }, orderBy: { fechaInicio: 'desc' } }),
     prisma.contratoOps.findMany({ where: { colaboradorId: id }, include: { sede: true }, orderBy: { fechaInicio: 'desc' } }),
     prisma.documento.findMany({ where: { entidadTipo: 'EducacionColaborador', entidadId: { in: c.educacion.map((e) => e.id) } }, select: { id: true, entidadId: true } }),
-    verNomina
+    mostrarPagos
       ? prisma.liquidacionNomina.findMany({ where: { colaboradorId: id, documentoId: { not: null } }, include: { periodo: { select: { nombre: true } } }, orderBy: { creadoEn: 'desc' }, take: 60 })
       : Promise.resolve([]),
   ])
@@ -156,7 +158,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             Documentos {semaforo.some((s) => s.obligatorio && s.estado === 'falta') && <span className="ml-1 text-destructive">•</span>}
           </TabsTrigger>
           <TabsTrigger value="educacion">Educación</TabsTrigger>
-          {verNomina && <TabsTrigger value="pagos">Pagos</TabsTrigger>}
+          {mostrarPagos && <TabsTrigger value="pagos">Pagos</TabsTrigger>}
         </TabsList>
 
         {/* Resumen */}
@@ -326,7 +328,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
         </TabsContent>
 
         {/* Pagos: desprendibles de nómina */}
-        {verNomina && (
+        {mostrarPagos && (
           <TabsContent value="pagos">
             <Card><CardContent className="p-0 divide-y">
               {liquidaciones.length === 0 ? (
