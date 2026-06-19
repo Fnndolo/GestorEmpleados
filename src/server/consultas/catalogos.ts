@@ -11,8 +11,10 @@ export async function cargarCatalogos() {
     prisma.ciudad.findMany({ orderBy: { nombre: 'asc' } }),
     prisma.entidadSeguridadSocial.findMany({ where: { activa: true }, orderBy: { nombre: 'asc' } }),
     prisma.banco.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
+    // Candidatos a jefe inmediato: activos que NO sean administradores de la plataforma
+    // (p. ej. la coordinadora de Talento Humano es administradora y no debe figurar como jefe).
     prisma.colaborador.findMany({
-      where: { estado: 'ACTIVO' },
+      where: { estado: 'ACTIVO', NOT: { usuario: { rol: { nombre: 'Administrador' } } } },
       select: { id: true, nombres: true, apellidos: true },
       orderBy: [{ apellidos: 'asc' }],
       take: 500,

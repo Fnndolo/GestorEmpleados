@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { contratoOpsSchema, cuentaCobroSchema, soporteSsSchema } from '@/lib/validaciones/contrato'
+import { contratoOpsSchema, soporteSsSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO } from '@/lib/fechas'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
@@ -40,29 +40,9 @@ export const crearContratoOps = accion(
   },
 )
 
-export const crearCuentaCobro = accion(
-  { modulo: 'contratos', accion: 'CREAR', schema: cuentaCobroSchema },
-  async (d) => {
-    const dup = await prisma.cuentaCobroOps.findUnique({
-      where: { contratoOpsId_periodo: { contratoOpsId: d.contratoOpsId, periodo: d.periodo } },
-    })
-    if (dup) throw new ErrorNegocio('Ya existe una cuenta de cobro para ese periodo.')
-    const total = await prisma.cuentaCobroOps.count({ where: { contratoOpsId: d.contratoOpsId } })
-    await dbAuditado.cuentaCobroOps.create({
-      data: {
-        contratoOpsId: d.contratoOpsId,
-        numero: `CC-${total + 1}`,
-        periodo: d.periodo,
-        valor: d.valor,
-        fechaRadicacion: parseFechaISO(d.fechaRadicacion)!,
-        estado: 'RADICADA',
-        observaciones: v(d.observaciones),
-      },
-    })
-    revalidatePath('/contratos/ops')
-    return { ok: true }
-  },
-)
+// Las cuentas de cobro las radica el propio contratista desde su autoservicio
+// (ver crearMiCuentaCobro). El administrador solo las revisa, verifica la seguridad
+// social y las aprueba/rechaza/paga (registrarSoporteSs, cambiarEstadoCuenta).
 
 export const registrarSoporteSs = accion(
   { modulo: 'contratos', accion: 'EDITAR', schema: soporteSsSchema },

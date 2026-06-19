@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, ShieldCheck, ShieldAlert, ShieldQuestion, CheckCircle2, XCircle, Ban } from 'lucide-react'
+import { ShieldCheck, ShieldAlert, ShieldQuestion, CheckCircle2, XCircle, Ban } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
-import { crearCuentaCobro, registrarSoporteSs, cambiarEstadoCuenta } from '../../ops-acciones'
+import { registrarSoporteSs, cambiarEstadoCuenta } from '../../ops-acciones'
 
 type Soporte = { estadoVerificacion: string; periodoCotizado: string; ibcDeclarado: number | null; operador: string | null }
 type Cuenta = {
@@ -34,18 +34,14 @@ export function CuentasCobro({
   puedeEditar: boolean; puedeAprobar: boolean
 }) {
   const router = useRouter()
-  const [nueva, setNueva] = useState(false)
   const [soporteDe, setSoporteDe] = useState<Cuenta | null>(null)
 
   return (
     <div className="space-y-3">
-      {puedeEditar && (
-        <div className="flex justify-end">
-          <Button size="sm" onClick={() => setNueva(true)}><Plus className="size-4" /> Nueva cuenta de cobro</Button>
-        </div>
-      )}
       {cuentas.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-6 text-center border rounded-lg border-dashed">Sin cuentas de cobro.</p>
+        <p className="text-sm text-muted-foreground py-6 text-center border rounded-lg border-dashed">
+          Sin cuentas de cobro. Las radica el contratista desde su autoservicio; aquí las revisas, verificas la seguridad social y las apruebas o rechazas.
+        </p>
       ) : (
         cuentas.map((cc) => (
           <Card key={cc.id}>
@@ -94,7 +90,6 @@ export function CuentasCobro({
         ))
       )}
 
-      {nueva && <DialogNuevaCuenta contratoOpsId={contratoOpsId} onClose={() => setNueva(false)} onDone={() => { setNueva(false); router.refresh() }} />}
       {soporteDe && <DialogSoporte cuenta={soporteDe} valorMensual={valorMensual} onClose={() => setSoporteDe(null)} onDone={() => { setSoporteDe(null); router.refresh() }} />}
     </div>
   )
@@ -125,38 +120,6 @@ function AccionEstado({
     <Button size="sm" variant={variant} onClick={ejecutar} disabled={cargando}>
       {cargando ? <Spinner /> : <Icono className="size-4" />} {label}
     </Button>
-  )
-}
-
-function DialogNuevaCuenta({ contratoOpsId, onClose, onDone }: { contratoOpsId: string; onClose: () => void; onDone: () => void }) {
-  const [periodo, setPeriodo] = useState('')
-  const [valor, setValor] = useState('')
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
-  const [guardando, setGuardando] = useState(false)
-
-  async function guardar() {
-    setGuardando(true)
-    const res = await crearCuentaCobro({ contratoOpsId, periodo, valor: Number(valor), fechaRadicacion: fecha })
-    setGuardando(false)
-    if (res.ok) { toast.success('Cuenta de cobro creada.'); onDone() }
-    else toast.error(res.error)
-  }
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Nueva cuenta de cobro</DialogTitle></DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-1.5"><Label>Periodo (AAAA-MM)</Label><Input value={periodo} onChange={(e) => setPeriodo(e.target.value)} placeholder="2026-06" /></div>
-          <div className="space-y-1.5"><Label>Valor</Label><Input type="number" value={valor} onChange={(e) => setValor(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Fecha de radicación</Label><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={guardar} disabled={guardando}>{guardando && <Spinner />}Crear</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }
 

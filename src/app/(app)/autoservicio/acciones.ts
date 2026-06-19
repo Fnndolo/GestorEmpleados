@@ -114,8 +114,9 @@ async function avisarAprobadoresDelPaso(solicitudId: string, orden: number) {
     })
     if (jefe?.usuarioId) await avisar(jefe.usuarioId, opts)
   } else if (paso.rolAprobador) {
+    // Talento Humano: RRHH + Subgerencia + Administrador (la coordinadora de TH es administradora)
     const usuarios = await prisma.user.findMany({
-      where: { estado: 'ACTIVO', rol: { nombre: { in: [paso.rolAprobador, 'Subgerencia'] } } },
+      where: { estado: 'ACTIVO', rol: { nombre: { in: [paso.rolAprobador, 'Subgerencia', 'Administrador'] } } },
       select: { id: true },
     })
     for (const u of usuarios) await avisar(u.id, opts)
@@ -204,7 +205,7 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string) {
       data: {
         colaboradorId: s.colaboradorId,
         fechaInicio: parseFechaISO(datos.fechaInicio)!, fechaFin: parseFechaISO(datos.fechaFin)!,
-        diasHabiles: dias, estado: 'APROBADA',
+        diasHabiles: dias, estado: 'APROBADA', solicitudId,
       },
     })
     resultado = `Vacaciones aprobadas (${dias} días hábiles)`
@@ -217,7 +218,7 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string) {
         horaInicio: porHoras ? datos.horaInicio : null,
         horaFin: porHoras ? datos.horaFin : null,
         horas: porHoras ? horasEntre(datos.horaInicio!, datos.horaFin!) : null,
-        motivo: datos.motivo ?? 'Permiso', remunerado: true,
+        motivo: datos.motivo ?? 'Permiso', remunerado: true, solicitudId,
       },
     })
     resultado = porHoras ? `Permiso aprobado (${datos.horaInicio}–${datos.horaFin})` : 'Permiso aprobado (día completo)'
@@ -228,7 +229,7 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string) {
         colaboradorId: s.colaboradorId,
         tipo: (datos.incapacidadTipo as 'ENFERMEDAD_GENERAL') ?? 'ENFERMEDAD_GENERAL',
         fechaInicio: parseFechaISO(datos.fechaInicio)!, fechaFin: parseFechaISO(datos.fechaFin)!,
-        dias, entidad: datos.entidad || null, observaciones: datos.motivo || null,
+        dias, entidad: datos.entidad || null, observaciones: datos.motivo || null, solicitudId,
       },
     })
     resultado = `Incapacidad registrada (${dias} día(s))`

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Plus, CheckCircle2 } from 'lucide-react'
+import { Plus, CheckCircle2, Paperclip } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -43,11 +43,26 @@ const ESTADO_VAC: Record<string, string> = {
 }
 
 type Datos = {
-  vacaciones: { id: string; colaborador: string; colaboradorId: string; fechaInicio: string; fechaFin: string; dias: number; estado: string }[]
-  incapacidades: { id: string; colaborador: string; tipo: string; fechaInicio: string; fechaFin: string; dias: number }[]
+  vacaciones: { id: string; colaborador: string; colaboradorId: string; fechaInicio: string; fechaFin: string; dias: number; estado: string; desdeAutoservicio: boolean; soporteDocId: string | null }[]
+  incapacidades: { id: string; colaborador: string; tipo: string; fechaInicio: string; fechaFin: string; dias: number; desdeAutoservicio: boolean; soporteDocId: string | null }[]
   licencias: { id: string; colaborador: string; tipo: string; fechaInicio: string; fechaFin: string; dias: number; remunerada: boolean }[]
-  permisos: { id: string; colaborador: string; fecha: string; diaCompleto: boolean; horas: number | null; motivo: string }[]
+  permisos: { id: string; colaborador: string; fecha: string; diaCompleto: boolean; horas: number | null; motivo: string; desdeAutoservicio: boolean; soporteDocId: string | null }[]
   bonificaciones: { id: string; colaborador: string; concepto: string; valor: number; constitutivoSalario: boolean; estadoPago: string; fechaPago: string | null }[]
+}
+
+/** Insignia de origen autoservicio + enlace al soporte adjunto por el empleado. */
+function OrigenSoporte({ autoservicio, docId }: { autoservicio: boolean; docId: string | null }) {
+  if (!autoservicio && !docId) return null
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      {autoservicio && <Badge variant="outline" className="text-[10px]">Autoservicio</Badge>}
+      {docId && (
+        <a href={`/api/documentos/${docId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+          <Paperclip className="size-3.5" /> Soporte
+        </a>
+      )}
+    </div>
+  )
 }
 
 export function NovedadesCliente({ tab, datos, puedeCrear, puedeEditar }: { tab: string; datos: Datos; puedeCrear: boolean; puedeEditar: boolean }) {
@@ -68,9 +83,9 @@ export function NovedadesCliente({ tab, datos, puedeCrear, puedeEditar }: { tab:
       </div>
 
       {tab === 'vacaciones' && <ListaVacaciones items={datos.vacaciones} />}
-      {tab === 'incapacidades' && <ListaSimple items={datos.incapacidades.map((x) => ({ id: x.id, titulo: x.colaborador, sub: `${TIPO_INCAP[x.tipo]} · ${formatFechaCorta(new Date(x.fechaInicio))} a ${formatFechaCorta(new Date(x.fechaFin))} · ${x.dias} días` }))} />}
+      {tab === 'incapacidades' && <ListaSimple items={datos.incapacidades.map((x) => ({ id: x.id, titulo: x.colaborador, sub: `${TIPO_INCAP[x.tipo]} · ${formatFechaCorta(new Date(x.fechaInicio))} a ${formatFechaCorta(new Date(x.fechaFin))} · ${x.dias} días`, autoservicio: x.desdeAutoservicio, soporteDocId: x.soporteDocId }))} />}
       {tab === 'licencias' && <ListaSimple items={datos.licencias.map((x) => ({ id: x.id, titulo: x.colaborador, sub: `${TIPO_LIC[x.tipo]} · ${x.dias} días · ${x.remunerada ? 'Remunerada' : 'No remunerada'}` }))} />}
-      {tab === 'permisos' && <ListaSimple items={datos.permisos.map((x) => ({ id: x.id, titulo: x.colaborador, sub: `${formatFechaCorta(new Date(x.fecha))} · ${x.diaCompleto ? 'Día completo' : `${x.horas ?? 0} horas`} · ${x.motivo}` }))} />}
+      {tab === 'permisos' && <ListaSimple items={datos.permisos.map((x) => ({ id: x.id, titulo: x.colaborador, sub: `${formatFechaCorta(new Date(x.fecha))} · ${x.diaCompleto ? 'Día completo' : `${x.horas ?? 0} horas`} · ${x.motivo}`, autoservicio: x.desdeAutoservicio, soporteDocId: x.soporteDocId }))} />}
       {tab === 'bonificaciones' && <ListaBonificaciones items={datos.bonificaciones} puedeEditar={puedeEditar} />}
 
       {dialogo && <DialogRegistro tab={dialogo} onClose={() => setDialogo(null)} />}
@@ -88,6 +103,7 @@ function ListaVacaciones({ items }: { items: Datos['vacaciones'] }) {
             <p className="font-medium text-sm truncate">{x.colaborador}</p>
             <p className="text-xs text-muted-foreground">{formatFechaCorta(new Date(x.fechaInicio))} a {formatFechaCorta(new Date(x.fechaFin))} · {x.dias} días hábiles</p>
           </div>
+          <OrigenSoporte autoservicio={x.desdeAutoservicio} docId={x.soporteDocId} />
           <Badge variant={x.estado === 'APROBADA' || x.estado === 'DISFRUTADA' ? 'default' : 'secondary'}>{ESTADO_VAC[x.estado]}</Badge>
         </div>
       ))}
@@ -95,14 +111,17 @@ function ListaVacaciones({ items }: { items: Datos['vacaciones'] }) {
   )
 }
 
-function ListaSimple({ items }: { items: { id: string; titulo: string; sub: string }[] }) {
+function ListaSimple({ items }: { items: { id: string; titulo: string; sub: string; autoservicio?: boolean; soporteDocId?: string | null }[] }) {
   if (items.length === 0) return <Vacio />
   return (
     <Card><CardContent className="p-0 divide-y">
       {items.map((x) => (
-        <div key={x.id} className="p-3">
-          <p className="font-medium text-sm">{x.titulo}</p>
-          <p className="text-xs text-muted-foreground">{x.sub}</p>
+        <div key={x.id} className="flex items-center gap-3 p-3">
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-sm">{x.titulo}</p>
+            <p className="text-xs text-muted-foreground">{x.sub}</p>
+          </div>
+          <OrigenSoporte autoservicio={!!x.autoservicio} docId={x.soporteDocId ?? null} />
         </div>
       ))}
     </CardContent></Card>

@@ -24,6 +24,15 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
     prisma.bonificacion.findMany({ where: filtroSede, include: incCol, orderBy: { creadoEn: 'desc' }, take: 100 }),
   ])
 
+  // Soportes adjuntos por el empleado en la solicitud de autoservicio que originó la novedad
+  const solicitudIds = [...vacaciones, ...incapacidades, ...permisos].map((x) => x.solicitudId).filter((id): id is string => !!id)
+  const docs = solicitudIds.length
+    ? await prisma.documento.findMany({ where: { entidadTipo: 'Solicitud', entidadId: { in: solicitudIds } }, select: { id: true, entidadId: true } })
+    : []
+  const docPorSolicitud = new Map<string, string>()
+  for (const d of docs) if (!docPorSolicitud.has(d.entidadId)) docPorSolicitud.set(d.entidadId, d.id)
+  const soporte = (solId: string | null) => (solId ? docPorSolicitud.get(solId) ?? null : null)
+
   const nombre = (c: { nombres: string; apellidos: string }) => `${c.nombres} ${c.apellidos}`
 
   return (
@@ -34,10 +43,10 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
         datos={{
-          vacaciones: vacaciones.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: Number(x.diasHabiles), estado: x.estado })),
-          incapacidades: incapacidades.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), tipo: x.tipo, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: x.dias })),
+          vacaciones: vacaciones.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: Number(x.diasHabiles), estado: x.estado, desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId) })),
+          incapacidades: incapacidades.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), tipo: x.tipo, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: x.dias, desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId) })),
           licencias: licencias.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), tipo: x.tipo, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: x.dias, remunerada: x.remunerada })),
-          permisos: permisos.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), fecha: formatFechaISO(x.fecha), diaCompleto: x.diaCompleto, horas: x.horas ? Number(x.horas) : null, motivo: x.motivo })),
+          permisos: permisos.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), fecha: formatFechaISO(x.fecha), diaCompleto: x.diaCompleto, horas: x.horas ? Number(x.horas) : null, motivo: x.motivo, desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId) })),
           bonificaciones: bonificaciones.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), concepto: x.concepto, valor: Number(x.valor), constitutivoSalario: x.constitutivoSalario, estadoPago: x.estadoPago, fechaPago: x.fechaPago ? formatFechaISO(x.fechaPago) : null })),
         }}
       />
