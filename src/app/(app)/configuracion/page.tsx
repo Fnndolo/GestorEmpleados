@@ -3,13 +3,15 @@ import { requerirPermiso } from '@/server/sesion'
 import { tienePermiso } from '@/server/sesion'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Building2, Users, ShieldCheck, MapPin, Bell, FileStack, Layers, Receipt, ArrowRight } from 'lucide-react'
+import { Building2, Users, ShieldCheck, MapPin, Bell, FileStack, Layers, Receipt, Briefcase, Coins, ArrowRight } from 'lucide-react'
 
 export const metadata = { title: 'Configuración · Smart Gadgets RH' }
 
 const SECCIONES = [
   { titulo: 'Empresa', desc: 'Razón social, NIT, representante legal y parámetros generales.', href: '/configuracion/empresa', icono: Building2, modulo: 'configuracion' as const },
   { titulo: 'Sedes y ciudades', desc: 'Administra las sedes y ciudades donde opera la empresa.', href: '/configuracion/sedes', icono: MapPin, modulo: 'configuracion' as const },
+  { titulo: 'Cargos', desc: 'Crea y edita los cargos; los cambios se reflejan en quienes los tienen asignados.', href: '/configuracion/cargos', icono: Briefcase, modulo: 'configuracion' as const },
+  { titulo: 'Parámetros de nómina', desc: 'Salario mínimo (SMMLV) y auxilio de transporte vigentes.', href: '/configuracion/parametros-nomina', icono: Coins, modulo: 'configuracion' as const },
   { titulo: 'Usuarios', desc: 'Crea usuarios, asígnales rol y sedes, y controla su estado.', href: '/configuracion/usuarios', icono: Users, modulo: 'usuarios' as const },
   { titulo: 'Roles y permisos', desc: 'Define qué puede ver y hacer cada rol en cada módulo.', href: '/configuracion/roles', icono: ShieldCheck, modulo: 'usuarios' as const },
   { titulo: 'Tipos de documento', desc: 'Catálogo de documentos y cuáles son obligatorios por vínculo.', href: '/configuracion/tipos-documento', icono: FileStack, modulo: 'configuracion' as const },

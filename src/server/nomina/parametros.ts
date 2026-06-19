@@ -26,6 +26,16 @@ export async function cargarParametros(fecha: Date): Promise<ParametrosNomina> {
   return mapa
 }
 
+/** Valor vigente de un parámetro legal a hoy (0 si no existe). Útil para UI/contratos. */
+export async function valorParametroVigente(clave: string): Promise<number> {
+  const hoy = new Date()
+  const p = await prisma.parametroLegal.findFirst({
+    where: { clave, vigenciaDesde: { lte: hoy }, OR: [{ vigenciaHasta: null }, { vigenciaHasta: { gte: hoy } }] },
+    orderBy: { vigenciaDesde: 'desc' },
+  })
+  return p ? Number(p.valor) : 0
+}
+
 /** Factor de hora extra/recargo vigente a una fecha (por código). */
 export async function cargarTiposHora(fecha: Date): Promise<Record<string, number>> {
   const tipos = await prisma.tipoHora.findMany({

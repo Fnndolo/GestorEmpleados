@@ -13,7 +13,8 @@ const P2026 = {
 }
 
 const base: EntradaLiquidacion = {
-  salarioBase: 1_750_905, tipoSalario: 'ORDINARIO', diasTrabajados: 30, diasPeriodo: 30,
+  salarioBase: 1_750_905, tipoSalario: 'ORDINARIO', tieneAuxTransporte: true, auxConectividad: 0,
+  diasTrabajados: 30, diasPeriodo: 30,
   valorHorasExtra: 0, comisiones: 0, bonificacionConstitutiva: 0, bonificacionNoConstitutiva: 0,
   valorIncapacidad: 0, cuotaPrestamo: 0, claseRiesgoArl: 'I', empresaExonerada: false,
   aplicaRetefuente: false, parametros: P2026,

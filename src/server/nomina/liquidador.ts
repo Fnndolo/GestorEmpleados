@@ -40,10 +40,13 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
     // Días trabajados = días del periodo menos ausencias (incapacidades/licencias no remuneradas)
     const diasPeriodo = periodo.diasPeriodo
 
+    // Salario efectivo: si gana salario mínimo se usa el SMMLV vigente (se actualiza con el parámetro)
+    const salarioEfectivo = contrato.ganaSalarioMinimo ? Number(parametros.SMMLV) : Number(contrato.salarioBase)
+
     // Horas extra del periodo
     const horas = await prisma.novedadHoras.findMany({ where: { colaboradorId, periodoId } })
     const tiposHora = await import('./parametros').then((m) => m.cargarTiposHora(periodo.fechaFin))
-    const valorHora = Number(contrato.salarioBase) / 240
+    const valorHora = salarioEfectivo / 240
     let valorHorasExtra = 0
     for (const h of horas) {
       const factor = tiposHora[h.tipoHora] ?? 0
@@ -62,8 +65,10 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
     const cuotaPrestamo = prestamo ? Number(prestamo.valorCuota) : 0
 
     const resultado = liquidar({
-      salarioBase: Number(contrato.salarioBase),
+      salarioBase: salarioEfectivo,
       tipoSalario: contrato.tipoSalario,
+      tieneAuxTransporte: contrato.tieneAuxTransporte,
+      auxConectividad: Number(contrato.auxConectividad ?? 0),
       diasTrabajados: diasPeriodo,
       diasPeriodo,
       valorHorasExtra: Math.round(valorHorasExtra),
@@ -83,7 +88,7 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
         periodoId,
         colaboradorId,
         diasTrabajados: diasPeriodo,
-        salarioBase: contrato.salarioBase,
+        salarioBase: salarioEfectivo,
         ibc: resultado.ibc,
         totalDevengado: resultado.totalDevengado,
         totalDeducido: resultado.totalDeducido,

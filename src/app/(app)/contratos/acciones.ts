@@ -8,6 +8,7 @@ import { accion, ErrorNegocio } from '@/server/accion'
 import { contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO } from '@/lib/fechas'
 import { publicarVencimiento, resolverVencimiento } from '@/server/vencimientos/servicio'
+import { valorParametroVigente } from '@/server/nomina/parametros'
 
 async function siguienteNumero(prefijo: string): Promise<string> {
   const anio = new Date().getUTCFullYear()
@@ -71,6 +72,11 @@ export const crearContrato = accion(
       periodoPruebaFin.setUTCDate(periodoPruebaFin.getUTCDate() + d.periodoPruebaDias)
     }
 
+    // Si gana salario mínimo, el salario base se fija al SMMLV vigente
+    const ganaMin = d.ganaSalarioMinimo ?? false
+    const salarioBase = ganaMin ? (await valorParametroVigente('SMMLV')) || d.salarioBase : d.salarioBase
+    const auxConectividad = d.auxConectividad && d.auxConectividad > 0 ? d.auxConectividad : null
+
     const numero = await siguienteNumero('CT')
     const contrato = await dbAuditado.contrato.create({
       data: {
@@ -82,7 +88,10 @@ export const crearContrato = accion(
         jornada: d.jornada,
         horasSemanales: d.horasSemanales ?? null,
         modalidadTrabajo: d.modalidadTrabajo,
-        salarioBase: d.salarioBase,
+        salarioBase,
+        ganaSalarioMinimo: ganaMin,
+        tieneAuxTransporte: d.tieneAuxTransporte ?? true,
+        auxConectividad,
         tipoSalario: d.tipoSalario,
         fechaInicio: parseFechaISO(d.fechaInicio)!,
         fechaFin: parseFechaISO(d.fechaFin),

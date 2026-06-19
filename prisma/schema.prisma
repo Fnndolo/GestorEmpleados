@@ -930,6 +930,9 @@ model Contrato {
   horasSemanales     Int?                @map("horas_semanales")
   modalidadTrabajo   ModalidadTrabajo    @map("modalidad_trabajo")
   salarioBase        Decimal             @map("salario_base") @db.Decimal(14, 2)
+  ganaSalarioMinimo  Boolean             @default(false) @map("gana_salario_minimo") // salario = SMMLV vigente (se actualiza con el parámetro)
+  tieneAuxTransporte Boolean             @default(true) @map("tiene_aux_transporte") // aplica auxilio de transporte si es elegible (≤2 SMMLV, ordinario)
+  auxConectividad    Decimal?            @map("aux_conectividad") @db.Decimal(14, 2) // auxilio de conectividad (valor manual, no constitutivo)
   tipoSalario        TipoSalario         @default(ORDINARIO) @map("tipo_salario")
   fechaInicio        DateTime            @map("fecha_inicio") @db.Date
   fechaFin           DateTime?           @map("fecha_fin") @db.Date
@@ -1199,6 +1202,7 @@ model Incapacidad {
   entidad       String? // EPS/ARL que la emite
   esProrroga    Boolean         @default(false) @map("es_prorroga")
   observaciones String?
+  solicitudId   String?         @map("solicitud_id") @db.Uuid // origen: solicitud de autoservicio
   creadoEn      DateTime        @default(now()) @map("creado_en")
 
   @@index([colaboradorId])
@@ -1230,6 +1234,7 @@ model Licencia {
   dias          Int
   remunerada    Boolean      @default(true)
   observaciones String?
+  solicitudId   String?      @map("solicitud_id") @db.Uuid // origen: solicitud de autoservicio
   creadoEn      DateTime     @default(now()) @map("creado_en")
 
   @@index([colaboradorId])
@@ -1247,6 +1252,7 @@ model Permiso {
   diaCompleto   Boolean     @default(false) @map("dia_completo")
   motivo        String
   remunerado    Boolean     @default(true)
+  solicitudId   String?     @map("solicitud_id") @db.Uuid // origen: solicitud de autoservicio
   creadoEn      DateTime    @default(now()) @map("creado_en")
 
   @@index([colaboradorId])
@@ -1273,6 +1279,7 @@ model Vacaciones {
   diasHabiles   Decimal          @map("dias_habiles") @db.Decimal(5, 2)
   estado        EstadoVacaciones @default(SOLICITADA)
   observaciones String?
+  solicitudId   String?          @map("solicitud_id") @db.Uuid // origen: solicitud de autoservicio
   creadoEn      DateTime         @default(now()) @map("creado_en")
 
   @@index([colaboradorId, estado])

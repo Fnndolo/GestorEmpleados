@@ -18,9 +18,12 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
-type Cat = { sedes: { id: string; nombre: string; ciudad: string }[]; cargos: { id: string; nombre: string }[] }
+type Cat = { sedes: { id: string; nombre: string; ciudad: string }[]; cargos: { id: string; nombre: string }[]; smmlv: number; auxTransporte: number }
+
+const fmtCOP = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
 
 const TIPOS = [
   { v: 'TERMINO_INDEFINIDO', l: 'Término indefinido' },
@@ -38,11 +41,12 @@ export function FormContrato({ catalogos }: { catalogos: Cat }) {
     resolver: zodResolver(contratoSchema),
     defaultValues: {
       colaboradorId: '', tipo: 'TERMINO_INDEFINIDO', cargoId: '', sedeId: '', jornada: 'TIEMPO_COMPLETO',
-      modalidadTrabajo: 'PRESENCIAL', salarioBase: 0, tipoSalario: 'ORDINARIO',
-      fechaInicio: '', fechaFin: '', objetoObraLabor: '', etapaAprendizaje: '', observaciones: '',
+      modalidadTrabajo: 'PRESENCIAL', salarioBase: 0, ganaSalarioMinimo: false, tieneAuxTransporte: true, auxConectividad: 0,
+      tipoSalario: 'ORDINARIO', fechaInicio: '', fechaFin: '', objetoObraLabor: '', etapaAprendizaje: '', observaciones: '',
     },
   })
   const tipo = watch('tipo')
+  const ganaMin = watch('ganaSalarioMinimo')
 
   async function onSubmit(d: ContratoInput) {
     setGuardando(true)
@@ -93,9 +97,15 @@ export function FormContrato({ catalogos }: { catalogos: Cat }) {
             <SelectContent>{catalogos.cargos.map((c) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}</SelectContent>
           </Select>
         </Campo>
-        <Campo label="Salario base" error={errors.salarioBase?.message}>
-          <Input type="number" step="1" {...register('salarioBase')} />
-        </Campo>
+        <div className="sm:col-span-2 flex items-center gap-2 rounded-lg border p-3">
+          <Checkbox id="ganaMin" checked={ganaMin} onCheckedChange={(c) => { const on = c === true; setValue('ganaSalarioMinimo', on); setValue('salarioBase', on ? catalogos.smmlv : 0) }} />
+          <Label htmlFor="ganaMin" className="font-normal">Gana salario mínimo {catalogos.smmlv > 0 && <span className="text-muted-foreground">({fmtCOP(catalogos.smmlv)} — se actualiza con el parámetro)</span>}</Label>
+        </div>
+        {!ganaMin && (
+          <Campo label="Salario base" error={errors.salarioBase?.message}>
+            <Input type="number" step="1" {...register('salarioBase')} />
+          </Campo>
+        )}
         <Campo label="Tipo de salario">
           <Select value={watch('tipoSalario')} onValueChange={(v) => setValue('tipoSalario', v as ContratoInput['tipoSalario'])}>
             <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
@@ -104,6 +114,13 @@ export function FormContrato({ catalogos }: { catalogos: Cat }) {
               <SelectItem value="INTEGRAL">Integral</SelectItem>
             </SelectContent>
           </Select>
+        </Campo>
+        <div className="sm:col-span-2 flex items-center gap-2 rounded-lg border p-3">
+          <Checkbox id="auxT" checked={watch('tieneAuxTransporte') !== false} onCheckedChange={(c) => setValue('tieneAuxTransporte', c === true)} />
+          <Label htmlFor="auxT" className="font-normal">Tiene auxilio de transporte {catalogos.auxTransporte > 0 && <span className="text-muted-foreground">({fmtCOP(catalogos.auxTransporte)}/mes si es elegible ≤2 SMMLV)</span>}</Label>
+        </div>
+        <Campo label="Auxilio de conectividad (opcional, valor mensual)">
+          <Input type="number" step="1" {...register('auxConectividad')} placeholder="0" />
         </Campo>
         <Campo label="Jornada">
           <Select value={watch('jornada')} onValueChange={(v) => setValue('jornada', v as ContratoInput['jornada'])}>

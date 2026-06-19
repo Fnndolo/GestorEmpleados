@@ -17,6 +17,16 @@ export const sedeSchema = z.object({
 })
 export type SedeInput = z.infer<typeof sedeSchema>
 
+export const cargoSchema = z.object({
+  nombre: z.string().trim().min(2, 'Mínimo 2 caracteres').max(120),
+  areaId: z.uuid('Selecciona un área'),
+  nivel: z.enum(['directivo', 'coordinacion', 'operativo']).optional().or(z.literal('')),
+  funciones: z.string().trim().max(2000).optional().or(z.literal('')),
+  claseRiesgoDefecto: z.enum(['I', 'II', 'III', 'IV', 'V']).optional().or(z.literal('')),
+  activo: z.boolean(),
+})
+export type CargoInput = z.infer<typeof cargoSchema>
+
 export const empresaSchema = z.object({
   razonSocial: z.string().trim().min(2).max(150),
   nombreComercial: z.string().trim().min(2).max(150),

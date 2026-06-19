@@ -6,6 +6,8 @@ Decimal.set({ rounding: Decimal.ROUND_HALF_UP })
 export type EntradaLiquidacion = {
   salarioBase: number
   tipoSalario: 'ORDINARIO' | 'INTEGRAL'
+  tieneAuxTransporte: boolean
+  auxConectividad: number
   diasTrabajados: number
   diasPeriodo: number
   valorHorasExtra: number
@@ -60,11 +62,18 @@ export function liquidar(e: EntradaLiquidacion): ResultadoLiquidacion {
   const salario = valorDia.times(e.diasTrabajados)
   agregar(lineas, dev, 'SALARIO', 'Salario básico', 'DEVENGADO', peso(salario), { cantidad: e.diasTrabajados, base: e.salarioBase })
 
-  // Auxilio de transporte (≤ 2 SMMLV, proporcional a días trabajados)
+  // Auxilio de transporte (si el contrato lo incluye, ≤ 2 SMMLV, ordinario, proporcional a días)
   let auxTransporte = new Decimal(0)
-  if (e.tipoSalario === 'ORDINARIO' && salarioBase.lessThanOrEqualTo(SMMLV.times(p.AUX_TRANSPORTE_TOPE_SMMLV ?? 2))) {
+  if (e.tieneAuxTransporte && e.tipoSalario === 'ORDINARIO' && salarioBase.lessThanOrEqualTo(SMMLV.times(p.AUX_TRANSPORTE_TOPE_SMMLV ?? 2))) {
     auxTransporte = new Decimal(p.AUX_TRANSPORTE).dividedBy(30).times(e.diasTrabajados)
     agregar(lineas, dev, 'AUX_TRANSPORTE', 'Auxilio de transporte', 'DEVENGADO', peso(auxTransporte))
+  }
+
+  // Auxilio de conectividad (valor manual, no constitutivo: no entra al IBC ni a prestaciones)
+  let auxConectividad = new Decimal(0)
+  if (e.auxConectividad > 0) {
+    auxConectividad = new Decimal(e.auxConectividad).dividedBy(30).times(e.diasTrabajados)
+    agregar(lineas, dev, 'AUX_CONECTIVIDAD', 'Auxilio de conectividad', 'DEVENGADO', peso(auxConectividad))
   }
 
   if (e.valorHorasExtra > 0) agregar(lineas, dev, 'HORAS_EXTRA', 'Horas extra y recargos', 'DEVENGADO', e.valorHorasExtra)
@@ -109,7 +118,7 @@ export function liquidar(e: EntradaLiquidacion): ResultadoLiquidacion {
   // Retención en la fuente (procedimiento 1 simplificado, opcional)
   if (e.aplicaRetefuente) {
     const totalDev = dev.reduce((a, b) => a.plus(b), new Decimal(0))
-    const rete = retencionFuente(totalDev.minus(auxTransporte).minus(salud).minus(pension), p.UVT)
+    const rete = retencionFuente(totalDev.minus(auxTransporte).minus(auxConectividad).minus(salud).minus(pension), p.UVT)
     if (rete > 0) agregar(lineas, ded, 'RETEFUENTE', 'Retención en la fuente', 'DEDUCCION', rete)
   }
 
