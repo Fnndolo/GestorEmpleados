@@ -6,7 +6,7 @@ import { Encabezado } from '@/components/shell/encabezado'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Plus, FileText, ChevronRight, FileWarning } from 'lucide-react'
+import { Plus, FileText, ChevronRight, FileWarning, Receipt } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatFechaCorta } from '@/lib/fechas'
 import { fmtCOP } from '@/lib/moneda'
@@ -37,7 +37,7 @@ export default async function ContratosPage({
   const esOps = tab === 'OPS'
 
   const cuentasSinSoporte = await prisma.cuentaCobroOps.count({
-    where: { estado: { in: ['RADICADA', 'EN_VERIFICACION_SS', 'BLOQUEADA_SS'] }, soporteSs: { is: null } },
+    where: { contratoOpsId: { not: null }, estado: { in: ['RADICADA', 'EN_VERIFICACION_SS', 'BLOQUEADA_SS'] }, soporteSs: { is: null } },
   })
 
   const contratosLaboral = esOps ? [] : await prisma.contrato.findMany({
@@ -60,16 +60,21 @@ export default async function ContratosPage({
         titulo="Contratación y vinculación"
         descripcion="Contratos laborales por modalidad y contratos de prestación de servicios (OPS)."
         acciones={
-          puedeCrear && (
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" asChild>
-                <Link href="/contratos/ops/nuevo"><Plus className="size-4" /> OPS</Link>
-              </Button>
-              <Button size="sm" asChild>
-                <Link href="/contratos/nuevo"><Plus className="size-4" /> Contrato</Link>
-              </Button>
-            </div>
-          )
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/contratos/cuentas-cobro"><Receipt className="size-4" /> Cuentas de cobro</Link>
+            </Button>
+            {puedeCrear && (
+              <>
+                <Button size="sm" variant="outline" asChild>
+                  <Link href="/contratos/ops/nuevo"><Plus className="size-4" /> OPS</Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link href="/contratos/nuevo"><Plus className="size-4" /> Contrato</Link>
+                </Button>
+              </>
+            )}
+          </div>
         }
       />
 

@@ -22,13 +22,8 @@ export default async function MisCuentasCobroPage() {
     return <div className="mx-auto max-w-3xl"><Encabezado titulo="Mis cuentas de cobro" /><Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Tu usuario no está vinculado a una ficha de colaborador.</CardContent></Card></div>
   }
 
-  const contrato = await prisma.contratoOps.findFirst({ where: { colaboradorId: usuario.colaboradorId, estado: 'ACTIVO' }, orderBy: { fechaInicio: 'desc' } })
-  if (!contrato) {
-    return <div className="mx-auto max-w-3xl"><Encabezado titulo="Mis cuentas de cobro" /><Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No tienes un contrato de prestación de servicios (OPS) activo. Esta sección es para contratistas.</CardContent></Card></div>
-  }
-
   const [cuentas, plantillas] = await Promise.all([
-    prisma.cuentaCobroOps.findMany({ where: { contratoOpsId: contrato.id }, orderBy: { creadoEn: 'desc' } }),
+    prisma.cuentaCobroOps.findMany({ where: { colaboradorId: usuario.colaboradorId }, orderBy: { creadoEn: 'desc' } }),
     prisma.plantillaCuentaCobro.findMany({ where: { activa: true }, orderBy: [{ esDefecto: 'desc' }, { nombre: 'asc' }] }),
   ])
 
@@ -36,7 +31,7 @@ export default async function MisCuentasCobroPage() {
     <div className="mx-auto max-w-3xl">
       <Encabezado
         titulo="Mis cuentas de cobro"
-        descripcion="Crea y envía tu cuenta de cobro. Contabilidad y gerencia recibirán la notificación."
+        descripcion="Crea y envía tu cuenta de cobro (servicios, comisiones o saldos a tu favor). Contabilidad y gerencia recibirán la notificación."
         acciones={<MiCuentaCobro plantillas={plantillas.map((p) => ({ id: p.id, nombre: p.nombre }))} />}
       />
       {cuentas.length === 0 ? (

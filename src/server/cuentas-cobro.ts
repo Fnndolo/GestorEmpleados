@@ -20,24 +20,37 @@ async function logoDataUri(logoPath: string | null): Promise<string | null> {
 }
 
 /** Genera el PDF de una cuenta de cobro desde una plantilla y lo guarda como Documento. */
-export async function generarPdfCuentaCobro(cuentaId: string, plantillaId: string | null, usuarioId: string): Promise<string> {
+export async function generarPdfCuentaCobro(cuentaId: string, plantillaId: string | null, usuarioId: string, firmaDataUri: string | null = null): Promise<string> {
   const cuenta = await prisma.cuentaCobroOps.findUniqueOrThrow({
     where: { id: cuentaId },
-    include: { contratoOps: { include: { colaborador: { include: { banco: true, sede: { include: { ciudad: true } } } } } } },
+    include: {
+      contratoOps: true,
+      colaborador: { include: { banco: true, sede: { include: { ciudad: true } } } },
+    },
   })
   const empresa = await prisma.configuracionEmpresa.findFirstOrThrow()
   const plantilla = plantillaId
     ? await prisma.plantillaCuentaCobro.findUnique({ where: { id: plantillaId } })
     : await prisma.plantillaCuentaCobro.findFirst({ where: { esDefecto: true, activa: true } })
 
-  const cuerpoDefecto = 'Esta cuenta de cobro corresponde a los servicios prestados según el contrato de prestación de servicios suscrito. Declaro que estoy al día en el pago de mis aportes a seguridad social como trabajador independiente.'
-  const c = cuenta.contratoOps.colaborador
+  const cuerpoDefecto = 'Esta cuenta de cobro corresponde a los conceptos descritos. Declaro que la información es veraz.'
+
+  // El dueño de la cuenta es el colaborador (directo) o, para OPS antiguas, el del contrato.
+  let c = cuenta.colaborador
+  if (!c) {
+    const conContrato = await prisma.cuentaCobroOps.findUniqueOrThrow({
+      where: { id: cuentaId },
+      include: { contratoOps: { include: { colaborador: { include: { banco: true, sede: { include: { ciudad: true } } } } } } },
+    })
+    c = conContrato.contratoOps?.colaborador ?? null
+  }
+  if (!c) throw new Error('La cuenta de cobro no tiene colaborador asociado.')
 
   const pdf = await renderCuentaCobro({
     empresa: { razonSocial: empresa.razonSocial, nombreComercial: empresa.nombreComercial, nit: empresa.nit, direccion: empresa.direccion },
     contratista: {
       nombre: `${c.nombres} ${c.apellidos}`, documento: `${c.tipoDocumento} ${c.numeroDocumento}`,
-      rut: cuenta.contratoOps.rut, banco: c.banco?.nombre ?? null,
+      rut: cuenta.contratoOps?.rut ?? null, banco: c.banco?.nombre ?? null,
       tipoCuenta: c.tipoCuenta ? TIPO_CUENTA[c.tipoCuenta] : null, numeroCuenta: c.numeroCuenta,
     },
     plantilla: {
@@ -52,14 +65,15 @@ export async function generarPdfCuentaCobro(cuentaId: string, plantillaId: strin
     valor: Number(cuenta.valor),
     ciudad: c.sede.ciudad.nombre,
     fecha: hoyBogota(),
+    firmaDataUri,
   })
 
-  const archivo = await subirArchivo(`cuentas-cobro/${cuenta.contratoOpsId}`, `cuenta-cobro-${cuenta.numero}.pdf`, pdf, 'application/pdf')
+  const archivo = await subirArchivo(`cuentas-cobro/${cuenta.id}`, `cuenta-cobro-${cuenta.numero}.pdf`, pdf, 'application/pdf')
   const doc = await prisma.documento.create({
     data: {
       entidadTipo: 'CuentaCobroOps', entidadId: cuenta.id, nombre: `Cuenta de cobro ${cuenta.numero}`,
       bucket: archivo.bucket, storagePath: archivo.storagePath, mimeType: 'application/pdf',
-      tamanoBytes: archivo.tamanoBytes, nivelAcceso: 'GENERAL', sedeId: cuenta.contratoOps.sedeId, subidoPorId: usuarioId,
+      tamanoBytes: archivo.tamanoBytes, nivelAcceso: 'GENERAL', sedeId: c.sedeId, subidoPorId: usuarioId,
     },
   })
   await prisma.cuentaCobroOps.update({ where: { id: cuenta.id }, data: { documentoId: doc.id } })

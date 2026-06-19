@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { FirmaCaptura } from '@/components/firma/firma-captura'
 import { crearMiCuentaCobro } from '../cuentas-acciones'
 
 export function MiCuentaCobro({ plantillas }: { plantillas: { id: string; nombre: string }[] }) {
@@ -19,13 +20,14 @@ export function MiCuentaCobro({ plantillas }: { plantillas: { id: string; nombre
   const [valor, setValor] = useState('')
   const [concepto, setConcepto] = useState('')
   const [plantillaId, setPlantillaId] = useState('')
+  const [firma, setFirma] = useState<string | null>(null)
   const [g, setG] = useState(false)
 
   async function crear() {
     setG(true)
-    const res = await crearMiCuentaCobro({ periodo, valor: Number(valor), concepto, plantillaId: plantillaId || undefined })
+    const res = await crearMiCuentaCobro({ periodo, valor: Number(valor), concepto, plantillaId: plantillaId || undefined, firmaDataUri: firma ?? undefined })
     setG(false)
-    if (res.ok) { toast.success('Cuenta de cobro enviada. Contabilidad fue notificada.'); setAbierto(false); router.refresh() }
+    if (res.ok) { toast.success('Cuenta de cobro enviada. Contabilidad fue notificada.'); setAbierto(false); setFirma(null); router.refresh() }
     else toast.error(res.error)
   }
 
@@ -33,7 +35,7 @@ export function MiCuentaCobro({ plantillas }: { plantillas: { id: string; nombre
     <>
       <Button size="sm" onClick={() => setAbierto(true)}><Plus className="size-4" /> Nueva cuenta de cobro</Button>
       <Dialog open={abierto} onOpenChange={setAbierto}>
-        <DialogContent>
+        <DialogContent className="max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nueva cuenta de cobro</DialogTitle>
             <DialogDescription>Se genera el PDF y se envía a contabilidad y gerencia.</DialogDescription>
@@ -53,6 +55,10 @@ export function MiCuentaCobro({ plantillas }: { plantillas: { id: string; nombre
                 </Select>
               </div>
             )}
+            <div className="space-y-1.5">
+              <Label>Firma digital (opcional)</Label>
+              <FirmaCaptura onChange={setFirma} />
+            </div>
           </div>
           <DialogFooter><Button variant="ghost" onClick={() => setAbierto(false)}>Cancelar</Button><Button onClick={crear} disabled={g || !valor}>{g && <Spinner />}Crear y enviar</Button></DialogFooter>
         </DialogContent>

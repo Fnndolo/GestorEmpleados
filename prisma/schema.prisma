@@ -526,6 +526,7 @@ model Colaborador {
   contratos             Contrato[]
   contratosOps          ContratoOps[]
   opsSupervisados       ContratoOps[]          @relation("SupervisorOps")
+  cuentasCobro          CuentaCobroOps[]
   variacionesSalariales VariacionSalarial[]
   incapacidades         Incapacidad[]
   licencias             Licencia[]
@@ -1108,8 +1109,10 @@ enum EstadoVerificacionSS {
 
 model CuentaCobroOps {
   id            String            @id @default(uuid(7)) @db.Uuid
-  contratoOpsId String            @map("contrato_ops_id") @db.Uuid
-  contratoOps   ContratoOps       @relation(fields: [contratoOpsId], references: [id])
+  contratoOpsId String?           @map("contrato_ops_id") @db.Uuid
+  contratoOps   ContratoOps?      @relation(fields: [contratoOpsId], references: [id])
+  colaboradorId String?           @map("colaborador_id") @db.Uuid // dueño (incluye cuentas de cobro de empleados no OPS)
+  colaborador   Colaborador?      @relation(fields: [colaboradorId], references: [id])
   numero        String
   periodo       String // "2026-06"
   concepto      String? // descripción de lo cobrado (días laborados, bono…)

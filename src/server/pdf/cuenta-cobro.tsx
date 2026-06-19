@@ -22,6 +22,7 @@ export type DatosCuentaCobro = {
   valor: number
   ciudad: string
   fecha: Date
+  firmaDataUri?: string | null
 }
 
 function aplicarVariables(texto: string, d: DatosCuentaCobro): string {
@@ -70,6 +71,7 @@ function Doc({ d }: { d: DatosCuentaCobro }) {
         {d.plantilla.pieLegal ? <Text style={s.pie}>{aplicarVariables(d.plantilla.pieLegal, d)}</Text> : null}
 
         <View style={{ marginTop: 48 }}>
+          {d.firmaDataUri ? <Image src={d.firmaDataUri} style={{ width: 150, height: 56, objectFit: 'contain', marginBottom: -4 }} /> : null}
           <View style={estilos.firmaLinea}>
             <Text style={estilos.negrita}>{d.contratista.nombre}</Text>
             <Text>{d.contratista.documento}</Text>

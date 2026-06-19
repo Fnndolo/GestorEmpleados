@@ -30,11 +30,10 @@ export default async function AutoservicioPage() {
     )
   }
 
-  const [saldo, solicitudes, disciplinariosAbiertos, esContratista] = await Promise.all([
+  const [saldo, solicitudes, disciplinariosAbiertos] = await Promise.all([
     saldoVacaciones(usuario.colaboradorId),
     prisma.solicitud.findMany({ where: { colaboradorId: usuario.colaboradorId }, orderBy: { creadoEn: 'desc' }, take: 20 }),
     prisma.procesoDisciplinario.count({ where: { colaboradorId: usuario.colaboradorId, cerrado: false } }),
-    prisma.contratoOps.count({ where: { colaboradorId: usuario.colaboradorId, estado: 'ACTIVO' } }),
   ])
 
   return (
@@ -47,11 +46,9 @@ export default async function AutoservicioPage() {
             <Button variant="outline" size="sm" asChild>
               <Link href="/autoservicio/disciplinarios"><Gavel className="size-4" /> Disciplinarios{disciplinariosAbiertos > 0 && <Badge variant="destructive" className="ml-1">{disciplinariosAbiertos}</Badge>}</Link>
             </Button>
-            {esContratista > 0 && (
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/autoservicio/cuentas-cobro"><Receipt className="size-4" /> Cuentas de cobro</Link>
-              </Button>
-            )}
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/autoservicio/cuentas-cobro"><Receipt className="size-4" /> Cuentas de cobro</Link>
+            </Button>
             {puedeAprobar && (
               <Button variant="outline" size="sm" asChild>
                 <Link href="/autoservicio/aprobaciones"><Inbox className="size-4" /> Aprobaciones</Link>

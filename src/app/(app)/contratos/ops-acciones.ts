@@ -52,7 +52,7 @@ export const registrarSoporteSs = accion(
       include: { contratoOps: true },
     })
     // Validación IBC ≥ 40% del valor mensualizado (Ley 1955 art. 244), tolerancia 1%
-    const base = Number(cuenta.contratoOps.valorMensual ?? cuenta.valor)
+    const base = Number(cuenta.contratoOps?.valorMensual ?? cuenta.valor)
     if (d.ibcDeclarado != null && base > 0) {
       const minimo = base * 0.4 * 0.99
       if (d.estadoVerificacion === 'VALIDA' && d.ibcDeclarado < minimo) {
@@ -105,8 +105,9 @@ export const cambiarEstadoCuenta = accion(
       where: { id: d.id },
       include: { soporteSs: true },
     })
-    // Regla legal: no se puede aprobar/pagar sin soporte de SS válido
-    if ((d.estado === 'APROBADA' || d.estado === 'PAGADA') && cuenta.soporteSs?.estadoVerificacion !== 'VALIDA') {
+    // Regla legal SOLO para contratistas OPS (independientes): no se aprueba/paga sin
+    // soporte de SS válido. Las cuentas de empleados no OPS (comisiones/saldos) no la requieren.
+    if (cuenta.contratoOpsId && (d.estado === 'APROBADA' || d.estado === 'PAGADA') && cuenta.soporteSs?.estadoVerificacion !== 'VALIDA') {
       throw new ErrorNegocio('No se puede aprobar ni pagar sin el soporte de seguridad social verificado como válido.')
     }
     await dbAuditado.cuentaCobroOps.update({
@@ -117,6 +118,7 @@ export const cambiarEstadoCuenta = accion(
       },
     })
     revalidatePath('/contratos/ops')
+    revalidatePath('/contratos/cuentas-cobro')
     return { ok: true }
   },
 )

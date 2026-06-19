@@ -15,6 +15,7 @@ export default async function CuentasRiesgoPage() {
 
   const cuentas = await prisma.cuentaCobroOps.findMany({
     where: {
+      contratoOpsId: { not: null }, // solo contratistas OPS requieren soporte de SS
       estado: { in: ['RADICADA', 'EN_VERIFICACION_SS', 'BLOQUEADA_SS'] },
       OR: [{ soporteSs: { is: null } }, { soporteSs: { estadoVerificacion: { not: 'VALIDA' } } }],
     },
@@ -39,9 +40,9 @@ export default async function CuentasRiesgoPage() {
             <Link key={cc.id} href={`/contratos/ops/${cc.contratoOpsId}`} className="flex items-center gap-3 p-3 hover:bg-accent/40">
               <FileWarning className="size-5 text-amber-600 shrink-0" />
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-sm truncate">{cc.contratoOps.colaborador.nombres} {cc.contratoOps.colaborador.apellidos}</p>
+                <p className="font-medium text-sm truncate">{cc.contratoOps?.colaborador.nombres} {cc.contratoOps?.colaborador.apellidos}</p>
                 <p className="text-xs text-muted-foreground">
-                  {cc.contratoOps.numero} · {cc.numero} · periodo {cc.periodo} · {cc.contratoOps.sede.nombre}
+                  {cc.contratoOps?.numero} · {cc.numero} · periodo {cc.periodo} · {cc.contratoOps?.sede.nombre}
                 </p>
               </div>
               <span className="text-sm font-medium hidden sm:block">{fmtCOP(Number(cc.valor))}</span>
