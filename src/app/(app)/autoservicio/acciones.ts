@@ -54,7 +54,7 @@ export const crearSolicitud = accion(
     const colaboradorId = await colaboradorDe(usuario)
     const colab = await prisma.colaborador.findUniqueOrThrow({
       where: { id: colaboradorId },
-      select: { jefeInmediatoId: true },
+      select: { jefeInmediatoId: true, jefeInmediato: { select: { usuario: { select: { rol: { select: { nombre: true } } } } } } },
     })
 
     const solicitud = await dbAuditado.solicitud.create({
@@ -64,13 +64,20 @@ export const crearSolicitud = accion(
     // Pasos de aprobación según el tipo:
     //  - Incapacidad: la valida y registra Talento Humano (no se "aprueba" al jefe);
     //    el jefe solo recibe aviso informativo.
-    //  - Resto: jefe inmediato (si existe) → Talento Humano (RRHH/Subgerencia).
+    //  - Resto: jefe inmediato (nivel área, si existe) → Talento Humano (nivel empresa).
+    // Si el jefe inmediato YA tiene autoridad de empresa (Talento Humano/Gerencia/Admin),
+    // su única aprobación cubre ambos niveles y no se agrega un paso de Talento Humano aparte
+    // (p. ej. Andrés cuyo jefe inmediato es Laura, administradora/Talento Humano).
+    const ROLES_EMPRESA = ['Administrador', 'Recursos Humanos', 'Subgerencia']
+    const jefeEsEmpresa = !!colab.jefeInmediato?.usuario?.rol && ROLES_EMPRESA.includes(colab.jefeInmediato.usuario.rol.nombre)
+    const tieneJefeStep = d.tipo !== 'INCAPACIDAD' && !!colab.jefeInmediatoId
+
     const pasos: { orden: number; usaJefeInmediato: boolean; rolAprobador: string | null }[] = []
     let orden = 1
-    if (d.tipo !== 'INCAPACIDAD' && colab.jefeInmediatoId) {
-      pasos.push({ orden: orden++, usaJefeInmediato: true, rolAprobador: null })
+    if (tieneJefeStep) pasos.push({ orden: orden++, usaJefeInmediato: true, rolAprobador: null })
+    if (!(tieneJefeStep && jefeEsEmpresa)) {
+      pasos.push({ orden: orden++, usaJefeInmediato: false, rolAprobador: 'Recursos Humanos' })
     }
-    pasos.push({ orden: orden++, usaJefeInmediato: false, rolAprobador: 'Recursos Humanos' })
 
     await prisma.pasoAprobacion.createMany({
       data: pasos.map((p) => ({ solicitudId: solicitud.id, orden: p.orden, usaJefeInmediato: p.usaJefeInmediato, rolAprobador: p.rolAprobador })),
