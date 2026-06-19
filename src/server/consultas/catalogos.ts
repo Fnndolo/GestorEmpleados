@@ -11,10 +11,10 @@ export async function cargarCatalogos() {
     prisma.ciudad.findMany({ orderBy: { nombre: 'asc' } }),
     prisma.entidadSeguridadSocial.findMany({ where: { activa: true }, orderBy: { nombre: 'asc' } }),
     prisma.banco.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
-    // Candidatos a jefe inmediato: activos que NO sean administradores de la plataforma
-    // (p. ej. la coordinadora de Talento Humano es administradora y no debe figurar como jefe).
+    // Candidatos a jefe inmediato: cualquier colaborador activo (la aprobación de área la
+    // hace el jefe inmediato; la aprobación final a nivel empresa la da Talento Humano/Gerencia).
     prisma.colaborador.findMany({
-      where: { estado: 'ACTIVO', NOT: { usuario: { rol: { nombre: 'Administrador' } } } },
+      where: { estado: 'ACTIVO' },
       select: { id: true, nombres: true, apellidos: true },
       orderBy: [{ apellidos: 'asc' }],
       take: 500,
