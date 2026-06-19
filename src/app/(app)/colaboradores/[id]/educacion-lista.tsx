@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { Plus, Trash2, GraduationCap } from 'lucide-react'
+import { Plus, Trash2, GraduationCap, Paperclip, FileText } from 'lucide-react'
 import { educacionSchema, type EducacionInput } from '@/lib/validaciones/colaborador'
 import { agregarEducacion, eliminarEducacion } from '../acciones'
 import { NIVEL_EDUCATIVO } from '@/lib/etiquetas'
@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 type Educacion = {
   id: string; nivel: string; titulo: string; institucion: string
-  fechaGrado: string | null; enCurso: boolean
+  fechaGrado: string | null; enCurso: boolean; certificadoDocId: string | null
 }
 
 export function EducacionLista({
@@ -57,6 +57,11 @@ export function EducacionLista({
                   {e.enCurso ? ' · En curso' : e.fechaGrado ? ` · ${formatFechaCorta(new Date(e.fechaGrado))}` : ''}
                 </p>
               </div>
+              {e.certificadoDocId && (
+                <a href={`/api/documentos/${e.certificadoDocId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0">
+                  <FileText className="size-3.5" /> Certificado
+                </a>
+              )}
               {puedeEditar && (
                 <Button
                   variant="ghost" size="icon" aria-label="Eliminar"
@@ -82,6 +87,8 @@ function DialogEducacion({
   colaboradorId, onClose, onGuardado,
 }: { colaboradorId: string; onClose: () => void; onGuardado: () => void }) {
   const [guardando, setGuardando] = useState(false)
+  const [archivo, setArchivo] = useState<File | null>(null)
+  const inputArchivo = useRef<HTMLInputElement>(null)
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<EducacionInput>({
     resolver: zodResolver(educacionSchema),
     defaultValues: { colaboradorId, nivel: 'PREGRADO', titulo: '', institucion: '', fechaGrado: '', enCurso: false },
@@ -90,9 +97,21 @@ function DialogEducacion({
   async function onSubmit(d: EducacionInput) {
     setGuardando(true)
     const res = await agregarEducacion(d)
+    if (!res.ok) { setGuardando(false); toast.error(res.error); return }
+    // Adjuntar el certificado (opcional) al estudio recién creado
+    if (archivo) {
+      try {
+        const fd = new FormData()
+        fd.append('archivo', archivo)
+        fd.append('entidadTipo', 'EducacionColaborador')
+        fd.append('entidadId', (res.datos as { id: string }).id)
+        fd.append('nombre', `Certificado — ${d.titulo}`)
+        await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+      } catch { /* el certificado es opcional */ }
+    }
     setGuardando(false)
-    if (res.ok) { toast.success('Estudio agregado.'); onGuardado() }
-    else toast.error(res.error)
+    toast.success('Estudio agregado.')
+    onGuardado()
   }
 
   return (
@@ -127,6 +146,13 @@ function DialogEducacion({
             <Checkbox checked={watch('enCurso')} onCheckedChange={(v) => setValue('enCurso', Boolean(v))} />
             En curso
           </label>
+          <div className="space-y-1.5">
+            <Label>Certificado (opcional)</Label>
+            <input ref={inputArchivo} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />
+            <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
+              <Paperclip className="size-4" /> {archivo ? archivo.name : 'Adjuntar certificado o diploma'}
+            </Button>
+          </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
             <Button type="submit" disabled={guardando}>{guardando && <Spinner />}Agregar</Button>

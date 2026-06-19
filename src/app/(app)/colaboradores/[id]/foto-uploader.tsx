@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import { toast } from 'sonner'
-import { Camera } from 'lucide-react'
+import { Camera, X } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Spinner } from '@/components/ui/spinner'
 
@@ -38,6 +38,22 @@ export function FotoUploader({
     }
   }
 
+  async function eliminar() {
+    if (!confirm('¿Eliminar la foto de perfil?')) return
+    setSubiendo(true)
+    try {
+      const resp = await fetch(`/api/colaboradores/${colaboradorId}/foto`, { method: 'DELETE' })
+      if (!resp.ok) throw new Error('No se pudo eliminar')
+      toast.success('Foto eliminada.')
+      setVersion((v) => v + 1)
+      router.refresh()
+    } catch {
+      toast.error('No se pudo eliminar la foto.')
+    } finally {
+      setSubiendo(false)
+    }
+  }
+
   return (
     <div className="relative">
       <Avatar className="size-20">
@@ -54,6 +70,16 @@ export function FotoUploader({
           >
             {subiendo ? <Spinner className="size-3.5" /> : <Camera className="size-3.5" />}
           </button>
+          {tieneFoto && (
+            <button
+              onClick={eliminar}
+              disabled={subiendo}
+              className="absolute -top-1 -right-1 flex size-6 items-center justify-center rounded-full bg-destructive text-white shadow ring-2 ring-background"
+              aria-label="Eliminar foto"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
           <input ref={inputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={onSeleccion} />
         </>
       )}

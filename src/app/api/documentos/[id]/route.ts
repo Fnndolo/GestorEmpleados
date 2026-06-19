@@ -16,7 +16,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const doc = await prisma.documento.findUnique({ where: { id } })
   if (!doc) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
 
-  if (!puedeVerNivel(usuario, doc.nivelAcceso)) {
+  // El colaborador siempre puede acceder a sus propios documentos (habeas data): desprendibles,
+  // certificaciones, etc. Para el resto se valida el nivel de acceso del documento.
+  const esPropio = doc.entidadTipo === 'Colaborador' && usuario.colaboradorId != null && doc.entidadId === usuario.colaboradorId
+  if (!esPropio && !puedeVerNivel(usuario, doc.nivelAcceso)) {
     return NextResponse.json({ error: 'Sin permiso para este documento' }, { status: 403 })
   }
 

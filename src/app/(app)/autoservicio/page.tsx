@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Palmtree, FileCheck, Inbox, Download, Gavel, Receipt } from 'lucide-react'
 import { formatFechaCorta } from '@/lib/fechas'
+import { fmtCOP } from '@/lib/moneda'
 import { NuevaSolicitud } from './nueva-solicitud'
 
 export const metadata = { title: 'Autoservicio · Smart Gadgets RH' }
@@ -30,11 +31,12 @@ export default async function AutoservicioPage() {
     )
   }
 
-  const [saldo, solicitudes, disciplinariosAbiertos, esContratista] = await Promise.all([
+  const [saldo, solicitudes, disciplinariosAbiertos, esContratista, desprendibles] = await Promise.all([
     saldoVacaciones(usuario.colaboradorId),
     prisma.solicitud.findMany({ where: { colaboradorId: usuario.colaboradorId }, orderBy: { creadoEn: 'desc' }, take: 20 }),
     prisma.procesoDisciplinario.count({ where: { colaboradorId: usuario.colaboradorId, cerrado: false } }),
     prisma.contratoOps.count({ where: { colaboradorId: usuario.colaboradorId, estado: 'ACTIVO' } }),
+    prisma.liquidacionNomina.findMany({ where: { colaboradorId: usuario.colaboradorId, documentoId: { not: null } }, include: { periodo: { select: { nombre: true } } }, orderBy: { creadoEn: 'desc' }, take: 12 }),
   ])
 
   return (
@@ -99,6 +101,28 @@ export default async function AutoservicioPage() {
             )
           })}
         </CardContent></Card>
+      )}
+
+      {desprendibles.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-medium mb-3">Mis desprendibles de pago</h2>
+          <Card><CardContent className="p-0 divide-y">
+            {desprendibles.map((l) => (
+              <div key={l.id} className="flex items-center gap-3 p-3">
+                <Receipt className="size-5 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm">{l.periodo.nombre}</p>
+                  <p className="text-xs text-muted-foreground">Neto {fmtCOP(Number(l.neto))}</p>
+                </div>
+                {l.documentoId && (
+                  <Button size="sm" variant="outline" asChild>
+                    <a href={`/api/documentos/${l.documentoId}`} target="_blank" rel="noreferrer"><Download className="size-4" /> Desprendible</a>
+                  </Button>
+                )}
+              </div>
+            ))}
+          </CardContent></Card>
+        </div>
       )}
     </div>
   )

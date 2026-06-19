@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Pencil, Phone, Briefcase, ShieldAlert, CalendarDays } from 'lucide-react'
+import { Pencil, Phone, Briefcase, ShieldAlert, CalendarDays, FileText, Download, Receipt } from 'lucide-react'
+import { fmtCOP } from '@/lib/moneda'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { FotoUploader } from './foto-uploader'
 import { EducacionLista } from './educacion-lista'
@@ -54,6 +55,29 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
     }),
     prisma.tipoDocumento.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
   ])
+
+  const verNomina = tienePermiso(usuario, 'nomina', 'VER')
+  const [contratos, contratosOps, eduDocs, liquidaciones] = await Promise.all([
+    prisma.contrato.findMany({ where: { colaboradorId: id }, include: { cargo: true, sede: true }, orderBy: { fechaInicio: 'desc' } }),
+    prisma.contratoOps.findMany({ where: { colaboradorId: id }, include: { sede: true }, orderBy: { fechaInicio: 'desc' } }),
+    prisma.documento.findMany({ where: { entidadTipo: 'EducacionColaborador', entidadId: { in: c.educacion.map((e) => e.id) } }, select: { id: true, entidadId: true } }),
+    verNomina
+      ? prisma.liquidacionNomina.findMany({ where: { colaboradorId: id, documentoId: { not: null } }, include: { periodo: { select: { nombre: true } } }, orderBy: { creadoEn: 'desc' }, take: 60 })
+      : Promise.resolve([]),
+  ])
+
+  const certDocPorEdu = new Map<string, string>()
+  for (const d of eduDocs) if (!certDocPorEdu.has(d.entidadId)) certDocPorEdu.set(d.entidadId, d.id)
+
+  // Contrato "principal" para adjuntar su documento (laboral más reciente, o el OPS más reciente)
+  const principal = contratos[0]
+    ? { tipo: 'Contrato' as const, id: contratos[0].id, sedeId: contratos[0].sedeId }
+    : contratosOps[0]
+      ? { tipo: 'ContratoOps' as const, id: contratosOps[0].id, sedeId: contratosOps[0].sedeId }
+      : null
+  const contratoDocs = principal
+    ? await prisma.documento.findMany({ where: { entidadTipo: principal.tipo, entidadId: principal.id }, include: { tipoDocumento: true }, orderBy: { creadoEn: 'desc' } })
+    : []
 
   // Documentos visibles según nivel de acceso del usuario
   const documentosVisibles = documentos.filter(
@@ -127,10 +151,12 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
       <Tabs defaultValue="resumen">
         <TabsList>
           <TabsTrigger value="resumen">Resumen</TabsTrigger>
+          <TabsTrigger value="contrato">Contrato</TabsTrigger>
           <TabsTrigger value="documentos">
             Documentos {semaforo.some((s) => s.obligatorio && s.estado === 'falta') && <span className="ml-1 text-destructive">•</span>}
           </TabsTrigger>
           <TabsTrigger value="educacion">Educación</TabsTrigger>
+          {verNomina && <TabsTrigger value="pagos">Pagos</TabsTrigger>}
         </TabsList>
 
         {/* Resumen */}
@@ -198,6 +224,73 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
           ]} />
         </TabsContent>
 
+        {/* Contrato */}
+        <TabsContent value="contrato" className="space-y-4">
+          {contratos.length === 0 && contratosOps.length === 0 ? (
+            <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
+              Este colaborador no tiene contratos registrados.
+              {puedeEditar && <> <Link href="/contratos/nuevo" className="text-primary hover:underline">Crear contrato</Link>.</>}
+            </CardContent></Card>
+          ) : (
+            <>
+              {contratos.map((ct) => (
+                <Card key={ct.id}><CardContent className="py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-sm">{ct.numero}</p>
+                        <Badge variant="outline">{TIPO_VINCULO[ct.tipo as keyof typeof TIPO_VINCULO] ?? ct.tipo}</Badge>
+                        <Badge variant={ct.estado === 'ACTIVO' ? 'default' : 'secondary'}>{ct.estado}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {fmtCOP(Number(ct.salarioBase))}{ct.ganaSalarioMinimo ? ' · salario mínimo' : ''}
+                        {ct.tieneAuxTransporte ? ' · con aux. transporte' : ''}
+                        {ct.auxConectividad ? ` · conectividad ${fmtCOP(Number(ct.auxConectividad))}` : ''}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{ct.cargo?.nombre ?? 'Sin cargo'} · {ct.sede.nombre} · desde {formatFechaLarga(ct.fechaInicio)}{ct.fechaFin ? ` hasta ${formatFechaLarga(ct.fechaFin)}` : ''}</p>
+                    </div>
+                    <Button asChild size="sm" variant="outline"><Link href={`/contratos/${ct.id}`}>Ver contrato</Link></Button>
+                  </div>
+                </CardContent></Card>
+              ))}
+              {contratosOps.map((ct) => (
+                <Card key={ct.id}><CardContent className="py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-sm">{ct.numero}</p>
+                        <Badge variant="outline">OPS</Badge>
+                        <Badge variant={ct.estado === 'ACTIVO' ? 'default' : 'secondary'}>{ct.estado}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{ct.valorMensual ? `${fmtCOP(Number(ct.valorMensual))}/mes · ` : ''}{ct.sede.nombre} · desde {formatFechaLarga(ct.fechaInicio)} hasta {formatFechaLarga(ct.fechaFin)}</p>
+                    </div>
+                    <Button asChild size="sm" variant="outline"><Link href={`/contratos/ops/${ct.id}`}>Ver contrato</Link></Button>
+                  </div>
+                </CardContent></Card>
+              ))}
+
+              {principal && (
+                <div className="pt-2">
+                  <h3 className="flex items-center gap-2 text-sm font-medium mb-3"><FileText className="size-4" /> Documento del contrato {contratos[0]?.numero ?? contratosOps[0]?.numero}</h3>
+                  <GestorDocumentos
+                    entidadTipo={principal.tipo}
+                    entidadId={principal.id}
+                    sedeId={principal.sedeId}
+                    documentos={contratoDocs.map((d) => ({
+                      id: d.id, nombre: d.nombre, tipoDocumentoNombre: d.tipoDocumento?.nombre ?? null,
+                      mimeType: d.mimeType, tamanoBytes: d.tamanoBytes,
+                      fechaVencimiento: formatFechaISO(d.fechaVencimiento) || null, creadoEn: d.creadoEn.toISOString(),
+                    }))}
+                    tiposDocumento={tiposDocumento.map((t) => ({ id: t.id, nombre: t.nombre, requiereVencimiento: t.requiereVencimiento }))}
+                    semaforo={[]}
+                    puedeEditar={puedeEditar}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </TabsContent>
+
         {/* Documentos */}
         <TabsContent value="documentos">
           <GestorDocumentos
@@ -226,10 +319,35 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             items={c.educacion.map((e) => ({
               id: e.id, nivel: e.nivel, titulo: e.titulo, institucion: e.institucion,
               fechaGrado: formatFechaISO(e.fechaGrado) || null, enCurso: e.enCurso,
+              certificadoDocId: certDocPorEdu.get(e.id) ?? null,
             }))}
             puedeEditar={puedeEditar}
           />
         </TabsContent>
+
+        {/* Pagos: desprendibles de nómina */}
+        {verNomina && (
+          <TabsContent value="pagos">
+            <Card><CardContent className="p-0 divide-y">
+              {liquidaciones.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Aún no hay desprendibles de pago. Se generan al liquidar la nómina.</p>
+              ) : liquidaciones.map((l) => (
+                <div key={l.id} className="flex items-center gap-3 p-3">
+                  <Receipt className="size-5 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm">{l.periodo.nombre}</p>
+                    <p className="text-xs text-muted-foreground">Neto {fmtCOP(Number(l.neto))}</p>
+                  </div>
+                  {l.documentoId && (
+                    <Button size="sm" variant="outline" asChild>
+                      <a href={`/api/documentos/${l.documentoId}`} target="_blank" rel="noreferrer"><Download className="size-4" /> Desprendible</a>
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </CardContent></Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )

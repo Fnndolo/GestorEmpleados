@@ -29,3 +29,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   return NextResponse.json({ ok: true })
 }
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const usuario = await obtenerSesion()
+  if (!usuario) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (!tienePermiso(usuario, 'colaboradores', 'EDITAR')) {
+    return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+  }
+
+  const c = await prisma.colaborador.findUnique({ where: { id }, select: { fotoPath: true } })
+  if (!c) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
+  if (c.fotoPath) await eliminarArchivo(c.fotoPath)
+  await prisma.colaborador.update({ where: { id }, data: { fotoPath: null } })
+
+  return NextResponse.json({ ok: true })
+}

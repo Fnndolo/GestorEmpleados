@@ -87,7 +87,7 @@ export const editarColaborador = accion(
 export const agregarEducacion = accion(
   { modulo: 'colaboradores', accion: 'EDITAR', schema: educacionSchema },
   async (d) => {
-    await dbAuditado.educacionColaborador.create({
+    const edu = await dbAuditado.educacionColaborador.create({
       data: {
         colaboradorId: d.colaboradorId,
         nivel: d.nivel,
@@ -98,6 +98,7 @@ export const agregarEducacion = accion(
       },
     })
     revalidatePath(`/colaboradores/${d.colaboradorId}`)
+    return { id: edu.id }
   },
 )
 
