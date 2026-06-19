@@ -254,6 +254,57 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string) {
   await avisarSolicitante(solicitudId, 'Tu solicitud fue aprobada', resultado)
 }
 
+/**
+ * Emite la certificación de una solicitud aprobada (último paso): genera el PDF
+ * membretado (con firma opcional) o adjunta un certificado ya subido, y lo envía
+ * al colaborador. Si el aprobador no la emite ahora, la solicitud queda pendiente.
+ */
+export const emitirCertificacion = accion(
+  {
+    modulo: 'autoservicio',
+    accion: 'APROBAR',
+    schema: z.object({
+      pasoId: z.uuid(),
+      modo: z.enum(['GENERAR', 'SUBIR']),
+      firmaDataUri: z.string().optional(),
+      documentoId: z.uuid().optional(),
+    }),
+  },
+  async (d, usuario) => {
+    const paso = await prisma.pasoAprobacion.findUniqueOrThrow({
+      where: { id: d.pasoId },
+      include: { solicitud: { include: { colaborador: true, pasos: { orderBy: { orden: 'asc' } } } } },
+    })
+    if (paso.estado !== 'PENDIENTE') throw new ErrorNegocio('Este paso ya fue resuelto.')
+    if (paso.solicitud.tipo !== 'CERTIFICACION_LABORAL') throw new ErrorNegocio('Esta solicitud no es una certificación.')
+    if (!(await usuarioPuedeResolver(usuario, paso))) throw new ErrorNegocio('No tienes permiso para emitir esta certificación.')
+    if (paso.solicitud.pasos.some((p) => p.orden < paso.orden && p.estado === 'PENDIENTE')) throw new ErrorNegocio('Faltan aprobaciones previas.')
+    if (paso.solicitud.pasos.some((p) => p.orden > paso.orden && p.estado === 'PENDIENTE')) throw new ErrorNegocio('Aún hay pasos posteriores; aprueba para avanzar.')
+
+    const datos = paso.solicitud.datos as Record<string, string>
+    let documentoId = d.documentoId ?? null
+    if (d.modo === 'GENERAR') {
+      const r = await generarCertificacion({
+        colaboradorId: paso.solicitud.colaboradorId,
+        tipo: (datos.tipoCertificacion as 'SIMPLE') ?? 'SIMPLE',
+        dirigidaA: datos.dirigidaA ?? null,
+        generadoPorId: usuario.id,
+        firmaDataUri: d.firmaDataUri || null,
+      })
+      documentoId = r.documentoId
+    } else if (!documentoId) {
+      throw new ErrorNegocio('Sube el certificado antes de emitir.')
+    }
+
+    await dbAuditado.pasoAprobacion.update({ where: { id: d.pasoId }, data: { estado: 'APROBADO', decididoPorId: usuario.id, decididoEn: new Date() } })
+    await dbAuditado.solicitud.update({ where: { id: paso.solicitudId }, data: { estado: 'APROBADA', resultado: `Certificación generada:${documentoId}` } })
+    await avisarSolicitante(paso.solicitudId, 'Tu certificación está lista', 'Tu certificación laboral fue emitida. Ya puedes descargarla desde tu autoservicio.')
+    revalidatePath('/autoservicio')
+    revalidatePath('/autoservicio/aprobaciones')
+    return { documentoId }
+  },
+)
+
 export const cancelarSolicitud = accion(
   { modulo: 'autoservicio', accion: 'CREAR', schema: z.object({ id: z.uuid() }) },
   async ({ id }, usuario) => {

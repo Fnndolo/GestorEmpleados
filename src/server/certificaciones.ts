@@ -14,6 +14,7 @@ export async function generarCertificacion(opts: {
   tipo: DatosCertificacion['tipo']
   dirigidaA?: string | null
   generadoPorId: string
+  firmaDataUri?: string | null
 }): Promise<{ certificacionId: string; documentoId: string }> {
   const colab = await prisma.colaborador.findUniqueOrThrow({
     where: { id: opts.colaboradorId },
@@ -49,6 +50,7 @@ export async function generarCertificacion(opts: {
     },
     ciudad: colab.sede.ciudad.nombre,
     fecha: hoyBogota(),
+    firmaDataUri: opts.firmaDataUri ?? null,
   }
 
   const pdf = await renderCertificacion(datos)

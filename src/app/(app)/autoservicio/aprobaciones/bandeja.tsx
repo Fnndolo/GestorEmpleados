@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Check, X, CalendarClock, Paperclip } from 'lucide-react'
+import { Check, X, CalendarClock, Paperclip, FileSignature } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,12 +11,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
-import { resolverPaso } from '../acciones'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { FirmaCaptura } from '@/components/firma/firma-captura'
+import { resolverPaso, emitirCertificacion } from '../acciones'
 
 type Solicitud = {
-  id: string; pasoId: string; tipo: string; esPasoJefe: boolean; colaborador: string; sede: string
+  id: string; pasoId: string; tipo: string; esPasoJefe: boolean; colaborador: string; colaboradorId: string; sede: string
   creadoEn: string; detalle: string; fechaInicio: string; fechaFin: string
-  documentos: { id: string; nombre: string }[]
+  documentos: { id: string; nombre: string }[]; esCertFinal: boolean
 }
 const TIPO: Record<string, string> = { VACACIONES: 'Vacaciones', PERMISO: 'Permiso', INCAPACIDAD: 'Incapacidad', CERTIFICACION_LABORAL: 'Certificación', LICENCIA: 'Licencia' }
 
@@ -27,6 +29,7 @@ export function BandejaAprobaciones({ solicitudes }: { solicitudes: Solicitud[] 
   const [comentario, setComentario] = useState('')
   const [nuevaIni, setNuevaIni] = useState('')
   const [nuevaFin, setNuevaFin] = useState('')
+  const [certDe, setCertDe] = useState<Solicitud | null>(null)
 
   async function resolver(pasoId: string, aprobar: boolean, conFechas = false) {
     setProcesando(pasoId)
@@ -99,14 +102,88 @@ export function BandejaAprobaciones({ solicitudes }: { solicitudes: Solicitud[] 
                     <CalendarClock className="size-4" /> Aprobar con otras fechas
                   </Button>
                 )}
-                <Button size="sm" onClick={() => resolver(s.pasoId, true)} disabled={procesando === s.pasoId}>
-                  {procesando === s.pasoId ? <Spinner /> : <Check className="size-4" />} Aprobar
-                </Button>
+                {s.esCertFinal ? (
+                  <Button size="sm" onClick={() => setCertDe(s)} disabled={procesando === s.pasoId}>
+                    <FileSignature className="size-4" /> Emitir certificación
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={() => resolver(s.pasoId, true)} disabled={procesando === s.pasoId}>
+                    {procesando === s.pasoId ? <Spinner /> : <Check className="size-4" />} Aprobar
+                  </Button>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
       ))}
+
+      {certDe && <DialogCertificacion solicitud={certDe} onClose={() => setCertDe(null)} onDone={() => { setCertDe(null); router.refresh() }} />}
     </div>
+  )
+}
+
+function DialogCertificacion({ solicitud, onClose, onDone }: { solicitud: Solicitud; onClose: () => void; onDone: () => void }) {
+  const [modo, setModo] = useState<'GENERAR' | 'SUBIR'>('GENERAR')
+  const [firma, setFirma] = useState<string | null>(null)
+  const [archivo, setArchivo] = useState<File | null>(null)
+  const [g, setG] = useState(false)
+
+  async function emitir() {
+    setG(true)
+    try {
+      if (modo === 'GENERAR') {
+        const res = await emitirCertificacion({ pasoId: solicitud.pasoId, modo: 'GENERAR', firmaDataUri: firma ?? undefined })
+        if (!res.ok) { toast.error(res.error); setG(false); return }
+        toast.success('Certificación emitida y enviada al colaborador.')
+        window.open(`/api/documentos/${(res.datos as { documentoId: string }).documentoId}`, '_blank')
+      } else {
+        if (!archivo) { toast.error('Selecciona el archivo del certificado.'); setG(false); return }
+        const fd = new FormData()
+        fd.append('archivo', archivo)
+        fd.append('entidadTipo', 'Colaborador')
+        fd.append('entidadId', solicitud.colaboradorId)
+        fd.append('nombre', 'Certificación laboral')
+        const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        if (!up.ok) { toast.error('No se pudo subir el certificado.'); setG(false); return }
+        const { id: documentoId } = await up.json()
+        const res = await emitirCertificacion({ pasoId: solicitud.pasoId, modo: 'SUBIR', documentoId })
+        if (!res.ok) { toast.error(res.error); setG(false); return }
+        toast.success('Certificación enviada al colaborador.')
+      }
+      setG(false)
+      onDone()
+    } catch { setG(false); toast.error('No se pudo emitir la certificación.') }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Emitir certificación</DialogTitle>
+          <DialogDescription>Genera el certificado membretado (con firma opcional) o sube uno ya elaborado. Se enviará a {solicitud.colaborador}.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="flex gap-1.5">
+            <Button type="button" size="sm" variant={modo === 'GENERAR' ? 'default' : 'outline'} onClick={() => setModo('GENERAR')}>Generar</Button>
+            <Button type="button" size="sm" variant={modo === 'SUBIR' ? 'default' : 'outline'} onClick={() => setModo('SUBIR')}>Subir</Button>
+          </div>
+          {modo === 'GENERAR' ? (
+            <div className="space-y-1.5">
+              <Label>Firma digital (opcional)</Label>
+              <FirmaCaptura onChange={setFirma} />
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label>Archivo del certificado (PDF o imagen)</Label>
+              <Input type="file" accept="application/pdf,image/*" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Dejar para luego</Button>
+          <Button onClick={emitir} disabled={g}>{g && <Spinner />} Emitir y enviar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

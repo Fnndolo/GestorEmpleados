@@ -62,12 +62,15 @@ export default async function AprobacionesPage() {
               tipo: s.tipo,
               esPasoJefe: pasoActual.usaJefeInmediato,
               colaborador: `${s.colaborador.nombres} ${s.colaborador.apellidos}`,
+              colaboradorId: s.colaboradorId,
               sede: s.colaborador.sede.nombre,
               creadoEn: formatFechaISO(s.creadoEn),
               detalle: detalleSolicitud(s.tipo, datos),
               fechaInicio: datos.fechaInicio ?? '',
               fechaFin: datos.fechaFin ?? '',
               documentos: docsPorSolicitud.get(s.id) ?? [],
+              // Certificación en su último paso → se emite (generar/subir) en vez de solo aprobar
+              esCertFinal: s.tipo === 'CERTIFICACION_LABORAL' && !s.pasos.some((p) => p.estado === 'PENDIENTE' && p.orden > pasoActual.orden),
             }
           })}
         />

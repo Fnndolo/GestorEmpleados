@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, renderToBuffer } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, renderToBuffer } from '@react-pdf/renderer'
 import { estilos } from './estilos'
 import { Membrete, Pie, type DatosEmpresa } from './membrete'
 import { TIPO_VINCULO } from '@/lib/etiquetas'
@@ -22,6 +22,7 @@ export type DatosCertificacion = {
   }
   ciudad: string
   fecha: Date
+  firmaDataUri?: string | null
 }
 
 function CuerpoCertificacion({ d }: { d: DatosCertificacion }) {
@@ -62,6 +63,7 @@ function CuerpoCertificacion({ d }: { d: DatosCertificacion }) {
       </Text>
 
       <View style={estilos.firma}>
+        {d.firmaDataUri ? <Image src={d.firmaDataUri} style={{ width: 150, height: 60, objectFit: 'contain', marginBottom: -6 }} /> : null}
         <View style={estilos.firmaLinea}>
           <Text style={estilos.negrita}>Departamento de Talento Humano</Text>
           <Text>{d.empresa.nombreComercial}</Text>
