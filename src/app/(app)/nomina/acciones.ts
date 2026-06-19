@@ -7,6 +7,7 @@ import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { liquidarPeriodo } from '@/server/nomina/liquidador'
 import { generarDesprendibles } from '@/server/nomina/desprendibles'
+import { generarPazSalvoPrestamo } from '@/server/prestamos'
 import { parseFechaISO } from '@/lib/fechas'
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -94,6 +95,9 @@ async function aplicarEfectosCierre(periodoId: string) {
           where: { id: prestamo.id },
           data: { saldo: Math.max(0, nuevoSaldo), estado: nuevoSaldo <= 0 ? 'PAGADO' : 'ACTIVO' },
         })
+        // Marcar la siguiente cuota pendiente como pagada en este periodo
+        const cuota = await prisma.cuotaPrestamo.findFirst({ where: { prestamoId: prestamo.id, pagada: false }, orderBy: { numero: 'asc' } })
+        if (cuota) await prisma.cuotaPrestamo.update({ where: { id: cuota.id }, data: { pagada: true, periodoId, fechaPago: new Date() } })
       }
     }
     // Bonificaciones pendientes → pagadas
@@ -139,6 +143,15 @@ export const registrarPrestamo = accion(
     })
     revalidatePath('/nomina/prestamos')
     return { id: prestamo.id }
+  },
+)
+
+export const generarPazSalvoDePrestamo = accion(
+  { modulo: 'nomina', accion: 'EXPORTAR', schema: z.object({ prestamoId: z.uuid() }) },
+  async ({ prestamoId }, usuario) => {
+    const documentoId = await generarPazSalvoPrestamo(prestamoId, usuario.id)
+    revalidatePath(`/nomina/prestamos/${prestamoId}`)
+    return { documentoId }
   },
 )
 
