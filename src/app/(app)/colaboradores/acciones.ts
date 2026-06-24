@@ -8,6 +8,7 @@ import { accion, ErrorNegocio } from '@/server/accion'
 import { colaboradorSchema, educacionSchema } from '@/lib/validaciones/colaborador'
 import { parseFechaISO } from '@/lib/fechas'
 import { normalizarTexto } from '@/lib/texto'
+import { crearUsuarioColaborador } from '@/server/usuarios'
 import type { ColaboradorInput } from '@/lib/validaciones/colaborador'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
@@ -68,8 +69,26 @@ export const crearColaborador = accion(
     })
     if (dup) throw new ErrorNegocio('Ya existe un colaborador con ese documento.')
     const creado = await dbAuditado.colaborador.create({ data: aDatosPrisma(datos) })
+
+    // Crear el usuario de acceso del colaborador con el rol por defecto de su cargo
+    // (o "Empleado" si el cargo no lo define). Requiere un correo (corporativo o personal).
+    let usuarioCreado = false
+    const email = v(datos.emailCorporativo) ?? v(datos.emailPersonal)
+    if (email && datos.estado === 'ACTIVO') {
+      const cargo = datos.cargoId ? await prisma.cargo.findUnique({ where: { id: datos.cargoId }, select: { rolDefectoId: true } }) : null
+      let rolId = cargo?.rolDefectoId ?? null
+      if (!rolId) rolId = (await prisma.rol.findUnique({ where: { nombre: 'Empleado' }, select: { id: true } }))?.id ?? null
+      if (rolId) {
+        const r = await crearUsuarioColaborador({
+          email, nombre: `${datos.nombres.trim()} ${datos.apellidos.trim()}`,
+          rolId, colaboradorId: creado.id, sedeId: datos.sedeId,
+        }).catch((e) => { console.error('No se pudo crear el usuario del colaborador:', e); return null })
+        usuarioCreado = !!r
+      }
+    }
+
     revalidatePath('/colaboradores')
-    return { id: creado.id }
+    return { id: creado.id, usuarioCreado, sinCorreo: !email }
   },
 )
 

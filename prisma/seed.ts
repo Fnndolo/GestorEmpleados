@@ -12,8 +12,13 @@ import { seedCatalogos } from './seed-catalogos'
 import { seedNomina } from './seed-nomina'
 import { seedObligaciones } from './seed-obligaciones'
 
-const ADMIN_EMAIL = 'michaelmartinez0996@gmail.com'
-const ADMIN_PASSWORD_INICIAL = 'Kupocell.2026*'
+// El admin inicial se configura por variables de entorno en producción.
+const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'michaelmartinez0996@gmail.com'
+const ADMIN_PASSWORD_INICIAL = process.env.SEED_ADMIN_PASSWORD ?? 'Kupocell.2026*'
+const ADMIN_NAME = process.env.SEED_ADMIN_NAME ?? 'Administrador'
+// Por defecto el admin usa la contraseña indicada (sin cambio forzado). Pon
+// SEED_ADMIN_FORCE_CHANGE=true para exigir el cambio en el primer ingreso.
+const ADMIN_FORZAR_CAMBIO = process.env.SEED_ADMIN_FORCE_CHANGE === 'true'
 
 async function seedRoles() {
   for (const [nombre, def] of Object.entries(ROLES_SEED)) {
@@ -94,17 +99,17 @@ async function seedAdmin() {
     body: {
       email: ADMIN_EMAIL,
       password: ADMIN_PASSWORD_INICIAL,
-      name: 'Administrador',
+      name: ADMIN_NAME,
       role: 'admin',
       data: {
         rolId: rolAdmin.id,
         estado: 'ACTIVO',
-        debeCambiarPassword: true,
+        debeCambiarPassword: ADMIN_FORZAR_CAMBIO,
       },
     },
   })
   console.log(`Usuario administrador creado: ${creado.user.email}`)
-  console.log(`  Contraseña inicial: ${ADMIN_PASSWORD_INICIAL} (se exigirá cambiarla al primer ingreso)`)
+  console.log(`  Contraseña inicial configurada${ADMIN_FORZAR_CAMBIO ? ' (se exigirá cambiarla al primer ingreso)' : ''}.`)
 }
 
 async function seedPlantillaCuentaCobro() {

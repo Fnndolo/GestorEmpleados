@@ -16,35 +16,36 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { crearCargo, editarCargo, alternarCargo } from './acciones'
 
-type Cargo = { id: string; nombre: string; areaId: string; area: string; nivel: string; funciones: string; claseRiesgoDefecto: string; activo: boolean; asignados: number }
+type Cargo = { id: string; nombre: string; areaId: string; area: string; nivel: string; funciones: string; claseRiesgoDefecto: string; rolDefectoId: string; activo: boolean; asignados: number }
 type Area = { id: string; nombre: string }
+type Rol = { id: string; nombre: string }
 
 const NIVELES = [{ v: 'directivo', l: 'Directivo' }, { v: 'coordinacion', l: 'Coordinación' }, { v: 'operativo', l: 'Operativo' }]
 const RIESGOS = ['I', 'II', 'III', 'IV', 'V']
 const NONE = '__none__'
 
-export function CargosCliente({ puedeCrear, puedeEditar, areas, cargos }: { puedeCrear: boolean; puedeEditar: boolean; areas: Area[]; cargos: Cargo[] }) {
+export function CargosCliente({ puedeCrear, puedeEditar, areas, roles, cargos }: { puedeCrear: boolean; puedeEditar: boolean; areas: Area[]; roles: Rol[]; cargos: Cargo[] }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
   const [editando, setEditando] = useState<Cargo | null>(null)
   const [g, setG] = useState(false)
-  const [f, setF] = useState({ nombre: '', areaId: '', nivel: '', funciones: '', claseRiesgoDefecto: '', activo: true })
+  const [f, setF] = useState({ nombre: '', areaId: '', nivel: '', funciones: '', claseRiesgoDefecto: '', rolDefectoId: '', activo: true })
 
   function abrirNuevo() {
     setEditando(null)
-    setF({ nombre: '', areaId: areas[0]?.id ?? '', nivel: '', funciones: '', claseRiesgoDefecto: '', activo: true })
+    setF({ nombre: '', areaId: areas[0]?.id ?? '', nivel: '', funciones: '', claseRiesgoDefecto: '', rolDefectoId: '', activo: true })
     setAbierto(true)
   }
   function abrirEditar(c: Cargo) {
     setEditando(c)
-    setF({ nombre: c.nombre, areaId: c.areaId, nivel: c.nivel, funciones: c.funciones, claseRiesgoDefecto: c.claseRiesgoDefecto, activo: c.activo })
+    setF({ nombre: c.nombre, areaId: c.areaId, nivel: c.nivel, funciones: c.funciones, claseRiesgoDefecto: c.claseRiesgoDefecto, rolDefectoId: c.rolDefectoId, activo: c.activo })
     setAbierto(true)
   }
 
   async function guardar() {
     if (!f.nombre.trim() || !f.areaId) { toast.error('Indica el nombre y el área.'); return }
     setG(true)
-    const payload = { ...f, nivel: (f.nivel as 'directivo') || undefined, claseRiesgoDefecto: (f.claseRiesgoDefecto as 'I') || undefined, funciones: f.funciones || undefined }
+    const payload = { ...f, nivel: (f.nivel as 'directivo') || undefined, claseRiesgoDefecto: (f.claseRiesgoDefecto as 'I') || undefined, funciones: f.funciones || undefined, rolDefectoId: f.rolDefectoId || undefined }
     const res = editando ? await editarCargo({ id: editando.id, ...payload }) : await crearCargo(payload)
     setG(false)
     if (res.ok) { toast.success(editando ? 'Cargo actualizado.' : 'Cargo creado.'); setAbierto(false); router.refresh() }
@@ -122,6 +123,17 @@ export function CargosCliente({ puedeCrear, puedeEditar, areas, cargos }: { pued
               </div>
             </div>
             <div className="space-y-1.5"><Label>Funciones (opcional)</Label><Textarea rows={3} value={f.funciones} onChange={(e) => setF({ ...f, funciones: e.target.value })} placeholder="Usadas en la certificación laboral con funciones" /></div>
+            <div className="space-y-1.5">
+              <Label>Rol por defecto del usuario</Label>
+              <Select value={f.rolDefectoId || NONE} onValueChange={(v) => setF({ ...f, rolDefectoId: v === NONE ? '' : v })}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Empleado (por defecto)</SelectItem>
+                  {roles.map((r) => <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Rol que se asigna al crear el usuario de un colaborador con este cargo.</p>
+            </div>
             <div className="flex items-center gap-2"><Switch checked={f.activo} onCheckedChange={(v) => setF({ ...f, activo: v })} /><Label className="font-normal">Activo</Label></div>
           </div>
           <DialogFooter>

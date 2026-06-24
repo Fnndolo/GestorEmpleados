@@ -23,6 +23,7 @@ export const cargoSchema = z.object({
   nivel: z.enum(['directivo', 'coordinacion', 'operativo']).optional().or(z.literal('')),
   funciones: z.string().trim().max(2000).optional().or(z.literal('')),
   claseRiesgoDefecto: z.enum(['I', 'II', 'III', 'IV', 'V']).optional().or(z.literal('')),
+  rolDefectoId: z.union([z.uuid(), z.literal('')]).optional(),
   activo: z.boolean(),
 })
 export type CargoInput = z.infer<typeof cargoSchema>

@@ -14,6 +14,7 @@ function datosCargo(d: CargoInput) {
     nivel: d.nivel || null,
     funciones: d.funciones || null,
     claseRiesgoDefecto: d.claseRiesgoDefecto || null,
+    rolDefectoId: d.rolDefectoId || null,
   }
 }
 

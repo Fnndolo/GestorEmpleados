@@ -63,7 +63,14 @@ export function FormColaborador({ catalogos, valores, puedeEditarSalud }: Props)
       : await crearColaborador(datos)
     setGuardando(false)
     if (res.ok) {
-      toast.success(esEdicion ? 'Colaborador actualizado.' : 'Colaborador creado.')
+      if (esEdicion) {
+        toast.success('Colaborador actualizado.')
+      } else {
+        const d = res.datos as { id: string; usuarioCreado?: boolean; sinCorreo?: boolean }
+        if (d.usuarioCreado) toast.success('Colaborador creado. Se creó su usuario y se le envió la invitación por correo.')
+        else if (d.sinCorreo) toast.success('Colaborador creado. No tiene correo: no se creó usuario de acceso (puedes crearlo luego en Usuarios).')
+        else toast.success('Colaborador creado.')
+      }
       const id = esEdicion ? valores!.id! : (res.datos as { id: string }).id
       router.push(`/colaboradores/${id}`)
       router.refresh()
