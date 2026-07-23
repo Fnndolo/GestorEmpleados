@@ -15,8 +15,10 @@ import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { crearCargo, editarCargo, alternarCargo } from './acciones'
+import { EditorFunciones } from '@/components/contratos/editor-funciones'
+import type { FuncionesCargo } from '@/lib/contrato-variables'
 
-type Cargo = { id: string; nombre: string; areaId: string; area: string; nivel: string; funciones: string; claseRiesgoDefecto: string; rolDefectoId: string; activo: boolean; asignados: number }
+type Cargo = { id: string; nombre: string; areaId: string; area: string; nivel: string; funciones: string; funcionesContrato: FuncionesCargo; claseRiesgoDefecto: string; rolDefectoId: string; activo: boolean; asignados: number }
 type Area = { id: string; nombre: string }
 type Rol = { id: string; nombre: string }
 
@@ -29,23 +31,23 @@ export function CargosCliente({ puedeCrear, puedeEditar, areas, roles, cargos }:
   const [abierto, setAbierto] = useState(false)
   const [editando, setEditando] = useState<Cargo | null>(null)
   const [g, setG] = useState(false)
-  const [f, setF] = useState({ nombre: '', areaId: '', nivel: '', funciones: '', claseRiesgoDefecto: '', rolDefectoId: '', activo: true })
+  const [f, setF] = useState<{ nombre: string; areaId: string; nivel: string; funciones: string; funcionesContrato: FuncionesCargo; claseRiesgoDefecto: string; rolDefectoId: string; activo: boolean }>({ nombre: '', areaId: '', nivel: '', funciones: '', funcionesContrato: [], claseRiesgoDefecto: '', rolDefectoId: '', activo: true })
 
   function abrirNuevo() {
     setEditando(null)
-    setF({ nombre: '', areaId: areas[0]?.id ?? '', nivel: '', funciones: '', claseRiesgoDefecto: '', rolDefectoId: '', activo: true })
+    setF({ nombre: '', areaId: areas[0]?.id ?? '', nivel: '', funciones: '', funcionesContrato: [], claseRiesgoDefecto: '', rolDefectoId: '', activo: true })
     setAbierto(true)
   }
   function abrirEditar(c: Cargo) {
     setEditando(c)
-    setF({ nombre: c.nombre, areaId: c.areaId, nivel: c.nivel, funciones: c.funciones, claseRiesgoDefecto: c.claseRiesgoDefecto, rolDefectoId: c.rolDefectoId, activo: c.activo })
+    setF({ nombre: c.nombre, areaId: c.areaId, nivel: c.nivel, funciones: c.funciones, funcionesContrato: c.funcionesContrato, claseRiesgoDefecto: c.claseRiesgoDefecto, rolDefectoId: c.rolDefectoId, activo: c.activo })
     setAbierto(true)
   }
 
   async function guardar() {
     if (!f.nombre.trim() || !f.areaId) { toast.error('Indica el nombre y el área.'); return }
     setG(true)
-    const payload = { ...f, nivel: (f.nivel as 'directivo') || undefined, claseRiesgoDefecto: (f.claseRiesgoDefecto as 'I') || undefined, funciones: f.funciones || undefined, rolDefectoId: f.rolDefectoId || undefined }
+    const payload = { ...f, nivel: (f.nivel as 'directivo') || undefined, claseRiesgoDefecto: (f.claseRiesgoDefecto as 'I') || undefined, funciones: f.funciones || undefined, rolDefectoId: f.rolDefectoId || undefined, funcionesContrato: f.funcionesContrato }
     const res = editando ? await editarCargo({ id: editando.id, ...payload }) : await crearCargo(payload)
     setG(false)
     if (res.ok) { toast.success(editando ? 'Cargo actualizado.' : 'Cargo creado.'); setAbierto(false); router.refresh() }
@@ -123,6 +125,11 @@ export function CargosCliente({ puedeCrear, puedeEditar, areas, roles, cargos }:
               </div>
             </div>
             <div className="space-y-1.5"><Label>Funciones (opcional)</Label><Textarea rows={3} value={f.funciones} onChange={(e) => setF({ ...f, funciones: e.target.value })} placeholder="Usadas en la certificación laboral con funciones" /></div>
+            <div className="space-y-1.5">
+              <Label>Funciones para el contrato (opcional)</Label>
+              <p className="text-xs text-muted-foreground">Grupos con viñetas que se insertan en la cláusula de funciones del contrato. Añade, edita o elimina.</p>
+              <EditorFunciones value={f.funcionesContrato} onChange={(v) => setF({ ...f, funcionesContrato: v })} />
+            </div>
             <div className="space-y-1.5">
               <Label>Rol por defecto del usuario</Label>
               <Select value={f.rolDefectoId || NONE} onValueChange={(v) => setF({ ...f, rolDefectoId: v === NONE ? '' : v })}>

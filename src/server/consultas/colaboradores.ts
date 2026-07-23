@@ -10,9 +10,14 @@ import { sedeActualId } from '@/server/sede-actual'
 export async function whereColaboradores(
   usuario: UsuarioSesion,
   extra: Prisma.ColaboradorWhereInput = {},
+  // `ignorarSedeActiva`: no aplicar el filtro de la cookie de sede del shell.
+  // Se usa en vistas de detalle (ficha) donde la seguridad la da el ALCANCE, no
+  // la sede seleccionada — así un rol TODAS_SEDES puede abrir a cualquiera aunque
+  // tenga una sede puesta en el shell, sin exponer datos fuera de su alcance.
+  opts: { ignorarSedeActiva?: boolean } = {},
 ): Promise<Prisma.ColaboradorWhereInput> {
   const alcance = alcanceDe(usuario, 'colaboradores', 'VER') ?? 'PROPIO'
-  const sedeActiva = await sedeActualId()
+  const sedeActiva = opts.ignorarSedeActiva ? null : await sedeActualId()
 
   const cond: Prisma.ColaboradorWhereInput = { ...extra }
 
@@ -31,7 +36,11 @@ export async function whereColaboradores(
     return cond
   }
   if (alcance === 'SEDES_ASIGNADAS') {
-    cond.sedeId = { in: usuario.sedeIds.length ? usuario.sedeIds : ['∅'] }
+    const permitidas = usuario.sedeIds.length ? usuario.sedeIds : ['∅']
+    // Intersecta con la sede del shell (si es una de las suyas); nunca la sobrescribe
+    // por una ajena — así fijar la cookie a otra sede no filtra fuera del alcance.
+    cond.sedeId = sedeActiva && permitidas.includes(sedeActiva) ? sedeActiva : { in: permitidas }
+    return cond
   }
   // TODAS_SEDES: sin restricción por alcance
 

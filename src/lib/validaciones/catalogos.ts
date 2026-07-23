@@ -22,6 +22,8 @@ export const cargoSchema = z.object({
   areaId: z.uuid('Selecciona un área'),
   nivel: z.enum(['directivo', 'coordinacion', 'operativo']).optional().or(z.literal('')),
   funciones: z.string().trim().max(2000).optional().or(z.literal('')),
+  // Funciones para el contrato, en grupos con viñetas (cláusula de funciones).
+  funcionesContrato: z.array(z.object({ grupo: z.string().trim().min(1).max(160), items: z.array(z.string().trim().min(1).max(600)) })).optional(),
   claseRiesgoDefecto: z.enum(['I', 'II', 'III', 'IV', 'V']).optional().or(z.literal('')),
   rolDefectoId: z.union([z.uuid(), z.literal('')]).optional(),
   activo: z.boolean(),
@@ -33,6 +35,7 @@ export const empresaSchema = z.object({
   nombreComercial: z.string().trim().min(2).max(150),
   nit: z.string().trim().min(5, 'Indica el NIT').max(30),
   representanteLegal: z.string().trim().min(3).max(150),
+  representanteLegalCc: z.string().trim().max(40).optional().or(z.literal('')),
   emailContacto: z.email('Correo inválido').optional().or(z.literal('')),
   telefono: z.string().trim().max(40).optional().or(z.literal('')),
   direccion: z.string().trim().max(200).optional().or(z.literal('')),

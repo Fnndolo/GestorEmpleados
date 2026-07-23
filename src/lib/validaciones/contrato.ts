@@ -23,6 +23,17 @@ export const contratoSchema = z.object({
   etapaAprendizaje: z.enum(['LECTIVA', 'PRODUCTIVA']).optional().or(z.literal('')),
   periodoPruebaDias: z.coerce.number().int().min(0).max(365).optional(),
   observaciones: z.string().trim().max(1000).optional().or(z.literal('')),
+  // Texto del documento (editable por contrato; si no viene, se usa la plantilla de BD).
+  plantillaTitulo: z.string().trim().max(200).optional().or(z.literal('')),
+  plantillaIntro: z.string().max(6000).optional().or(z.literal('')),
+  plantillaCierre: z.string().max(2000).optional().or(z.literal('')),
+  clausulas: z.array(z.object({
+    titulo: z.string().trim().max(220),
+    cuerpo: z.string().max(8000),
+    esFunciones: z.boolean().optional(),
+  })).optional(),
+  funciones: z.array(z.object({ grupo: z.string().trim().max(200), items: z.array(z.string().trim().max(600)) })).optional(),
+  generarPdf: z.boolean().optional(),
 })
 export type ContratoInput = z.infer<typeof contratoSchema>
 
@@ -66,8 +77,62 @@ export const contratoOpsSchema = z.object({
   fechaInicio: fecha,
   fechaFin: fecha,
   rut: z.string().trim().max(30).optional().or(z.literal('')),
+  // Número del contrato (opcional; si va vacío se asigna uno automático).
+  numero: z.string().trim().max(40).optional().or(z.literal('')),
+  // Plantilla de contrato: cargo (funciones) + datos para el PDF.
+  cargoId: uuidOpc,
+  cargoObjeto: z.string().trim().max(200).optional().or(z.literal('')),
+  ciudad: z.string().trim().max(80).optional().or(z.literal('')),
+  fechaSuscripcion: fechaOpc,
+  plazoMeses: z.coerce.number().int().min(0).max(120).optional(),
+  // Snapshot del contratista para el documento (se prellenan desde el colaborador).
+  contratistaNombre: z.string().trim().max(160).optional().or(z.literal('')),
+  contratistaCc: z.string().trim().max(40).optional().or(z.literal('')),
+  contratistaCcLugar: z.string().trim().max(80).optional().or(z.literal('')),
+  contratistaDireccion: z.string().trim().max(200).optional().or(z.literal('')),
+  contratistaEmail: z.string().trim().max(160).optional().or(z.literal('')),
+  contratistaTelefono: z.string().trim().max(40).optional().or(z.literal('')),
+  contratistaGenero: z.string().trim().max(20).optional().or(z.literal('')),
+  // Datos de la empresa (con valores por defecto de la configuración, editables aquí).
+  empresaRazonSocial: z.string().trim().max(160).optional().or(z.literal('')),
+  empresaMarca: z.string().trim().max(160).optional().or(z.literal('')),
+  empresaNit: z.string().trim().max(40).optional().or(z.literal('')),
+  empresaRepLegal: z.string().trim().max(160).optional().or(z.literal('')),
+  empresaRepLegalCc: z.string().trim().max(40).optional().or(z.literal('')),
+  empresaCorreoDevolucion: z.string().trim().max(160).optional().or(z.literal('')),
+  // Texto del documento (editable por contrato).
+  plantillaTitulo: z.string().trim().max(200).optional().or(z.literal('')),
+  plantillaIntro: z.string().max(4000).optional().or(z.literal('')),
+  plantillaCierre: z.string().max(2000).optional().or(z.literal('')),
+  clausulas: z.array(z.object({
+    titulo: z.string().trim().max(220),
+    cuerpo: z.string().max(6000),
+    esFunciones: z.boolean().optional(),
+  })).optional(),
+  funciones: z.array(z.object({ grupo: z.string().trim().max(200), items: z.array(z.string().trim().max(600)) })).optional(),
+  funcionesTexto: z.string().max(8000).optional().or(z.literal('')),
+  // Entregables pactados (descripción + fecha de entrega opcional).
+  entregables: z.array(z.object({
+    descripcion: z.string().trim().min(3, 'Describe el entregable').max(500),
+    fechaEntrega: fechaOpc,
+  })).optional(),
+  generarPdf: z.boolean().optional(),
 })
 export type ContratoOpsInput = z.infer<typeof contratoOpsSchema>
+
+export const entregableOpsSchema = z.object({
+  contratoOpsId: z.uuid(),
+  descripcion: z.string().trim().min(3, 'Describe el entregable').max(500),
+  fechaEntrega: fechaOpc,
+})
+export type EntregableOpsInput = z.infer<typeof entregableOpsSchema>
+
+export const firmarContratoOpsSchema = z.object({
+  contratoId: z.uuid(),
+  rol: z.enum(['CONTRATISTA', 'CONTRATANTE']),
+  firmaDataUri: z.string().min(1).startsWith('data:image/', 'Firma inválida'),
+})
+export type FirmarContratoOpsInput = z.infer<typeof firmarContratoOpsSchema>
 
 export const cuentaCobroSchema = z.object({
   contratoOpsId: z.uuid(),

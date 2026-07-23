@@ -2,8 +2,8 @@ import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { ClipboardCheck } from 'lucide-react'
+import { Chip, Pill } from '@/components/ui-kit'
 import { formatFechaCorta } from '@/lib/fechas'
 import { CrearEvaluacion } from './crear-evaluacion'
 
@@ -28,12 +28,12 @@ export default async function EvaluacionesPage() {
         <Card><CardContent className="p-0 divide-y">
           {evaluaciones.map((e) => (
             <div key={e.id} className="flex items-center gap-3 p-3">
-              <ClipboardCheck className="size-5 text-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm truncate">{e.colaborador.nombres} {e.colaborador.apellidos}</p>
+              <Chip icono={ClipboardCheck} color="indigo" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{e.colaborador.nombres} {e.colaborador.apellidos}</p>
                 <p className="text-xs text-muted-foreground">{e.periodo} · {formatFechaCorta(e.fecha)}</p>
               </div>
-              <Badge variant={Number(e.puntaje) >= 70 ? 'default' : 'secondary'}>{Number(e.puntaje)} / 100</Badge>
+              <Pill tone={Number(e.puntaje) >= 70 ? 'ok' : Number(e.puntaje) >= 50 ? 'warn' : 'bad'}>{Number(e.puntaje)} / 100</Pill>
             </div>
           ))}
         </CardContent></Card>

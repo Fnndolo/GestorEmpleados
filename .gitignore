@@ -49,3 +49,12 @@ uploads/
 .env
 .vercel
 
+
+# Salida generada por /graphify (no es fuente)
+graphify-out/
+
+# Experimento de diseño, ajeno al sistema
+DESIGN.md
+
+# Skill y notas internas de Claude (no van al repo compartido)
+.claude/

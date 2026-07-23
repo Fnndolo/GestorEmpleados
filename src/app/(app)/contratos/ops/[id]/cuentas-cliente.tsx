@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ShieldCheck, ShieldAlert, ShieldQuestion, CheckCircle2, XCircle, Ban } from 'lucide-react'
+import { ShieldCheck, ShieldAlert, ShieldQuestionMark, CircleCheck, CircleX, Ban, Eye } from 'lucide-react'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,9 +18,10 @@ import { formatFechaCorta } from '@/lib/fechas'
 import { registrarSoporteSs, cambiarEstadoCuenta } from '../../ops-acciones'
 
 type Soporte = { estadoVerificacion: string; periodoCotizado: string; ibcDeclarado: number | null; operador: string | null }
+type Planilla = { id: string; nombre: string; esImagen: boolean }
 type Cuenta = {
   id: string; numero: string; periodo: string; valor: number; estado: string
-  fechaRadicacion: string; fechaPago: string | null; soporte: Soporte | null
+  fechaRadicacion: string; fechaPago: string | null; soporte: Soporte | null; planilla: Planilla | null
 }
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -35,6 +37,7 @@ export function CuentasCobro({
 }) {
   const router = useRouter()
   const [soporteDe, setSoporteDe] = useState<Cuenta | null>(null)
+  const [imagen, setImagen] = useState<Planilla | null>(null)
 
   return (
     <div className="space-y-3">
@@ -69,6 +72,20 @@ export function CuentasCobro({
                     <p className="text-amber-600">Sin soporte de seguridad social. Requerido para aprobar/pagar.</p>
                   )}
                 </div>
+                {/* Archivo de la planilla adjuntada por el contratista: se ve en la app. */}
+                {cc.planilla && (
+                  cc.planilla.esImagen ? (
+                    <Button variant="outline" size="sm" onClick={() => setImagen(cc.planilla)}>
+                      <Eye className="size-4" /> Ver planilla
+                    </Button>
+                  ) : (
+                    <VisorPdf documentoId={cc.planilla.id} titulo={cc.planilla.nombre}>
+                      <span className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium shadow-xs transition-colors hover:bg-accent">
+                        <Eye className="size-4" /> Ver planilla
+                      </span>
+                    </VisorPdf>
+                  )
+                )}
                 {puedeEditar && (
                   <Button variant="outline" size="sm" onClick={() => setSoporteDe(cc)}>
                     {cc.soporte ? 'Editar SS' : 'Registrar SS'}
@@ -79,10 +96,10 @@ export function CuentasCobro({
               {/* Acciones de estado */}
               {puedeAprobar && cc.estado !== 'PAGADA' && cc.estado !== 'RECHAZADA' && (
                 <div className="flex flex-wrap gap-2">
-                  <AccionEstado id={cc.id} estado="APROBADA" label="Aprobar" icono={CheckCircle2} onDone={() => router.refresh()} />
-                  <AccionEstado id={cc.id} estado="PAGADA" label="Marcar pagada" icono={CheckCircle2} onDone={() => router.refresh()} requiereFecha />
+                  <AccionEstado id={cc.id} estado="APROBADA" label="Aprobar" icono={CircleCheck} onDone={() => router.refresh()} />
+                  <AccionEstado id={cc.id} estado="PAGADA" label="Marcar pagada" icono={CircleCheck} onDone={() => router.refresh()} requiereFecha />
                   <AccionEstado id={cc.id} estado="BLOQUEADA_SS" label="Bloquear (SS)" icono={Ban} variant="outline" onDone={() => router.refresh()} />
-                  <AccionEstado id={cc.id} estado="RECHAZADA" label="Rechazar" icono={XCircle} variant="outline" onDone={() => router.refresh()} />
+                  <AccionEstado id={cc.id} estado="RECHAZADA" label="Rechazar" icono={CircleX} variant="outline" onDone={() => router.refresh()} />
                 </div>
               )}
             </CardContent>
@@ -91,6 +108,19 @@ export function CuentasCobro({
       )}
 
       {soporteDe && <DialogSoporte cuenta={soporteDe} valorMensual={valorMensual} onClose={() => setSoporteDe(null)} onDone={() => { setSoporteDe(null); router.refresh() }} />}
+
+      {/* Ampliación de la planilla cuando es imagen (foto del comprobante). */}
+      <Dialog open={imagen !== null} onOpenChange={(o) => { if (!o) setImagen(null) }}>
+        <DialogContent className="max-w-[calc(100%-2.5rem)] sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-6 text-base">{imagen?.nombre}</DialogTitle>
+          </DialogHeader>
+          {imagen && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={`/api/documentos/${imagen.id}`} alt={imagen.nombre} className="max-h-[70vh] w-full rounded-lg object-contain" />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -98,13 +128,13 @@ export function CuentasCobro({
 function EstadoSS({ estado }: { estado?: string }) {
   if (estado === 'VALIDA') return <ShieldCheck className="size-5 text-emerald-600" />
   if (estado === 'INVALIDA') return <ShieldAlert className="size-5 text-destructive" />
-  return <ShieldQuestion className="size-5 text-amber-500" />
+  return <ShieldQuestionMark className="size-5 text-amber-500" />
 }
 
 function AccionEstado({
   id, estado, label, icono: Icono, variant = 'default', requiereFecha, onDone,
 }: {
-  id: string; estado: string; label: string; icono: typeof CheckCircle2
+  id: string; estado: string; label: string; icono: typeof CircleCheck
   variant?: 'default' | 'outline'; requiereFecha?: boolean; onDone: () => void
 }) {
   const [cargando, setCargando] = useState(false)

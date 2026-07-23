@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Calculator, CheckCircle2, Lock, FileText, FileSpreadsheet } from 'lucide-react'
+import { Calculator, CircleCheck, Lock, FileText, FileSpreadsheet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
@@ -36,7 +36,7 @@ export function AccionesPeriodo({
       )}
       {puedeAprobar && estado === 'CALCULADA' && (
         <Button size="sm" variant="outline" onClick={() => ejecutar('apr', () => aprobarPeriodo({ periodoId }), 'Periodo aprobado.')} disabled={cargando !== null}>
-          {cargando === 'apr' ? <Spinner /> : <CheckCircle2 className="size-4" />} Aprobar
+          {cargando === 'apr' ? <Spinner /> : <CircleCheck className="size-4" />} Aprobar
         </Button>
       )}
       {puedeAprobar && estado === 'APROBADA' && (

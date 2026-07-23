@@ -1,32 +1,60 @@
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
+import { formatFechaISO } from '@/lib/fechas'
 import { Encabezado } from '@/components/shell/encabezado'
-import { ParametrosForm } from './form'
+import { ParametrosForm, type ParametroItem, type TipoHoraItem } from './form'
 
 export const metadata = { title: 'Parámetros de nómina · Configuración' }
-
-async function actual(clave: string) {
-  const p = await prisma.parametroLegal.findFirst({ where: { clave }, orderBy: { vigenciaDesde: 'desc' } })
-  return p ? { valor: Number(p.valor), fuente: p.fuenteLegal, desde: p.vigenciaDesde } : null
-}
 
 export default async function ParametrosNominaPage() {
   const usuario = await requerirPermiso('configuracion', 'VER')
   const puedeEditar = tienePermiso(usuario, 'configuracion', 'EDITAR')
-  const [smmlv, aux] = await Promise.all([actual('SMMLV'), actual('AUX_TRANSPORTE')])
+
+  const hoy = new Date()
+  const [parametros, tiposHora, config] = await Promise.all([
+    prisma.parametroLegal.findMany({ orderBy: [{ clave: 'asc' }, { vigenciaDesde: 'desc' }] }),
+    prisma.tipoHora.findMany({ orderBy: [{ codigo: 'asc' }, { vigenteDesde: 'desc' }] }),
+    prisma.configuracionEmpresa.findFirst(),
+  ])
+
+  // Vigente por clave = el más reciente cuya vigencia cubre hoy (o el último si ninguna).
+  const porClave = new Map<string, ParametroItem>()
+  for (const p of parametros) {
+    if (porClave.has(p.clave)) continue
+    const vigente = p.vigenciaDesde <= hoy && (!p.vigenciaHasta || p.vigenciaHasta >= hoy)
+    porClave.set(p.clave, {
+      clave: p.clave,
+      valor: Number(p.valor),
+      desde: formatFechaISO(p.vigenciaDesde) ?? '',
+      fuente: p.fuenteLegal,
+      descripcion: p.descripcion,
+      vigente,
+    })
+  }
+
+  const tiposPorCodigo = new Map<string, TipoHoraItem>()
+  for (const t of tiposHora) {
+    if (tiposPorCodigo.has(t.codigo)) continue
+    tiposPorCodigo.set(t.codigo, {
+      codigo: t.codigo,
+      nombre: t.nombre,
+      factor: Number(t.factor),
+      desde: formatFechaISO(t.vigenteDesde) ?? '',
+    })
+  }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-3xl">
       <Encabezado
         titulo="Parámetros de nómina"
-        descripcion="Salario mínimo (SMMLV) y auxilio de transporte vigentes. Se usan al liquidar la nómina y en los contratos que ganan salario mínimo."
+        descripcion="Valores legales vigentes que usa el motor de nómina. Registra una nueva vigencia cuando cambie la norma: el histórico se conserva para auditoría."
       />
       <ParametrosForm
         puedeEditar={puedeEditar}
-        smmlv={smmlv?.valor ?? 0}
-        auxTransporte={aux?.valor ?? 0}
-        fuenteSmmlv={smmlv?.fuente ?? ''}
-        fuenteAux={aux?.fuente ?? ''}
+        parametros={[...porClave.values()]}
+        tiposHora={[...tiposPorCodigo.values()]}
+        aplicaRetefuente={config?.aplicaRetefuente ?? false}
+        empresaExonerada={config?.empresaExonerada ?? true}
       />
     </div>
   )

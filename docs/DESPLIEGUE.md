@@ -68,9 +68,16 @@ git push -u origin main
 | `SMTP_USER` | `smartventaspasto@gmail.com` |
 | `SMTP_PASS` | (la contraseña de aplicación de 16 caracteres, sin espacios) |
 | `CRON_SECRET` | una cadena aleatoria larga (protege los cron) |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | clave pública VAPID (notificaciones push) — genera el par con `npx web-push generate-vapid-keys` |
+| `VAPID_PRIVATE_KEY` | clave privada VAPID del mismo par (¡secreta!) |
+| `VAPID_SUBJECT` | `mailto:smartventaspasto@gmail.com` |
 | `SEED_ADMIN_EMAIL` | `smartventaspasto@gmail.com` |
-| `SEED_ADMIN_PASSWORD` | `KupocellSmart.2025@` |
+| `SEED_ADMIN_PASSWORD` | **una contraseña NUEVA y fuerte — no uses una que esté escrita en documentos del repo; cámbiala además al primer ingreso** |
 | `SEED_ADMIN_NAME` | `Administrador` |
+| `SEED_ADMIN_FORCE_CHANGE` | `true` (exige cambiar la contraseña del admin en el primer ingreso) |
+
+> Sin las claves VAPID la app funciona igual, pero no habrá notificaciones push en el celular
+> (correo e in-app sí). Genera el par una vez y no lo cambies (los suscritos se perderían).
 
 4. **Deploy**. Espera a que termine (la primera vez tarda unos minutos).
 > Tras conocer la URL final, vuelve a Settings → Environment Variables y confirma que
@@ -86,7 +93,8 @@ En PowerShell, en la carpeta del proyecto:
 $env:DATABASE_URL = "PEGA_AQUI_TU_DIRECT_URL"   # usa la conexión DIRECTA (5432) para migrar
 $env:DIRECT_URL   = "PEGA_AQUI_TU_DIRECT_URL"
 $env:SEED_ADMIN_EMAIL    = "smartventaspasto@gmail.com"
-$env:SEED_ADMIN_PASSWORD = "KupocellSmart.2025@"
+$env:SEED_ADMIN_PASSWORD = "LA_MISMA_CONTRASEÑA_NUEVA_QUE_PUSISTE_EN_VERCEL"
+$env:SEED_ADMIN_FORCE_CHANGE = "true"
 
 pnpm prisma migrate deploy   # crea todas las tablas
 pnpm db:seed                 # roles + permisos + catálogos + parámetros + admin (SIN empleados)
@@ -97,16 +105,21 @@ pnpm db:seed                 # roles + permisos + catálogos + parámetros + adm
 ---
 
 ## 6. Verificación
-1. Abre `https://TU-APP.vercel.app/login` → entra con `smartventaspasto@gmail.com` / `KupocellSmart.2025@`.
-2. **Configuración → Cargos**: revisa/ajusta el **rol por defecto** de cada cargo (ej. cargos de Talento Humano → rol *Recursos Humanos*; el resto → *Empleado*).
-3. **Colaboradores → Nuevo**: crea uno con su **correo**. Debe:
+1. Abre `https://TU-APP.vercel.app/login` → entra con el correo y la contraseña del admin (te pedirá cambiarla).
+2. **Configuración → Empresa**: llena NIT, representante legal y demás datos (vienen en "Por definir").
+3. **Configuración → Sedes**: la base arranca **sin ciudades ni sedes**. Crea tu **ciudad** (ej. Pasto, Nariño) y luego tu **sede** real. Sin al menos una sede no se pueden crear colaboradores.
+4. **Configuración → Cargos**: revisa/ajusta el **rol por defecto** de cada cargo (ej. cargos de Talento Humano → rol *Recursos Humanos*; el resto → *Empleado*).
+5. **Colaboradores → Nuevo**: crea uno con su **correo**. Debe:
    - crearse su **usuario** automáticamente con el rol del cargo, y
    - **llegarle el correo** de invitación con su contraseña temporal. ← así confirmas que el correo funciona.
-4. Sube una foto/documento → confirma que se guarda (Supabase Storage).
+6. Sube una foto/documento → confirma que se guarda (Supabase Storage).
 
 ---
 
 ## Notas
+- **Backups**: el plan Free de Supabase NO tiene backups diarios automáticos. Para nómina y
+  documentos laborales esto es obligatorio: usa Supabase Pro (backups diarios) o programa un
+  `pg_dump` periódico desde otra máquina. Sin backup no salgas a uso real.
 - **Cron de alertas**: Vercel ejecuta `/api/cron/calendario-legal` (05:30 Bogotá) y `/api/cron/alertas` (06:00 Bogotá) según `vercel.json`. En plan Hobby los cron corren 1 vez/día (suficiente). Para mayor frecuencia, plan Pro.
 - **Correos a muchos destinatarios**: Gmail tiene un límite (~500/día) más que suficiente para RH. Si en el futuro creces, migra a Resend con un dominio propio (el código ya lo soporta: `EMAIL_DRIVER=resend`).
 - **Cambiar la contraseña del admin**: el admin entra y la puede cambiar desde su perfil cuando quiera.

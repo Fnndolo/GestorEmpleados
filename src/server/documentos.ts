@@ -43,6 +43,9 @@ export async function guardarDocumento(
     const td = await prisma.tipoDocumento.findUnique({ where: { id: datos.tipoDocumentoId } })
     if (td) nivelAcceso = td.nivelAcceso
   }
+  // El certificado de un examen médico es dato de salud (Ley 1581): acceso
+  // restringido aunque no se haya elegido un tipo de documento con ese nivel.
+  if (datos.entidadTipo === 'ExamenMedico' && nivelAcceso === 'GENERAL') nivelAcceso = 'SST_MEDICO'
 
   const prefijo = `${datos.entidadTipo.toLowerCase()}/${datos.entidadId}`
   const subido = await subirArchivo(prefijo, archivo.nombre, archivo.contenido, archivo.mimeType)
@@ -70,11 +73,20 @@ export async function guardarDocumento(
     const tipoNombre = doc.tipoDocumentoId
       ? (await prisma.tipoDocumento.findUnique({ where: { id: doc.tipoDocumentoId } }))?.nombre
       : null
+
+    let tituloAdicional = ''
+    if (datos.entidadTipo === 'Colaborador') {
+      const colab = await prisma.colaborador.findUnique({ where: { id: datos.entidadId } })
+      if (colab) {
+        tituloAdicional = ` — ${colab.nombres} ${colab.apellidos}`
+      }
+    }
+
     await publicarVencimiento({
       origen: 'DOCUMENTO',
       entidadTipo: 'Documento',
       entidadId: doc.id,
-      titulo: `${tipoNombre ?? doc.nombre}`,
+      titulo: `${tipoNombre ?? doc.nombre}${tituloAdicional}`,
       detalle: doc.descripcion,
       fechaVencimientoISO: formatFechaISO(doc.fechaVencimiento),
       sedeId: doc.sedeId,

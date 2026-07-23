@@ -3,8 +3,8 @@ import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, HandCoins } from 'lucide-react'
+import { Chip, Pill } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import { PrestamosCliente } from './prestamos-cliente'
 
@@ -28,16 +28,15 @@ export default async function PrestamosPage() {
         {prestamos.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">Sin préstamos registrados.</p>
         ) : prestamos.map((p) => (
-          <Link key={p.id} href={`/nomina/prestamos/${p.id}`} className="flex items-center gap-3 p-3 hover:bg-accent/40 transition-colors">
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm truncate">{p.colaborador.nombres} {p.colaborador.apellidos}</p>
+          <Link key={p.id} href={`/nomina/prestamos/${p.id}`} className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/40">
+            <Chip icono={HandCoins} color="amber" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{p.colaborador.nombres} {p.colaborador.apellidos}</p>
               <p className="text-xs text-muted-foreground">{fmtCOP(Number(p.valorTotal))} en {p.numeroCuotas} cuotas de {fmtCOP(Number(p.valorCuota))}</p>
             </div>
-            <div className="text-right">
-              <p className="text-sm font-medium">Saldo: {fmtCOP(Number(p.saldo))}</p>
-            </div>
-            <Badge variant={p.estado === 'PAGADO' ? 'default' : 'secondary'}>{p.estado}</Badge>
-            <ChevronRight className="size-4 text-muted-foreground" />
+            <p className="hidden text-sm font-medium tabular-nums sm:block">Saldo: {fmtCOP(Number(p.saldo))}</p>
+            <Pill tone={p.estado === 'PAGADO' ? 'ok' : 'warn'}>{p.estado === 'PAGADO' ? 'Pagado' : 'Activo'}</Pill>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
           </Link>
         ))}
       </CardContent></Card>

@@ -27,8 +27,10 @@ pnpm dev                     # arranca la app en http://localhost:3000
 > nómina) y `pnpm db:studio` para inspeccionar la base de datos.
 
 **Usuario administrador inicial** (creado por el seed):
-- Correo: `michaelmartinez0996@gmail.com`
-- Contraseña temporal: `Kupocell.2026*` (el sistema obliga a cambiarla en el primer ingreso)
+- Correo y contraseña se definen con las variables `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD`.
+- Si no defines `SEED_ADMIN_PASSWORD`, el seed **genera una contraseña aleatoria y la imprime en
+  consola** al crear el admin (solo en desarrollo). El sistema obliga a cambiarla en el primer ingreso.
+- **En producción**: define siempre `SEED_ADMIN_PASSWORD` con una contraseña fuerte y única (ver `docs/DESPLIEGUE.md`).
 
 En desarrollo, los correos (invitaciones, restablecimientos) se **imprimen en la consola** del
 servidor en lugar de enviarse (`EMAIL_DRIVER=console`).

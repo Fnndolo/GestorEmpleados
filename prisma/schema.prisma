@@ -218,6 +218,7 @@ model ConfiguracionEmpresa {
   nombreComercial    String  @map("nombre_comercial")
   nit                String
   representanteLegal String  @map("representante_legal")
+  representanteLegalCc String? @map("representante_legal_cc") // C.C. del rep. legal (contratos)
   emailContacto      String? @map("email_contacto")
   telefono           String?
   direccion          String?
@@ -225,6 +226,10 @@ model ConfiguracionEmpresa {
   logoUrl            String? @map("logo_url")
   // Días hábiles: el sábado cuenta como hábil salvo configuración contraria (C6)
   sabadoHabil        Boolean @default(true) @map("sabado_habil")
+  // Interruptores de nómina (editables por RRHH sin cambio de código):
+  // retención en la fuente (procedimiento 1) y exoneración de aportes Ley 114-1 (art. 65 Ley 1819).
+  aplicaRetefuente   Boolean @default(false) @map("aplica_retefuente")
+  empresaExonerada   Boolean @default(true) @map("empresa_exonerada")
   actualizadoEn      DateTime @updatedAt @map("actualizado_en")
 
   @@map("configuracion_empresa")
@@ -340,6 +345,9 @@ model Cargo {
   area               Area            @relation(fields: [areaId], references: [id])
   nivel              String? // directivo / coordinación / operativo…
   funciones          String? // alimenta certificación CON_FUNCIONES
+  // Funciones para el contrato (cláusula de funciones), en grupos con viñetas.
+  // Estructura: [{ grupo: string, items: string[] }]
+  funcionesContrato  Json?           @map("funciones_contrato")
   claseRiesgoDefecto ClaseRiesgoArl? @map("clase_riesgo_defecto")
   rolDefectoId       String?         @map("rol_defecto_id") @db.Uuid // rol que se asigna al crear el usuario del colaborador
   rolDefecto         Rol?            @relation("CargoRolDefecto", fields: [rolDefectoId], references: [id])
@@ -349,9 +357,41 @@ model Cargo {
 
   colaboradores Colaborador[]
   contratos     Contrato[]
+  contratosOps  ContratoOps[]
 
   @@unique([nombre, areaId])
   @@map("cargo")
+}
+
+// Plantilla de contrato por modalidad (editable por la encargada). El texto legal
+// vive aquí (cláusulas con {{variables}}); las funciones salen del cargo.
+model PlantillaContrato {
+  id            String              @id @default(uuid(7)) @db.Uuid
+  nombre        String
+  tipo          String // 'OPS' (prestación de servicios); luego laborales
+  titulo        String // "CONTRATO DE PRESTACIÓN DE SERVICIOS"
+  intro         String // párrafo introductorio (con {{variables}})
+  cierre        String              @default("") // párrafo final "Leído, entendido y aprobado" antes de las firmas
+  activa        Boolean             @default(true)
+  creadoEn      DateTime            @default(now()) @map("creado_en")
+  actualizadoEn DateTime            @updatedAt @map("actualizado_en")
+
+  clausulas ClausulaPlantilla[]
+
+  @@map("plantilla_contrato")
+}
+
+model ClausulaPlantilla {
+  id          String            @id @default(uuid(7)) @db.Uuid
+  plantillaId String            @map("plantilla_id") @db.Uuid
+  plantilla   PlantillaContrato @relation(fields: [plantillaId], references: [id], onDelete: Cascade)
+  orden       Int
+  titulo      String // "PRIMERA. – OBJETO:"
+  cuerpo      String // texto con {{variables}}; líneas que empiezan con "- " son viñetas
+  esFunciones Boolean           @default(false) @map("es_funciones") // aquí se insertan las funciones del cargo
+
+  @@index([plantillaId])
+  @@map("clausula_plantilla")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -510,6 +550,9 @@ model Colaborador {
   jefeInmediatoId  String?          @map("jefe_inmediato_id") @db.Uuid
   jefeInmediato    Colaborador?     @relation("JefeInmediato", fields: [jefeInmediatoId], references: [id])
   subordinados     Colaborador[]    @relation("JefeInmediato")
+  // Máxima autoridad de la empresa: sus solicitudes se auto-registran (no requieren
+  // aprobación superior) y nadie más puede "aprobar" por encima de él.
+  esRepresentanteLegal Boolean      @default(false) @map("es_representante_legal")
   modalidadTrabajo ModalidadTrabajo @default(PRESENCIAL) @map("modalidad_trabajo")
   fechaIngreso     DateTime         @map("fecha_ingreso") @db.Date
   fechaRetiro      DateTime?        @map("fecha_retiro") @db.Date
@@ -535,6 +578,7 @@ model Colaborador {
   licencias             Licencia[]
   permisos              Permiso[]
   vacaciones            Vacaciones[]
+  novedadesConcepto     NovedadConcepto[]
   bonificaciones        Bonificacion[]
   solicitudes           Solicitud[]
   certificaciones       CertificacionLaboral[]
@@ -549,9 +593,14 @@ model Colaborador {
   evaluaciones          EvaluacionDesempeno[]
   procesosDisciplinarios ProcesoDisciplinario[]
   autorizacionesDatos   AutorizacionDatos[]
+  consultasHabeas       ConsultaReclamoDatos[]
   examenesMedicos       ExamenMedico[]
   accidentes            AccidenteTrabajo[]
   entregasEpp           EntregaEpp[]
+  membresiasComite      MiembroComite[]
+  brigadas              Brigadista[]
+  designacionesSgsst    ResponsableSgsst[]
+  novedadesArl          NovedadArl[]
 
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
@@ -635,6 +684,7 @@ model Documento {
   storagePath      String               @map("storage_path")
   mimeType         String               @map("mime_type")
   tamanoBytes      Int                  @map("tamano_bytes")
+  sha256           String?              // huella SHA-256 (hex) del archivo: sello de integridad
   fechaVencimiento DateTime?            @map("fecha_vencimiento") @db.Date
   nivelAcceso      NivelAccesoDocumento @default(GENERAL) @map("nivel_acceso")
   sedeId           String?              @map("sede_id") @db.Uuid
@@ -711,6 +761,7 @@ enum OrigenVencimiento {
   ACCION_CORRECTIVA
   EPP
   DOTACION
+  PLAN_EMERGENCIA
   MODULO_PERSONALIZADO
   MANUAL
 
@@ -825,6 +876,20 @@ model FestivoExcepcion {
 // NOTIFICACIONES — centro in-app + outbox (correo / WhatsApp preparado)
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Suscripción Web Push de un dispositivo (navegador/PWA) de un usuario.
+model SuscripcionPush {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?  @map("user_agent")
+  creadoEn  DateTime @default(now()) @map("creado_en")
+
+  @@index([userId])
+  @@map("suscripcion_push")
+}
+
 model Notificacion {
   id          String   @id @default(uuid(7)) @db.Uuid
   userId      String   @map("user_id") @db.Uuid
@@ -832,12 +897,26 @@ model Notificacion {
   mensaje     String
   enlace      String?
   leida       Boolean  @default(false)
+  // Clave del evento (ver src/lib/notificaciones/catalogo.ts). Permite que el
+  // admin configure qué eventos muestran pop-up. Null = aviso sin catalogar.
+  evento      String?
   // Evita duplicar la misma notificación si el cron corre dos veces
   dedupeKey   String   @unique @map("dedupe_key")
   creadoEn    DateTime @default(now()) @map("creado_en")
 
   @@index([userId, leida, creadoEn])
   @@map("notificacion")
+}
+
+// Preferencia global (la fija el administrador) de qué eventos muestran pop-up.
+// Sin registro para un evento = pop-up activo por defecto. Solo afecta el pop-up
+// (toast): la notificación igual llega a la campana, el correo y el push.
+model PreferenciaNotificacion {
+  evento        String   @id
+  popup         Boolean  @default(true)
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  @@map("preferencia_notificacion")
 }
 
 enum CanalMensaje {
@@ -947,12 +1026,23 @@ model Contrato {
   periodoPruebaFin   DateTime?           @map("periodo_prueba_fin") @db.Date
   estado             EstadoContrato      @default(BORRADOR)
   observaciones      String?
+  // Snapshot de los datos resueltos del PDF (plantilla + variables sustituidas) para
+  // regenerar el documento firmado sin re-derivar; el texto queda congelado al crear.
+  contenidoPdf       Json?               @map("contenido_pdf")
+  // Firma digital de cada parte (imagen PNG en storage) + fecha y usuario que la aplicó.
+  firmaEmpleadoPath   String?   @map("firma_empleado_path")
+  firmaEmpleadoFecha  DateTime? @map("firma_empleado_fecha")
+  firmaEmpleadoPorId  String?   @map("firma_empleado_por_id") @db.Uuid
+  firmaEmpleadorPath  String?   @map("firma_empleador_path")
+  firmaEmpleadorFecha DateTime? @map("firma_empleador_fecha")
+  firmaEmpleadorPorId String?   @map("firma_empleador_por_id") @db.Uuid
   creadoEn           DateTime            @default(now()) @map("creado_en")
   actualizadoEn      DateTime            @updatedAt @map("actualizado_en")
 
-  prorrogas    ProrrogaContrato[]
-  otrosis      OtrosiContrato[]
-  suspensiones SuspensionContrato[]
+  prorrogas       ProrrogaContrato[]
+  otrosis         OtrosiContrato[]
+  suspensiones    SuspensionContrato[]
+  evidenciasFirma EvidenciaFirmaContrato[]
 
   @@index([colaboradorId, estado])
   @@index([tipo, estado, fechaFin])
@@ -1047,6 +1137,7 @@ model VariacionSalarial {
 enum EstadoContratoOps {
   BORRADOR
   ACTIVO
+  FIRMADO
   TERMINADO
 
   @@map("estado_contrato_ops")
@@ -1062,21 +1153,96 @@ model ContratoOps {
   valorMensual  Decimal?          @map("valor_mensual") @db.Decimal(14, 2)
   supervisorId  String?           @map("supervisor_id") @db.Uuid
   supervisor    Colaborador?      @relation("SupervisorOps", fields: [supervisorId], references: [id])
+  cargoId       String?           @map("cargo_id") @db.Uuid
+  cargo         Cargo?            @relation(fields: [cargoId], references: [id])
   sedeId        String            @map("sede_id") @db.Uuid
   sede          Sede              @relation(fields: [sedeId], references: [id])
   fechaInicio   DateTime          @map("fecha_inicio") @db.Date
   fechaFin      DateTime          @map("fecha_fin") @db.Date
   rut           String?
   estado        EstadoContratoOps @default(ACTIVO)
+  // Snapshot de los datos resueltos del PDF (empresa, plantilla, encabezado, nombres)
+  // para poder regenerar el documento firmado sin re-derivar el formulario.
+  contenidoPdf  Json?             @map("contenido_pdf")
+  // Firma digital de cada parte (imagen PNG en storage) + fecha y usuario que la aplicó.
+  firmaContratistaPath  String?   @map("firma_contratista_path")
+  firmaContratistaFecha DateTime? @map("firma_contratista_fecha")
+  firmaContratistaPorId String?   @map("firma_contratista_por_id") @db.Uuid
+  firmaContratantePath  String?   @map("firma_contratante_path")
+  firmaContratanteFecha DateTime? @map("firma_contratante_fecha")
+  firmaContratantePorId String?   @map("firma_contratante_por_id") @db.Uuid
   creadoEn      DateTime          @default(now()) @map("creado_en")
   actualizadoEn DateTime          @updatedAt @map("actualizado_en")
 
   entregables   EntregableOps[]
   cuentasCobro  CuentaCobroOps[]
+  evidenciasFirma EvidenciaFirmaContrato[]
 
   @@index([colaboradorId, estado])
   @@index([sedeId])
   @@map("contrato_ops")
+}
+
+enum RolFirmaContrato {
+  CONTRATISTA
+  CONTRATANTE
+  EMPLEADO
+  EMPLEADOR
+
+  @@map("rol_firma_contrato")
+}
+
+// Rastro probatorio de cada acto de firma (Ley 527 de 1999): quién, cuándo, desde
+// dónde y con qué huella de documento. Se registra en BD, no dentro del PDF.
+model EvidenciaFirmaContrato {
+  id            String           @id @default(uuid(7)) @db.Uuid
+  // Exactamente uno de los dos: contrato OPS o contrato laboral.
+  contratoOpsId String?          @map("contrato_ops_id") @db.Uuid
+  contratoOps   ContratoOps?     @relation(fields: [contratoOpsId], references: [id], onDelete: Cascade)
+  contratoId    String?          @map("contrato_id") @db.Uuid
+  contrato      Contrato?        @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  rol           RolFirmaContrato
+  userId        String?          @map("user_id") @db.Uuid
+  userEmail     String?          @map("user_email")
+  ip            String?
+  userAgent     String?          @map("user_agent")
+  metodoAuth    String           @default("SESION") @map("metodo_auth") // método con que se autenticó el firmante
+  // Documentos resultantes con su huella: [{ tipo, documentoId, sha256 }]
+  documentos    Json?
+  firmadoEn     DateTime         @default(now()) @map("firmado_en")
+
+  @@index([contratoOpsId])
+  @@map("evidencia_firma_contrato")
+}
+
+// Propósito de un código de verificación de firma (a qué firma autoriza).
+enum PropositoCodigoFirma {
+  FIRMA_CONTRATO_OPS
+  FIRMA_CONTRATO_LABORAL
+
+  @@map("proposito_codigo_firma")
+}
+
+// Código de un solo uso (OTP) enviado por correo para autorizar una firma
+// electrónica en autoservicio. Deja huella del consentimiento previo (Ley 527):
+// se guarda el hash del código (nunca en texto plano), a quién y para qué se
+// emitió, vencimiento, intentos e IP. El código válido más reciente por
+// (usuario, propósito, referencia) es el vigente.
+model CodigoFirma {
+  id           String               @id @default(uuid(7)) @db.Uuid
+  proposito    PropositoCodigoFirma
+  referenciaId String               @map("referencia_id") @db.Uuid // p. ej. contratoOpsId
+  userId       String               @map("user_id") @db.Uuid
+  email        String // correo destino al que se envió el código
+  codigoHash   String               @map("codigo_hash") // SHA-256 del código de 6 dígitos
+  expiraEn     DateTime             @map("expira_en")
+  intentos     Int                  @default(0) // intentos fallidos de validación
+  usadoEn      DateTime?            @map("usado_en") // cuándo se consumió al firmar
+  ip           String?
+  creadoEn     DateTime             @default(now()) @map("creado_en")
+
+  @@index([userId, proposito, referenciaId])
+  @@map("codigo_firma")
 }
 
 model EntregableOps {
@@ -1286,6 +1452,9 @@ model Vacaciones {
   estado        EstadoVacaciones @default(SOLICITADA)
   observaciones String?
   solicitudId   String?          @map("solicitud_id") @db.Uuid // origen: solicitud de autoservicio
+  // Periodo de nómina que pagó estas vacaciones por adelantado (antes de la salida).
+  // El periodo que cubre los días descuenta el salario para no pagar doble.
+  pagoAnticipadoPeriodoId String? @map("pago_anticipado_periodo_id") @db.Uuid
   creadoEn      DateTime         @default(now()) @map("creado_en")
 
   @@index([colaboradorId, estado])
@@ -1307,11 +1476,15 @@ model Bonificacion {
   valor               Decimal            @db.Decimal(14, 2)
   constitutivoSalario Boolean            @default(false) @map("constitutivo_salario")
   estadoPago          EstadoBonificacion @default(PENDIENTE) @map("estado_pago")
+  // Periodo en que se pagó (se fija al liquidar): evita volver a pagarla y da idempotencia
+  periodoId           String?            @map("periodo_id") @db.Uuid
+  periodo             PeriodoNomina?     @relation(fields: [periodoId], references: [id])
   fechaPago           DateTime?          @map("fecha_pago") @db.Date
   observaciones       String?
   creadoEn            DateTime           @default(now()) @map("creado_en")
 
   @@index([colaboradorId])
+  @@index([periodoId])
   @@map("bonificacion")
 }
 
@@ -1333,6 +1506,12 @@ enum TipoSolicitud {
 enum EstadoSolicitud {
   PENDIENTE
   EN_APROBACION
+  // Contrapropuesta de fechas del jefe pendiente de respuesta del colaborador
+  // (RIT art. 29 lit. c: el disfrute de vacaciones se concierta entre ambos).
+  EN_NEGOCIACION
+  // Licencia de ley con soporte insuficiente: vuelve al colaborador para que lo
+  // corrija sobre la MISMA solicitud (no es un rechazo; la licencia es un derecho).
+  DEVUELTA
   APROBADA
   RECHAZADA
   CANCELADA
@@ -1475,6 +1654,8 @@ model ConceptoNomina {
   activo              Boolean             @default(true)
   orden               Int                 @default(100)
 
+  novedades NovedadConcepto[]
+
   @@map("concepto_nomina")
 }
 
@@ -1528,8 +1709,30 @@ model PeriodoNomina {
   liquidaciones LiquidacionNomina[]
   comisiones    Comision[]
   novedadesHoras NovedadHoras[]
+  bonificaciones Bonificacion[]
+  novedadesConcepto NovedadConcepto[]
 
   @@map("periodo_nomina")
+}
+
+// Aplicación de un concepto configurable del catálogo a un colaborador en un
+// periodo (auxilio de alimentación, prima extralegal, descuento…). El motor lo
+// liquida según las banderas del concepto (constitutivo, IBC, prestaciones).
+model NovedadConcepto {
+  id            String         @id @default(uuid(7)) @db.Uuid
+  colaboradorId String         @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador    @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  periodoId     String         @map("periodo_id") @db.Uuid
+  periodo       PeriodoNomina  @relation(fields: [periodoId], references: [id], onDelete: Cascade)
+  conceptoId    String         @map("concepto_id") @db.Uuid
+  concepto      ConceptoNomina @relation(fields: [conceptoId], references: [id])
+  valor         Decimal        @db.Decimal(14, 2)
+  observaciones String?
+  creadoEn      DateTime       @default(now()) @map("creado_en")
+
+  @@index([colaboradorId, periodoId])
+  @@index([periodoId])
+  @@map("novedad_concepto")
 }
 
 model LiquidacionNomina {
@@ -1699,6 +1902,9 @@ model Terminacion {
   tipo          TipoTerminacion
   fechaRetiro   DateTime          @map("fecha_retiro") @db.Date
   preavisoDias  Int?              @map("preaviso_dias")
+  // Justa causa: proceso disciplinario cerrado que la sustenta (debido proceso).
+  procesoDisciplinarioId String?  @map("proceso_disciplinario_id") @db.Uuid
+  procesoDisciplinario   ProcesoDisciplinario? @relation(fields: [procesoDisciplinarioId], references: [id])
   indemnizacion Decimal?          @db.Decimal(14, 2)
   motivo        String?
   estado        EstadoTerminacion @default(EN_PROCESO)
@@ -1811,6 +2017,8 @@ model AsignacionActivo {
   fechaDevolucion    DateTime?   @map("fecha_devolucion") @db.Date
   actaEntregaDocId   String?     @map("acta_entrega_doc_id") @db.Uuid
   actaDevolucionDocId String?    @map("acta_devolucion_doc_id") @db.Uuid
+  // Firma digital del colaborador sobre el acta de entrega (desde su autoservicio)
+  firmaEntregaEn     DateTime?   @map("firma_entrega_en")
   observaciones      String?
   creadoEn           DateTime    @default(now()) @map("creado_en")
 
@@ -1828,6 +2036,8 @@ model EntregaDotacion {
   items         String // descripción de las prendas
   fechaEntrega  DateTime    @map("fecha_entrega") @db.Date
   recibidoDocId String?     @map("recibido_doc_id") @db.Uuid
+  // Firma digital del colaborador sobre el recibido (desde su autoservicio)
+  firmadoEn     DateTime?   @map("firmado_en")
   creadoEn      DateTime    @default(now()) @map("creado_en")
 
   @@index([colaboradorId])
@@ -1919,6 +2129,9 @@ model DocumentoLegal {
   vigenciaFin DateTime?         @map("vigencia_fin") @db.Date
   sedeId      String?           @map("sede_id") @db.Uuid
   documentoId String?           @map("documento_id") @db.Uuid // archivo PDF
+  // Marca este documento como la política del SG-SST (se refleja en el semáforo de SST)
+  esSgSst     Boolean           @default(false) @map("es_sgsst")
+  firmadaEn   DateTime?         @map("firmada_en") @db.Date // fecha de firma del representante legal
   creadoEn    DateTime          @default(now()) @map("creado_en")
   actualizadoEn DateTime        @updatedAt @map("actualizado_en")
 
@@ -1962,10 +2175,13 @@ model ProcesoDisciplinario {
   fechaApertura DateTime           @map("fecha_apertura") @db.Date
   decision      String?
   cerrado       Boolean            @default(false)
+  fechaLimite   DateTime?          @map("fecha_limite") @db.Date // plazo vigente (descargos o apelación): 5 días hábiles
+  documentoActaId String?          @map("documento_acta_id") @db.Uuid // acta/acuerdo final
   creadoEn      DateTime           @default(now()) @map("creado_en")
   actualizadoEn DateTime           @updatedAt @map("actualizado_en")
 
   etapas EtapaProceso[]
+  terminaciones Terminacion[]
 
   @@index([colaboradorId])
   @@map("proceso_disciplinario")
@@ -2005,6 +2221,7 @@ model DenunciaAcoso {
   sedeId      String?        @map("sede_id") @db.Uuid
   estado      EstadoDenuncia @default(RECIBIDA)
   resolucion  String?
+  documentoResolucionId String? @map("documento_resolucion_id") @db.Uuid // acuerdo/resolución final
   creadoEn    DateTime       @default(now()) @map("creado_en")
   actualizadoEn DateTime     @updatedAt @map("actualizado_en")
 
@@ -2041,6 +2258,9 @@ model ConsultaReclamoDatos {
   id           String                @id @default(uuid(7)) @db.Uuid
   tipo         TipoConsultaReclamo
   titular      String
+  // Colaborador que la radicó desde su autoservicio (null si la registró un tercero vía admin)
+  colaboradorId String?              @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador?         @relation(fields: [colaboradorId], references: [id])
   descripcion  String
   fechaRadicacion DateTime           @map("fecha_radicacion") @db.Date
   fechaLimite  DateTime?             @map("fecha_limite") @db.Date
@@ -2154,10 +2374,12 @@ model MiembroComite {
   id            String  @id @default(uuid(7)) @db.Uuid
   comiteId      String  @map("comite_id") @db.Uuid
   comite        Comite  @relation(fields: [comiteId], references: [id], onDelete: Cascade)
-  colaboradorId String  @map("colaborador_id") @db.Uuid
+  colaboradorId String      @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id])
   rol           String // Presidente, Secretario, Miembro, Suplente
-  porEmpleador  Boolean @default(false) @map("por_empleador")
+  porEmpleador  Boolean     @default(false) @map("por_empleador")
 
+  @@index([colaboradorId])
   @@map("miembro_comite")
 }
 
@@ -2185,16 +2407,98 @@ enum NivelRiesgoIpevr {
 }
 
 model PeligroIpevr {
-  id        String           @id @default(uuid(7)) @db.Uuid
-  sedeId    String?          @map("sede_id") @db.Uuid
-  proceso   String
-  peligro   String
-  riesgo    String
-  nivel     NivelRiesgoIpevr
-  controles String?
-  creadoEn  DateTime         @default(now()) @map("creado_en")
+  id               String           @id @default(uuid(7)) @db.Uuid
+  sedeId           String?          @map("sede_id") @db.Uuid
+  proceso          String
+  peligro          String
+  riesgo           String
+  nivel            NivelRiesgoIpevr
+  controles        String?
+  // Campos GTC 45: rutina de la tarea y jerarquía de controles existentes.
+  rutinaria        Boolean          @default(true)
+  controlFuente    String?          @map("control_fuente")
+  controlMedio     String?          @map("control_medio")
+  controlIndividuo String?          @map("control_individuo")
+  responsable      String?
+  fechaRevision    DateTime?        @map("fecha_revision") @db.Date
+  creadoEn         DateTime         @default(now()) @map("creado_en")
 
   @@map("peligro_ipevr")
+}
+
+model Profesiograma {
+  id                  String   @id @default(uuid(7)) @db.Uuid
+  cargoId             String   @unique @map("cargo_id") @db.Uuid
+  riesgosExpuestos    String   @map("riesgos_expuestos")
+  examenesRequeridos  String   @map("examenes_requeridos")
+  aptitudesRequeridas String   @map("aptitudes_requeridas")
+  restricciones       String?
+  creadoEn            DateTime @default(now()) @map("creado_en")
+  actualizadoEn       DateTime @updatedAt @map("actualizado_en")
+
+  @@map("profesiograma")
+}
+
+model PlanEmergencia {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  sedeId        String?  @map("sede_id") @db.Uuid
+  version       String
+  vigenciaDesde DateTime @map("vigencia_desde") @db.Date
+  vigenciaHasta DateTime @map("vigencia_hasta") @db.Date
+  documentoId   String?  @map("documento_id") @db.Uuid
+  activo        Boolean  @default(true)
+  creadoEn      DateTime @default(now()) @map("creado_en")
+
+  @@map("plan_emergencia")
+}
+
+model Brigadista {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  colaboradorId String      @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id])
+  sedeId        String?     @map("sede_id") @db.Uuid
+  rol           String // Evacuación, Primeros auxilios, Contraincendios, Comunicaciones
+  activo        Boolean     @default(true)
+  creadoEn      DateTime    @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("brigadista")
+}
+
+model Simulacro {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  sedeId        String?  @map("sede_id") @db.Uuid
+  fecha         DateTime @db.Date
+  tipo          String // Incendio, Sismo, Evacuación…
+  participantes Int?
+  observaciones String?
+  documentoId   String?  @map("documento_id") @db.Uuid
+  creadoEn      DateTime @default(now()) @map("creado_en")
+
+  @@map("simulacro")
+}
+
+enum EstadoInspeccion {
+  ABIERTA
+  CERRADA
+
+  @@map("estado_inspeccion")
+}
+
+model InspeccionSst {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  sedeId      String?          @map("sede_id") @db.Uuid
+  fecha       DateTime         @db.Date
+  tipo        String // Locativa, Extintores, Equipos, Ergonómica…
+  area        String?
+  hallazgos   String
+  responsable String?
+  estado      EstadoInspeccion @default(ABIERTA)
+  fechaCierre DateTime?        @map("fecha_cierre") @db.Date
+  documentoId String?          @map("documento_id") @db.Uuid
+  creadoEn    DateTime         @default(now()) @map("creado_en")
+
+  @@map("inspeccion_sst")
 }
 
 enum TipoExamenMedico {
@@ -2229,8 +2533,52 @@ model ExamenMedico {
   documentoId     String?          @map("documento_id") @db.Uuid
   creadoEn        DateTime         @default(now()) @map("creado_en")
 
+  // Seguimiento a recomendaciones/restricciones: abierto mientras haya algo que vigilar
+  seguimientoCerrado Boolean       @default(false) @map("seguimiento_cerrado")
+  seguimientos    SeguimientoExamen[]
+
   @@index([colaboradorId])
   @@map("examen_medico")
+}
+
+// Notas de seguimiento a las recomendaciones/restricciones de un examen
+// (dato clínico sensible — visible solo con permiso colaboradores_salud).
+model SeguimientoExamen {
+  id       String       @id @default(uuid(7)) @db.Uuid
+  examenId String       @map("examen_id") @db.Uuid
+  examen   ExamenMedico @relation(fields: [examenId], references: [id], onDelete: Cascade)
+  fecha    DateTime     @db.Date
+  nota     String
+  creadoEn DateTime     @default(now()) @map("creado_en")
+
+  @@index([examenId])
+  @@map("seguimiento_examen")
+}
+
+enum TipoNovedadArl {
+  AFILIACION
+  RETIRO
+  TRASLADO_ARL
+  CAMBIO_CLASE_RIESGO
+  OTRA
+
+  @@map("tipo_novedad_arl")
+}
+
+// Novedades reportadas a la ARL (afiliaciones, retiros, traslados, cambios de clase de riesgo)
+model NovedadArl {
+  id            String         @id @default(uuid(7)) @db.Uuid
+  colaboradorId String         @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador    @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  tipo          TipoNovedadArl
+  fecha         DateTime       @db.Date
+  detalle       String?
+  claseRiesgo   ClaseRiesgoArl? @map("clase_riesgo") // para cambios de clase
+  soporteDocId  String?        @map("soporte_doc_id") @db.Uuid
+  creadoEn      DateTime       @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("novedad_arl")
 }
 
 enum EstadoAccidente {
@@ -2251,6 +2599,9 @@ model AccidenteTrabajo {
   descripcion   String
   parteCuerpo   String?         @map("parte_cuerpo")
   diasIncapacidad Int?          @map("dias_incapacidad")
+  // Incidente = casi-accidente sin lesión (Res. 1401/2007): se investiga igual,
+  // pero no se reporta a la ARL (sin FURAT) ni suma a los índices de accidentalidad.
+  esIncidente   Boolean         @default(false) @map("es_incidente")
   furatReportado Boolean        @default(false) @map("furat_reportado")
   investigacion String?
   estado        EstadoAccidente @default(REPORTADO)
@@ -2281,6 +2632,8 @@ model EntregaEpp {
   fechaEntrega  DateTime    @map("fecha_entrega") @db.Date
   reposicion    Boolean     @default(false)
   soporteDocId  String?     @map("soporte_doc_id") @db.Uuid
+  // Firma digital del colaborador sobre el recibido (desde su autoservicio)
+  firmadoEn     DateTime?   @map("firmado_en")
   creadoEn      DateTime    @default(now()) @map("creado_en")
 
   @@index([colaboradorId])
@@ -2298,6 +2651,27 @@ model AutoevaluacionSst {
 
   @@unique([anio])
   @@map("autoevaluacion_sst")
+
+  acciones AccionMejoraSst[]
+}
+
+// Plan de mejoramiento tras la autoevaluación (Res. 0312/2019 art. 28): cada
+// acción con responsable, fecha límite y evidencia; alerta al acercarse el plazo.
+model AccionMejoraSst {
+  id               String            @id @default(uuid(7)) @db.Uuid
+  autoevaluacionId String            @map("autoevaluacion_id") @db.Uuid
+  autoevaluacion   AutoevaluacionSst @relation(fields: [autoevaluacionId], references: [id], onDelete: Cascade)
+  actividad        String
+  responsable      String
+  fechaLimite      DateTime          @map("fecha_limite") @db.Date
+  recursos         String?
+  cumplida         Boolean           @default(false)
+  cumplidaEn       DateTime?         @map("cumplida_en") @db.Date
+  evidenciaDocId   String?           @map("evidencia_doc_id") @db.Uuid
+  creadoEn         DateTime          @default(now()) @map("creado_en")
+
+  @@index([autoevaluacionId])
+  @@map("accion_mejora_sst")
 }
 
 // Indicadores SST mensuales (frecuencia, severidad, ausentismo)
@@ -2314,6 +2688,65 @@ model IndicadorSst {
 
   @@unique([anio, mes])
   @@map("indicador_sst")
+}
+
+// Estructura documental del SG-SST (D.1072 art. 2.2.4.6.8): responsable designado.
+// Histórico: el vigente es el registro activo más reciente.
+model ResponsableSgsst {
+  id               String      @id @default(uuid(7)) @db.Uuid
+  colaboradorId    String      @map("colaborador_id") @db.Uuid
+  colaborador      Colaborador @relation(fields: [colaboradorId], references: [id])
+  fechaDesignacion DateTime    @map("fecha_designacion") @db.Date
+  licenciaSst      String?     @map("licencia_sst") // nro. de licencia en SST (si aplica)
+  cursoHoras       Int?        @map("curso_horas") // curso virtual 50 o 20 horas
+  cartaDocId       String?     @map("carta_doc_id") @db.Uuid // carta de designación firmada
+  activo           Boolean     @default(true)
+  creadoEn         DateTime    @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@map("responsable_sgsst")
+}
+
+// Plan de trabajo anual del SG-SST (D.1072 art. 2.2.4.6.8 num. 7): uno por año.
+model PlanTrabajoSst {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  anio        Int
+  documentoId String?  @map("documento_id") @db.Uuid // PDF del plan firmado
+  aprobadoPor String?  @map("aprobado_por") // quién lo aprueba (empleador/representante)
+  avancePct   Int      @default(0) @map("avance_pct") // % de ejecución (0-100)
+  notas       String?
+  creadoEn    DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  @@unique([anio])
+  @@map("plan_trabajo_sst")
+}
+
+enum CumplimientoNorma {
+  CUMPLE
+  PARCIAL
+  NO_CUMPLE
+
+  @@map("cumplimiento_norma")
+}
+
+// Matriz legal SST (normograma, D.1072 art. 2.2.4.6.8 num. 5): inventario de
+// normas aplicables con evaluación de cumplimiento y evidencia.
+model NormaMatrizLegal {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  norma          String // ej. "Decreto 1072 de 2015"
+  emisor         String? // Ministerio del Trabajo, etc.
+  tema           String // qué regula frente a la empresa
+  articulos      String? // artículos aplicables
+  comoCumple     String?           @map("como_cumple")
+  cumplimiento   CumplimientoNorma @default(NO_CUMPLE)
+  evidenciaDocId String?           @map("evidencia_doc_id") @db.Uuid
+  responsableRol String?           @map("responsable_rol")
+  activo         Boolean           @default(true)
+  creadoEn       DateTime          @default(now()) @map("creado_en")
+  actualizadoEn  DateTime          @updatedAt @map("actualizado_en")
+
+  @@map("norma_matriz_legal")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

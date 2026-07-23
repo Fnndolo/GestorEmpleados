@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { Prisma } from '@/generated/prisma/client'
 import { dbAuditado } from '@/lib/auditoria'
 import { accion } from '@/server/accion'
 import { cargoSchema, type CargoInput } from '@/lib/validaciones/catalogos'
@@ -13,6 +14,7 @@ function datosCargo(d: CargoInput) {
     activo: d.activo,
     nivel: d.nivel || null,
     funciones: d.funciones || null,
+    funcionesContrato: d.funcionesContrato && d.funcionesContrato.length > 0 ? d.funcionesContrato : Prisma.DbNull,
     claseRiesgoDefecto: d.claseRiesgoDefecto || null,
     rolDefectoId: d.rolDefectoId || null,
   }

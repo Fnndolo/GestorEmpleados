@@ -8,22 +8,28 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
 import { cn } from '@/lib/utils'
+import { Chip, Pill, type PillTone } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import { crearActivo, asignarActivo, devolverActivo, registrarDotacion } from './acciones'
 
-type Activo = { id: string; codigo: string; nombre: string; tipo: string; estado: string; valor: number | null; asignacion: { id: string; colaborador: string; actaEntregaDocId: string | null } | null }
-type Dotacion = { id: string; colaborador: string; anio: number; corte: string; items: string; fechaEntrega: string }
+type Activo = { id: string; codigo: string; nombre: string; tipo: string; estado: string; valor: number | null; asignacion: { id: string; colaborador: string; actaEntregaDocId: string | null; actaFirmada: boolean } | null }
+type Dotacion = {
+  id: string; colaborador: string; anio: number; corte: string; items: string; fechaEntrega: string
+  /** PDF del recibido (arts. 230-234 CST); lo firma el colaborador desde su autoservicio. */
+  recibidoDocId: string | null
+  firmado: boolean
+}
 type Sede = { id: string; nombre: string; ciudad: string }
 
 const ESTADO: Record<string, string> = { DISPONIBLE: 'Disponible', ASIGNADO: 'Asignado', EN_MANTENIMIENTO: 'Mantenimiento', DADO_DE_BAJA: 'De baja' }
+const TONO_ACTIVO: Record<string, PillTone> = { DISPONIBLE: 'ok', ASIGNADO: 'info', EN_MANTENIMIENTO: 'warn', DADO_DE_BAJA: 'muted' }
 
 export function ActivosCliente({ activos, dotaciones, sedes, puedeCrear, puedeEditar }: { activos: Activo[]; dotaciones: Dotacion[]; sedes: Sede[]; puedeCrear: boolean; puedeEditar: boolean }) {
   const [tab, setTab] = useState<'activos' | 'dotacion'>('activos')
@@ -52,12 +58,17 @@ export function ActivosCliente({ activos, dotaciones, sedes, puedeCrear, puedeEd
           <Card><CardContent className="p-0 divide-y">
             {activos.map((a) => (
               <div key={a.id} className="flex items-center gap-3 p-3">
-                <Laptop className="size-5 text-muted-foreground shrink-0" />
+                <Chip icono={Laptop} color="ink" />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm truncate">{a.nombre}</p>
                   <p className="text-xs text-muted-foreground">{a.codigo} · {a.tipo}{a.asignacion && ` · ${a.asignacion.colaborador}`}</p>
                 </div>
-                <Badge variant={a.estado === 'ASIGNADO' ? 'default' : 'secondary'}>{ESTADO[a.estado]}</Badge>
+                {a.asignacion && (
+                  <Pill tone={a.asignacion.actaFirmada ? 'ok' : 'warn'}>
+                    {a.asignacion.actaFirmada ? 'Acta firmada' : 'Acta sin firmar'}
+                  </Pill>
+                )}
+                <Pill tone={TONO_ACTIVO[a.estado] ?? 'muted'}>{ESTADO[a.estado]}</Pill>
                 {a.asignacion?.actaEntregaDocId && (
                   <Button variant="ghost" size="icon" asChild aria-label="Acta"><a href={`/api/documentos/${a.asignacion.actaEntregaDocId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a></Button>
                 )}
@@ -75,9 +86,18 @@ export function ActivosCliente({ activos, dotaciones, sedes, puedeCrear, puedeEd
         dotaciones.length === 0 ? <Vacio icono={Shirt} /> : (
           <Card><CardContent className="p-0 divide-y">
             {dotaciones.map((d) => (
-              <div key={d.id} className="p-3">
-                <p className="font-medium text-sm">{d.colaborador}</p>
-                <p className="text-xs text-muted-foreground">{d.corte} {d.anio} · {formatFechaCorta(new Date(d.fechaEntrega))} · {d.items}</p>
+              <div key={d.id} className="flex items-center gap-3 p-3">
+                <Chip icono={Shirt} color="violet" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm">{d.colaborador}</p>
+                  <p className="text-xs text-muted-foreground">{d.corte} {d.anio} · {formatFechaCorta(new Date(d.fechaEntrega))} · {d.items}</p>
+                </div>
+                {d.recibidoDocId && (
+                  <Button variant="ghost" size="icon" asChild aria-label="Recibido PDF">
+                    <a href={`/api/documentos/${d.recibidoDocId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a>
+                  </Button>
+                )}
+                <Pill tone={d.firmado ? 'ok' : 'warn'}>{d.firmado ? 'Firmado' : 'Pendiente de firma'}</Pill>
               </div>
             ))}
           </CardContent></Card>

@@ -21,6 +21,7 @@ export default async function EmpresaPage() {
           nombreComercial: empresa?.nombreComercial ?? '',
           nit: empresa?.nit ?? '',
           representanteLegal: empresa?.representanteLegal ?? '',
+          representanteLegalCc: empresa?.representanteLegalCc ?? '',
           emailContacto: empresa?.emailContacto ?? '',
           telefono: empresa?.telefono ?? '',
           direccion: empresa?.direccion ?? '',

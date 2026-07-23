@@ -3,14 +3,15 @@ import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Wallet, ChevronRight, HandCoins } from 'lucide-react'
+import { Wallet, ChevronRight, HandCoins, Receipt } from 'lucide-react'
+import { Chip, Pill, type PillTone } from '@/components/ui-kit'
 import { CrearPeriodo } from './crear-periodo'
 
 export const metadata = { title: 'Nómina · Smart Gadgets RH' }
 
 const ESTADO: Record<string, string> = { BORRADOR: 'Borrador', CALCULADA: 'Calculada', APROBADA: 'Aprobada', CERRADA: 'Cerrada', PAGADA: 'Pagada' }
+const TONO: Record<string, PillTone> = { BORRADOR: 'muted', CALCULADA: 'info', APROBADA: 'warn', CERRADA: 'ok', PAGADA: 'ok' }
 
 export default async function NominaPage() {
   const usuario = await requerirPermiso('nomina', 'VER')
@@ -30,6 +31,9 @@ export default async function NominaPage() {
         acciones={
           <div className="flex gap-2">
             <Button variant="outline" size="sm" asChild>
+              <Link href="/nomina/ops"><Receipt className="size-4" /> Pagos OPS</Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
               <Link href="/nomina/prestamos"><HandCoins className="size-4" /> Préstamos</Link>
             </Button>
             {puedeCrear && <CrearPeriodo />}
@@ -45,16 +49,14 @@ export default async function NominaPage() {
       ) : (
         <Card><CardContent className="p-0 divide-y">
           {periodos.map((p) => (
-            <Link key={p.id} href={`/nomina/${p.id}`} className="flex items-center gap-3 p-3 hover:bg-accent/40">
-              <Wallet className="size-5 text-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm">{p.nombre}{p.esAjuste && ' (ajuste)'}</p>
+            <Link key={p.id} href={`/nomina/${p.id}`} className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/40">
+              <Chip icono={Wallet} color="emerald" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{p.nombre}{p.esAjuste && ' (ajuste)'}</p>
                 <p className="text-xs text-muted-foreground">{p._count.liquidaciones} liquidación(es)</p>
               </div>
-              <Badge variant={p.estado === 'CERRADA' || p.estado === 'PAGADA' ? 'default' : p.estado === 'BORRADOR' ? 'secondary' : 'outline'}>
-                {ESTADO[p.estado]}
-              </Badge>
-              <ChevronRight className="size-4 text-muted-foreground" />
+              <Pill tone={TONO[p.estado] ?? 'muted'}>{ESTADO[p.estado]}</Pill>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
             </Link>
           ))}
         </CardContent></Card>

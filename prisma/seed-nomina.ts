@@ -41,13 +41,17 @@ const TIPOS_HORA: { codigo: string; nombre: string; factor: number; desde: Date;
   { codigo: 'RN', nombre: 'Recargo nocturno', factor: 0.35, desde: D(2025, 1, 1) },
   // Recargo dominical/festivo escalonado (Ley 2466): 80% → 90% el 1-jul-2026
   { codigo: 'RD', nombre: 'Recargo dominical/festivo', factor: 0.80, desde: D(2025, 7, 1), hasta: D(2026, 6, 30) },
-  { codigo: 'RD', nombre: 'Recargo dominical/festivo', factor: 0.90, desde: D(2026, 7, 1) },
+  { codigo: 'RD', nombre: 'Recargo dominical/festivo', factor: 0.90, desde: D(2026, 7, 1), hasta: D(2027, 6, 30) },
+  { codigo: 'RD', nombre: 'Recargo dominical/festivo', factor: 1.00, desde: D(2027, 7, 1) },
   { codigo: 'RND', nombre: 'Recargo nocturno dominical', factor: 1.15, desde: D(2025, 7, 1), hasta: D(2026, 6, 30) },
-  { codigo: 'RND', nombre: 'Recargo nocturno dominical', factor: 1.25, desde: D(2026, 7, 1) },
+  { codigo: 'RND', nombre: 'Recargo nocturno dominical', factor: 1.25, desde: D(2026, 7, 1), hasta: D(2027, 6, 30) },
+  { codigo: 'RND', nombre: 'Recargo nocturno dominical', factor: 1.35, desde: D(2027, 7, 1) },
   { codigo: 'HEDD', nombre: 'Hora extra diurna dominical', factor: 2.00, desde: D(2025, 7, 1), hasta: D(2026, 6, 30) },
-  { codigo: 'HEDD', nombre: 'Hora extra diurna dominical', factor: 2.10, desde: D(2026, 7, 1) },
+  { codigo: 'HEDD', nombre: 'Hora extra diurna dominical', factor: 2.10, desde: D(2026, 7, 1), hasta: D(2027, 6, 30) },
+  { codigo: 'HEDD', nombre: 'Hora extra diurna dominical', factor: 2.20, desde: D(2027, 7, 1) },
   { codigo: 'HEND', nombre: 'Hora extra nocturna dominical', factor: 2.50, desde: D(2025, 7, 1), hasta: D(2026, 6, 30) },
-  { codigo: 'HEND', nombre: 'Hora extra nocturna dominical', factor: 2.60, desde: D(2026, 7, 1) },
+  { codigo: 'HEND', nombre: 'Hora extra nocturna dominical', factor: 2.60, desde: D(2026, 7, 1), hasta: D(2027, 6, 30) },
+  { codigo: 'HEND', nombre: 'Hora extra nocturna dominical', factor: 2.70, desde: D(2027, 7, 1) },
 ]
 
 const C = (

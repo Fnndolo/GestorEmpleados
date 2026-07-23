@@ -5,8 +5,8 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
-import { eventosDelMes } from '@/server/consultas/eventos-colaborador'
-import { CalendarioMes } from '@/components/calendario/calendario-mes'
+import { eventosDelAnio } from '@/server/consultas/eventos-colaborador'
+import { CalendarioAnual } from '@/components/calendario/calendario-anual'
 import { hoyBogota } from '@/lib/fechas'
 
 export const metadata = { title: 'Calendario del colaborador · Smart Gadgets RH' }
@@ -15,37 +15,33 @@ export default async function CalendarioColaboradorPage({
   params, searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ mes?: string }>
+  searchParams: Promise<{ anio?: string }>
 }) {
   const { id } = await params
-  const { mes: mesParam } = await searchParams
+  const { anio: anioParam } = await searchParams
   await requerirPermiso('colaboradores', 'VER')
 
   const colab = await prisma.colaborador.findUnique({ where: { id }, select: { nombres: true, apellidos: true } })
   if (!colab) notFound()
 
-  const hoy = hoyBogota()
-  let anio = hoy.getUTCFullYear()
-  let mes = hoy.getUTCMonth() + 1
-  if (mesParam && /^\d{4}-\d{2}$/.test(mesParam)) {
-    anio = Number(mesParam.slice(0, 4))
-    mes = Number(mesParam.slice(5, 7))
-  }
+  const hoyD = hoyBogota()
+  const hoy = { anio: hoyD.getUTCFullYear(), mes: hoyD.getUTCMonth() + 1, dia: hoyD.getUTCDate() }
+  const anio = anioParam && /^\d{4}$/.test(anioParam) ? Number(anioParam) : hoy.anio
 
-  const eventos = await eventosDelMes(id, anio, mes)
+  const eventos = await eventosDelAnio(id, anio)
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-5xl">
       <Encabezado
         titulo={`Calendario · ${colab.nombres} ${colab.apellidos}`}
-        descripcion="Días con vacaciones, permisos, licencias, día de la familia, compensatorios, incapacidades y suspensiones."
+        descripcion="Vacaciones, permisos, licencias, día de la familia, compensatorios, incapacidades y suspensiones. Haz clic en un mes para verlo en detalle."
         acciones={
           <Button variant="outline" size="sm" asChild>
             <Link href={`/colaboradores/${id}`}><ArrowLeft className="size-4" /> Volver a la ficha</Link>
           </Button>
         }
       />
-      <CalendarioMes anio={anio} mes={mes} eventos={eventos} baseHref={`/colaboradores/${id}/calendario`} />
+      <CalendarioAnual anio={anio} eventos={eventos} hoy={hoy} baseHref={`/colaboradores/${id}/calendario`} />
     </div>
   )
 }

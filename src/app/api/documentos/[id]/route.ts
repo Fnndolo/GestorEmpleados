@@ -8,7 +8,7 @@ import { ejecutarConContexto } from '@/server/contexto'
 
 export const runtime = 'nodejs'
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const usuario = await obtenerSesion()
   if (!usuario) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -31,10 +31,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         auditar('ACCESO', 'Documento', { registroId: doc.id, descripcion: `Acceso a documento ${doc.nombre}` }),
       )
     }
+    // Nombre de descarga con la extensión real (doc.nombre no la incluye).
+    const ext = doc.storagePath.includes('.') ? '.' + doc.storagePath.split('.').pop() : ''
+    const nombreArchivo = ext && !doc.nombre.toLowerCase().endsWith(ext.toLowerCase()) ? doc.nombre + ext : doc.nombre
+    // ?descargar=1 fuerza la descarga; sin el parámetro se muestra embebido (visor).
+    const disposicion = req.nextUrl.searchParams.get('descargar') === '1' ? 'attachment' : 'inline'
+
     return new NextResponse(new Uint8Array(contenido), {
       headers: {
         'Content-Type': doc.mimeType,
-        'Content-Disposition': `inline; filename="${encodeURIComponent(doc.nombre)}"`,
+        'Content-Disposition': `${disposicion}; filename="${encodeURIComponent(nombreArchivo)}"`,
         'Cache-Control': 'private, no-store',
       },
     })

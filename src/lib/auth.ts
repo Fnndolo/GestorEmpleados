@@ -8,6 +8,9 @@ import { enviarCorreo } from '@/server/notificaciones/correo'
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
   secret: process.env.BETTER_AUTH_SECRET,
+  // Orígenes adicionales permitidos (ej. túnel HTTPS para probar en el celular):
+  // BETTER_AUTH_TRUSTED_ORIGINS="https://xxxx.devtunnels.ms,https://otro.com"
+  trustedOrigins: process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(',').map((s) => s.trim()).filter(Boolean),
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
   emailAndPassword: {
     enabled: true,

@@ -65,9 +65,23 @@ async function seedUsuariosDemo() {
 }
 
 async function main() {
-  const bogota = await prisma.ciudad.findFirstOrThrow({ where: { nombre: 'Bogotá' } })
-  const medellin = await prisma.ciudad.findFirstOrThrow({ where: { nombre: 'Medellín' } })
-  const sedeBogota = await prisma.sede.findFirstOrThrow({ where: { esPrincipal: true } })
+  // El demo crea sus propias ciudades/sedes (el seed de producción ya NO siembra
+  // ninguna: producción arranca en blanco y el admin crea su sede real desde la app).
+  const bogota = await prisma.ciudad.upsert({
+    where: { nombre_departamento: { nombre: 'Bogotá', departamento: 'Cundinamarca' } },
+    create: { nombre: 'Bogotá', departamento: 'Cundinamarca', codigoDane: '11001' },
+    update: {},
+  })
+  const medellin = await prisma.ciudad.upsert({
+    where: { nombre_departamento: { nombre: 'Medellín', departamento: 'Antioquia' } },
+    create: { nombre: 'Medellín', departamento: 'Antioquia', codigoDane: '05001' },
+    update: {},
+  })
+  const sedeBogota = await prisma.sede.upsert({
+    where: { nombre: 'Sede Principal' },
+    create: { nombre: 'Sede Principal', ciudadId: bogota.id, direccion: 'Por definir', esPrincipal: true },
+    update: {},
+  })
   const sedeMedellin = await prisma.sede.upsert({
     where: { nombre: 'Sede Medellín' },
     create: { nombre: 'Sede Medellín', ciudadId: medellin.id, direccion: 'Carrera 43A # 1-50', telefono: '6041234567' },

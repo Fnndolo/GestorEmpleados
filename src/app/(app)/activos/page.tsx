@@ -38,9 +38,16 @@ export default async function ActivosPage() {
         activos={activos.map((a) => ({
           id: a.id, codigo: a.codigo, nombre: a.nombre, tipo: a.tipo, estado: a.estado,
           valor: a.valor ? Number(a.valor) : null,
-          asignacion: a.asignaciones[0] ? { id: a.asignaciones[0].id, colaborador: `${a.asignaciones[0].colaborador.nombres} ${a.asignaciones[0].colaborador.apellidos}`, actaEntregaDocId: a.asignaciones[0].actaEntregaDocId } : null,
+          asignacion: a.asignaciones[0] ? { id: a.asignaciones[0].id, colaborador: `${a.asignaciones[0].colaborador.nombres} ${a.asignaciones[0].colaborador.apellidos}`, actaEntregaDocId: a.asignaciones[0].actaEntregaDocId, actaFirmada: Boolean(a.asignaciones[0].firmaEntregaEn) } : null,
         }))}
-        dotaciones={dotaciones.map((d) => ({ id: d.id, colaborador: `${d.colaborador.nombres} ${d.colaborador.apellidos}`, anio: d.anio, corte: d.corte, items: d.items, fechaEntrega: formatFechaISO(d.fechaEntrega) }))}
+        dotaciones={dotaciones.map((d) => ({
+          id: d.id,
+          colaborador: `${d.colaborador.nombres} ${d.colaborador.apellidos}`,
+          anio: d.anio, corte: d.corte, items: d.items,
+          fechaEntrega: formatFechaISO(d.fechaEntrega),
+          recibidoDocId: d.recibidoDocId,
+          firmado: Boolean(d.firmadoEn),
+        }))}
       />
     </div>
   )

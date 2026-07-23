@@ -1,5 +1,6 @@
-import { View, Text } from '@react-pdf/renderer'
+import { View, Text, Image, StyleSheet } from '@react-pdf/renderer'
 import { estilos } from './estilos'
+import { MEMBRETE_FONDO } from './assets/membrete-fondo'
 
 export type DatosEmpresa = {
   razonSocial: string
@@ -8,6 +9,33 @@ export type DatosEmpresa = {
   direccion?: string | null
   telefono?: string | null
   emailContacto?: string | null
+  sitioWeb?: string | null
+}
+
+/** Línea de pie de página del membrete (correo · NIT · sitio web). */
+export function pieContacto(empresa: DatosEmpresa): string {
+  return [empresa.emailContacto, `NIT ${empresa.nit}`, empresa.sitioWeb]
+    .filter(Boolean)
+    .join('     ·     ')
+}
+
+// Papel membretado oficial de KUPOCELL S.A.S.: imagen a página completa renderizada
+// desde "Membrete Kupocell.docx" (encabezado con logo KUPOCELL y franjas azules,
+// marca de agua Smart Gadgets al centro y pie con datos de contacto e iconos). Se
+// pinta `fixed` → se repite en cada página, detrás del contenido.
+const m = StyleSheet.create({
+  fondo: { position: 'absolute', top: 0, left: 0, width: 612, height: 792 }, // carta en pt
+})
+
+/**
+ * Fondo de papel membretado para contratos y autorizaciones. Debe ir como PRIMER
+ * hijo del <Page> (para quedar detrás del contenido). Las páginas deben reservar
+ * espacio con paddingTop ≥ ~118 y paddingBottom ≥ ~64 para no pisar encabezado/pie.
+ *
+ * El pie de contacto ya viene impreso en la imagen del membrete.
+ */
+export function MembreteFondo() {
+  return <Image src={MEMBRETE_FONDO} style={m.fondo} fixed />
 }
 
 export function Membrete({ empresa }: { empresa: DatosEmpresa }) {

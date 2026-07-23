@@ -4,8 +4,9 @@ import { prisma } from '@/lib/db'
 import { sedeActualId } from '@/server/sede-actual'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { AlertTriangle, Clock, CalendarCheck, Bell } from 'lucide-react'
+import { TriangleAlert, Clock, CalendarCheck, Bell, type LucideIcon } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Chip, Pill, type ChipColor, type PillTone } from '@/components/ui-kit'
 import { hoyBogota, formatFechaCorta } from '@/lib/fechas'
 import type { Prisma } from '@/generated/prisma/client'
 
@@ -25,7 +26,7 @@ export default async function VencimientosPage({
   searchParams: Promise<{ filtro?: string }>
 }) {
   const usuario = await requerirPermiso('vencimientos', 'VER')
-  const { filtro = 'activos' } = await searchParams
+  const { filtro = 'todos' } = await searchParams
   const sedeActiva = await sedeActualId()
   const alcance = alcanceDe(usuario, 'vencimientos', 'VER')
 
@@ -40,6 +41,28 @@ export default async function VencimientosPage({
     orderBy: { fechaVencimiento: 'asc' },
     take: 500,
   })
+
+  // Pre-cargar documentos para mapear el enlace al colaborador correspondiente
+  const docIds = vencimientos
+    .filter((v) => v.entidadTipo === 'Documento')
+    .map((v) => v.entidadId)
+  
+  const documentos = await prisma.documento.findMany({
+    where: { id: { in: docIds } },
+    select: { id: true, entidadTipo: true, entidadId: true },
+  })
+  const docsMap = new Map(documentos.map((d) => [d.id, d]))
+
+  // Pre-cargar contratos para mapear el enlace al colaborador correspondiente
+  const contratoIds = vencimientos
+    .filter((v) => v.entidadTipo === 'Contrato')
+    .map((v) => v.entidadId)
+
+  const contratos = await prisma.contrato.findMany({
+    where: { id: { in: contratoIds } },
+    select: { id: true, colaboradorId: true },
+  })
+  const contratosMap = new Map(contratos.map((c) => [c.id, c]))
 
   const hoy = hoyBogota()
   const en30 = new Date(hoy); en30.setUTCDate(en30.getUTCDate() + 30)
@@ -57,17 +80,23 @@ export default async function VencimientosPage({
   const proximos = clasificados.filter((v) => v.urgencia === 'proximo')
 
   const lista =
-    filtro === 'vencidos' ? vencidos : filtro === 'por_vencer' ? porVencer : clasificados
+    filtro === 'vencidos'
+      ? vencidos
+      : filtro === 'por_vencer'
+      ? porVencer
+      : filtro === 'al_dia'
+      ? proximos
+      : clasificados // 'todos'
 
   return (
     <div className="mx-auto max-w-5xl">
       <Encabezado titulo="Vencimientos" descripcion="Semáforo de vencimientos de toda la plataforma, filtrable por sede." />
 
       {/* Resumen semáforo */}
-      <div className="grid gap-3 sm:grid-cols-3 mb-6">
-        <TarjetaSemaforo titulo="Vencidos" cantidad={vencidos.length} icono={AlertTriangle} color="text-destructive" filtro="vencidos" activo={filtro === 'vencidos'} />
-        <TarjetaSemaforo titulo="Por vencer (30 días)" cantidad={porVencer.length} icono={Clock} color="text-amber-500" filtro="por_vencer" activo={filtro === 'por_vencer'} />
-        <TarjetaSemaforo titulo="Al día" cantidad={proximos.length} icono={CalendarCheck} color="text-emerald-600" filtro="activos" activo={filtro === 'activos'} />
+      <div className="mb-6 grid grid-cols-3 gap-2.5">
+        <TarjetaSemaforo titulo="Vencidos" cantidad={vencidos.length} icono={TriangleAlert} color="rose" filtro="vencidos" activo={filtro === 'vencidos'} />
+        <TarjetaSemaforo titulo="Por vencer (30 días)" cantidad={porVencer.length} icono={Clock} color="amber" filtro="por_vencer" activo={filtro === 'por_vencer'} />
+        <TarjetaSemaforo titulo="Al día" cantidad={proximos.length} icono={CalendarCheck} color="emerald" filtro="al_dia" activo={filtro === 'al_dia' || filtro === 'todos'} />
       </div>
 
       {lista.length === 0 ? (
@@ -78,25 +107,26 @@ export default async function VencimientosPage({
       ) : (
         <Card><CardContent className="p-0 divide-y">
           {lista.map((v) => {
+            const visual = VISUAL_URGENCIA[v.urgencia]
             const contenido = (
               <div className="flex items-center gap-3 p-3">
-                <Punto urgencia={v.urgencia} />
+                <Chip icono={visual.icono} color={visual.color} />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{v.titulo}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {ORIGEN_ETIQUETA[v.origen] ?? v.origen} · {formatFechaCorta(v.fechaVencimiento)}
+                  <p className="truncate text-sm font-medium">{v.titulo}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {ORIGEN_ETIQUETA[v.origen] ?? v.origen} · {v.urgencia === 'vencido' ? 'venció el' : 'vence el'} {formatFechaCorta(v.fechaVencimiento)}
                   </p>
                 </div>
-                <Badge variant={v.urgencia === 'vencido' ? 'destructive' : v.urgencia === 'por_vencer' ? 'secondary' : 'outline'}>
+                <Pill tone={visual.tone}>
                   {v.urgencia === 'vencido'
                     ? `Venció hace ${Math.abs(v.dias)} d`
                     : v.dias === 0 ? 'Vence hoy' : `En ${v.dias} d`}
-                </Badge>
+                </Pill>
               </div>
             )
-            const enlace = enlaceVenc(v.entidadTipo, v.entidadId)
+            const enlace = enlaceVenc(v.entidadTipo, v.entidadId, docsMap, contratosMap)
             return enlace
-              ? <Link key={v.id} href={enlace} className="block hover:bg-accent/40">{contenido}</Link>
+              ? <Link key={v.id} href={enlace} className="block transition-colors hover:bg-accent/40">{contenido}</Link>
               : <div key={v.id}>{contenido}</div>
           })}
         </CardContent></Card>
@@ -105,32 +135,55 @@ export default async function VencimientosPage({
   )
 }
 
+/** Ícono, color de chip y tono de píldora por urgencia. */
+const VISUAL_URGENCIA: Record<string, { icono: LucideIcon; color: ChipColor; tone: PillTone }> = {
+  vencido: { icono: TriangleAlert, color: 'rose', tone: 'bad' },
+  por_vencer: { icono: Clock, color: 'amber', tone: 'warn' },
+  proximo: { icono: CalendarCheck, color: 'emerald', tone: 'ok' },
+}
+
 function TarjetaSemaforo({
-  titulo, cantidad, icono: Icono, color, filtro, activo,
+  titulo, cantidad, icono, color, filtro, activo,
 }: {
-  titulo: string; cantidad: number; icono: typeof Clock; color: string; filtro: string; activo: boolean
+  titulo: string; cantidad: number; icono: LucideIcon; color: ChipColor; filtro: string; activo: boolean
 }) {
   return (
-    <Link href={`/vencimientos?filtro=${filtro}`}>
-      <Card className={activo ? 'border-primary' : ''}>
-        <CardContent className="flex items-center gap-3 py-4">
-          <Icono className={`size-6 ${color}`} />
-          <div>
-            <p className="text-2xl font-semibold tabular-nums">{cantidad}</p>
-            <p className="text-xs text-muted-foreground">{titulo}</p>
-          </div>
-        </CardContent>
-      </Card>
+    <Link
+      href={`/vencimientos?filtro=${filtro}`}
+      className={cn(
+        'flex items-center gap-3 rounded-xl border bg-card p-3 transition-all',
+        'hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        activo && 'border-primary/50 ring-1 ring-primary/20',
+      )}
+    >
+      <Chip icono={icono} color={color} className="size-9 rounded-[10px]" iconClassName="size-[18px]" />
+      <div className="min-w-0">
+        <p className="text-[17px] font-bold leading-tight tracking-tight tabular-nums sm:text-[20px]">{cantidad}</p>
+        <p className="mt-0.5 truncate text-[10.5px] text-muted-foreground sm:text-[11px]">{titulo}</p>
+      </div>
     </Link>
   )
 }
 
-function Punto({ urgencia }: { urgencia: string }) {
-  const color = urgencia === 'vencido' ? 'bg-destructive' : urgencia === 'por_vencer' ? 'bg-amber-500' : 'bg-emerald-500'
-  return <span className={`size-2.5 shrink-0 rounded-full ${color}`} />
-}
-
-function enlaceVenc(entidadTipo: string, entidadId: string): string | null {
+function enlaceVenc(
+  entidadTipo: string,
+  entidadId: string,
+  docsMap: Map<string, { entidadTipo: string; entidadId: string }>,
+  contratosMap: Map<string, { colaboradorId: string }>,
+): string | null {
   if (entidadTipo === 'Colaborador') return `/colaboradores/${entidadId}`
+  if (entidadTipo === 'Documento') {
+    const doc = docsMap.get(entidadId)
+    if (doc && doc.entidadTipo === 'Colaborador') {
+      return `/colaboradores/${doc.entidadId}`
+    }
+  }
+  if (entidadTipo === 'Contrato') {
+    const contrato = contratosMap.get(entidadId)
+    if (contrato) {
+      return `/colaboradores/${contrato.colaboradorId}`
+    }
+  }
   return null
 }

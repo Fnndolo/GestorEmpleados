@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { LogOut, KeyRound, ChevronsUpDown } from 'lucide-react'
 import { signOut } from '@/lib/auth-client'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { colorAvatar } from '@/lib/etiquetas'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,7 +45,9 @@ export function MenuUsuario({
     <DropdownMenu>
       <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-md p-2 text-left hover:bg-accent transition-colors">
         <Avatar className="size-8">
-          <AvatarFallback className="text-xs">{iniciales(nombre)}</AvatarFallback>
+          <AvatarFallback className="text-xs font-semibold text-white" style={{ backgroundColor: colorAvatar(nombre) }}>
+            {iniciales(nombre)}
+          </AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{nombre}</p>

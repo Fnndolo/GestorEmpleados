@@ -4,6 +4,7 @@ import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { BandejaAprobaciones } from './bandeja'
 import { formatFechaISO } from '@/lib/fechas'
+import { defLicencia } from '@/lib/licencias'
 
 export const metadata = { title: 'Aprobaciones · Smart Gadgets RH' }
 
@@ -37,12 +38,12 @@ export default async function AprobacionesPage() {
   // Documentos adjuntos de las solicitudes visibles
   const docs = await prisma.documento.findMany({
     where: { entidadTipo: 'Solicitud', entidadId: { in: visibles.map((s) => s.id) } },
-    select: { id: true, entidadId: true, nombre: true },
+    select: { id: true, entidadId: true, nombre: true, mimeType: true },
   })
-  const docsPorSolicitud = new Map<string, { id: string; nombre: string }[]>()
+  const docsPorSolicitud = new Map<string, { id: string; nombre: string; esImagen: boolean }[]>()
   for (const d of docs) {
     const arr = docsPorSolicitud.get(d.entidadId) ?? []
-    arr.push({ id: d.id, nombre: d.nombre })
+    arr.push({ id: d.id, nombre: d.nombre, esImagen: d.mimeType.startsWith('image/') })
     docsPorSolicitud.set(d.entidadId, arr)
   }
 
@@ -56,6 +57,11 @@ export default async function AprobacionesPage() {
           solicitudes={visibles.map((s) => {
             const pasoActual = s.pasos.find((p) => p.estado === 'PENDIENTE')!
             const datos = s.datos as Record<string, string>
+            const calculoVacaciones = s.tipo === 'VACACIONES'
+              ? ((s.datos as Record<string, unknown>).calculoVacaciones as {
+                  dias: number; saldo: number; anticipadas: boolean; diasAnticipados: number; advertencias: string[]
+                } | undefined) ?? null
+              : null
             return {
               id: s.id,
               pasoId: pasoActual.id,
@@ -71,6 +77,20 @@ export default async function AprobacionesPage() {
               documentos: docsPorSolicitud.get(s.id) ?? [],
               // Certificación en su último paso → se emite (generar/subir) en vez de solo aprobar
               esCertFinal: s.tipo === 'CERTIFICACION_LABORAL' && !s.pasos.some((p) => p.estado === 'PENDIENTE' && p.orden > pasoActual.orden),
+              // Licencia que concede la ley: se valida el soporte, no se aprueba ni se niega.
+              licenciaDerecho: s.tipo === 'LICENCIA' && !!datos.licenciaTipo && defLicencia(datos.licenciaTipo).derecho,
+              licenciaFundamento: s.tipo === 'LICENCIA' && datos.licenciaTipo ? defLicencia(datos.licenciaTipo).fundamento : null,
+              calculoVacaciones,
+              // La solicitud volvió tras una devolución: el colaborador corrigió el soporte.
+              soporteCorregido: Boolean((s.datos as Record<string, unknown>).soporteCorregidoEn),
+              contrapropuestaRechazada: (() => {
+                if (s.tipo !== 'VACACIONES') return null
+                const cp = (s.datos as Record<string, unknown>).contrapropuesta as
+                  { fechaInicio: string; fechaFin: string; aceptada?: boolean; respuesta?: string | null } | undefined
+                return cp?.aceptada === false
+                  ? { fechaInicio: cp.fechaInicio, fechaFin: cp.fechaFin, respuesta: cp.respuesta ?? null }
+                  : null
+              })(),
             }
           })}
         />
@@ -92,5 +112,9 @@ function detalleSolicitud(tipo: string, datos: Record<string, string>): string {
   }
   if (tipo === 'INCAPACIDAD') return `${TIPO_INCAP[datos.incapacidadTipo] ?? 'Incapacidad'} · del ${datos.fechaInicio} al ${datos.fechaFin}${datos.entidad ? ` · ${datos.entidad}` : ''}`
   if (tipo === 'CERTIFICACION_LABORAL') return `${datos.tipoCertificacion ?? 'Simple'}${datos.dirigidaA ? ` · para ${datos.dirigidaA}` : ''}`
+  if (tipo === 'LICENCIA' && datos.licenciaTipo) {
+    const def = defLicencia(datos.licenciaTipo)
+    return `${def.label} · del ${datos.fechaInicio} al ${datos.fechaFin} · ${def.remunerada ? 'remunerada' : 'no remunerada'}${datos.motivo ? ` · ${datos.motivo}` : ''}`
+  }
   return ''
 }

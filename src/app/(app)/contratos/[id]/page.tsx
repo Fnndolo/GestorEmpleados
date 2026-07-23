@@ -9,6 +9,7 @@ import { formatFechaLarga, formatFechaCorta } from '@/lib/fechas'
 import { fmtCOP } from '@/lib/moneda'
 import { TIPO_VINCULO, MODALIDAD_TRABAJO } from '@/lib/etiquetas'
 import { AccionesContrato } from './acciones-cliente'
+import { FirmasLaboral } from './firmas-laboral'
 
 export const metadata = { title: 'Contrato · Smart Gadgets RH' }
 
@@ -38,10 +39,21 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
   })
   if (!c) notFound()
 
-  const [cargos, sedes] = await Promise.all([
+  const [cargos, sedes, documentos, empresaCfg, evidencias] = await Promise.all([
     prisma.cargo.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
     prisma.sede.findMany({ where: { activa: true }, include: { ciudad: true }, orderBy: { nombre: 'asc' } }),
+    prisma.documento.findMany({
+      where: { entidadTipo: 'Contrato', entidadId: id },
+      orderBy: { creadoEn: 'desc' },
+      select: { id: true, nombre: true },
+    }),
+    prisma.configuracionEmpresa.findFirst({ select: { representanteLegal: true } }),
+    prisma.evidenciaFirmaContrato.findMany({ where: { contratoId: id }, orderBy: { firmadoEn: 'asc' } }),
   ])
+
+  // Último PDF de cada tipo (el firmado si existe, si no el original).
+  const docContrato = documentos.find((d) => !d.nombre.startsWith('Autorización'))
+  const docAutorizacion = documentos.find((d) => d.nombre.startsWith('Autorización'))
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -65,6 +77,42 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
         <p className="mt-3">
           <Link href={`/colaboradores/${c.colaboradorId}`} className="text-sm text-primary hover:underline">Ver ficha del colaborador →</Link>
         </p>
+      </CardContent></Card>
+
+      {/* Documento del contrato y firmas digitales */}
+      <Card className="mb-4"><CardContent className="py-4">
+        <h3 className="text-sm font-medium mb-3">Documento y firmas</h3>
+        <FirmasLaboral
+          contratoId={c.id}
+          numero={c.numero}
+          tieneDocumento={!!c.contenidoPdf}
+          documentoId={docContrato?.id ?? null}
+          autorizacionId={docAutorizacion?.id ?? null}
+          puedeFirmar={puedeEditar}
+          empleador={{
+            nombre: empresaCfg?.representanteLegal ?? '',
+            firmado: !!c.firmaEmpleadorPath,
+            fecha: c.firmaEmpleadorFecha ? formatFechaCorta(c.firmaEmpleadorFecha) : null,
+          }}
+          empleado={{
+            nombre: `${c.colaborador.nombres} ${c.colaborador.apellidos}`,
+            firmado: !!c.firmaEmpleadoPath,
+            fecha: c.firmaEmpleadoFecha ? formatFechaCorta(c.firmaEmpleadoFecha) : null,
+          }}
+        />
+        {evidencias.length > 0 && (
+          <div className="mt-4 border-t pt-3">
+            <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Rastro de firma</h4>
+            <ul className="space-y-1">
+              {evidencias.map((e) => (
+                <li key={e.id} className="text-xs text-muted-foreground">
+                  {e.rol === 'EMPLEADO' ? 'Empleado' : 'Empleador'} · {formatFechaCorta(e.firmadoEn)}
+                  {e.userEmail ? ` · ${e.userEmail}` : ''}{e.ip ? ` · IP ${e.ip}` : ''} · {e.metodoAuth === 'CODIGO_EMAIL' ? 'código al correo' : 'sesión'}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </CardContent></Card>
 
       {/* Prórrogas */}

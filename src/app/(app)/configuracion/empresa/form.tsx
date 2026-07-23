@@ -49,6 +49,9 @@ export function EmpresaForm({ valores }: { valores: EmpresaInput }) {
           <Campo label="Representante legal" error={errors.representanteLegal?.message}>
             <Input {...register('representanteLegal')} />
           </Campo>
+          <Campo label="C.C. del representante legal" error={errors.representanteLegalCc?.message}>
+            <Input {...register('representanteLegalCc')} placeholder="Aparece en los contratos" />
+          </Campo>
           <Campo label="Correo de contacto" error={errors.emailContacto?.message}>
             <Input type="email" {...register('emailContacto')} />
           </Campo>

@@ -3,13 +3,24 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Gavel } from 'lucide-react'
+import { Gavel, CircleCheck } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { formatFechaLarga } from '@/lib/fechas'
-import { Descargos } from './descargos'
+import { Descargos, Apelacion } from './descargos'
+import { SoportesLista, type SoporteDoc } from '@/app/(app)/juridica/_ui'
 
 export const metadata = { title: 'Mis procesos disciplinarios · Smart Gadgets RH' }
 
 const ETAPA: Record<string, string> = { CITACION_DESCARGOS: 'Citación a descargos', DESCARGOS: 'Descargos presentados', DECISION: 'Decisión', RECURSO: 'Recurso', CERRADO: 'Cerrado' }
+
+/** Color del borde izquierdo por etapa — paleta del sistema. */
+const BORDE_ETAPA: Record<string, string> = {
+  CITACION_DESCARGOS: 'border-l-amber-500',
+  DESCARGOS: 'border-l-sky-500',
+  DECISION: 'border-l-violet-500',
+  RECURSO: 'border-l-rose-500',
+  CERRADO: 'border-l-emerald-500',
+}
 
 export default async function MisDisciplinariosPage() {
   const usuario = await requerirSesion()
@@ -29,6 +40,22 @@ export default async function MisDisciplinariosPage() {
     orderBy: { creadoEn: 'desc' },
   })
 
+  // Soportes anclados a cada etapa (para que el empleado los pueda ver)
+  const etapaIds = procesos.flatMap((p) => p.etapas.map((e) => e.id))
+  const docsEtapa = etapaIds.length
+    ? await prisma.documento.findMany({
+        where: { entidadTipo: 'EtapaProceso', entidadId: { in: etapaIds } },
+        orderBy: { creadoEn: 'asc' },
+        select: { id: true, nombre: true, mimeType: true, entidadId: true },
+      })
+    : []
+  const porEtapa = new Map<string, SoporteDoc[]>()
+  for (const d of docsEtapa) {
+    const arr = porEtapa.get(d.entidadId) ?? []
+    arr.push({ id: d.id, nombre: d.nombre, mimeType: d.mimeType })
+    porEtapa.set(d.entidadId, arr)
+  }
+
   return (
     <div className="mx-auto max-w-3xl">
       <Encabezado titulo="Mis procesos disciplinarios" descripcion="Aquí puedes ver los procesos en tu contra y presentar tus descargos (derecho de defensa)." />
@@ -38,7 +65,8 @@ export default async function MisDisciplinariosPage() {
         <div className="space-y-4">
           {procesos.map((p) => {
             const yaPresentoDescargos = p.etapas.some((e) => e.etapa === 'DESCARGOS')
-            const puedePresentar = !p.cerrado && !yaPresentoDescargos
+            const puedePresentar = !p.cerrado && !yaPresentoDescargos && p.etapa === 'CITACION_DESCARGOS'
+            const puedeApelar = !p.cerrado && p.etapa === 'DECISION'
             return (
               <Card key={p.id}>
                 <CardContent className="py-4">
@@ -48,22 +76,40 @@ export default async function MisDisciplinariosPage() {
                   </div>
                   {p.descripcion && <p className="text-sm text-muted-foreground mb-3">{p.descripcion}</p>}
                   {p.etapas.length > 0 && (
-                    <ol className="space-y-2 border-l pl-4 mb-3">
+                    <ol className="mb-3">
+                      {/* Bloques cuadrados contiguos; solo el borde izquierdo lleva el color de la etapa. */}
                       {p.etapas.map((e) => (
-                        <li key={e.id} className="relative text-sm">
-                          <span className="absolute -left-[21px] top-1 size-2.5 rounded-full bg-primary" />
-                          <span className="font-medium">{ETAPA[e.etapa]}</span> · <span className="text-muted-foreground">{formatFechaLarga(e.fecha)}</span>
-                          {e.detalle && <p className="text-xs text-muted-foreground">{e.detalle}</p>}
+                        <li
+                          key={e.id}
+                          className={cn(
+                            'border border-l-4 bg-card px-3.5 py-2.5 text-sm [&+li]:-mt-px',
+                            BORDE_ETAPA[e.etapa] ?? 'border-l-primary',
+                          )}
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <CircleCheck className="size-4 shrink-0 text-muted-foreground" />
+                            <span className="font-semibold">{ETAPA[e.etapa]}</span>
+                            <span className="text-xs text-muted-foreground">· {formatFechaLarga(e.fecha)}</span>
+                          </div>
+                          {e.detalle && <p className="mt-0.5 text-xs text-muted-foreground">{e.detalle}</p>}
+                          <SoportesLista documentos={porEtapa.get(e.id) ?? []} />
                         </li>
                       ))}
                     </ol>
                   )}
+                  {!p.cerrado && p.fechaLimite && (
+                    <p className="mb-2 text-xs text-amber-600">
+                      Tienes hasta el {formatFechaLarga(p.fechaLimite)} (5 días hábiles) para {p.etapa === 'DECISION' ? 'apelar' : 'presentar tus descargos'}.
+                    </p>
+                  )}
                   {puedePresentar ? (
                     <Descargos procesoId={p.id} />
-                  ) : yaPresentoDescargos ? (
-                    <p className="text-xs text-emerald-600">Ya presentaste tus descargos. El área encargada continuará con el proceso.</p>
-                  ) : (
+                  ) : puedeApelar ? (
+                    <Apelacion procesoId={p.id} />
+                  ) : p.cerrado ? (
                     <p className="text-xs text-muted-foreground">Proceso cerrado.</p>
+                  ) : (
+                    <p className="text-xs text-emerald-600">Ya presentaste tus descargos. El área encargada continuará con el proceso.</p>
                   )}
                 </CardContent>
               </Card>

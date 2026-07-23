@@ -19,12 +19,14 @@ import type { OpcionSede } from '@/server/sede-actual'
 export function DrawerMovil({
   hrefsVisibles,
   modulosCustom = [],
+  badges,
   sedes,
   sedeActual,
   usuario,
 }: {
   hrefsVisibles: string[]
   modulosCustom?: ModuloCustom[]
+  badges?: Record<string, number>
   sedes: OpcionSede[]
   sedeActual: string | null
   usuario: { nombre: string; email: string; rol: string }
@@ -50,7 +52,7 @@ export function DrawerMovil({
           <SelectorSede sedes={sedes} actual={sedeActual} />
         </div>
         <div className="flex-1 overflow-y-auto p-3">
-          <NavLinks hrefsVisibles={hrefsVisibles} modulosCustom={modulosCustom} onNavegar={() => setAbierto(false)} />
+          <NavLinks hrefsVisibles={hrefsVisibles} modulosCustom={modulosCustom} badges={badges} onNavegar={() => setAbierto(false)} />
         </div>
         <div className="border-t p-2">
           <MenuUsuario {...usuario} />

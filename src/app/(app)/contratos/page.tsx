@@ -4,14 +4,31 @@ import { prisma } from '@/lib/db'
 import { sedeActualId } from '@/server/sede-actual'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Plus, FileText, ChevronRight, FileWarning, Receipt } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Plus, FileText, ChevronRight, FileExclamationPoint, Receipt } from 'lucide-react'
+import { Chip, Pill, type PillTone } from '@/components/ui-kit'
+import { colorAvatar, iniciales } from '@/lib/etiquetas'
+import { FiltroTabs } from '@/components/shell/filtro-tabs'
 import { formatFechaCorta } from '@/lib/fechas'
 import { fmtCOP } from '@/lib/moneda'
 
 export const metadata = { title: 'Contratación · Smart Gadgets RH' }
+
+const TONO_CONTRATO: Record<string, PillTone> = {
+  ACTIVO: 'ok', BORRADOR: 'warn', SUSPENDIDO: 'bad', TERMINADO: 'muted',
+}
+
+function AvatarColab({ c }: { c: { id: string; nombres: string; apellidos: string; fotoPath: string | null } }) {
+  return (
+    <Avatar className="size-8 shrink-0">
+      {c.fotoPath && <AvatarImage src={`/api/documentos/foto/${c.id}`} alt="" />}
+      <AvatarFallback className="text-[10px] font-semibold text-white" style={{ backgroundColor: colorAvatar(`${c.nombres} ${c.apellidos}`) }}>
+        {iniciales(c.nombres, c.apellidos)}
+      </AvatarFallback>
+    </Avatar>
+  )
+}
 
 const TABS = [
   { valor: 'OPS', label: 'OPS' },
@@ -79,51 +96,40 @@ export default async function ContratosPage({
       />
 
       {cuentasSinSoporte > 0 && (
-        <Link href="/contratos/cuentas-riesgo">
-          <Card className="mb-4 border-amber-300 bg-amber-50/50">
-            <CardContent className="flex items-center gap-3 py-3">
-              <FileWarning className="size-5 text-amber-600" />
-              <p className="text-sm flex-1">
-                <b>{cuentasSinSoporte}</b> cuenta(s) de cobro OPS sin soporte de seguridad social (riesgo de pago).
-              </p>
-              <ChevronRight className="size-4 text-muted-foreground" />
-            </CardContent>
-          </Card>
+        <Link
+          href="/contratos/cuentas-riesgo"
+          className="mb-4 flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 transition-colors hover:bg-amber-500/10"
+        >
+          <Chip icono={FileExclamationPoint} color="amber" className="size-9 rounded-[10px]" iconClassName="size-[18px]" />
+          <p className="min-w-0 flex-1 text-sm">
+            <b>{cuentasSinSoporte}</b> cuenta(s) de cobro OPS sin soporte de seguridad social (riesgo de pago).
+          </p>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
         </Link>
       )}
 
-      {/* Pestañas */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 mb-4">
-        {TABS.map((t) => (
-          <Link
-            key={t.valor}
-            href={`/contratos?tab=${t.valor}`}
-            className={cn(
-              'whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
-              tab === t.valor ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent',
-            )}
-          >
-            {t.label}
-          </Link>
-        ))}
+      {/* Pestañas (móvil: desplegable) */}
+      <div className="mb-4">
+        <FiltroTabs tabs={TABS} activo={tab} basePath="/contratos" />
       </div>
 
       {esOps ? (
         contratosOps.length === 0 ? <Vacio /> : (
           <Card><CardContent className="p-0 divide-y">
             {contratosOps.map((c) => (
-              <Link key={c.id} href={`/contratos/ops/${c.id}`} className="flex items-center gap-3 p-3 hover:bg-accent/40">
-                <FileText className="size-5 text-muted-foreground shrink-0" />
+              <Link key={c.id} href={`/contratos/ops/${c.id}`} className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/40">
+                <Chip icono={Receipt} color="teal" />
+                <AvatarColab c={c.colaborador} />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{c.colaborador.nombres} {c.colaborador.apellidos}</p>
-                  <p className="text-xs text-muted-foreground truncate">{c.numero} · {c.objeto}</p>
+                  <p className="truncate text-sm font-medium">{c.colaborador.nombres} {c.colaborador.apellidos}</p>
+                  <p className="truncate text-xs text-muted-foreground">{c.numero} · {c.objeto}</p>
                 </div>
-                <div className="text-right hidden sm:block">
-                  <p className="text-sm font-medium">{fmtCOP(Number(c.valorTotal))}</p>
+                <div className="hidden text-right sm:block">
+                  <p className="text-sm font-medium tabular-nums">{fmtCOP(Number(c.valorTotal))}</p>
                   <p className="text-xs text-muted-foreground">{c._count.cuentasCobro} cuenta(s)</p>
                 </div>
-                <Badge variant={c.estado === 'ACTIVO' ? 'default' : 'secondary'}>{c.estado}</Badge>
-                <ChevronRight className="size-4 text-muted-foreground" />
+                <Pill tone={TONO_CONTRATO[c.estado] ?? 'muted'}>{ESTADO_CONTRATO[c.estado] ?? c.estado}</Pill>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
               </Link>
             ))}
           </CardContent></Card>
@@ -132,20 +138,19 @@ export default async function ContratosPage({
         contratosLaboral.length === 0 ? <Vacio /> : (
           <Card><CardContent className="p-0 divide-y">
             {contratosLaboral.map((c) => (
-              <Link key={c.id} href={`/contratos/${c.id}`} className="flex items-center gap-3 p-3 hover:bg-accent/40">
-                <FileText className="size-5 text-muted-foreground shrink-0" />
+              <Link key={c.id} href={`/contratos/${c.id}`} className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/40">
+                <Chip icono={FileText} color="indigo" />
+                <AvatarColab c={c.colaborador} />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{c.colaborador.nombres} {c.colaborador.apellidos}</p>
-                  <p className="text-xs text-muted-foreground truncate">
+                  <p className="truncate text-sm font-medium">{c.colaborador.nombres} {c.colaborador.apellidos}</p>
+                  <p className="truncate text-xs text-muted-foreground">
                     {c.numero} · {c.cargo?.nombre ?? 'Sin cargo'}
                     {c.fechaFin && ` · vence ${formatFechaCorta(c.fechaFin)}`}
                   </p>
                 </div>
-                <span className="text-sm font-medium hidden sm:block">{fmtCOP(Number(c.salarioBase))}</span>
-                <Badge variant={c.estado === 'ACTIVO' ? 'default' : c.estado === 'SUSPENDIDO' ? 'destructive' : 'secondary'}>
-                  {ESTADO_CONTRATO[c.estado]}
-                </Badge>
-                <ChevronRight className="size-4 text-muted-foreground" />
+                <span className="hidden text-sm font-medium tabular-nums sm:block">{fmtCOP(Number(c.salarioBase))}</span>
+                <Pill tone={TONO_CONTRATO[c.estado] ?? 'muted'}>{ESTADO_CONTRATO[c.estado]}</Pill>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
               </Link>
             ))}
           </CardContent></Card>
