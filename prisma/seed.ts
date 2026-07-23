@@ -1,24 +1,37 @@
 /**
- * Seed inicial: roles del sistema + matriz de permisos, ciudades/sede principal,
- * configuración de empresa y usuario administrador.
+ * Seed inicial: roles del sistema + matriz de permisos, configuración de empresa,
+ * catálogos, parámetros legales y usuario administrador. NO siembra ciudades ni
+ * sedes: producción arranca en blanco y el admin crea su sede real desde la app
+ * (Configuración → Sedes). El demo (seed-demo.ts) crea las suyas por su cuenta.
  *
  * Idempotente: puede ejecutarse varias veces sin duplicar datos.
  * Uso: pnpm db:seed
  */
 import 'dotenv/config'
+import { randomBytes } from 'node:crypto'
 import { prisma } from '../src/lib/db'
 import { ROLES_SEED } from '../src/lib/permisos/modulos'
 import { seedCatalogos } from './seed-catalogos'
 import { seedNomina } from './seed-nomina'
 import { seedObligaciones } from './seed-obligaciones'
+import { seedMatrizLegal } from './seed-matriz-legal'
+import { seedPlantillasContrato } from './seed-plantillas'
+import { seedPlantillaLaboral } from './seed-plantilla-laboral'
 
-// El admin inicial se configura por variables de entorno en producción.
-const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'michaelmartinez0996@gmail.com'
-const ADMIN_PASSWORD_INICIAL = process.env.SEED_ADMIN_PASSWORD ?? 'Kupocell.2026*'
+// El admin inicial se configura por variables de entorno. NUNCA hay una
+// contraseña por defecto en el código (sería un secreto commiteado al repo):
+// si no se define SEED_ADMIN_PASSWORD, se genera una aleatoria y se imprime en
+// consola al crear el admin.
+const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@ejemplo.local'
 const ADMIN_NAME = process.env.SEED_ADMIN_NAME ?? 'Administrador'
-// Por defecto el admin usa la contraseña indicada (sin cambio forzado). Pon
-// SEED_ADMIN_FORCE_CHANGE=true para exigir el cambio en el primer ingreso.
-const ADMIN_FORZAR_CAMBIO = process.env.SEED_ADMIN_FORCE_CHANGE === 'true'
+// Contraseña generada al vuelo si no viene por variable (no queda ningún secreto
+// en el repositorio). Se muestra en consola solo cuando se autogenera.
+const ADMIN_PASSWORD_AUTOGENERADA = !process.env.SEED_ADMIN_PASSWORD
+const ADMIN_PASSWORD_INICIAL =
+  process.env.SEED_ADMIN_PASSWORD ?? `Adm-${randomBytes(9).toString('base64').replace(/[+/=]/g, '')}9*`
+// El cambio de contraseña al primer ingreso se fuerza por defecto (seguro);
+// pon SEED_ADMIN_FORCE_CHANGE=false solo en desarrollo si te estorba.
+const ADMIN_FORZAR_CAMBIO = process.env.SEED_ADMIN_FORCE_CHANGE !== 'false'
 
 async function seedRoles() {
   for (const [nombre, def] of Object.entries(ROLES_SEED)) {
@@ -43,30 +56,6 @@ async function seedRoles() {
     }
     console.log(`Rol listo: ${nombre}`)
   }
-}
-
-async function seedSedes() {
-  const bogota = await prisma.ciudad.upsert({
-    where: { nombre_departamento: { nombre: 'Bogotá', departamento: 'Cundinamarca' } },
-    create: { nombre: 'Bogotá', departamento: 'Cundinamarca', codigoDane: '11001' },
-    update: {},
-  })
-  await prisma.ciudad.upsert({
-    where: { nombre_departamento: { nombre: 'Medellín', departamento: 'Antioquia' } },
-    create: { nombre: 'Medellín', departamento: 'Antioquia', codigoDane: '05001' },
-    update: {},
-  })
-  await prisma.sede.upsert({
-    where: { nombre: 'Sede Principal' },
-    create: {
-      nombre: 'Sede Principal',
-      ciudadId: bogota.id,
-      direccion: 'Por definir',
-      esPrincipal: true,
-    },
-    update: {},
-  })
-  console.log('Ciudades y sede principal listas')
 }
 
 async function seedEmpresa() {
@@ -109,7 +98,12 @@ async function seedAdmin() {
     },
   })
   console.log(`Usuario administrador creado: ${creado.user.email}`)
-  console.log(`  Contraseña inicial configurada${ADMIN_FORZAR_CAMBIO ? ' (se exigirá cambiarla al primer ingreso)' : ''}.`)
+  if (ADMIN_PASSWORD_AUTOGENERADA) {
+    console.log(`  ⚠️  Contraseña autogenerada (no se definió SEED_ADMIN_PASSWORD): ${ADMIN_PASSWORD_INICIAL}`)
+    console.log('     Anótala ahora; no se vuelve a mostrar. En producción define SEED_ADMIN_PASSWORD.')
+  } else {
+    console.log(`  Contraseña inicial tomada de SEED_ADMIN_PASSWORD${ADMIN_FORZAR_CAMBIO ? ' (se exigirá cambiarla al primer ingreso)' : ''}.`)
+  }
 }
 
 async function seedPlantillaCuentaCobro() {
@@ -157,12 +151,14 @@ async function seedReglasAlerta() {
 
 async function main() {
   await seedRoles()
-  await seedSedes()
   await seedEmpresa()
   await seedCatalogos()
   await seedReglasAlerta()
   await seedNomina()
   await seedObligaciones()
+  await seedMatrizLegal()
+  await seedPlantillasContrato()
+  await seedPlantillaLaboral()
   await seedPlantillaCuentaCobro()
   await seedAdmin()
 }

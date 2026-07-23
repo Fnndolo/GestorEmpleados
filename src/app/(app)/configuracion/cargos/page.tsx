@@ -2,6 +2,7 @@ import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { CargosCliente } from './cargos-cliente'
+import type { FuncionesCargo } from '@/lib/contrato-variables'
 
 export const metadata = { title: 'Cargos · Configuración' }
 
@@ -32,7 +33,9 @@ export default async function CargosPage() {
         roles={roles}
         cargos={cargos.map((c) => ({
           id: c.id, nombre: c.nombre, areaId: c.areaId, area: c.area.nombre,
-          nivel: c.nivel ?? '', funciones: c.funciones ?? '', claseRiesgoDefecto: c.claseRiesgoDefecto ?? '',
+          nivel: c.nivel ?? '', funciones: c.funciones ?? '',
+          funcionesContrato: (c.funcionesContrato as FuncionesCargo | null) ?? [],
+          claseRiesgoDefecto: c.claseRiesgoDefecto ?? '',
           rolDefectoId: c.rolDefectoId ?? '', activo: c.activo, asignados: c._count.colaboradores + c._count.contratos,
         }))}
       />

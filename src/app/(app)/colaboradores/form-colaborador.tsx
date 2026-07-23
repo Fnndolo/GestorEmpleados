@@ -66,10 +66,11 @@ export function FormColaborador({ catalogos, valores, puedeEditarSalud }: Props)
       if (esEdicion) {
         toast.success('Colaborador actualizado.')
       } else {
-        const d = res.datos as { id: string; usuarioCreado?: boolean; sinCorreo?: boolean }
+        const d = res.datos as { id: string; usuarioCreado?: boolean; sinCorreo?: boolean; correoYaTeniaUsuario?: boolean }
         if (d.usuarioCreado) toast.success('Colaborador creado. Se creó su usuario y se le envió la invitación por correo.')
+        else if (d.correoYaTeniaUsuario) toast.warning('Colaborador creado, pero ese correo YA tiene un usuario en el sistema: no se creó cuenta nueva ni se envió invitación. Usa un correo distinto si es otra persona.', { duration: 9000 })
         else if (d.sinCorreo) toast.success('Colaborador creado. No tiene correo: no se creó usuario de acceso (puedes crearlo luego en Usuarios).')
-        else toast.success('Colaborador creado.')
+        else toast.warning('Colaborador creado, pero no se pudo crear su usuario de acceso. Revisa el correo o créalo luego en Usuarios.')
       }
       const id = esEdicion ? valores!.id! : (res.datos as { id: string }).id
       router.push(`/colaboradores/${id}`)
@@ -100,7 +101,7 @@ export function FormColaborador({ catalogos, valores, puedeEditarSalud }: Props)
       <Seccion titulo="Contacto">
         <CampoTexto label="Celular" reg={register('celular')} err={errors.celular?.message} />
         <CampoTexto label="Teléfono fijo" reg={register('telefono')} />
-        <CampoTexto label="Correo personal" reg={register('emailPersonal')} err={errors.emailPersonal?.message} />
+        <CampoTexto label="Correo personal * (ahí llegan sus credenciales de acceso)" reg={register('emailPersonal')} err={errors.emailPersonal?.message} />
         <CampoTexto label="Correo corporativo" reg={register('emailCorporativo')} err={errors.emailCorporativo?.message} />
         <CampoTexto label="Dirección" reg={register('direccion')} full />
         <CampoTexto label="Barrio" reg={register('barrio')} />

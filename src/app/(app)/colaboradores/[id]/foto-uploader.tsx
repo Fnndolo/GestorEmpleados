@@ -6,6 +6,7 @@ import imageCompression from 'browser-image-compression'
 import { toast } from 'sonner'
 import { Camera, X } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { colorAvatar } from '@/lib/etiquetas'
 import { Spinner } from '@/components/ui/spinner'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -13,9 +14,9 @@ import {
 } from '@/components/ui/alert-dialog'
 
 export function FotoUploader({
-  colaboradorId, iniciales, tieneFoto, puedeEditar,
+  colaboradorId, iniciales, nombreCompleto, tieneFoto, puedeEditar,
 }: {
-  colaboradorId: string; iniciales: string; tieneFoto: boolean; puedeEditar: boolean
+  colaboradorId: string; iniciales: string; nombreCompleto?: string; tieneFoto: boolean; puedeEditar: boolean
 }) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -61,7 +62,12 @@ export function FotoUploader({
     <div className="relative">
       <Avatar className="size-20">
         {tieneFoto && <AvatarImage src={`/api/documentos/foto/${colaboradorId}?v=${version}`} alt="" />}
-        <AvatarFallback className="text-lg">{iniciales}</AvatarFallback>
+        <AvatarFallback
+          className="text-lg font-semibold text-white"
+          style={{ backgroundColor: colorAvatar(nombreCompleto ?? iniciales) }}
+        >
+          {iniciales}
+        </AvatarFallback>
       </Avatar>
       {puedeEditar && (
         <>

@@ -93,3 +93,13 @@ export function nombreCompleto(c: { nombres: string; apellidos: string }): strin
 export function iniciales(nombres: string, apellidos: string): string {
   return `${nombres[0] ?? ''}${apellidos[0] ?? ''}`.toUpperCase()
 }
+
+// Paleta de avatares (la misma del organigrama): color determinístico por nombre,
+// para que cada persona tenga siempre el mismo color en toda la app.
+export const PALETA_AVATAR = ['#0ea5e9', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6366f1', '#14b8a6', '#f97316', '#0284c7']
+
+export function colorAvatar(semilla: string): string {
+  let h = 0
+  for (let i = 0; i < semilla.length; i++) h = (h * 31 + semilla.charCodeAt(i)) >>> 0
+  return PALETA_AVATAR[h % PALETA_AVATAR.length]
+}

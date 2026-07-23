@@ -1,6 +1,7 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
 import { enviarCorreo } from '@/server/notificaciones/correo'
+import { enviarPush } from '@/server/notificaciones/push'
 
 /** Date.now() de forma segura (en algunos runtimes restringidos se evita). */
 function ahora(): number {
@@ -17,11 +18,12 @@ export async function notificarUsuario(
   mensaje: string,
   enlace?: string,
   dedupeKey?: string,
+  evento?: string,
 ): Promise<void> {
   const key = dedupeKey ?? `aviso:${userId}:${titulo}:${ahora()}`
   try {
     await prisma.notificacion.create({
-      data: { userId, titulo, mensaje, enlace: enlace ?? null, dedupeKey: key },
+      data: { userId, titulo, mensaje, enlace: enlace ?? null, dedupeKey: key, evento: evento ?? null },
     })
   } catch {
     /* dedupeKey duplicado → ya existe, idempotente */
@@ -58,12 +60,15 @@ function plantillaCorreo(nombre: string, titulo: string, mensaje: string, enlace
  */
 export async function avisar(
   userId: string,
-  opts: { titulo: string; mensaje: string; enlace?: string; llamadoAccion?: string },
+  opts: { titulo: string; mensaje: string; enlace?: string; llamadoAccion?: string; evento?: string },
 ): Promise<void> {
   const usuario = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
   if (!usuario) return
 
-  await notificarUsuario(userId, opts.titulo, opts.mensaje, opts.enlace)
+  await notificarUsuario(userId, opts.titulo, opts.mensaje, opts.enlace, undefined, opts.evento)
+
+  // Web Push a los dispositivos suscritos del usuario (best-effort)
+  await enviarPush(userId, { titulo: opts.titulo, mensaje: opts.mensaje, enlace: opts.enlace }).catch(() => {})
 
   const dedupe = `mail:aviso:${userId}:${opts.titulo}:${ahora()}`
   const cuerpo = plantillaCorreo(usuario.name, opts.titulo, opts.mensaje, opts.enlace, opts.llamadoAccion)
@@ -86,13 +91,32 @@ export async function avisar(
 /** Avisa a todos los usuarios activos con uno de los roles indicados (in-app + correo). */
 export async function avisarPorRol(
   roles: string[],
-  opts: { titulo: string; mensaje: string; enlace?: string; llamadoAccion?: string },
+  opts: { titulo: string; mensaje: string; enlace?: string; llamadoAccion?: string; evento?: string },
 ): Promise<void> {
   const usuarios = await prisma.user.findMany({
     where: { estado: 'ACTIVO', rol: { nombre: { in: roles } } },
     select: { id: true },
   })
   for (const u of usuarios) await avisar(u.id, opts)
+}
+
+/**
+ * Envía un aviso a TODOS los usuarios activos (in-app + push). No manda correo, para
+ * no llenar las bandejas: pensado para avisos generales/pruebas de notificación.
+ * Devuelve a cuántos usuarios se envió.
+ */
+export async function avisarBroadcast(opts: {
+  titulo: string
+  mensaje: string
+  enlace?: string
+  evento?: string
+}): Promise<{ total: number }> {
+  const usuarios = await prisma.user.findMany({ where: { estado: 'ACTIVO' }, select: { id: true } })
+  for (const u of usuarios) {
+    await notificarUsuario(u.id, opts.titulo, opts.mensaje, opts.enlace, undefined, opts.evento)
+    await enviarPush(u.id, { titulo: opts.titulo, mensaje: opts.mensaje, enlace: opts.enlace }).catch(() => {})
+  }
+  return { total: usuarios.length }
 }
 
 /** Devuelve el userId vinculado a un colaborador (o null). */

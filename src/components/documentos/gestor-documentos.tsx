@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import { toast } from 'sonner'
 import {
-  Upload, FileText, Image as ImageIcon, Trash2, ExternalLink, CheckCircle2, AlertTriangle, Clock,
+  Upload, FileText, Image as ImageIcon, Trash2, ExternalLink, CircleCheck, TriangleAlert, Clock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +29,18 @@ type Doc = {
   tamanoBytes: number; fechaVencimiento: string | null; creadoEn: string
 }
 type TipoDoc = { id: string; nombre: string; requiereVencimiento: boolean }
+
+/** Misma clasificación que "Mis documentos" (autoservicio): por nombre o tipo del catálogo. */
+const CATEGORIAS = ['Expediente', 'Contratos', 'Desprendibles', 'Certificaciones', 'Actas', 'Otros']
+function categoriaDe(d: Doc): string {
+  const n = d.nombre.toLowerCase()
+  if (n.includes('desprendible') || n.includes('nómina')) return 'Desprendibles'
+  if (n.includes('certificación') || n.includes('certificado laboral')) return 'Certificaciones'
+  if (n.includes('acta') || n.includes('recibido de dotación')) return 'Actas'
+  if (n.includes('contrato') || n.includes('otrosí') || n.includes('autorización de datos')) return 'Contratos'
+  if (d.tipoDocumentoNombre) return 'Expediente'
+  return 'Otros'
+}
 type ItemSemaforo = { nombre: string; obligatorio: boolean; estado: 'al_dia' | 'falta' | 'vencido' | 'por_vencer' }
 
 export function GestorDocumentos({
@@ -41,8 +53,11 @@ export function GestorDocumentos({
   const [subiendo, setSubiendo] = useState(false)
   const [dialogo, setDialogo] = useState(false)
   const [eliminar, setEliminar] = useState<Doc | null>(null)
+  const [filtro, setFiltro] = useState('Todos')
 
   const obligatoriosFaltantes = semaforo.filter((s) => s.obligatorio && s.estado === 'falta').length
+  const categorias = CATEGORIAS.filter((c) => documentos.some((d) => categoriaDe(d) === c))
+  const visibles = filtro === 'Todos' ? documentos : documentos.filter((d) => categoriaDe(d) === filtro)
 
   return (
     <div className="space-y-6">
@@ -84,13 +99,34 @@ export function GestorDocumentos({
             </Button>
           )}
         </div>
-        {documentos.length === 0 ? (
+        {categorias.length > 1 && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {['Todos', ...categorias].map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setFiltro(c)}
+                className={
+                  filtro === c
+                    ? 'rounded-full bg-foreground px-3 py-1 text-xs font-semibold text-background'
+                    : 'rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent'
+                }
+              >
+                {c}
+                <span className="ml-1 tabular-nums opacity-60">
+                  {c === 'Todos' ? documentos.length : documentos.filter((d) => categoriaDe(d) === c).length}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        {visibles.length === 0 ? (
           <p className="text-sm text-muted-foreground py-6 text-center border rounded-lg border-dashed">
-            Aún no hay documentos cargados.
+            {filtro === 'Todos' ? 'Aún no hay documentos cargados.' : `No hay documentos en "${filtro}".`}
           </p>
         ) : (
           <div className="grid gap-2">
-            {documentos.map((d) => (
+            {visibles.map((d) => (
               <Card key={d.id}>
                 <CardContent className="flex items-center gap-3 py-3">
                   {d.mimeType.startsWith('image/') ? <ImageIcon className="size-5 text-muted-foreground shrink-0" /> : <FileText className="size-5 text-muted-foreground shrink-0" />}
@@ -155,10 +191,10 @@ export function GestorDocumentos({
 }
 
 function IconoEstado({ estado }: { estado: ItemSemaforo['estado'] }) {
-  if (estado === 'al_dia') return <CheckCircle2 className="size-3.5 text-emerald-600" />
+  if (estado === 'al_dia') return <CircleCheck className="size-3.5 text-emerald-600" />
   if (estado === 'por_vencer') return <Clock className="size-3.5 text-amber-500" />
-  if (estado === 'vencido') return <AlertTriangle className="size-3.5 text-destructive" />
-  return <AlertTriangle className="size-3.5 text-muted-foreground" />
+  if (estado === 'vencido') return <TriangleAlert className="size-3.5 text-destructive" />
+  return <TriangleAlert className="size-3.5 text-muted-foreground" />
 }
 
 function DialogSubir({

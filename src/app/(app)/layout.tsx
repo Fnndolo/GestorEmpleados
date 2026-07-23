@@ -1,5 +1,6 @@
 import { requerirSesion, tienePermiso } from '@/server/sesion'
 import { hrefsVisibles } from '@/lib/navegacion'
+import { contarAprobacionesPendientes } from '@/server/consultas/aprobaciones-pendientes'
 import { sedesDisponibles, sedeActualId } from '@/server/sede-actual'
 import { prisma } from '@/lib/db'
 import { Logo } from '@/components/marca/logo'
@@ -11,6 +12,7 @@ import { BottomNav } from '@/components/shell/bottom-nav'
 import { Campana } from '@/components/shell/campana'
 import { BusquedaGlobal } from '@/components/shell/busqueda-global'
 import { RegistrarSW } from '@/components/pwa/registrar-sw'
+import { BannerPush } from '@/components/pwa/banner-push'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const usuario = await requerirSesion()
@@ -18,6 +20,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const sedes = await sedesDisponibles(usuario)
   const sedeActual = await sedeActualId()
   const datosUsuario = { nombre: usuario.nombre, email: usuario.email, rol: usuario.rolNombre }
+  // El enlace a vencimientos en la campana solo se muestra a quien tenga el permiso.
+  const verVencimientos = tienePermiso(usuario, 'vencimientos', 'VER')
+
+  // Badge de solicitudes por aprobar sobre el botón "Aprobaciones".
+  const aprobacionesPendientes = await contarAprobacionesPendientes(usuario)
+  const badges = aprobacionesPendientes > 0 ? { '/autoservicio/aprobaciones': aprobacionesPendientes } : undefined
 
   // Módulos personalizados creados por el administrador (visibles para quien tenga el permiso)
   const modulosCustom = (
@@ -39,7 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <SelectorSede sedes={sedes} actual={sedeActual} />
         </div>
         <div className="flex-1 overflow-y-auto p-3">
-          <NavLinks hrefsVisibles={visibles} modulosCustom={modulosCustom} />
+          <NavLinks hrefsVisibles={visibles} modulosCustom={modulosCustom} badges={badges} />
         </div>
         <div className="border-t p-2">
           <MenuUsuario {...datosUsuario} />
@@ -53,6 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <DrawerMovil
             hrefsVisibles={visibles}
             modulosCustom={modulosCustom}
+            badges={badges}
             sedes={sedes}
             sedeActual={sedeActual}
             usuario={datosUsuario}
@@ -64,15 +73,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <BusquedaGlobal />
           </div>
           <div className="flex-1 sm:hidden" />
-          <Campana />
+          <Campana verVencimientos={verVencimientos} />
         </header>
 
         {/* Contenido */}
-        <main className="flex-1 p-4 pb-24 lg:p-6 lg:pb-6">{children}</main>
+        <main className="flex-1 p-4 pb-24 lg:p-6 lg:pb-6">
+          <BannerPush />
+          {children}
+        </main>
       </div>
 
       {/* Barra inferior móvil */}
-      <BottomNav hrefsVisibles={visibles} />
+      <BottomNav hrefsVisibles={visibles} badges={badges} />
     </div>
   )
 }

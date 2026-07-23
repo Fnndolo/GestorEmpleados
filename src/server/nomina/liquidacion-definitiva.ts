@@ -28,8 +28,21 @@ export type ResultadoLiquidacionDef = {
 }
 
 const peso = (d: Decimal) => d.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber()
-const dias360 = (desde: Date, hasta: Date) =>
-  Math.max(0, Math.floor((hasta.getTime() - desde.getTime()) / 86_400_000))
+
+/**
+ * Días entre dos fechas por la convención comercial 30/360 que usa la liquidación
+ * laboral en Colombia (meses de 30 días, año de 360). NO usar días calendario
+ * reales: sobre-liquidaría cesantías/prima/vacaciones ~1,4% (365/360).
+ */
+function dias360(desde: Date, hasta: Date): number {
+  if (hasta <= desde) return 0
+  let d1 = desde.getUTCDate()
+  let d2 = hasta.getUTCDate()
+  if (d1 === 31) d1 = 30
+  if (d2 === 31) d2 = 30
+  const meses = (hasta.getUTCFullYear() - desde.getUTCFullYear()) * 12 + (hasta.getUTCMonth() - desde.getUTCMonth())
+  return Math.max(0, meses * 30 + (d2 - d1))
+}
 
 /** Calcula la liquidación definitiva (cesantías, intereses, prima, vacaciones, indemnización). */
 export function liquidacionDefinitiva(e: EntradaLiquidacionDef): ResultadoLiquidacionDef {

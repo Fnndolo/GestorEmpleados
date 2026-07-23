@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { CheckCircle2, XCircle, Download, ShieldAlert, ExternalLink } from 'lucide-react'
+import { CircleCheck, CircleX, Download, ShieldAlert, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -64,9 +64,9 @@ export function CuentasRevision({ puedeAprobar, cuentas }: { puedeAprobar: boole
 
             {puedeAprobar && c.estado !== 'PAGADA' && c.estado !== 'RECHAZADA' && (
               <div className="flex flex-wrap justify-end gap-2">
-                <Button size="sm" variant="outline" onClick={() => cambiar(c.id, 'RECHAZADA')} disabled={proc === c.id}><XCircle className="size-4" /> Rechazar</Button>
-                <Button size="sm" variant="outline" onClick={() => cambiar(c.id, 'APROBADA')} disabled={proc === c.id}>{proc === c.id ? <Spinner /> : <CheckCircle2 className="size-4" />} Aprobar</Button>
-                <Button size="sm" onClick={() => cambiar(c.id, 'PAGADA', true)} disabled={proc === c.id}><CheckCircle2 className="size-4" /> Marcar pagada</Button>
+                <Button size="sm" variant="outline" onClick={() => cambiar(c.id, 'RECHAZADA')} disabled={proc === c.id}><CircleX className="size-4" /> Rechazar</Button>
+                <Button size="sm" variant="outline" onClick={() => cambiar(c.id, 'APROBADA')} disabled={proc === c.id}>{proc === c.id ? <Spinner /> : <CircleCheck className="size-4" />} Aprobar</Button>
+                <Button size="sm" onClick={() => cambiar(c.id, 'PAGADA', true)} disabled={proc === c.id}><CircleCheck className="size-4" /> Marcar pagada</Button>
               </div>
             )}
           </CardContent>

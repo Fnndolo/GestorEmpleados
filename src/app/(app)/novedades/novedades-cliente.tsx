@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { toast } from 'sonner'
-import { Plus, CheckCircle2, Paperclip } from 'lucide-react'
+import { Plus, CircleCheck, Paperclip, TreePalm, Stethoscope, File, Clock, CreditCard, type LucideIcon } from 'lucide-react'
+import { Pill, type PillTone, type ChipColor } from '@/components/ui-kit'
+import { ListaAcordeon } from '@/components/ui-kit/lista-acordeon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
-import { cn } from '@/lib/utils'
+import { FiltroTabs } from '@/components/shell/filtro-tabs'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import {
@@ -42,12 +43,30 @@ const ESTADO_VAC: Record<string, string> = {
   SOLICITADA: 'Solicitada', APROBADA: 'Aprobada', EN_DISFRUTE: 'En disfrute', DISFRUTADA: 'Disfrutada', RECHAZADA: 'Rechazada', CANCELADA: 'Cancelada',
 }
 
+/** El estado se lee de un vistazo por color — misma paleta que "Mi actividad" de autoservicio. */
+const TONO_ESTADO: Record<string, PillTone> = {
+  APROBADA: 'ok', DISFRUTADA: 'ok', PAGADO: 'ok',
+  EN_DISFRUTE: 'info',
+  SOLICITADA: 'warn', PENDIENTE: 'warn',
+  RECHAZADA: 'bad',
+  CANCELADA: 'muted',
+}
+
 type Datos = {
-  vacaciones: { id: string; colaborador: string; colaboradorId: string; fechaInicio: string; fechaFin: string; dias: number; estado: string; desdeAutoservicio: boolean; soporteDocId: string | null }[]
-  incapacidades: { id: string; colaborador: string; tipo: string; fechaInicio: string; fechaFin: string; dias: number; desdeAutoservicio: boolean; soporteDocId: string | null }[]
-  licencias: { id: string; colaborador: string; tipo: string; fechaInicio: string; fechaFin: string; dias: number; remunerada: boolean }[]
-  permisos: { id: string; colaborador: string; fecha: string; diaCompleto: boolean; horas: number | null; motivo: string; desdeAutoservicio: boolean; soporteDocId: string | null }[]
-  bonificaciones: { id: string; colaborador: string; concepto: string; valor: number; constitutivoSalario: boolean; estadoPago: string; fechaPago: string | null }[]
+  vacaciones: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; fechaInicio: string; fechaFin: string; dias: number; estado: string; desdeAutoservicio: boolean; soporteDocId: string | null }[]
+  incapacidades: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; tipo: string; fechaInicio: string; fechaFin: string; dias: number; desdeAutoservicio: boolean; soporteDocId: string | null }[]
+  licencias: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; tipo: string; fechaInicio: string; fechaFin: string; dias: number; remunerada: boolean }[]
+  permisos: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; fecha: string; diaCompleto: boolean; horas: number | null; motivo: string; desdeAutoservicio: boolean; soporteDocId: string | null }[]
+  bonificaciones: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; concepto: string; valor: number; constitutivoSalario: boolean; estadoPago: string; fechaPago: string | null }[]
+}
+
+/** Ícono y color por tipo de novedad — mismo lenguaje visual que "Mi actividad" de autoservicio. */
+const CHIP_NOV: Record<string, { icono: LucideIcon; color: ChipColor }> = {
+  vacaciones: { icono: TreePalm, color: 'emerald' },
+  incapacidades: { icono: Stethoscope, color: 'rose' },
+  licencias: { icono: File, color: 'violet' },
+  permisos: { icono: Clock, color: 'sky' },
+  bonificaciones: { icono: CreditCard, color: 'ink' },
 }
 
 /** Insignia de origen autoservicio + enlace al soporte adjunto por el empleado. */
@@ -71,21 +90,91 @@ export function NovedadesCliente({ tab, datos, puedeCrear, puedeEditar }: { tab:
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
-          {TABS.map((t) => (
-            <Link key={t.v} href={`/novedades?tab=${t.v}`}
-              className={cn('whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors', tab === t.v ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent')}>
-              {t.l}
-            </Link>
-          ))}
+        <div className="min-w-0 flex-1">
+          <FiltroTabs tabs={TABS.map((t) => ({ valor: t.v, label: t.l }))} activo={tab} basePath="/novedades" />
         </div>
         {puedeCrear && <Button size="sm" onClick={() => setDialogo(tab)}><Plus className="size-4" /> Registrar</Button>}
       </div>
 
-      {tab === 'vacaciones' && <ListaVacaciones items={datos.vacaciones} />}
-      {tab === 'incapacidades' && <ListaSimple items={datos.incapacidades.map((x) => ({ id: x.id, titulo: x.colaborador, sub: `${TIPO_INCAP[x.tipo]} · ${formatFechaCorta(new Date(x.fechaInicio))} a ${formatFechaCorta(new Date(x.fechaFin))} · ${x.dias} días`, autoservicio: x.desdeAutoservicio, soporteDocId: x.soporteDocId }))} />}
-      {tab === 'licencias' && <ListaSimple items={datos.licencias.map((x) => ({ id: x.id, titulo: x.colaborador, sub: `${TIPO_LIC[x.tipo]} · ${x.dias} días · ${x.remunerada ? 'Remunerada' : 'No remunerada'}` }))} />}
-      {tab === 'permisos' && <ListaSimple items={datos.permisos.map((x) => ({ id: x.id, titulo: x.colaborador, sub: `${formatFechaCorta(new Date(x.fecha))} · ${x.diaCompleto ? 'Día completo' : `${x.horas ?? 0} horas`} · ${x.motivo}`, autoservicio: x.desdeAutoservicio, soporteDocId: x.soporteDocId }))} />}
+      {tab === 'vacaciones' && (
+        <Lista
+          chip={CHIP_NOV.vacaciones}
+          items={datos.vacaciones.map((x) => ({
+            id: x.id,
+            titulo: x.colaborador,
+            avatar: { colaboradorId: x.colaboradorId, tieneFoto: x.tieneFoto, nombre: x.colaborador },
+            sub: `${formatFechaCorta(new Date(x.fechaInicio))} a ${formatFechaCorta(new Date(x.fechaFin))} · ${x.dias} días hábiles`,
+            campos: [
+              { label: 'Desde', valor: formatFechaCorta(new Date(x.fechaInicio)) },
+              { label: 'Hasta', valor: formatFechaCorta(new Date(x.fechaFin)) },
+              { label: 'Días hábiles', valor: String(x.dias) },
+              { label: 'Estado', valor: ESTADO_VAC[x.estado] ?? x.estado },
+              { label: 'Origen', valor: x.desdeAutoservicio ? 'Autoservicio' : 'Registro de RRHH' },
+            ],
+            derecha: (
+              <div className="flex shrink-0 items-center gap-2">
+                <OrigenSoporte autoservicio={x.desdeAutoservicio} docId={x.soporteDocId} />
+                <Pill tone={TONO_ESTADO[x.estado] ?? 'muted'}>{ESTADO_VAC[x.estado]}</Pill>
+              </div>
+            ),
+          }))}
+        />
+      )}
+      {tab === 'incapacidades' && (
+        <Lista
+          chip={CHIP_NOV.incapacidades}
+          items={datos.incapacidades.map((x) => ({
+            id: x.id,
+            titulo: x.colaborador,
+            avatar: { colaboradorId: x.colaboradorId, tieneFoto: x.tieneFoto, nombre: x.colaborador },
+            sub: `${TIPO_INCAP[x.tipo]} · ${formatFechaCorta(new Date(x.fechaInicio))} a ${formatFechaCorta(new Date(x.fechaFin))} · ${x.dias} días`,
+            campos: [
+              { label: 'Tipo', valor: TIPO_INCAP[x.tipo] ?? x.tipo },
+              { label: 'Desde', valor: formatFechaCorta(new Date(x.fechaInicio)) },
+              { label: 'Hasta', valor: formatFechaCorta(new Date(x.fechaFin)) },
+              { label: 'Días', valor: String(x.dias) },
+              { label: 'Origen', valor: x.desdeAutoservicio ? 'Autoservicio' : 'Registro de RRHH' },
+            ],
+            derecha: <OrigenSoporte autoservicio={x.desdeAutoservicio} docId={x.soporteDocId} />,
+          }))}
+        />
+      )}
+      {tab === 'licencias' && (
+        <Lista
+          chip={CHIP_NOV.licencias}
+          items={datos.licencias.map((x) => ({
+            id: x.id,
+            titulo: x.colaborador,
+            avatar: { colaboradorId: x.colaboradorId, tieneFoto: x.tieneFoto, nombre: x.colaborador },
+            sub: `${TIPO_LIC[x.tipo]} · ${x.dias} días · ${x.remunerada ? 'Remunerada' : 'No remunerada'}`,
+            campos: [
+              { label: 'Tipo', valor: TIPO_LIC[x.tipo] ?? x.tipo },
+              { label: 'Desde', valor: formatFechaCorta(new Date(x.fechaInicio)) },
+              { label: 'Hasta', valor: formatFechaCorta(new Date(x.fechaFin)) },
+              { label: 'Días', valor: String(x.dias) },
+              { label: 'Remunerada', valor: x.remunerada ? 'Sí' : 'No' },
+            ],
+          }))}
+        />
+      )}
+      {tab === 'permisos' && (
+        <Lista
+          chip={CHIP_NOV.permisos}
+          items={datos.permisos.map((x) => ({
+            id: x.id,
+            titulo: x.colaborador,
+            avatar: { colaboradorId: x.colaboradorId, tieneFoto: x.tieneFoto, nombre: x.colaborador },
+            sub: `${formatFechaCorta(new Date(x.fecha))} · ${x.diaCompleto ? 'Día completo' : `${x.horas ?? 0} horas`} · ${x.motivo}`,
+            campos: [
+              { label: 'Fecha', valor: formatFechaCorta(new Date(x.fecha)) },
+              { label: 'Modalidad', valor: x.diaCompleto ? 'Día completo' : `Por horas (${x.horas ?? 0})` },
+              ...(x.motivo ? [{ label: 'Motivo', valor: x.motivo }] : []),
+              { label: 'Origen', valor: x.desdeAutoservicio ? 'Autoservicio' : 'Registro de RRHH' },
+            ],
+            derecha: <OrigenSoporte autoservicio={x.desdeAutoservicio} docId={x.soporteDocId} />,
+          }))}
+        />
+      )}
       {tab === 'bonificaciones' && <ListaBonificaciones items={datos.bonificaciones} puedeEditar={puedeEditar} />}
 
       {dialogo && <DialogRegistro tab={dialogo} onClose={() => setDialogo(null)} />}
@@ -93,63 +182,39 @@ export function NovedadesCliente({ tab, datos, puedeCrear, puedeEditar }: { tab:
   )
 }
 
-function ListaVacaciones({ items }: { items: Datos['vacaciones'] }) {
-  if (items.length === 0) return <Vacio />
-  return (
-    <Card><CardContent className="p-0 divide-y">
-      {items.map((x) => (
-        <div key={x.id} className="flex items-center gap-3 p-3">
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm truncate">{x.colaborador}</p>
-            <p className="text-xs text-muted-foreground">{formatFechaCorta(new Date(x.fechaInicio))} a {formatFechaCorta(new Date(x.fechaFin))} · {x.dias} días hábiles</p>
-          </div>
-          <OrigenSoporte autoservicio={x.desdeAutoservicio} docId={x.soporteDocId} />
-          <Badge variant={x.estado === 'APROBADA' || x.estado === 'DISFRUTADA' ? 'default' : 'secondary'}>{ESTADO_VAC[x.estado]}</Badge>
-        </div>
-      ))}
-    </CardContent></Card>
-  )
-}
-
-function ListaSimple({ items }: { items: { id: string; titulo: string; sub: string; autoservicio?: boolean; soporteDocId?: string | null }[] }) {
-  if (items.length === 0) return <Vacio />
-  return (
-    <Card><CardContent className="p-0 divide-y">
-      {items.map((x) => (
-        <div key={x.id} className="flex items-center gap-3 p-3">
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm">{x.titulo}</p>
-            <p className="text-xs text-muted-foreground">{x.sub}</p>
-          </div>
-          <OrigenSoporte autoservicio={!!x.autoservicio} docId={x.soporteDocId ?? null} />
-        </div>
-      ))}
-    </CardContent></Card>
-  )
+/** ListaAcordeon del kit con estado vacío de la pestaña. */
+function Lista(props: React.ComponentProps<typeof ListaAcordeon>) {
+  if (props.items.length === 0) return <Vacio />
+  return <ListaAcordeon {...props} />
 }
 
 function ListaBonificaciones({ items, puedeEditar }: { items: Datos['bonificaciones']; puedeEditar: boolean }) {
   const router = useRouter()
-  if (items.length === 0) return <Vacio />
   return (
-    <Card><CardContent className="p-0 divide-y">
-      {items.map((x) => (
-        <div key={x.id} className="flex items-center gap-3 p-3">
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm truncate">{x.colaborador}</p>
-            <p className="text-xs text-muted-foreground">{x.concepto} · {fmtCOP(x.valor)} · {x.constitutivoSalario ? 'Constitutivo' : 'No constitutivo'}</p>
-          </div>
-          {x.estadoPago === 'PAGADO' ? (
-            <Badge>Pagado {x.fechaPago ? formatFechaCorta(new Date(x.fechaPago)) : ''}</Badge>
-          ) : puedeEditar ? (
-            <Button size="sm" variant="outline" onClick={async () => {
-              const res = await marcarBonificacionPagada({ id: x.id })
-              if (res.ok) { toast.success('Marcada como pagada.'); router.refresh() } else toast.error(res.error)
-            }}><CheckCircle2 className="size-4" /> Marcar pagada</Button>
-          ) : <Badge variant="secondary">Pendiente</Badge>}
-        </div>
-      ))}
-    </CardContent></Card>
+    <Lista
+      chip={CHIP_NOV.bonificaciones}
+      items={items.map((x) => ({
+        id: x.id,
+        titulo: x.colaborador,
+        avatar: { colaboradorId: x.colaboradorId, tieneFoto: x.tieneFoto, nombre: x.colaborador },
+        sub: `${x.concepto} · ${fmtCOP(x.valor)} · ${x.constitutivoSalario ? 'Constitutivo' : 'No constitutivo'}`,
+        campos: [
+          { label: 'Concepto', valor: x.concepto },
+          { label: 'Valor', valor: fmtCOP(x.valor) },
+          { label: 'Constitutivo de salario', valor: x.constitutivoSalario ? 'Sí' : 'No' },
+          { label: 'Estado de pago', valor: x.estadoPago === 'PAGADO' ? 'Pagado' : 'Pendiente' },
+          ...(x.fechaPago ? [{ label: 'Fecha de pago', valor: formatFechaCorta(new Date(x.fechaPago)) }] : []),
+        ],
+        derecha: x.estadoPago === 'PAGADO' ? (
+          <Pill tone="ok">Pagado {x.fechaPago ? formatFechaCorta(new Date(x.fechaPago)) : ''}</Pill>
+        ) : puedeEditar ? (
+          <Button size="sm" variant="outline" onClick={async () => {
+            const res = await marcarBonificacionPagada({ id: x.id })
+            if (res.ok) { toast.success('Marcada como pagada.'); router.refresh() } else toast.error(res.error)
+          }}><CircleCheck className="size-4" /> Marcar pagada</Button>
+        ) : <Pill tone="warn">Pendiente</Pill>,
+      }))}
+    />
   )
 }
 
@@ -197,10 +262,19 @@ function DialogRegistro({ tab, onClose }: { tab: string; onClose: () => void }) 
           )}
 
           {(tab === 'vacaciones' || tab === 'incapacidades' || tab === 'licencias') && (
-            <div className="grid grid-cols-2 gap-3">
-              <Campo label="Fecha inicio"><Input type="date" onChange={(e) => set('fechaInicio', e.target.value)} /></Campo>
-              <Campo label="Fecha fin"><Input type="date" onChange={(e) => set('fechaFin', e.target.value)} /></Campo>
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Campo label="Fecha inicio">
+                  <Input type="date" min={tab === 'vacaciones' ? minInicioVacaciones() : undefined} onChange={(e) => set('fechaInicio', e.target.value)} />
+                </Campo>
+                <Campo label="Fecha fin"><Input type="date" onChange={(e) => set('fechaFin', e.target.value)} /></Campo>
+              </div>
+              {tab === 'vacaciones' && (
+                <p className="text-xs text-muted-foreground">
+                  La empresa debe notificar las vacaciones con al menos 15 días de anticipación (RIT art. 34).
+                </p>
+              )}
+            </>
           )}
           {tab === 'permisos' && (
             <>
@@ -236,6 +310,13 @@ function DialogRegistro({ tab, onClose }: { tab: string; onClose: () => void }) 
       </DialogContent>
     </Dialog>
   )
+}
+
+/** Mínimo para iniciar vacaciones registradas por la empresa: hoy + 15 días (RIT art. 34). */
+function minInicioVacaciones(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 15)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {

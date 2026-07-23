@@ -114,3 +114,57 @@ describe('motor de nómina', () => {
     expect(retencionFuente(new Decimal(12_000_000), 52_480)).toBeGreaterThan(0)
   })
 })
+
+describe('vacaciones pagadas por adelantado (RIT arts. 34 y 42)', () => {
+  it('genera la línea devengada y entra al IBC', () => {
+    const r = liquidar({ ...base, salarioBase: 3_000_000, tieneAuxTransporte: false, valorVacacionesAnticipadas: 1_200_000 })
+    expect(linea(r, 'VACACIONES_ANTICIPADAS')?.valor).toBe(1_200_000)
+    // IBC = salario (3.000.000) + vacaciones anticipadas (1.200.000), redondeado a la centena
+    expect(r.ibc).toBe(4_200_000)
+    expect(r.totalDevengado - r.totalDeducido).toBe(r.neto)
+  })
+
+  it('sin valor no genera línea', () => {
+    const r = liquidar(base)
+    expect(linea(r, 'VACACIONES_ANTICIPADAS')).toBeUndefined()
+  })
+})
+
+describe('conceptos configurables (arts. 127/128 CST)', () => {
+  const auxNoConstitutivo = {
+    codigo: 'AUX_ALIMENTACION', nombre: 'Auxilio de alimentación', tipo: 'DEVENGADO' as const,
+    valor: 300_000, afectaIbcSs: false, basePrestaciones: false, baseVacaciones: false,
+  }
+  const primaConstitutiva = {
+    codigo: 'PRIMA_EXTRALEGAL', nombre: 'Prima extralegal', tipo: 'DEVENGADO' as const,
+    valor: 300_000, afectaIbcSs: true, basePrestaciones: true, baseVacaciones: true,
+  }
+  const descuento = {
+    codigo: 'DESC_GIMNASIO', nombre: 'Descuento gimnasio', tipo: 'DEDUCCION' as const,
+    valor: 50_000, afectaIbcSs: false, basePrestaciones: false, baseVacaciones: false,
+  }
+
+  it('no constitutivo: suma al neto sin tocar el IBC', () => {
+    const sin = liquidar({ ...base, salarioBase: 3_000_000, tieneAuxTransporte: false })
+    const con = liquidar({ ...base, salarioBase: 3_000_000, tieneAuxTransporte: false, otrosConceptos: [auxNoConstitutivo] })
+    expect(con.ibc).toBe(sin.ibc)
+    expect(con.totalDevengado - sin.totalDevengado).toBe(300_000)
+    expect(con.neto - sin.neto).toBe(300_000) // sin deducciones adicionales
+  })
+
+  it('constitutivo: entra al IBC y a las provisiones', () => {
+    const sin = liquidar({ ...base, salarioBase: 3_000_000, tieneAuxTransporte: false })
+    const con = liquidar({ ...base, salarioBase: 3_000_000, tieneAuxTransporte: false, otrosConceptos: [primaConstitutiva] })
+    expect(con.ibc - sin.ibc).toBe(300_000)
+    // Salud y pensión del empleado suben 4% + 4% de los 300.000
+    expect(con.totalDeducido - sin.totalDeducido).toBe(24_000)
+    expect(con.totalProvisiones).toBeGreaterThan(sin.totalProvisiones)
+  })
+
+  it('deducción configurable: descuenta del neto', () => {
+    const sin = liquidar(base)
+    const con = liquidar({ ...base, otrosConceptos: [descuento] })
+    expect(sin.neto - con.neto).toBe(50_000)
+    expect(con.totalDevengado).toBe(sin.totalDevengado)
+  })
+})

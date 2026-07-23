@@ -73,8 +73,10 @@ export const crearColaborador = accion(
     // Crear el usuario de acceso del colaborador con el rol por defecto de su cargo
     // (o "Empleado" si el cargo no lo define). Requiere un correo (corporativo o personal).
     let usuarioCreado = false
+    let correoYaTeniaUsuario = false
     const email = v(datos.emailCorporativo) ?? v(datos.emailPersonal)
     if (email && datos.estado === 'ACTIVO') {
+      correoYaTeniaUsuario = !!(await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true } }))
       const cargo = datos.cargoId ? await prisma.cargo.findUnique({ where: { id: datos.cargoId }, select: { rolDefectoId: true } }) : null
       let rolId = cargo?.rolDefectoId ?? null
       if (!rolId) rolId = (await prisma.rol.findUnique({ where: { nombre: 'Empleado' }, select: { id: true } }))?.id ?? null
@@ -88,7 +90,7 @@ export const crearColaborador = accion(
     }
 
     revalidatePath('/colaboradores')
-    return { id: creado.id, usuarioCreado, sinCorreo: !email }
+    return { id: creado.id, usuarioCreado, sinCorreo: !email, correoYaTeniaUsuario }
   },
 )
 

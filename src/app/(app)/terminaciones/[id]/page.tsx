@@ -5,7 +5,8 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { formatFechaLarga } from '@/lib/fechas'
+import { formatFechaLarga, formatFechaISO } from '@/lib/fechas'
+import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { fmtCOP } from '@/lib/moneda'
 import { PazYSalvoChecklist } from './paz-y-salvo'
 
@@ -29,10 +30,21 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
       colaborador: { select: { id: true, nombres: true, apellidos: true, numeroDocumento: true } },
       liquidacion: true,
       pazYSalvo: { include: { items: true } },
+      procesoDisciplinario: { select: { id: true, asunto: true, decision: true, fechaApertura: true } },
     },
   })
   if (!t) notFound()
   const liq = t.liquidacion
+
+  // Actas y soportes de la terminación (carta, liquidación firmada, acta de entrega…)
+  const [documentos, tiposDocumento] = await Promise.all([
+    prisma.documento.findMany({
+      where: { entidadTipo: 'Terminacion', entidadId: id },
+      include: { tipoDocumento: { select: { nombre: true } } },
+      orderBy: { creadoEn: 'desc' },
+    }),
+    prisma.tipoDocumento.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
+  ])
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -45,6 +57,25 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
       <p className="mb-4">
         <Link href={`/colaboradores/${t.colaborador.id}`} className="text-sm text-primary hover:underline">Ver ficha del colaborador →</Link>
       </p>
+
+      {/* Justa causa: proceso disciplinario que la sustenta (debido proceso) */}
+      {t.tipo === 'CON_JUSTA_CAUSA' && (
+        <Card className="mb-4"><CardContent className="py-3">
+          {t.procesoDisciplinario ? (
+            <p className="text-sm">
+              <span className="font-medium">Sustentada en el proceso disciplinario:</span>{' '}
+              <Link href={`/juridica/disciplinarios/${t.procesoDisciplinario.id}`} className="text-primary hover:underline">
+                {t.procesoDisciplinario.asunto} ({formatFechaLarga(t.procesoDisciplinario.fechaApertura)})
+              </Link>
+              {t.procesoDisciplinario.decision && <span className="text-muted-foreground"> · {t.procesoDisciplinario.decision}</span>}
+            </p>
+          ) : (
+            <p className="text-sm text-destructive">
+              ⚠ Terminación con justa causa sin proceso disciplinario vinculado (registrada antes del control de debido proceso).
+            </p>
+          )}
+        </CardContent></Card>
+      )}
 
       {/* Liquidación definitiva */}
       {liq && (
@@ -78,6 +109,23 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
           puedeAprobar={puedeAprobar}
         />
       )}
+
+      {/* Actas y soportes: carta de terminación, liquidación firmada, renuncia, actas de entrega… */}
+      <div className="mt-6">
+        <GestorDocumentos
+          entidadTipo="Terminacion"
+          entidadId={t.id}
+          sedeId={null}
+          documentos={documentos.map((d) => ({
+            id: d.id, nombre: d.nombre, tipoDocumentoNombre: d.tipoDocumento?.nombre ?? null,
+            mimeType: d.mimeType, tamanoBytes: d.tamanoBytes,
+            fechaVencimiento: formatFechaISO(d.fechaVencimiento) || null, creadoEn: d.creadoEn.toISOString(),
+          }))}
+          tiposDocumento={tiposDocumento.map((x) => ({ id: x.id, nombre: x.nombre, requiereVencimiento: x.requiereVencimiento }))}
+          semaforo={[]}
+          puedeEditar={puedeEditar}
+        />
+      </div>
     </div>
   )
 }

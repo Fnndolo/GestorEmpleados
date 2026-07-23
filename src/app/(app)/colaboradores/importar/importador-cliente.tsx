@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ExcelJS from 'exceljs'
 import { toast } from 'sonner'
-import { Download, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react'
+import { Download, Upload, FileSpreadsheet, CircleCheck, TriangleAlert, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
@@ -171,8 +171,8 @@ export function ImportadorCliente() {
           <CardContent className="py-4 space-y-3">
             <div className="flex items-center gap-2">
               {resultado.errores.length === 0
-                ? <CheckCircle2 className="size-5 text-emerald-600" />
-                : <AlertTriangle className="size-5 text-amber-500" />}
+                ? <CircleCheck className="size-5 text-emerald-600" />
+                : <TriangleAlert className="size-5 text-amber-500" />}
               <p className="font-medium">
                 {resultado.insertadas} importado(s) · {resultado.errores.length} con error
               </p>

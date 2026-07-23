@@ -5,13 +5,14 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Search, ChevronRight } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { TIPO_VINCULO_CORTO, MODALIDAD_TRABAJO, ESTADO_COLABORADOR, iniciales } from '@/lib/etiquetas'
+import { TIPO_VINCULO_CORTO, MODALIDAD_TRABAJO, ESTADO_COLABORADOR, iniciales, colorAvatar } from '@/lib/etiquetas'
 
 type Colaborador = {
   id: string; nombres: string; apellidos: string; tipoDocumento: string
@@ -64,8 +65,23 @@ export function ListaColaboradores({
         />
       </div>
 
-      {/* Pestañas por vínculo */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
+      {/* Filtro por vínculo — móvil: desplegable (sin scroll); escritorio: pestañas */}
+      <div className="sm:hidden">
+        <Select value={tabActivo} onValueChange={(v) => navegar(v, q)}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {tabs.map((t) => (
+              <SelectItem key={t.valor} value={t.valor}>
+                {TAB_LABEL[t.valor]} ({t.conteo})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="hidden gap-1.5 overflow-x-auto pb-1 sm:flex">
         {tabs.map((t) => (
           <button
             key={t.valor}
@@ -104,7 +120,12 @@ export function ListaColaboradores({
             >
               <Avatar className="size-10">
                 {c.fotoPath && <AvatarImage src={`/api/documentos/foto/${c.id}`} alt="" />}
-                <AvatarFallback className="text-xs">{iniciales(c.nombres, c.apellidos)}</AvatarFallback>
+                <AvatarFallback
+                  className="text-xs font-semibold text-white"
+                  style={{ backgroundColor: colorAvatar(`${c.nombres} ${c.apellidos}`) }}
+                >
+                  {iniciales(c.nombres, c.apellidos)}
+                </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
                 <p className="font-medium truncate">{c.nombres} {c.apellidos}</p>

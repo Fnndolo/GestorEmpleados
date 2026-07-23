@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Pill } from '@/components/ui-kit'
 import { Progress } from '@/components/ui/progress'
 import { ArrowLeft, Check, Clock, Download } from 'lucide-react'
 import { fmtCOP } from '@/lib/moneda'
@@ -53,8 +53,8 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
           <Dato label="Cuota" valor={fmtCOP(Number(prestamo.valorCuota))} />
           <Dato label="Saldo" valor={fmtCOP(Number(prestamo.saldo))} />
           <div>
-            <p className="text-xs text-muted-foreground">Estado</p>
-            <Badge variant={prestamo.estado === 'PAGADO' ? 'default' : 'secondary'}>{prestamo.estado}</Badge>
+            <p className="mb-1 text-xs text-muted-foreground">Estado</p>
+            <Pill tone={prestamo.estado === 'PAGADO' ? 'ok' : 'warn'}>{prestamo.estado === 'PAGADO' ? 'Pagado' : 'Activo'}</Pill>
           </div>
         </div>
         <div>
@@ -80,7 +80,7 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
       <Card><CardContent className="p-0 divide-y">
         {prestamo.cuotas.map((c) => (
           <div key={c.id} className="flex items-center gap-3 p-3">
-            <div className={`flex size-8 shrink-0 items-center justify-center rounded-full ${c.pagada ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'}`}>
+            <div className={`flex size-8 shrink-0 items-center justify-center rounded-full ${c.pagada ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
               {c.pagada ? <Check className="size-4" /> : <Clock className="size-4" />}
             </div>
             <div className="flex-1 min-w-0">

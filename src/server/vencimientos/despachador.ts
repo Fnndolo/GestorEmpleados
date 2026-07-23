@@ -87,7 +87,7 @@ export async function procesarAlertas(): Promise<{ vencidos: number; alertas: nu
       // Notificación in-app (idempotente por dedupeKey)
       try {
         await prisma.notificacion.create({
-          data: { userId: u.id, titulo, mensaje, enlace, dedupeKey: dedupe },
+          data: { userId: u.id, titulo, mensaje, enlace, dedupeKey: dedupe, evento: 'vencimiento_alerta' },
         })
         notificaciones++
       } catch {

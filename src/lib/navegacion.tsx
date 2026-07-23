@@ -8,14 +8,16 @@ import {
   Laptop,
   Scale,
   HeartPulse,
-  BarChart3,
+  ChartColumn,
   Settings,
   Bell,
   GraduationCap,
   ClipboardCheck,
+  UserMinus,
+  MailCheck,
   type LucideIcon,
 } from 'lucide-react'
-import type { ModuloClave } from '@/lib/permisos/modulos'
+import type { Accion, ModuloClave } from '@/lib/permisos/modulos'
 import { tienePermiso, type UsuarioSesion } from '@/lib/permisos/tipos'
 
 export type ItemNav = {
@@ -23,6 +25,7 @@ export type ItemNav = {
   href: string
   icono: LucideIcon
   modulo?: ModuloClave // si se omite, siempre visible
+  accion?: Accion // acción requerida sobre el módulo (por defecto VER)
   // Atajo: incluir en la barra inferior móvil
   enMovil?: boolean
 }
@@ -50,6 +53,7 @@ export const SECCIONES: SeccionNav[] = [
       { titulo: 'Activos y dotación', href: '/activos', icono: Laptop, modulo: 'activos' },
       { titulo: 'Capacitaciones', href: '/capacitaciones', icono: GraduationCap, modulo: 'capacitaciones' },
       { titulo: 'Evaluaciones', href: '/evaluaciones', icono: ClipboardCheck, modulo: 'evaluaciones' },
+      { titulo: 'Terminaciones', href: '/terminaciones', icono: UserMinus, modulo: 'terminaciones' },
     ],
   },
   {
@@ -62,27 +66,35 @@ export const SECCIONES: SeccionNav[] = [
   },
   {
     titulo: 'Mi espacio',
-    items: [{ titulo: 'Autoservicio', href: '/autoservicio', icono: UserCog, modulo: 'autoservicio', enMovil: true }],
+    items: [
+      { titulo: 'Autoservicio', href: '/autoservicio', icono: UserCog, modulo: 'autoservicio', enMovil: true },
+      // Bandeja de aprobaciones: solo para quien puede aprobar (jefes, TH, subgerencia).
+      { titulo: 'Aprobaciones', href: '/autoservicio/aprobaciones', icono: MailCheck, modulo: 'autoservicio', accion: 'APROBAR', enMovil: true },
+    ],
   },
   {
     titulo: 'Administración',
     items: [
-      { titulo: 'Reportes', href: '/reportes', icono: BarChart3, modulo: 'reportes' },
+      { titulo: 'Reportes', href: '/reportes', icono: ChartColumn, modulo: 'reportes' },
       { titulo: 'Configuración', href: '/configuracion', icono: Settings, modulo: 'configuracion' },
     ],
   },
 ]
 
+function puedeVerItem(usuario: UsuarioSesion, item: ItemNav): boolean {
+  return !item.modulo || tienePermiso(usuario, item.modulo, item.accion ?? 'VER')
+}
+
 export function seccionesVisibles(usuario: UsuarioSesion): SeccionNav[] {
   return SECCIONES.map((seccion) => ({
     ...seccion,
-    items: seccion.items.filter((item) => !item.modulo || tienePermiso(usuario, item.modulo, 'VER')),
+    items: seccion.items.filter((item) => puedeVerItem(usuario, item)),
   })).filter((seccion) => seccion.items.length > 0)
 }
 
 export function itemsMovil(usuario: UsuarioSesion): ItemNav[] {
   const todos = SECCIONES.flatMap((s) => s.items).filter((i) => i.enMovil)
-  return todos.filter((item) => !item.modulo || tienePermiso(usuario, item.modulo, 'VER')).slice(0, 5)
+  return todos.filter((item) => puedeVerItem(usuario, item)).slice(0, 5)
 }
 
 /**
@@ -92,7 +104,7 @@ export function itemsMovil(usuario: UsuarioSesion): ItemNav[] {
  */
 export function hrefsVisibles(usuario: UsuarioSesion): string[] {
   return SECCIONES.flatMap((s) => s.items)
-    .filter((item) => !item.modulo || tienePermiso(usuario, item.modulo, 'VER'))
+    .filter((item) => puedeVerItem(usuario, item))
     .map((item) => item.href)
 }
 

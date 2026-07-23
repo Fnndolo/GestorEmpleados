@@ -15,6 +15,22 @@ export type EntradaLiquidacion = {
   bonificacionConstitutiva: number
   bonificacionNoConstitutiva: number
   valorIncapacidad: number
+  /** Pago anticipado de vacaciones que inician después de este periodo (RIT arts. 34 y 42). */
+  valorVacacionesAnticipadas?: number
+  /**
+   * Conceptos configurables del catálogo aplicados al colaborador este periodo.
+   * Cada uno trae sus banderas (art. 127/128 CST): si es constitutivo/afecta IBC
+   * entra a seguridad social; basePrestaciones/baseVacaciones alimentan provisiones.
+   */
+  otrosConceptos?: {
+    codigo: string
+    nombre: string
+    tipo: 'DEVENGADO' | 'DEDUCCION'
+    valor: number
+    afectaIbcSs: boolean
+    basePrestaciones: boolean
+    baseVacaciones: boolean
+  }[]
   cuotaPrestamo: number
   claseRiesgoArl: 'I' | 'II' | 'III' | 'IV' | 'V'
   empresaExonerada: boolean
@@ -81,6 +97,20 @@ export function liquidar(e: EntradaLiquidacion): ResultadoLiquidacion {
   if (e.bonificacionConstitutiva > 0) agregar(lineas, dev, 'BONIFICACION_C', 'Bonificación constitutiva', 'DEVENGADO', e.bonificacionConstitutiva)
   if (e.bonificacionNoConstitutiva > 0) agregar(lineas, dev, 'BONIFICACION_NC', 'Bonificación no constitutiva', 'DEVENGADO', e.bonificacionNoConstitutiva)
   if (e.valorIncapacidad > 0) agregar(lineas, dev, 'INCAPACIDAD', 'Incapacidad', 'DEVENGADO', e.valorIncapacidad)
+  // Vacaciones pagadas por adelantado (antes de la fecha de salida). Son salario
+  // durante el descanso (RIT art. 42), así que entran al IBC.
+  const vacacionesAnticipadas = e.valorVacacionesAnticipadas ?? 0
+  if (vacacionesAnticipadas > 0) agregar(lineas, dev, 'VACACIONES_ANTICIPADAS', 'Vacaciones (pago anticipado)', 'DEVENGADO', vacacionesAnticipadas)
+
+  // Conceptos configurables del catálogo (devengados aquí; deducciones más abajo).
+  const conceptos = e.otrosConceptos ?? []
+  let conceptosIbc = 0, conceptosPrest = 0, conceptosVac = 0
+  for (const c of conceptos.filter((x) => x.tipo === 'DEVENGADO' && x.valor > 0)) {
+    agregar(lineas, dev, c.codigo, c.nombre, 'DEVENGADO', c.valor)
+    if (c.afectaIbcSs) conceptosIbc += c.valor
+    if (c.basePrestaciones) conceptosPrest += c.valor
+    if (c.baseVacaciones) conceptosVac += c.valor
+  }
 
   // ── IBC (base de seguridad social) ──
   let ibc: Decimal
@@ -89,6 +119,8 @@ export function liquidar(e: EntradaLiquidacion): ResultadoLiquidacion {
     .plus(e.comisiones)
     .plus(e.bonificacionConstitutiva)
     .plus(e.valorIncapacidad)
+    .plus(vacacionesAnticipadas)
+    .plus(conceptosIbc)
   if (e.tipoSalario === 'INTEGRAL') {
     ibc = salario.times(0.7).plus(e.valorHorasExtra).plus(e.comisiones)
   } else {
@@ -124,9 +156,14 @@ export function liquidar(e: EntradaLiquidacion): ResultadoLiquidacion {
 
   if (e.cuotaPrestamo > 0) agregar(lineas, ded, 'PRESTAMO', 'Cuota de préstamo', 'DEDUCCION', e.cuotaPrestamo)
 
+  // Deducciones configurables del catálogo (descuentos autorizados: art. 69 num. 4 RIT).
+  for (const c of conceptos.filter((x) => x.tipo === 'DEDUCCION' && x.valor > 0)) {
+    agregar(lineas, ded, c.codigo, c.nombre, 'DEDUCCION', c.valor)
+  }
+
   // ── Provisiones (no afectan el neto) ──
-  const basePrest = salario.plus(e.valorHorasExtra).plus(e.comisiones).plus(e.bonificacionConstitutiva).plus(auxTransporte)
-  const baseVac = salario.plus(e.valorHorasExtra).plus(e.comisiones).plus(e.bonificacionConstitutiva)
+  const basePrest = salario.plus(e.valorHorasExtra).plus(e.comisiones).plus(e.bonificacionConstitutiva).plus(auxTransporte).plus(conceptosPrest)
+  const baseVac = salario.plus(e.valorHorasExtra).plus(e.comisiones).plus(e.bonificacionConstitutiva).plus(conceptosVac)
   if (e.tipoSalario === 'ORDINARIO') {
     agregar(lineas, prov, 'PROV_CESANTIAS', 'Provisión cesantías', 'PROVISION', peso(basePrest.times(p.CESANTIAS)), { base: peso(basePrest), factor: p.CESANTIAS })
     agregar(lineas, prov, 'PROV_INT_CESANTIAS', 'Provisión intereses cesantías', 'PROVISION', peso(basePrest.times(p.CESANTIAS).times(p.INTERESES_CESANTIAS)))

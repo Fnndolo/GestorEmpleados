@@ -3,7 +3,8 @@ import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Users, Briefcase, Wallet, Home, FileWarning, CalendarClock, AlertTriangle, UserMinus } from 'lucide-react'
+import { Users, Briefcase, Wallet, House, FileExclamationPoint, CalendarClock, TriangleAlert, UserMinus, type LucideIcon } from 'lucide-react'
+import { Stat, Chip, type ChipColor } from '@/components/ui-kit'
 import { hoyBogota } from '@/lib/fechas'
 import { fmtCOP } from '@/lib/moneda'
 import { TIPO_VINCULO_CORTO } from '@/lib/etiquetas'
@@ -48,11 +49,11 @@ export default async function ReportesPage() {
     <div className="mx-auto max-w-5xl">
       <Encabezado titulo="Reportes y tableros" descripcion="Indicadores del personal, cumplimiento documental, contratos y SST." />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-        <Stat icono={Users} valor={activos} label="Personal activo" />
-        <Stat icono={Briefcase} valor={`${laborales} / ${ops}`} label="Laborales / OPS" />
-        <Stat icono={Home} valor={remotos} label="Remotos / híbridos" />
-        <Stat icono={Wallet} valor={fmtCOP(masaSalarial)} label="Masa salarial (mes)" small />
+      <div className="mb-6 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+        <Stat icono={Users} color="sky" valor={String(activos)} label="Personal activo" />
+        <Stat icono={Briefcase} color="indigo" valor={`${laborales} / ${ops}`} label="Laborales / OPS" />
+        <Stat icono={House} color="teal" valor={String(remotos)} label="Remotos / híbridos" />
+        <Stat icono={Wallet} color="emerald" valor={fmtCOP(masaSalarial)} label="Masa salarial (mes)" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2 mb-6">
@@ -66,33 +67,30 @@ export default async function ReportesPage() {
         </Card>
       </div>
 
-      <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">Alertas y cumplimiento</h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-6">
-        <ReporteLink icono={CalendarClock} valor={fijosPorVencer} label="Contratos fijos por vencer (60 días)" href="/contratos?tab=TERMINO_FIJO" color="text-amber-500" />
-        <ReporteLink icono={CalendarClock} valor={finPrueba} label="Fin de periodo de prueba (60 días)" href="/contratos" color="text-amber-500" />
-        <ReporteLink icono={FileWarning} valor={cuentasSinSoporte} label="Cuentas OPS sin soporte SS" href="/contratos/cuentas-riesgo" color="text-destructive" />
-        <ReporteLink icono={AlertTriangle} valor={accidentesAnio} label={`Accidentalidad ${anio}`} href="/sst?tab=accidentes" color="text-destructive" />
-        <ReporteLink icono={UserMinus} valor={`${rotacion}%`} label={`Rotación ${anio}`} href="/terminaciones" color="text-foreground" />
-        <ReporteLink icono={FileWarning} valor="Ver" label="Semáforo documental (por colaborador)" href="/colaboradores" color="text-foreground" />
+      <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-muted-foreground">Alertas y cumplimiento</h2>
+      <div className="mb-6 grid grid-cols-2 gap-2.5 lg:grid-cols-3">
+        <ReporteLink icono={CalendarClock} valor={fijosPorVencer} label="Contratos fijos por vencer (60 días)" href="/contratos?tab=TERMINO_FIJO" color="amber" />
+        <ReporteLink icono={CalendarClock} valor={finPrueba} label="Fin de periodo de prueba (60 días)" href="/contratos" color="amber" />
+        <ReporteLink icono={FileExclamationPoint} valor={cuentasSinSoporte} label="Cuentas OPS sin soporte SS" href="/contratos/cuentas-riesgo" color="rose" />
+        <ReporteLink icono={TriangleAlert} valor={accidentesAnio} label={`Accidentalidad ${anio}`} href="/sst?tab=accidentes" color="rose" />
+        <ReporteLink icono={UserMinus} valor={`${rotacion}%`} label={`Rotación ${anio}`} href="/terminaciones" color="ink" />
+        <ReporteLink icono={FileExclamationPoint} valor="Ver" label="Semáforo documental (por colaborador)" href="/colaboradores" color="ink" />
       </div>
     </div>
   )
 }
 
-function Stat({ icono: Icono, valor, label, small }: { icono: typeof Users; valor: number | string; label: string; small?: boolean }) {
+function ReporteLink({ icono, valor, label, href, color }: { icono: LucideIcon; valor: number | string; label: string; href: string; color: ChipColor }) {
   return (
-    <Card><CardContent className="flex items-center gap-3 py-4">
-      <Icono className="size-6 text-primary" />
-      <div className="min-w-0"><p className={`font-semibold tabular-nums ${small ? 'text-lg' : 'text-2xl'} truncate`}>{valor}</p><p className="text-xs text-muted-foreground">{label}</p></div>
-    </CardContent></Card>
-  )
-}
-
-function ReporteLink({ icono: Icono, valor, label, href, color }: { icono: typeof Users; valor: number | string; label: string; href: string; color: string }) {
-  return (
-    <Link href={href}><Card className="hover:border-primary/40 transition-colors"><CardContent className="flex items-center gap-3 py-4">
-      <Icono className={`size-5 ${color}`} />
-      <div className="flex-1 min-w-0"><p className="text-xl font-semibold tabular-nums">{valor}</p><p className="text-xs text-muted-foreground">{label}</p></div>
-    </CardContent></Card></Link>
+    <Link
+      href={href}
+      className="flex items-center gap-3 rounded-xl border bg-card p-3 transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Chip icono={icono} color={color} className="size-9 rounded-[10px]" iconClassName="size-[18px]" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[17px] font-bold leading-tight tracking-tight tabular-nums">{valor}</p>
+        <p className="mt-0.5 text-[10.5px] text-muted-foreground sm:text-[11px]">{label}</p>
+      </div>
+    </Link>
   )
 }

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CalendarPlus, FileEdit, PauseCircle, PlayCircle } from 'lucide-react'
+import { CalendarPlus, FilePen, CirclePause, CirclePlay } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -39,12 +39,12 @@ export function AccionesContrato({
         {tipo === 'TERMINO_FIJO' && (
           <Button size="sm" variant="outline" onClick={() => setDialogo('prorroga')}><CalendarPlus className="size-4" /> Prórroga</Button>
         )}
-        <Button size="sm" variant="outline" onClick={() => setDialogo('otrosi')}><FileEdit className="size-4" /> Otrosí</Button>
+        <Button size="sm" variant="outline" onClick={() => setDialogo('otrosi')}><FilePen className="size-4" /> Otrosí</Button>
         {estado !== 'SUSPENDIDO' ? (
-          <Button size="sm" variant="outline" onClick={() => setDialogo('suspension')}><PauseCircle className="size-4" /> Suspender</Button>
+          <Button size="sm" variant="outline" onClick={() => setDialogo('suspension')}><CirclePause className="size-4" /> Suspender</Button>
         ) : (
           <Button size="sm" variant="outline" onClick={reactivar} disabled={cargando}>
-            {cargando ? <Spinner /> : <PlayCircle className="size-4" />} Reactivar
+            {cargando ? <Spinner /> : <CirclePlay className="size-4" />} Reactivar
           </Button>
         )}
       </div>

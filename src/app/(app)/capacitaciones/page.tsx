@@ -5,6 +5,7 @@ import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { GraduationCap, ChevronRight } from 'lucide-react'
+import { Chip } from '@/components/ui-kit'
 import { formatFechaCorta } from '@/lib/fechas'
 import { CrearCapacitacion } from './crear-capacitacion'
 
@@ -30,8 +31,8 @@ export default async function CapacitacionesPage() {
       ) : (
         <Card><CardContent className="p-0 divide-y">
           {capacitaciones.map((c) => (
-            <Link key={c.id} href={`/capacitaciones/${c.id}`} className="flex items-center gap-3 p-3 hover:bg-accent/40">
-              <GraduationCap className="size-5 text-muted-foreground shrink-0" />
+            <Link key={c.id} href={`/capacitaciones/${c.id}`} className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/40">
+              <Chip icono={GraduationCap} color="violet" />
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{c.titulo}</p>
                 <p className="text-xs text-muted-foreground">{formatFechaCorta(c.fecha)} · {c._count.asistencias} asistente(s)</p>

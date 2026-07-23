@@ -3,8 +3,8 @@ import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { UserMinus, ChevronRight } from 'lucide-react'
+import { Chip, Pill } from '@/components/ui-kit'
 import { formatFechaCorta } from '@/lib/fechas'
 import { NuevaTerminacion } from './nueva-terminacion'
 
@@ -43,15 +43,15 @@ export default async function TerminacionesPage() {
           {terminaciones.map((t) => {
             const pendientes = t.pazYSalvo?.items.filter((i) => !i.cumplido).length ?? 0
             return (
-              <Link key={t.id} href={`/terminaciones/${t.id}`} className="flex items-center gap-3 p-3 hover:bg-accent/40">
-                <UserMinus className="size-5 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{t.colaborador.nombres} {t.colaborador.apellidos}</p>
+              <Link key={t.id} href={`/terminaciones/${t.id}`} className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/40">
+                <Chip icono={UserMinus} color="rose" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{t.colaborador.nombres} {t.colaborador.apellidos}</p>
                   <p className="text-xs text-muted-foreground">{TIPO[t.tipo]} · {formatFechaCorta(t.fechaRetiro)}</p>
                 </div>
-                {pendientes > 0 && <Badge variant="secondary">{pendientes} paz y salvo</Badge>}
-                <Badge variant={t.estado === 'CERRADA' ? 'default' : 'outline'}>{ESTADO[t.estado]}</Badge>
-                <ChevronRight className="size-4 text-muted-foreground" />
+                {pendientes > 0 && <Pill tone="warn">{pendientes} paz y salvo</Pill>}
+                <Pill tone={t.estado === 'CERRADA' ? 'ok' : t.estado === 'LIQUIDADA' ? 'info' : 'warn'}>{ESTADO[t.estado]}</Pill>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
               </Link>
             )
           })}

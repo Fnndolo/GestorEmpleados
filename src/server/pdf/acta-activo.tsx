@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, renderToBuffer } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, renderToBuffer } from '@react-pdf/renderer'
 import { estilos } from './estilos'
 import { Membrete, Pie, type DatosEmpresa } from './membrete'
 import { formatFechaLarga } from '@/lib/fechas'
@@ -11,6 +11,9 @@ export type DatosActaActivo = {
   activo: { codigo: string; nombre: string; tipo: string; marca: string | null; serie: string | null; valor: number | null }
   ciudad: string
   fecha: Date
+  /** Firma digital del colaborador (data URI PNG); si falta, queda la línea para firmar. */
+  firmaDataUri?: string | null
+  firmaFecha?: Date | null
 }
 
 function Doc({ d }: { d: DatosActaActivo }) {
@@ -41,7 +44,16 @@ function Doc({ d }: { d: DatosActaActivo }) {
             : 'Se deja constancia de la devolución del activo en las condiciones verificadas por la empresa.'}
         </Text>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 56 }}>
-          <View style={estilos.firmaLinea}><Text>{d.colaborador.nombre}</Text><Text style={{ fontSize: 8 }}>Colaborador</Text></View>
+          <View style={estilos.firmaLinea}>
+            {d.firmaDataUri ? (
+              // eslint-disable-next-line jsx-a11y/alt-text
+              <Image src={d.firmaDataUri} style={{ width: 120, height: 48, objectFit: 'contain' }} />
+            ) : null}
+            <Text>{d.colaborador.nombre}</Text>
+            <Text style={{ fontSize: 8 }}>
+              Colaborador{d.firmaDataUri && d.firmaFecha ? ` · firmado digitalmente el ${formatFechaLarga(d.firmaFecha)}` : ''}
+            </Text>
+          </View>
           <View style={estilos.firmaLinea}><Text>Talento Humano</Text><Text style={{ fontSize: 8 }}>{d.empresa.nombreComercial}</Text></View>
         </View>
         <Pie texto={`${d.empresa.razonSocial} · NIT ${d.empresa.nit}`} />

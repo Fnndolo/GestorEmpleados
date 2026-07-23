@@ -12,3 +12,4 @@ export async function marcarLeidas(ids?: string[]): Promise<{ ok: boolean }> {
   })
   return { ok: true }
 }
+

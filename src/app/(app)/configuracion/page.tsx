@@ -2,22 +2,25 @@ import Link from 'next/link'
 import { requerirPermiso } from '@/server/sesion'
 import { tienePermiso } from '@/server/sesion'
 import { Encabezado } from '@/components/shell/encabezado'
-import { Card, CardContent } from '@/components/ui/card'
-import { Building2, Users, ShieldCheck, MapPin, Bell, FileStack, Layers, Receipt, Briefcase, Coins, ArrowRight } from 'lucide-react'
+import { Building2, Users, ShieldCheck, MapPin, Bell, BellRing, FileStack, Layers, Receipt, Briefcase, Coins } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { CHIP, Chip, type ChipColor } from '@/components/ui-kit'
 
 export const metadata = { title: 'Configuración · Smart Gadgets RH' }
 
-const SECCIONES = [
-  { titulo: 'Empresa', desc: 'Razón social, NIT, representante legal y parámetros generales.', href: '/configuracion/empresa', icono: Building2, modulo: 'configuracion' as const },
-  { titulo: 'Sedes y ciudades', desc: 'Administra las sedes y ciudades donde opera la empresa.', href: '/configuracion/sedes', icono: MapPin, modulo: 'configuracion' as const },
-  { titulo: 'Cargos', desc: 'Crea y edita los cargos; los cambios se reflejan en quienes los tienen asignados.', href: '/configuracion/cargos', icono: Briefcase, modulo: 'configuracion' as const },
-  { titulo: 'Parámetros de nómina', desc: 'Salario mínimo (SMMLV) y auxilio de transporte vigentes.', href: '/configuracion/parametros-nomina', icono: Coins, modulo: 'configuracion' as const },
-  { titulo: 'Usuarios', desc: 'Crea usuarios, asígnales rol y sedes, y controla su estado.', href: '/configuracion/usuarios', icono: Users, modulo: 'usuarios' as const },
-  { titulo: 'Roles y permisos', desc: 'Define qué puede ver y hacer cada rol en cada módulo.', href: '/configuracion/roles', icono: ShieldCheck, modulo: 'usuarios' as const },
-  { titulo: 'Tipos de documento', desc: 'Catálogo de documentos y cuáles son obligatorios por vínculo.', href: '/configuracion/tipos-documento', icono: FileStack, modulo: 'configuracion' as const },
-  { titulo: 'Reglas de alerta', desc: 'Días de anticipación de las alertas de vencimiento por tipo.', href: '/configuracion/alertas', icono: Bell, modulo: 'configuracion' as const },
-  { titulo: 'Módulos personalizados', desc: 'Crea pestañas y módulos a la medida con campos propios.', href: '/configuracion/modulos', icono: Layers, modulo: 'configuracion' as const },
-  { titulo: 'Plantillas de cuenta de cobro', desc: 'Diseña plantillas con logo y texto para las cuentas de cobro de los contratistas.', href: '/configuracion/plantillas-cuenta-cobro', icono: Receipt, modulo: 'configuracion' as const },
+const SECCIONES: { titulo: string; desc: string; href: string; icono: typeof Building2; color: ChipColor; modulo: 'configuracion' | 'usuarios' }[] = [
+  { titulo: 'Empresa', desc: 'Razón social, NIT, representante legal y parámetros generales.', href: '/configuracion/empresa', icono: Building2, color: 'ink', modulo: 'configuracion' },
+  { titulo: 'Sedes y ciudades', desc: 'Administra las sedes y ciudades donde opera la empresa.', href: '/configuracion/sedes', icono: MapPin, color: 'teal', modulo: 'configuracion' },
+  { titulo: 'Cargos', desc: 'Crea y edita los cargos; los cambios se reflejan en quienes los tienen asignados.', href: '/configuracion/cargos', icono: Briefcase, color: 'indigo', modulo: 'configuracion' },
+  { titulo: 'Parámetros de nómina', desc: 'Salario mínimo (SMMLV) y auxilio de transporte vigentes.', href: '/configuracion/parametros-nomina', icono: Coins, color: 'emerald', modulo: 'configuracion' },
+  { titulo: 'Conceptos de nómina', desc: 'Devengados y deducciones propios, marcados como constitutivos o no de salario.', href: '/configuracion/conceptos-nomina', icono: Coins, color: 'emerald', modulo: 'configuracion' },
+  { titulo: 'Usuarios', desc: 'Crea usuarios, asígnales rol y sedes, y controla su estado.', href: '/configuracion/usuarios', icono: Users, color: 'sky', modulo: 'usuarios' },
+  { titulo: 'Roles y permisos', desc: 'Define qué puede ver y hacer cada rol en cada módulo.', href: '/configuracion/roles', icono: ShieldCheck, color: 'violet', modulo: 'usuarios' },
+  { titulo: 'Tipos de documento', desc: 'Catálogo de documentos y cuáles son obligatorios por vínculo.', href: '/configuracion/tipos-documento', icono: FileStack, color: 'amber', modulo: 'configuracion' },
+  { titulo: 'Reglas de alerta', desc: 'Días de anticipación de las alertas de vencimiento por tipo.', href: '/configuracion/alertas', icono: Bell, color: 'amber', modulo: 'configuracion' },
+  { titulo: 'Notificaciones', desc: 'Elige qué eventos muestran un pop-up en pantalla (los demás siguen llegando a la campana y al correo).', href: '/configuracion/notificaciones', icono: BellRing, color: 'rose', modulo: 'configuracion' },
+  { titulo: 'Módulos personalizados', desc: 'Crea pestañas y módulos a la medida con campos propios.', href: '/configuracion/modulos', icono: Layers, color: 'sky', modulo: 'configuracion' },
+  { titulo: 'Plantillas de cuenta de cobro', desc: 'Diseña plantillas con logo y texto para las cuentas de cobro de los contratistas.', href: '/configuracion/plantillas-cuenta-cobro', icono: Receipt, color: 'teal', modulo: 'configuracion' },
 ]
 
 export default async function ConfiguracionPage() {
@@ -27,26 +30,22 @@ export default async function ConfiguracionPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <Encabezado titulo="Configuración" descripcion="Administra los parámetros y catálogos de la plataforma." />
-      <div className="grid gap-3 sm:grid-cols-2">
-        {visibles.map((s) => {
-          const Icono = s.icono
-          return (
-            <Link key={s.href} href={s.href} className="group">
-              <Card className="h-full transition-colors hover:border-primary/40 hover:bg-accent/40">
-                <CardContent className="flex items-start gap-3 py-4">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Icono className="size-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium">{s.titulo}</p>
-                    <p className="text-sm text-muted-foreground">{s.desc}</p>
-                  </div>
-                  <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                </CardContent>
-              </Card>
-            </Link>
-          )
-        })}
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
+        {visibles.map((s) => (
+          <Link
+            key={s.href}
+            href={s.href}
+            className={cn(
+              'rounded-xl border bg-card p-3 text-left transition-all sm:p-3.5',
+              'hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            )}
+          >
+            <Chip icono={s.icono} color={s.color} className="mb-2 rounded-[9px] sm:mb-2.5 sm:size-9" />
+            <span className="block text-[12.5px] font-semibold leading-tight sm:text-[13px]">{s.titulo}</span>
+            <span className="mt-0.5 hidden text-[11px] leading-snug text-muted-foreground sm:block">{s.desc}</span>
+          </Link>
+        ))}
       </div>
     </div>
   )

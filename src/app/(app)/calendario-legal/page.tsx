@@ -1,61 +1,48 @@
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { CalendarClock } from 'lucide-react'
-import { hoyBogota, formatFechaISO } from '@/lib/fechas'
-import { CalendarioCliente } from './calendario-cliente'
+import { hoyBogota } from '@/lib/fechas'
+import { CalendarioLegalAnual } from './calendario-legal-anual'
 
 export const metadata = { title: 'Calendario legal · Smart Gadgets RH' }
 
-const CATEGORIA: Record<string, string> = {
-  SOCIETARIO: 'Societario', TRIBUTARIO: 'Tributario', LABORAL: 'Laboral', HABEAS_DATA: 'Habeas data',
-  COMERCIAL: 'Comercial', SST: 'SST', CONTRACTUAL: 'Contractual',
-}
-
-export default async function CalendarioLegalPage() {
+export default async function CalendarioLegalPage({ searchParams }: { searchParams: Promise<{ anio?: string }> }) {
+  const { anio: anioParam } = await searchParams
   const usuario = await requerirPermiso('calendario_legal', 'VER')
   const puedeEditar = tienePermiso(usuario, 'calendario_legal', 'EDITAR')
   const puedeGenerar = tienePermiso(usuario, 'calendario_legal', 'CREAR')
 
-  const hoy = hoyBogota()
-  const [pendientes, totalObligaciones] = await Promise.all([
+  const hoyD = hoyBogota()
+  const hoy = { anio: hoyD.getUTCFullYear(), mes: hoyD.getUTCMonth() + 1, dia: hoyD.getUTCDate() }
+  const anio = anioParam && /^\d{4}$/.test(anioParam) ? Number(anioParam) : hoy.anio
+
+  const [ocurrencias, totalObligaciones] = await Promise.all([
     prisma.ocurrenciaObligacion.findMany({
-      where: { estado: { not: 'CUMPLIDA' } },
-      include: { obligacion: true, },
+      where: { fechaLimite: { gte: new Date(Date.UTC(anio, 0, 1)), lte: new Date(Date.UTC(anio, 11, 31)) } },
+      include: { obligacion: { select: { nombre: true, categoria: true, fuenteLegal: true } } },
       orderBy: { fechaLimite: 'asc' },
-      take: 200,
     }),
     prisma.obligacionLegal.count({ where: { activa: true } }),
   ])
 
-  const items = pendientes.map((o) => {
-    const dias = Math.round((o.fechaLimite.getTime() - hoy.getTime()) / 86_400_000)
-    return {
-      id: o.id,
-      nombre: o.obligacion.nombre,
-      categoria: CATEGORIA[o.obligacion.categoria] ?? o.obligacion.categoria,
-      fechaLimite: formatFechaISO(o.fechaLimite),
-      fuente: o.obligacion.fuenteLegal,
-      dias,
-      vencida: o.fechaLimite < hoy,
-    }
-  })
+  const items = ocurrencias.map((o) => ({
+    id: o.id,
+    mes: o.fechaLimite.getUTCMonth() + 1,
+    dia: o.fechaLimite.getUTCDate(),
+    nombre: o.obligacion.nombre,
+    categoria: o.obligacion.categoria,
+    fuente: o.obligacion.fuenteLegal,
+    cumplida: o.estado === 'CUMPLIDA',
+    vencida: o.estado !== 'CUMPLIDA' && o.fechaLimite < hoyD,
+  }))
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-5xl">
       <Encabezado
         titulo="Calendario de obligaciones legales"
-        descripcion={`${totalObligaciones} obligaciones recurrentes (societarias, tributarias, laborales, habeas data y SST) con alertas automáticas.`}
+        descripcion={`${totalObligaciones} obligaciones recurrentes (societarias, tributarias, laborales, habeas data y SST) con alertas automáticas. Haz clic en un mes para verlo en detalle.`}
       />
-      {items.length === 0 ? (
-        <Card><CardContent className="flex flex-col items-center gap-3 py-12 text-center text-muted-foreground">
-          <CalendarClock className="size-8" />
-          <p>No hay obligaciones próximas. Genera el calendario para las siguientes fechas.</p>
-        </CardContent></Card>
-      ) : null}
-      <CalendarioCliente items={items} puedeEditar={puedeEditar} puedeGenerar={puedeGenerar} />
+      <CalendarioLegalAnual anio={anio} items={items} hoy={hoy} puedeEditar={puedeEditar} puedeGenerar={puedeGenerar} />
     </div>
   )
 }

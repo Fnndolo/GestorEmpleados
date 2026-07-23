@@ -59,6 +59,8 @@ export async function crearUsuarioColaborador(opts: {
       <p><b>Correo:</b> ${email}<br/><b>Contraseña temporal:</b> ${tmp}</p>
       <p>Ingresa en <a href="${url}/login">${url}/login</a>. Por seguridad, el sistema te pedirá
       crear una contraseña nueva en tu primer ingreso.</p>
+      <p>Al entrar, ve a <b>Autoservicio → Mi información</b> para completar tus datos personales,
+      de contacto, seguridad social y bancarios.</p>
       <p>Rol asignado: <b>${rol.nombre}</b>.</p>`,
   }).catch((e) => { console.error('No se pudo enviar la invitación por correo:', e) })
 
