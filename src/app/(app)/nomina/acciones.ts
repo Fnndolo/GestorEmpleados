@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { liquidarPeriodo } from '@/server/nomina/liquidador'
+import { liquidarPeriodo, revertirEfectosPeriodo } from '@/server/nomina/liquidador'
 import { generarDesprendibles } from '@/server/nomina/desprendibles'
 import { generarPazSalvoPrestamo } from '@/server/prestamos'
 import { parseFechaISO } from '@/lib/fechas'
@@ -73,41 +73,62 @@ export const cerrarPeriodo = accion(
   async ({ periodoId }) => {
     const p = await prisma.periodoNomina.findUniqueOrThrow({ where: { id: periodoId } })
     if (p.estado !== 'APROBADA') throw new ErrorNegocio('Solo se cierran periodos aprobados.')
-    // Descontar cuotas de préstamo y marcar bonificaciones como pagadas
-    await aplicarEfectosCierre(periodoId)
+    // Los efectos (abono de préstamos, bonificaciones pagadas, vacaciones anticipadas) los
+    // aplica el LIQUIDADOR, de forma idempotente y atada al periodo. Cerrar solo congela el
+    // estado: no debe volver a aplicarlos o se descontarían/pagarían dos veces.
     await dbAuditado.periodoNomina.update({ where: { id: periodoId }, data: { estado: 'CERRADA' } })
+    revalidatePath('/nomina')
     revalidatePath(`/nomina/${periodoId}`)
   },
 )
 
-async function aplicarEfectosCierre(periodoId: string) {
-  const liquidaciones = await prisma.liquidacionNomina.findMany({
-    where: { periodoId },
-    include: { detalles: true },
-  })
-  for (const liq of liquidaciones) {
-    // Préstamo: registrar cuota pagada y reducir saldo
-    const tieneCuota = liq.detalles.find((d) => d.conceptoCodigo === 'PRESTAMO')
-    if (tieneCuota) {
-      const prestamo = await prisma.prestamo.findFirst({ where: { colaboradorId: liq.colaboradorId, estado: 'ACTIVO' } })
-      if (prestamo) {
-        const nuevoSaldo = Number(prestamo.saldo) - Number(tieneCuota.valor)
-        await prisma.prestamo.update({
-          where: { id: prestamo.id },
-          data: { saldo: Math.max(0, nuevoSaldo), estado: nuevoSaldo <= 0 ? 'PAGADO' : 'ACTIVO' },
-        })
-        // Marcar la siguiente cuota pendiente como pagada en este periodo
-        const cuota = await prisma.cuotaPrestamo.findFirst({ where: { prestamoId: prestamo.id, pagada: false }, orderBy: { numero: 'asc' } })
-        if (cuota) await prisma.cuotaPrestamo.update({ where: { id: cuota.id }, data: { pagada: true, periodoId, fechaPago: new Date() } })
-      }
+/**
+ * Reabre un periodo cerrado o aprobado para poder corregirlo. Devuelve el periodo a
+ * BORRADOR y deshace todo lo que había dejado aplicado (abonos de préstamo,
+ * bonificaciones pagadas, vacaciones anticipadas), de modo que al volver a liquidar
+ * no queden dobles descuentos. No se puede reabrir un periodo ya PAGADO.
+ */
+export const reabrirPeriodo = accion(
+  { modulo: 'nomina', accion: 'APROBAR', schema: z.object({ periodoId: z.uuid() }) },
+  async ({ periodoId }) => {
+    const p = await prisma.periodoNomina.findUniqueOrThrow({ where: { id: periodoId } })
+    if (p.estado === 'PAGADA') throw new ErrorNegocio('El periodo ya fue pagado: corrige con un periodo de ajuste.')
+    if (p.estado === 'BORRADOR') throw new ErrorNegocio('El periodo ya está abierto.')
+
+    await revertirEfectosPeriodo(periodoId)
+    await dbAuditado.periodoNomina.update({ where: { id: periodoId }, data: { estado: 'BORRADOR' } })
+    revalidatePath('/nomina')
+    revalidatePath(`/nomina/${periodoId}`)
+    return { estadoAnterior: p.estado }
+  },
+)
+
+/**
+ * Elimina un periodo que aún no se ha cerrado (útil si se creó por error). Deshace sus
+ * efectos antes de borrarlo para no dejar préstamos ni bonificaciones descuadrados.
+ */
+export const eliminarPeriodo = accion(
+  { modulo: 'nomina', accion: 'APROBAR', schema: z.object({ periodoId: z.uuid() }) },
+  async ({ periodoId }) => {
+    const p = await prisma.periodoNomina.findUniqueOrThrow({ where: { id: periodoId } })
+    if (p.estado === 'CERRADA' || p.estado === 'PAGADA') {
+      throw new ErrorNegocio('No se puede eliminar un periodo cerrado o pagado. Reábrelo primero si necesitas corregirlo.')
     }
-    // Bonificaciones pendientes → pagadas
-    await prisma.bonificacion.updateMany({
-      where: { colaboradorId: liq.colaboradorId, estadoPago: 'PENDIENTE' },
-      data: { estadoPago: 'PAGADO', fechaPago: new Date() },
-    })
-  }
-}
+
+    await revertirEfectosPeriodo(periodoId)
+    // Comisiones y horas se DESLIGAN (no se borran): las digitó el usuario y se pueden
+    // reasignar al periodo correcto. Las novedades de concepto sí desaparecen con el
+    // periodo (la relación es onDelete: Cascade y su periodoId es obligatorio).
+    const conceptosBorrados = await prisma.novedadConcepto.count({ where: { periodoId } })
+    await prisma.$transaction([
+      prisma.comision.updateMany({ where: { periodoId }, data: { periodoId: null } }),
+      prisma.novedadHoras.updateMany({ where: { periodoId }, data: { periodoId: null } }),
+    ])
+    await dbAuditado.periodoNomina.delete({ where: { id: periodoId } })
+    revalidatePath('/nomina')
+    return { nombre: p.nombre, conceptosBorrados }
+  },
+)
 
 export const generarPdfDesprendibles = accion(
   { modulo: 'nomina', accion: 'EXPORTAR', schema: z.object({ periodoId: z.uuid() }) },

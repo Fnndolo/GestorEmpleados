@@ -5,12 +5,45 @@ import { cargarParametros } from './parametros'
 import { liquidar } from './motor'
 import { diasSuperpuestos, pagoIncapacidad } from './ausencias'
 import { horasMesJornada } from './horas'
+import { regenerarNovedadesAsistencia } from '@/server/asistencia/horas-asistencia'
 
 /**
  * Liquida (o recalcula) un periodo de nómina completo: para cada colaborador
  * con contrato laboral activo, calcula su liquidación y persiste el detalle.
  * Idempotente: borra y recrea las liquidaciones del periodo (advisory lock).
  */
+/**
+ * Deshace TODO lo que este periodo dejó aplicado fuera de sus liquidaciones: abonos de
+ * préstamo (el saldo vuelve a subir), bonificaciones marcadas como pagadas y marcas de
+ * pago anticipado de vacaciones. Se usa al recalcular, al reabrir y al eliminar el
+ * periodo, para que ninguna de esas operaciones deje rastros de dinero ya aplicado.
+ */
+export async function revertirEfectosPeriodo(periodoId: string): Promise<void> {
+  await prisma.liquidacionNomina.deleteMany({ where: { periodoId } })
+
+  // Abonos de préstamo: devolver el saldo y borrar las cuotas del periodo.
+  const cuotasPrevias = await prisma.cuotaPrestamo.findMany({ where: { periodoId } })
+  for (const c of cuotasPrevias) {
+    await prisma.prestamo.update({
+      where: { id: c.prestamoId },
+      data: { saldo: { increment: c.valor }, estado: 'ACTIVO' },
+    })
+  }
+  await prisma.cuotaPrestamo.deleteMany({ where: { periodoId } })
+
+  // Bonificaciones pagadas por ESTE periodo → vuelven a quedar pendientes y sin periodo.
+  await prisma.bonificacion.updateMany({
+    where: { periodoId },
+    data: { estadoPago: 'PENDIENTE', periodoId: null, fechaPago: null },
+  })
+
+  // Marcas de pago anticipado de vacaciones hechas por ESTE periodo.
+  await prisma.vacaciones.updateMany({
+    where: { pagoAnticipadoPeriodoId: periodoId },
+    data: { pagoAnticipadoPeriodoId: null },
+  })
+}
+
 export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: number }> {
   const periodo = await prisma.periodoNomina.findUniqueOrThrow({ where: { id: periodoId } })
   if (periodo.estado === 'CERRADA' || periodo.estado === 'PAGADA') {
@@ -36,25 +69,13 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
   // Lock por periodo para evitar liquidaciones concurrentes
   await prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${periodoId}))`
 
-  // Borrar liquidaciones previas del periodo (recálculo)
-  await prisma.liquidacionNomina.deleteMany({ where: { periodoId } })
+  // Horas de asistencia SIEMPRE frescas: se regeneran desde las marcaciones
+  // (esquema `asistencia`, misma base) en cada liquidación/recalculo. Editar
+  // una marcación en ArriveControl y recalcular aquí siempre cuadra — no hay
+  // envíos ni copias que se desactualicen.
+  await regenerarNovedadesAsistencia(periodo)
 
-  // Revertir los abonos de préstamo de este periodo antes de recalcular (idempotencia):
-  // el saldo vuelve a subir y las cuotas del periodo se eliminan para recrearse.
-  const cuotasPrevias = await prisma.cuotaPrestamo.findMany({ where: { periodoId } })
-  for (const c of cuotasPrevias) {
-    await prisma.prestamo.update({
-      where: { id: c.prestamoId },
-      data: { saldo: { increment: c.valor }, estado: 'ACTIVO' },
-    })
-  }
-  await prisma.cuotaPrestamo.deleteMany({ where: { periodoId } })
-
-  // Revertir marcas de pago anticipado de vacaciones hechas por ESTE periodo (recálculo).
-  await prisma.vacaciones.updateMany({
-    where: { pagoAnticipadoPeriodoId: periodoId },
-    data: { pagoAnticipadoPeriodoId: null },
-  })
+  await revertirEfectosPeriodo(periodoId)
 
   let liquidados = 0
   for (const contrato of contratos) {

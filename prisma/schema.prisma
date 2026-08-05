@@ -1029,6 +1029,9 @@ model Contrato {
   // Snapshot de los datos resueltos del PDF (plantilla + variables sustituidas) para
   // regenerar el documento firmado sin re-derivar; el texto queda congelado al crear.
   contenidoPdf       Json?               @map("contenido_pdf")
+  // Origen del PDF: GENERADO (desde plantilla in-app) o SUBIDO (contrato ya existente,
+  // normalmente firmado en físico; se adjunta como Documento y se omite la firma digital).
+  origenPdf          OrigenPdfContrato   @default(GENERADO) @map("origen_pdf")
   // Firma digital de cada parte (imagen PNG en storage) + fecha y usuario que la aplicó.
   firmaEmpleadoPath   String?   @map("firma_empleado_path")
   firmaEmpleadoFecha  DateTime? @map("firma_empleado_fecha")
@@ -1164,6 +1167,9 @@ model ContratoOps {
   // Snapshot de los datos resueltos del PDF (empresa, plantilla, encabezado, nombres)
   // para poder regenerar el documento firmado sin re-derivar el formulario.
   contenidoPdf  Json?             @map("contenido_pdf")
+  // Origen del PDF: GENERADO (desde plantilla in-app) o SUBIDO (contrato ya existente,
+  // normalmente firmado en físico; se adjunta como Documento y se omite la firma digital).
+  origenPdf     OrigenPdfContrato @default(GENERADO) @map("origen_pdf")
   // Firma digital de cada parte (imagen PNG en storage) + fecha y usuario que la aplicó.
   firmaContratistaPath  String?   @map("firma_contratista_path")
   firmaContratistaFecha DateTime? @map("firma_contratista_fecha")
@@ -1181,6 +1187,11 @@ model ContratoOps {
   @@index([colaboradorId, estado])
   @@index([sedeId])
   @@map("contrato_ops")
+}
+
+enum OrigenPdfContrato {
+  GENERADO
+  SUBIDO
 }
 
 enum RolFirmaContrato {
@@ -1786,8 +1797,15 @@ model NovedadHoras {
   tipoHora      String        @map("tipo_hora") // HED/HEN/RN/RD/RND clasificado
   horas         Decimal       @db.Decimal(5, 2)
   observaciones String?
+  // Id del tramo en el sistema de asistencia externo (ArriveControl). NULL en las
+  // novedades cargadas a mano desde la app. Garantiza la idempotencia del lote:
+  // reenviar el mismo tramo no vuelve a pagar las horas (contrato §4.1).
+  // El par con tipoHora es necesario porque un tramo que cruza las 7:00 p.m. se
+  // parte en dos filas (HED + HEN) que comparten la misma referencia.
+  referenciaExterna String?    @map("referencia_externa")
   creadoEn      DateTime      @default(now()) @map("creado_en")
 
+  @@unique([referenciaExterna, tipoHora])
   @@index([colaboradorId, periodoId])
   @@map("novedad_horas")
 }

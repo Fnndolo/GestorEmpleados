@@ -1,11 +1,13 @@
 'use server'
 
+import { createHash } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
+import { subirArchivo } from '@/server/storage'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { contratoOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema } from '@/lib/validaciones/contrato'
+import { contratoOpsSchema, subirContratoOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, hoyBogota } from '@/lib/fechas'
 import { construirDatosPdfContratoOps, construirDatosAutorizacion, generarPdfContratoOps, generarPdfAutorizacionDatos, leerFirmaComoDataUri, type SnapshotContratoOps } from '@/server/contratos-ops-pdf'
 import { fechaLarga } from '@/lib/numero-letras'
@@ -172,6 +174,62 @@ export const crearContratoOps = accion(
     revalidatePath('/contratos')
     revalidatePath(`/contratos/ops/${c.id}`)
     return { id: c.id, documentoId }
+  },
+)
+
+/**
+ * Sube un contrato OPS YA EXISTENTE (firmado en físico / hecho fuera del sistema).
+ * Crea el registro con los datos estructurados, marca `origenPdf: SUBIDO` y adjunta el
+ * PDF aportado como Documento. No genera plantilla ni exige firma digital.
+ */
+export const subirContratoOpsExistente = accion(
+  { modulo: 'contratos', accion: 'CREAR', schema: subirContratoOpsSchema },
+  async (d, usuario) => {
+    // Decodificar el PDF (data URI base64) a Buffer.
+    const base64 = d.pdfBase64.split(',')[1] ?? ''
+    const pdf = Buffer.from(base64, 'base64')
+    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+
+    const numero = v(d.numero) ?? (await siguienteNumeroOps())
+    const c = await dbAuditado.contratoOps.create({
+      data: {
+        numero,
+        colaboradorId: d.colaboradorId,
+        objeto: d.objeto,
+        valorTotal: d.valorTotal,
+        valorMensual: d.valorMensual ?? null,
+        supervisorId: v(d.supervisorId),
+        sedeId: d.sedeId,
+        fechaInicio: parseFechaISO(d.fechaInicio)!,
+        fechaFin: parseFechaISO(d.fechaFin)!,
+        rut: v(d.rut),
+        estado: 'ACTIVO',
+        origenPdf: 'SUBIDO',
+      },
+    })
+
+    // Subir el PDF aportado y registrarlo como Documento del contrato.
+    const sha256 = createHash('sha256').update(pdf).digest('hex')
+    const archivo = await subirArchivo(`contratos/${c.id}`, `contrato-${numero}.pdf`, pdf, 'application/pdf')
+    await dbAuditado.documento.create({
+      data: {
+        entidadTipo: 'ContratoOps',
+        entidadId: c.id,
+        nombre: (d.pdfNombre && d.pdfNombre.trim()) || `Contrato OPS ${numero} (subido)`,
+        bucket: archivo.bucket,
+        storagePath: archivo.storagePath,
+        mimeType: 'application/pdf',
+        tamanoBytes: archivo.tamanoBytes,
+        sha256,
+        nivelAcceso: 'GENERAL',
+        sedeId: c.sedeId,
+        subidoPorId: usuario.id,
+      },
+    })
+
+    revalidatePath('/contratos')
+    revalidatePath(`/contratos/ops/${c.id}`)
+    return { id: c.id }
   },
 )
 

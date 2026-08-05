@@ -7,6 +7,7 @@ import { dbAuditado, auditar } from '@/lib/auditoria'
 import { accion } from '@/server/accion'
 import { parseFechaISO } from '@/lib/fechas'
 import { normalizarTexto } from '@/lib/texto'
+import { crearUsuarioColaborador } from '@/server/usuarios'
 
 const filaSchema = z.object({
   tipoDocumento: z.string().default(''),
@@ -37,6 +38,10 @@ const filaSchema = z.object({
 const importarSchema = z.object({
   archivoNombre: z.string(),
   filas: z.array(filaSchema).max(5000),
+  // Crear el usuario de acceso de cada importado (igual que el alta individual) y
+  // enviarle la invitación. Se puede desactivar para cargar el histórico sin avisar
+  // a nadie todavía; los accesos se pueden crear después desde cada ficha.
+  crearUsuarios: z.boolean().default(true),
 })
 
 const TIPOS_DOC = ['CC', 'CE', 'TI', 'PASAPORTE', 'PPT', 'NIT']
@@ -48,16 +53,19 @@ const norm = (s: string) => s.trim().toLowerCase()
 
 export const importarColaboradores = accion(
   { modulo: 'colaboradores', accion: 'CREAR', schema: importarSchema },
-  async ({ archivoNombre, filas }, usuario) => {
+  async ({ archivoNombre, filas, crearUsuarios }, usuario) => {
     // Catálogos en memoria (resolución por nombre)
-    const [sedes, areas, cargos, entidades, bancos, existentes] = await Promise.all([
+    const [sedes, areas, cargos, entidades, bancos, existentes, rolEmpleado] = await Promise.all([
       prisma.sede.findMany({ select: { id: true, nombre: true } }),
       prisma.area.findMany({ select: { id: true, nombre: true } }),
-      prisma.cargo.findMany({ select: { id: true, nombre: true } }),
+      prisma.cargo.findMany({ select: { id: true, nombre: true, rolDefectoId: true } }),
       prisma.entidadSeguridadSocial.findMany({ select: { id: true, nombre: true, tipo: true } }),
       prisma.banco.findMany({ select: { id: true, nombre: true } }),
       prisma.colaborador.findMany({ select: { tipoDocumento: true, numeroDocumento: true } }),
+      prisma.rol.findUnique({ where: { nombre: 'Empleado' }, select: { id: true } }),
     ])
+    // Rol por defecto de cada cargo (mismo criterio que el alta individual).
+    const rolDeCargo = new Map(cargos.map((c) => [c.id, c.rolDefectoId]))
     const sedeMap = new Map(sedes.map((s) => [norm(s.nombre), s.id]))
     const areaMap = new Map(areas.map((a) => [norm(a.nombre), a.id]))
     const cargoMap = new Map(cargos.map((c) => [norm(c.nombre), c.id]))
@@ -69,7 +77,11 @@ export const importarColaboradores = accion(
     const docsExistentes = new Set(existentes.map((e) => `${e.tipoDocumento}|${e.numeroDocumento}`))
 
     const errores: { fila: number; mensaje: string }[] = []
-    const aCrear: { data: Record<string, unknown>; vacaciones: number }[] = []
+    type Acceso = { email: string; nombre: string; cargoId: string | null; sedeId: string }
+    const aCrear: { data: Record<string, unknown>; vacaciones: number; acceso: Acceso | null }[] = []
+    // Un correo = un usuario: si el archivo repite correos, solo el primero puede
+    // recibir acceso (Colaborador.usuarioId es único). Se avisa como error de fila.
+    const correosEnArchivo = new Set<string>()
 
     filas.forEach((f, idx) => {
       const fila = idx + 2 // +2: encabezado en fila 1
@@ -100,8 +112,24 @@ export const importarColaboradores = accion(
 
       const vac = Number(f.vacacionesPendientes.trim().replace(',', '.'))
 
+      // El correo se usa para el acceso: si viene repetido en el archivo, se importa
+      // igual pero sin usuario (y se reporta), en vez de fallar silenciosamente.
+      const correo = f.emailPersonal.trim().toLowerCase()
+      let correoAcceso: string | null = correo || null
+      if (correo) {
+        if (correosEnArchivo.has(correo)) {
+          e(`Correo repetido en el archivo: "${correo}" — se importa sin usuario de acceso`)
+          correoAcceso = null
+        } else {
+          correosEnArchivo.add(correo)
+        }
+      }
+
       aCrear.push({
         vacaciones: Number.isFinite(vac) && vac > 0 ? vac : 0,
+        acceso: correoAcceso
+          ? { email: correoAcceso, nombre: `${f.nombres.trim()} ${f.apellidos.trim()}`, cargoId: cargoId ?? null, sedeId }
+          : null,
         data: {
           tipoDocumento: tipoDoc,
           numeroDocumento: f.numeroDocumento.trim(),
@@ -133,12 +161,14 @@ export const importarColaboradores = accion(
 
     // Inserción en lotes de 100
     let insertadas = 0
+    const pendientesAcceso: (Acceso & { colaboradorId: string })[] = []
     for (let i = 0; i < aCrear.length; i += 100) {
       const lote = aCrear.slice(i, i + 100)
       await prisma.$transaction(async (tx) => {
         for (const item of lote) {
           const col = await tx.colaborador.create({ data: item.data as never })
           insertadas++
+          if (item.acceso) pendientesAcceso.push({ ...item.acceso, colaboradorId: col.id })
           if (item.vacaciones > 0) {
             await tx.ajusteVacaciones.create({
               data: {
@@ -154,6 +184,27 @@ export const importarColaboradores = accion(
       })
     }
 
+    // Usuarios de acceso: FUERA de la transacción (crean su propia sesión de auth y
+    // envían correo). Un fallo aquí no debe deshacer la importación: el colaborador
+    // queda creado y su acceso se puede generar luego desde la ficha.
+    let usuariosCreados = 0
+    if (crearUsuarios) {
+      for (const p of pendientesAcceso) {
+        const rolId = (p.cargoId ? rolDeCargo.get(p.cargoId) : null) ?? rolEmpleado?.id ?? null
+        if (!rolId) continue
+        try {
+          const r = await crearUsuarioColaborador({
+            email: p.email, nombre: p.nombre, rolId, colaboradorId: p.colaboradorId, sedeId: p.sedeId,
+          })
+          if (r) usuariosCreados++
+          else errores.push({ fila: 0, mensaje: `El correo "${p.email}" ya tenía usuario: se vinculó al colaborador, sin crear cuenta nueva.` })
+        } catch (err) {
+          console.error('No se pudo crear el usuario del colaborador importado:', err)
+          errores.push({ fila: 0, mensaje: `No se pudo crear el acceso de "${p.email}". Créalo luego desde su ficha.` })
+        }
+      }
+    }
+
     await dbAuditado.importacionDatos.create({
       data: {
         tipo: 'colaboradores',
@@ -167,10 +218,11 @@ export const importarColaboradores = accion(
       },
     })
     await auditar('CREAR', 'Colaborador', {
-      descripcion: `Importación de colaboradores: ${insertadas} creados, ${errores.length} con error`,
+      descripcion: `Importación de colaboradores: ${insertadas} creados, ${usuariosCreados} usuario(s) de acceso, ${errores.length} con error`,
     })
 
     revalidatePath('/colaboradores')
-    return { insertadas, errores }
+    revalidatePath('/configuracion/usuarios')
+    return { insertadas, usuariosCreados, errores }
   },
 )

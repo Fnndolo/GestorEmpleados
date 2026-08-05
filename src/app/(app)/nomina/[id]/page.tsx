@@ -29,7 +29,13 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
     where: { id },
     include: {
       liquidaciones: {
-        include: { colaborador: { select: { nombres: true, apellidos: true, numeroDocumento: true, banco: { select: { nombre: true } }, tipoCuenta: true, numeroCuenta: true } } },
+        include: {
+          colaborador: { select: { nombres: true, apellidos: true, numeroDocumento: true, banco: { select: { nombre: true } }, tipoCuenta: true, numeroCuenta: true } },
+          // Solo la línea de horas extra: se trae aquí (y no con una consulta por
+          // liquidación) para no provocar un N+1 cuando el periodo tiene muchos
+          // colaboradores.
+          detalles: { where: { conceptoCodigo: 'HORAS_EXTRA' }, select: { valor: true } },
+        },
         orderBy: { colaborador: { apellidos: 'asc' } },
       },
     },
@@ -170,6 +176,9 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
             tipo: n.concepto.tipo,
             valor: Number(n.valor),
           }))}
+          // Panel del sistema de control de asistencia, origen de estas horas.
+          // Si la variable no está configurada, el enlace no se muestra.
+          urlAsistencia={process.env.ASISTENCIA_URL ?? null}
         />
       )}
 
@@ -234,6 +243,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
               <thead className="bg-muted">
                 <tr>
                   <th className="p-3 text-left font-medium">Colaborador</th>
+                  <th className="p-3 text-right font-medium">Horas extra</th>
                   <th className="p-3 text-right font-medium">Devengado</th>
                   <th className="p-3 text-right font-medium hidden sm:table-cell">Deducido</th>
                   <th className="p-3 text-right font-medium">Neto</th>
@@ -246,11 +256,18 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
                   const banco = l.colaborador.banco?.nombre
                   const cuenta = l.colaborador.numeroCuenta
                   const tipo = l.colaborador.tipoCuenta ? TIPO_CUENTA[l.colaborador.tipoCuenta] : null
+                  // Puede haber varias líneas del concepto (una por tramo), así que se suman.
+                  const horasExtra = l.detalles.reduce((t, d) => t + Number(d.valor), 0)
                   return (
                   <tr key={l.id} className="border-t">
                     <td className="p-3">
                       <Link href={`/colaboradores/${l.colaboradorId}`} className="hover:underline">{l.colaborador.nombres} {l.colaborador.apellidos}</Link>
                       <p className="text-xs text-muted-foreground">{l.colaborador.numeroDocumento}</p>
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {horasExtra > 0
+                        ? fmtCOP(horasExtra)
+                        : <span className="text-muted-foreground">—</span>}
                     </td>
                     <td className="p-3 text-right tabular-nums">{fmtCOP(Number(l.totalDevengado))}</td>
                     <td className="p-3 text-right tabular-nums hidden sm:table-cell">{fmtCOP(Number(l.totalDeducido))}</td>

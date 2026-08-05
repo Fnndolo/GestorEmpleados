@@ -11,14 +11,24 @@
 const MIN_NOCTURNO_INICIO = 19 * 60 // 7:00 p.m.
 const MIN_NOCTURNO_FIN = 6 * 60 // 6:00 a.m.
 
+/**
+ * Vigencias de la jornada máxima legal (Ley 2101, reducción progresiva).
+ * Ordenadas de la más reciente a la más antigua; `horasMes` es el divisor
+ * de la hora ordinaria (semana de 6 días: horasMes = semanal × 30 ÷ 6).
+ * También las consume la integración de asistencia (config-laboral).
+ */
+export const JORNADA_VIGENCIAS: ReadonlyArray<{ desde: string; horasSemana: number; horasMes: number }> = [
+  { desde: '2026-07-15', horasSemana: 42, horasMes: 210 },
+  { desde: '2025-07-15', horasSemana: 44, horasMes: 220 },
+  { desde: '2024-07-15', horasSemana: 46, horasMes: 230 },
+  { desde: '2023-07-15', horasSemana: 47, horasMes: 235 },
+  { desde: '1950-01-01', horasSemana: 48, horasMes: 240 },
+]
+
 /** Horas laborables del mes según la jornada vigente a la fecha (Ley 2101 / RIT art. 18). */
 export function horasMesJornada(fecha: Date): number {
   const iso = fecha.toISOString().slice(0, 10)
-  if (iso >= '2026-07-15') return 210 // 42 h/sem
-  if (iso >= '2025-07-15') return 220 // 44 h/sem
-  if (iso >= '2024-07-15') return 230 // 46 h/sem
-  if (iso >= '2023-07-15') return 235 // 47 h/sem
-  return 240 // 48 h/sem (régimen anterior)
+  return (JORNADA_VIGENCIAS.find((v) => iso >= v.desde) ?? JORNADA_VIGENCIAS[JORNADA_VIGENCIAS.length - 1]).horasMes
 }
 
 function aMinutos(hhmm: string): number {
