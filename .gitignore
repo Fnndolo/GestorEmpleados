@@ -67,3 +67,6 @@ scripts/supabase-snapshot.json
 scripts/*-local.ts
 
 .mcp.json
+
+.vercel
+.env*
