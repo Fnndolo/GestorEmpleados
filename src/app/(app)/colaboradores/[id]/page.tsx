@@ -18,6 +18,7 @@ import { Stat, BloqueDatos } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
+import { SubirContratoExistente } from './subir-contrato-existente'
 import { FotoUploader } from './foto-uploader'
 import { EducacionLista } from './educacion-lista'
 import { BotonCertificacion } from './boton-certificacion'
@@ -25,6 +26,13 @@ import { BotonDisciplinario } from './boton-disciplinario'
 import { formatFechaLarga, formatFechaISO, formatFechaCorta, calcularEdad, antiguedad, hoyBogota } from '@/lib/fechas'
 
 const TIPO_CAPACITACION: Record<string, string> = { INDUCCION: 'Inducción', REINDUCCION: 'Reinducción', FORMACION: 'Formación', SST: 'SST' }
+
+/**
+ * Tipo del catálogo que ya NO se sube al expediente: el contrato se gestiona en el módulo
+ * de Contratos (crear desde plantilla, o «Subir contrato existente»). Se excluye del
+ * selector para no duplicar el archivo, y su casilla del semáforo se resuelve desde ahí.
+ */
+const TIPO_CONTRATO_FIRMADO = 'Contrato firmado'
 import {
   TIPO_VINCULO, MODALIDAD_TRABAJO, ESTADO_COLABORADOR, TIPO_DOCUMENTO_IDENTIDAD,
   GENERO, ESTADO_CIVIL, GRUPO_SANGUINEO, NIVEL_EDUCATIVO, TIPO_CUENTA, CLASE_RIESGO_ARL,
@@ -100,16 +108,6 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   const certDocPorEdu = new Map<string, string>()
   for (const d of eduDocs) if (!certDocPorEdu.has(d.entidadId)) certDocPorEdu.set(d.entidadId, d.id)
 
-  // Contrato "principal" para adjuntar su documento (laboral más reciente, o el OPS más reciente)
-  const principal = contratos[0]
-    ? { tipo: 'Contrato' as const, id: contratos[0].id, sedeId: contratos[0].sedeId }
-    : contratosOps[0]
-      ? { tipo: 'ContratoOps' as const, id: contratosOps[0].id, sedeId: contratosOps[0].sedeId }
-      : null
-  const contratoDocs = principal
-    ? await prisma.documento.findMany({ where: { entidadTipo: principal.tipo, entidadId: principal.id }, include: { tipoDocumento: true }, orderBy: { creadoEn: 'desc' } })
-    : []
-
   // Documentos visibles según nivel de acceso del usuario
   const documentosVisibles = documentos.filter(
     (d) => d.nivelAcceso === 'GENERAL' || verSalud || d.nivelAcceso === 'RRHH' && puedeEditar,
@@ -121,7 +119,16 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   en30.setUTCDate(en30.getUTCDate() + 30)
   const porTipo = new Map<string, typeof documentos[number]>()
   for (const d of documentos) if (d.tipoDocumentoId) porTipo.set(d.tipoDocumentoId, d)
+  // El contrato NO vive en el expediente: se gestiona en el módulo de Contratos. Por eso
+  // este requisito se resuelve mirando los contratos del colaborador (firmados en la app
+  // por ambas partes, o subidos ya firmados en físico) en vez de exigir una copia duplicada.
+  const tieneContratoFirmado =
+    contratos.some((ct) => ct.origenPdf === 'SUBIDO' || (ct.firmaEmpleadoPath && ct.firmaEmpleadorPath)) ||
+    contratosOps.some((ct) => ct.origenPdf === 'SUBIDO' || (ct.firmaContratistaPath && ct.firmaContratantePath))
   const semaforo = requeridos.map((r) => {
+    if (r.tipoDocumento.nombre === TIPO_CONTRATO_FIRMADO) {
+      return { nombre: r.tipoDocumento.nombre, obligatorio: r.obligatorio, estado: (tieneContratoFirmado ? 'al_dia' : 'falta') as 'al_dia' | 'falta' }
+    }
     const doc = porTipo.get(r.tipoDocumentoId)
     let estado: 'al_dia' | 'falta' | 'vencido' | 'por_vencer' = 'falta'
     if (doc) {
@@ -373,10 +380,17 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
 
         {/* Contrato */}
         <TabsContent value="contrato" className="space-y-4">
+          {/* Cargar un contrato que YA existe (firmado en físico). Los contratos nuevos
+              se crean desde Contratación, con su plantilla y firma digital. */}
+          {puedeEditar && puedeVerContratos && (
+            <div className="flex justify-end">
+              <SubirContratoExistente colaboradorId={c.id} sedeId={c.sedeId} cargoId={c.cargoId} />
+            </div>
+          )}
           {contratos.length === 0 && contratosOps.length === 0 ? (
             <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
               Este colaborador no tiene contratos registrados.
-              {puedeEditar && <> <Link href="/contratos/nuevo" className="text-primary hover:underline">Crear contrato</Link>.</>}
+              {puedeEditar && <> <Link href="/contratos/nuevo" className="text-primary hover:underline">Crear contrato nuevo</Link>, o sube uno que ya exista con el botón de arriba.</>}
             </CardContent></Card>
           ) : (
             <>
@@ -441,30 +455,23 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
                 </CardContent></Card>
               )}
 
-              {principal && (
-                <div className="pt-2">
-                  <h3 className="flex items-center gap-2 text-sm font-medium mb-3"><FileText className="size-4" /> Documento del contrato {contratos[0]?.numero ?? contratosOps[0]?.numero}</h3>
-                  <GestorDocumentos
-                    entidadTipo={principal.tipo}
-                    entidadId={principal.id}
-                    sedeId={principal.sedeId}
-                    documentos={contratoDocs.map((d) => ({
-                      id: d.id, nombre: d.nombre, tipoDocumentoNombre: d.tipoDocumento?.nombre ?? null,
-                      mimeType: d.mimeType, tamanoBytes: d.tamanoBytes,
-                      fechaVencimiento: formatFechaISO(d.fechaVencimiento) || null, creadoEn: d.creadoEn.toISOString(),
-                    }))}
-                    tiposDocumento={tiposDocumento.map((t) => ({ id: t.id, nombre: t.nombre, requiereVencimiento: t.requiereVencimiento }))}
-                    semaforo={[]}
-                    puedeEditar={puedeEditar}
-                  />
-                </div>
-              )}
+              {/* Los documentos y anexos de cada contrato (otrosíes, prórrogas, soportes) se
+                  gestionan dentro del contrato — así funcionan para TODOS, no solo el último. */}
+              <p className="pt-1 text-xs text-muted-foreground">
+                Los documentos y anexos de cada contrato (otrosíes, prórrogas, soportes) se gestionan
+                dentro de cada contrato, con «Ver contrato».
+              </p>
             </>
           )}
         </TabsContent>
 
-        {/* Documentos */}
+        {/* Documentos personales del colaborador (hoja de vida). Los papeles del
+            contrato viven en la pestaña Contrato. */}
         <TabsContent value="documentos">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Documentos personales del colaborador: cédula, diplomas, certificados y demás soportes de
+            su hoja de vida. Los documentos del contrato están en la pestaña Contrato.
+          </p>
           <GestorDocumentos
             entidadTipo="Colaborador"
             entidadId={c.id}
@@ -478,7 +485,9 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
               fechaVencimiento: formatFechaISO(d.fechaVencimiento) || null,
               creadoEn: d.creadoEn.toISOString(),
             }))}
-            tiposDocumento={tiposDocumento.map((t) => ({ id: t.id, nombre: t.nombre, requiereVencimiento: t.requiereVencimiento }))}
+            tiposDocumento={tiposDocumento
+              .filter((t) => t.nombre !== TIPO_CONTRATO_FIRMADO)
+              .map((t) => ({ id: t.id, nombre: t.nombre, requiereVencimiento: t.requiereVencimiento }))}
             semaforo={semaforo}
             puedeEditar={puedeEditar}
           />

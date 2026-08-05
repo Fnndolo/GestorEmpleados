@@ -5,7 +5,11 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { formatFechaLarga, formatFechaCorta } from '@/lib/fechas'
+import { buttonVariants } from '@/components/ui/button'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
+import { FileText } from 'lucide-react'
+import { formatFechaLarga, formatFechaCorta, formatFechaISO } from '@/lib/fechas'
+import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { fmtCOP } from '@/lib/moneda'
 import { TIPO_VINCULO, MODALIDAD_TRABAJO } from '@/lib/etiquetas'
 import { AccionesContrato } from './acciones-cliente'
@@ -39,7 +43,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
   })
   if (!c) notFound()
 
-  const [cargos, sedes, documentos, empresaCfg, evidencias] = await Promise.all([
+  const [cargos, sedes, documentos, empresaCfg, evidencias, anexos] = await Promise.all([
     prisma.cargo.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
     prisma.sede.findMany({ where: { activa: true }, include: { ciudad: true }, orderBy: { nombre: 'asc' } }),
     prisma.documento.findMany({
@@ -49,6 +53,13 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
     }),
     prisma.configuracionEmpresa.findFirst({ select: { representanteLegal: true } }),
     prisma.evidenciaFirmaContrato.findMany({ where: { contratoId: id }, orderBy: { firmadoEn: 'asc' } }),
+    // Anexos: entidad propia ('ContratoAnexo') para que el gestor —que permite borrar—
+    // nunca liste el PDF del contrato ni la autorización.
+    prisma.documento.findMany({
+      where: { entidadTipo: 'ContratoAnexo', entidadId: id },
+      include: { tipoDocumento: true },
+      orderBy: { creadoEn: 'desc' },
+    }),
   ])
 
   // Último PDF de cada tipo (el firmado si existe, si no el original).
@@ -81,6 +92,23 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
 
       {/* Documento del contrato y firmas digitales */}
       <Card className="mb-4"><CardContent className="py-4">
+        {c.origenPdf === 'SUBIDO' ? (
+          <>
+            <h3 className="text-sm font-medium mb-3">Documento del contrato</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">Contrato subido</Badge>
+              <span className="text-sm text-muted-foreground">Firmado en físico (documento externo al sistema).</span>
+            </div>
+            {docContrato ? (
+              <VisorPdf documentoId={docContrato.id} titulo={`Contrato ${c.numero}`} className={`mt-3 ${buttonVariants({ variant: 'outline', size: 'sm' })}`}>
+                <FileText className="size-4" /> Ver documento
+              </VisorPdf>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">No hay PDF adjunto para este contrato.</p>
+            )}
+          </>
+        ) : (
+        <>
         <h3 className="text-sm font-medium mb-3">Documento y firmas</h3>
         <FirmasLaboral
           contratoId={c.id}
@@ -113,6 +141,32 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
             </ul>
           </div>
         )}
+        </>
+        )}
+      </CardContent></Card>
+
+      {/* Anexos del contrato: otrosíes, prórrogas y soportes escaneados. Van en su propia
+          entidad para no mezclarse con el PDF del contrato (que no debe poder borrarse aquí). */}
+      <Card className="mb-4"><CardContent className="py-4">
+        <h3 className="text-sm font-medium">Anexos del contrato</h3>
+        <p className="mb-3 mt-1 text-xs text-muted-foreground">
+          Otrosíes, prórrogas y soportes que acompañan a este contrato. El documento del contrato
+          se gestiona arriba.
+        </p>
+        <GestorDocumentos
+          entidadTipo="ContratoAnexo"
+          entidadId={c.id}
+          sedeId={c.sedeId}
+          documentos={anexos.map((d) => ({
+            id: d.id, nombre: d.nombre, tipoDocumentoNombre: d.tipoDocumento?.nombre ?? null,
+            mimeType: d.mimeType, tamanoBytes: d.tamanoBytes,
+            fechaVencimiento: formatFechaISO(d.fechaVencimiento) || null,
+            creadoEn: d.creadoEn.toISOString(),
+          }))}
+          tiposDocumento={[]}
+          semaforo={[]}
+          puedeEditar={puedeEditar}
+        />
       </CardContent></Card>
 
       {/* Prórrogas */}

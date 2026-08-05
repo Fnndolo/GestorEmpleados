@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { z } from 'zod'
 import { toast } from 'sonner'
-import { Save, Plus, Trash2, ChevronDown, ChevronRight, ArrowUp, ArrowDown, GripVertical, FlaskConical, User, Coins, ListChecks, FileText, Building2, Sparkles, Lock } from 'lucide-react'
+import { Save, Plus, Trash2, ChevronDown, ChevronRight, ArrowUp, ArrowDown, GripVertical, User, Coins, ListChecks, FileText, Building2, Sparkles, Lock } from 'lucide-react'
 import { renumerarTitulo } from '@/lib/ordinales'
 import { contratoOpsSchema, type ContratoOpsInput } from '@/lib/validaciones/contrato'
 import { crearContratoOps, datosContratistaOps } from '../../ops-acciones'
@@ -179,37 +179,6 @@ export function ContratoOpsSplit({
     }
   }
 
-  /** Rellena el formulario con datos de muestra para probar el PDF sin digitar todo. */
-  function llenarDemo() {
-    const hoy = new Date().toISOString().slice(0, 10)
-    // Contratista de muestra (si ya eligió un colaborador, no se pisan sus datos)
-    if (!getValues('contratistaNombre')) {
-      setValue('contratistaNombre', 'MARÍA CAMILA PRUEBA GÓMEZ')
-      setValue('contratistaCc', 'CC 1.087.654.321')
-      setValue('contratistaCcLugar', 'Pasto (Nariño)')
-      setValue('contratistaDireccion', 'Calle 18 # 25-40, Barrio Centro')
-      setValue('contratistaEmail', 'maria.prueba@example.com')
-      setValue('contratistaTelefono', '310 000 0000')
-    }
-    // Condiciones económicas y plazo
-    setValue('valorTotal', 8_400_000)
-    setValue('valorMensual', 1_400_000)
-    setValue('plazoMeses', 6)
-    setValue('objeto', 'Prestación de servicios de apoyo comercial y atención al cliente en el punto de venta, según las funciones detalladas en el presente contrato.')
-    // Fechas: suscripción = hoy → inicio = hoy → fin = hoy + 6 meses − 1 día
-    setValue('fechaSuscripcion', hoy)
-    setValue('fechaInicio', hoy)
-    setValue('fechaFin', finDesde(hoy, 6))
-    // Cargo, sede y ciudad: los primeros disponibles (si no hay ya uno elegido)
-    if (!getValues('cargoId') && cargos[0]) aplicarCargo(cargos[0].id)
-    if (!getValues('sedeId') && sedes[0]) {
-      setValue('sedeId', sedes[0].id)
-      if (!getValues('ciudad')) setValue('ciudad', sedes[0].ciudad)
-    }
-    if (!getValues('empresaRepLegalCc')) setValue('empresaRepLegalCc', '12.345.678')
-    toast.info(getValues('colaboradorId') ? 'Datos demo cargados.' : 'Datos demo cargados. Elige el colaborador para poder crear el contrato.')
-  }
-
   async function onSelectContratista(id: string) {
     setValue('colaboradorId', id)
     const res = await datosContratistaOps({ colaboradorId: id })
@@ -296,12 +265,6 @@ export function ContratoOpsSplit({
     <div className="grid gap-6 lg:grid-cols-2">
       {/* Panel de edición (izquierda) */}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-2.5">
-        <div className="flex justify-end">
-          <Button type="button" variant="outline" size="sm" onClick={llenarDemo}>
-            <FlaskConical className="size-4" /> Llenar con datos demo
-          </Button>
-        </div>
-
         {/* ── Contratista: prellenado al elegir el colaborador ── */}
         <Seccion
           icono={User} color="violet" titulo="Contratista"

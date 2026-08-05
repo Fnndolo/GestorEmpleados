@@ -1,11 +1,13 @@
 'use server'
 
+import { createHash } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
+import { subirArchivo } from '@/server/storage'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema } from '@/lib/validaciones/contrato'
+import { contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema, subirContratoLaboralSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO } from '@/lib/fechas'
 import { publicarVencimiento, resolverVencimiento } from '@/server/vencimientos/servicio'
 import { valorParametroVigente } from '@/server/nomina/parametros'
@@ -131,6 +133,89 @@ export const crearContrato = accion(
       }
     }
 
+    revalidatePath('/contratos')
+    return { id: contrato.id }
+  },
+)
+
+/**
+ * Sube un contrato laboral YA EXISTENTE (firmado en físico / hecho fuera del sistema).
+ * Crea el registro con los datos estructurados (los necesita nómina y las alertas de
+ * vencimiento), marca `origenPdf: SUBIDO` y adjunta el PDF aportado como Documento.
+ * No genera plantilla ni exige firma digital: entra ACTIVO (firmado en físico).
+ */
+export const subirContratoExistente = accion(
+  { modulo: 'contratos', accion: 'CREAR', schema: subirContratoLaboralSchema },
+  async (d, usuario) => {
+    if (d.tipo === 'TERMINO_FIJO' && !d.fechaFin) throw new ErrorNegocio('Un contrato a término fijo requiere fecha de fin.')
+    if (d.tipo === 'OBRA_LABOR' && !d.objetoObraLabor) throw new ErrorNegocio('Indica el objeto de la obra o labor.')
+    if (d.tipo === 'TERMINO_FIJO' && d.fechaFin) {
+      const dur = (parseFechaISO(d.fechaFin)!.getTime() - parseFechaISO(d.fechaInicio)!.getTime()) / (365 * 86_400_000)
+      if (dur > 4) throw new ErrorNegocio('El contrato a término fijo no puede superar 4 años.')
+    }
+
+    // Decodificar el PDF (data URI base64) a Buffer.
+    const base64 = d.pdfBase64.split(',')[1] ?? ''
+    const pdf = Buffer.from(base64, 'base64')
+    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+
+    let periodoPruebaFin: Date | null = null
+    if (d.periodoPruebaDias && d.periodoPruebaDias > 0) {
+      periodoPruebaFin = parseFechaISO(d.fechaInicio)!
+      periodoPruebaFin.setUTCDate(periodoPruebaFin.getUTCDate() + d.periodoPruebaDias)
+    }
+    const ganaMin = d.ganaSalarioMinimo ?? false
+    const salarioBase = ganaMin ? (await valorParametroVigente('SMMLV')) || d.salarioBase : d.salarioBase
+    const auxConectividad = d.auxConectividad && d.auxConectividad > 0 ? d.auxConectividad : null
+
+    const numero = await siguienteNumero('CT')
+    const contrato = await dbAuditado.contrato.create({
+      data: {
+        numero,
+        colaboradorId: d.colaboradorId,
+        tipo: d.tipo,
+        cargoId: v(d.cargoId),
+        sedeId: d.sedeId,
+        jornada: d.jornada,
+        horasSemanales: d.horasSemanales ?? null,
+        modalidadTrabajo: d.modalidadTrabajo,
+        salarioBase,
+        ganaSalarioMinimo: ganaMin,
+        tieneAuxTransporte: d.tieneAuxTransporte ?? true,
+        auxConectividad,
+        tipoSalario: d.tipoSalario,
+        fechaInicio: parseFechaISO(d.fechaInicio)!,
+        fechaFin: parseFechaISO(d.fechaFin),
+        objetoObraLabor: v(d.objetoObraLabor),
+        etapaAprendizaje: (v(d.etapaAprendizaje) as 'LECTIVA' | 'PRODUCTIVA' | null) ?? null,
+        periodoPruebaDias: d.periodoPruebaDias ?? null,
+        periodoPruebaFin,
+        estado: 'ACTIVO',
+        origenPdf: 'SUBIDO',
+        observaciones: v(d.observaciones),
+      },
+    })
+
+    // Subir el PDF aportado y registrarlo como Documento del contrato.
+    const sha256 = createHash('sha256').update(pdf).digest('hex')
+    const archivo = await subirArchivo(`contratos/${contrato.id}`, `contrato-${numero}.pdf`, pdf, 'application/pdf')
+    await dbAuditado.documento.create({
+      data: {
+        entidadTipo: 'Contrato',
+        entidadId: contrato.id,
+        nombre: (d.pdfNombre && d.pdfNombre.trim()) || `Contrato laboral ${numero} (subido)`,
+        bucket: archivo.bucket,
+        storagePath: archivo.storagePath,
+        mimeType: 'application/pdf',
+        tamanoBytes: archivo.tamanoBytes,
+        sha256,
+        nivelAcceso: 'GENERAL',
+        sedeId: contrato.sedeId,
+        subidoPorId: usuario.id,
+      },
+    })
+
+    await publicarVencimientosContrato(contrato.id)
     revalidatePath('/contratos')
     return { id: contrato.id }
   },

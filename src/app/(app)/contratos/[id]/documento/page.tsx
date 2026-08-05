@@ -23,6 +23,8 @@ export default async function EditarContratoPage({ params }: { params: Promise<{
   if (!c) notFound()
   // Congelado desde la primera firma: los cambios posteriores van por otrosí.
   if (c.firmaEmpleadoPath || c.firmaEmpleadorPath) redirect(`/contratos/${id}`)
+  // Un contrato subido (PDF externo) no se edita por plantilla: se regeneraría y pisaría el PDF.
+  if (c.origenPdf === 'SUBIDO') redirect(`/contratos/${id}`)
 
   const [sedes, cargos, smmlv, auxTransporte, plantillas, empresa] = await Promise.all([
     prisma.sede.findMany({ where: { activa: true }, include: { ciudad: true }, orderBy: { nombre: 'asc' } }),

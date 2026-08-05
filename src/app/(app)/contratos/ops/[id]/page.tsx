@@ -6,6 +6,7 @@ import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatFechaLarga, formatFechaISO } from '@/lib/fechas'
+import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { fmtCOP } from '@/lib/moneda'
 import { CuentasCobro } from './cuentas-cliente'
 import { Entregables } from './entregables-cliente'
@@ -33,11 +34,20 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
 
   const snap = c.contenidoPdf as { firmaContratanteNombre?: string; firmaContratistaNombre?: string } | null
 
-  const documentos = await prisma.documento.findMany({
-    where: { entidadTipo: 'ContratoOps', entidadId: id },
-    orderBy: { creadoEn: 'desc' },
-    select: { id: true, nombre: true, creadoEn: true, sha256: true },
-  })
+  const [documentos, anexos] = await Promise.all([
+    prisma.documento.findMany({
+      where: { entidadTipo: 'ContratoOps', entidadId: id },
+      orderBy: { creadoEn: 'desc' },
+      select: { id: true, nombre: true, creadoEn: true, sha256: true },
+    }),
+    // Anexos: entidad propia ('ContratoOpsAnexo') para que el gestor —que permite borrar—
+    // nunca liste el PDF del contrato ni la autorización.
+    prisma.documento.findMany({
+      where: { entidadTipo: 'ContratoOpsAnexo', entidadId: id },
+      include: { tipoDocumento: true },
+      orderBy: { creadoEn: 'desc' },
+    }),
+  ])
 
   // Planillas PILA adjuntadas por el contratista a sus cuentas de cobro:
   // el verificador debe poder VER el archivo, no solo los datos declarados.
@@ -92,9 +102,11 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
       <Card className="mb-4"><CardContent className="py-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="text-base font-medium">Documentos del contrato</h2>
-          {puedeEditar && documentos.length > 0 && !documentos.some((d) => d.nombre.startsWith('Autorización')) && (
+          {c.origenPdf === 'SUBIDO' ? (
+            <Badge variant="secondary">Subido · firmado en físico</Badge>
+          ) : puedeEditar && documentos.length > 0 && !documentos.some((d) => d.nombre.startsWith('Autorización')) ? (
             <GenerarAutorizacion contratoId={c.id} />
-          )}
+          ) : null}
         </div>
         {documentos.length === 0 ? (
           <div className="flex flex-col items-start gap-2">
@@ -113,6 +125,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
         )}
       </CardContent></Card>
 
+      {c.origenPdf !== 'SUBIDO' && (
       <Card className="mb-4"><CardContent className="py-4">
         <h2 className="mb-3 text-base font-medium">Firmas</h2>
         {documentos.length === 0 ? (
@@ -136,6 +149,31 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
         <p className="mt-2 text-xs text-muted-foreground">
           La autorización de tratamiento de datos (Ley 1581) la firma únicamente el contratista, junto con el contrato, desde su autoservicio.
         </p>
+      </CardContent></Card>
+      )}
+
+      {/* Anexos del contrato: otrosíes, prórrogas y soportes escaneados. Van en su propia
+          entidad para no mezclarse con el PDF del contrato (que no debe poder borrarse aquí). */}
+      <Card className="mb-4"><CardContent className="py-4">
+        <h2 className="text-base font-medium">Anexos del contrato</h2>
+        <p className="mb-3 mt-1 text-xs text-muted-foreground">
+          Otrosíes, prórrogas y soportes que acompañan a este contrato. Los documentos del contrato
+          se gestionan arriba.
+        </p>
+        <GestorDocumentos
+          entidadTipo="ContratoOpsAnexo"
+          entidadId={c.id}
+          sedeId={c.sedeId}
+          documentos={anexos.map((d) => ({
+            id: d.id, nombre: d.nombre, tipoDocumentoNombre: d.tipoDocumento?.nombre ?? null,
+            mimeType: d.mimeType, tamanoBytes: d.tamanoBytes,
+            fechaVencimiento: formatFechaISO(d.fechaVencimiento) || null,
+            creadoEn: d.creadoEn.toISOString(),
+          }))}
+          tiposDocumento={[]}
+          semaforo={[]}
+          puedeEditar={puedeEditar}
+        />
       </CardContent></Card>
 
       <h2 className="text-lg font-medium mb-3">Cuentas de cobro</h2>

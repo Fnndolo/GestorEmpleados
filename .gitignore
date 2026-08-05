@@ -58,3 +58,12 @@ DESIGN.md
 
 # Skill y notas internas de Claude (no van al repo compartido)
 .claude/
+
+# Respaldos de base de datos (datos sensibles — NUNCA subir a git)
+respaldos/
+scripts/supabase-snapshot.json
+
+# Scripts de datos de prueba locales (contraseñas/cédulas de prueba)
+scripts/*-local.ts
+
+.mcp.json

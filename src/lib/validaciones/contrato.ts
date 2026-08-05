@@ -37,6 +37,26 @@ export const contratoSchema = z.object({
 })
 export type ContratoInput = z.infer<typeof contratoSchema>
 
+/**
+ * Subir un contrato laboral YA EXISTENTE (firmado en físico / hecho fuera del sistema).
+ * Pide los mismos datos estructurados que un contrato normal (los necesita nómina y las
+ * alertas de vencimiento), pero en vez de generar el PDF desde plantilla, se adjunta el
+ * PDF aportado. El archivo viaja como data URI base64 (mismo patrón que la firma).
+ */
+export const subirContratoLaboralSchema = contratoSchema
+  .pick({
+    colaboradorId: true, tipo: true, cargoId: true, sedeId: true, jornada: true,
+    horasSemanales: true, modalidadTrabajo: true, salarioBase: true, ganaSalarioMinimo: true,
+    tieneAuxTransporte: true, auxConectividad: true, tipoSalario: true, fechaInicio: true,
+    fechaFin: true, objetoObraLabor: true, etapaAprendizaje: true, periodoPruebaDias: true,
+    observaciones: true,
+  })
+  .extend({
+    pdfBase64: z.string().min(1, 'Adjunta el PDF del contrato').startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
+    pdfNombre: z.string().trim().max(200).optional().or(z.literal('')),
+  })
+export type SubirContratoLaboralInput = z.infer<typeof subirContratoLaboralSchema>
+
 export const prorrogaSchema = z.object({
   contratoId: z.uuid(),
   fechaInicio: fecha,
@@ -119,6 +139,21 @@ export const contratoOpsSchema = z.object({
   generarPdf: z.boolean().optional(),
 })
 export type ContratoOpsInput = z.infer<typeof contratoOpsSchema>
+
+/**
+ * Subir un contrato OPS (prestación de servicios) YA EXISTENTE, firmado en físico.
+ * Pide los datos estructurados mínimos + el PDF (data URI base64).
+ */
+export const subirContratoOpsSchema = contratoOpsSchema
+  .pick({
+    colaboradorId: true, objeto: true, valorTotal: true, valorMensual: true, supervisorId: true,
+    sedeId: true, fechaInicio: true, fechaFin: true, rut: true, numero: true,
+  })
+  .extend({
+    pdfBase64: z.string().min(1, 'Adjunta el PDF del contrato').startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
+    pdfNombre: z.string().trim().max(200).optional().or(z.literal('')),
+  })
+export type SubirContratoOpsInput = z.infer<typeof subirContratoOpsSchema>
 
 export const entregableOpsSchema = z.object({
   contratoOpsId: z.uuid(),

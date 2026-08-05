@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { procesarAlertas } from '@/server/vencimientos/despachador'
 import { actualizarEstadosVacaciones } from '@/server/vacaciones-liquidacion'
 import { alertarCortesDotacion, alertarInduccionPendiente } from '@/server/dotacion'
+import { alertarContratosVencidosSinCierre } from '@/server/contratos-vencidos'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -26,7 +27,10 @@ export async function GET(req: NextRequest) {
     const dotacion = await alertarCortesDotacion()
     // Inducción obligatoria (RIT arts. 7 y 95): nuevos sin inducción registrada.
     const induccion = await alertarInduccionPendiente()
-    return NextResponse.json({ ok: true, ...resumen, vacaciones, dotacion, induccion })
+    // Contratos vencidos que siguen activos: recordatorio semanal a RRHH hasta que se
+    // registre la prórroga o la terminación (el sistema no cierra ni restringe solo).
+    const contratosVencidos = await alertarContratosVencidosSinCierre()
+    return NextResponse.json({ ok: true, ...resumen, vacaciones, dotacion, induccion, contratosVencidos })
   } catch (e) {
     console.error('Error en cron de alertas:', e)
     return NextResponse.json({ error: 'Fallo en el procesamiento' }, { status: 500 })

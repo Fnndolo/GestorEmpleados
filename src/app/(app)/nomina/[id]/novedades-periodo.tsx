@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Coins, Clock, BadgeDollarSign, Trash2 } from 'lucide-react'
+import { Plus, Coins, Clock, BadgeDollarSign, Trash2, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -46,6 +46,12 @@ type Props = {
   comisiones: ComisionItem[]
   horas: HoraItem[]
   conceptosNovedades: ConceptoNovedadItem[]
+  /**
+   * URL del panel del sistema de control de asistencia (ArriveControl), de donde
+   * llegan las horas por la integración. Null si no está configurado, en cuyo
+   * caso no se muestra el enlace.
+   */
+  urlAsistencia: string | null
 }
 
 const GRUPOS = [
@@ -134,23 +140,43 @@ export function NovedadesPeriodo(p: Props) {
       )}
 
       {grupo === 'horas' && (
-        p.horas.length === 0 ? <Vacia texto="Sin horas extra ni recargos en este período." /> : (
-          <Card><CardContent className="divide-y p-0">
-            {p.horas.map((h) => (
-              <div key={h.id} className="flex items-center gap-3 p-3">
-                <Chip icono={Clock} color="sky" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{h.colaborador}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {h.fecha}{h.horaInicio !== '00:00' ? ` · ${h.horaInicio}–${h.horaFin}` : ''}
-                  </p>
+        <>
+          {p.horas.length === 0 ? <Vacia texto="Sin horas extra ni recargos en este período." /> : (
+            <Card><CardContent className="divide-y p-0">
+              {p.horas.map((h) => (
+                <div key={h.id} className="flex items-center gap-3 p-3">
+                  <Chip icono={Clock} color="sky" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{h.colaborador}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {h.fecha}{h.horaInicio !== '00:00' ? ` · ${h.horaInicio}–${h.horaFin}` : ''}
+                    </p>
+                  </div>
+                  <span className="text-sm font-medium tabular-nums">{h.horas} h</span>
+                  <Pill tone="info">{TIPO_HORA[h.tipoHora] ?? h.tipoHora}</Pill>
                 </div>
-                <span className="text-sm font-medium tabular-nums">{h.horas} h</span>
-                <Pill tone="info">{TIPO_HORA[h.tipoHora] ?? h.tipoHora}</Pill>
-              </div>
-            ))}
-          </CardContent></Card>
-        )
+              ))}
+            </CardContent></Card>
+          )}
+
+          {/* Trazabilidad: de dónde salen estas horas. Se abre en otra pestaña
+              porque es una aplicación distinta (control de asistencia). */}
+          {p.urlAsistencia && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Las horas marcadas llegan del sistema de control de asistencia.{' '}
+              <a
+                href={p.urlAsistencia}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 font-medium text-primary underline underline-offset-2 hover:no-underline"
+              >
+                Ver marcaciones y jornadas
+                <ExternalLink className="size-3" aria-hidden />
+                <span className="sr-only">(se abre en una pestaña nueva)</span>
+              </a>
+            </p>
+          )}
+        </>
       )}
 
       {grupo === 'conceptos' && (

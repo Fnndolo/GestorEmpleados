@@ -33,7 +33,10 @@ export function ImportadorCliente() {
   const [archivoNombre, setArchivoNombre] = useState('')
   const [parsing, setParsing] = useState(false)
   const [importando, setImportando] = useState(false)
-  const [resultado, setResultado] = useState<{ insertadas: number; errores: { fila: number; mensaje: string }[] } | null>(null)
+  const [resultado, setResultado] = useState<{ insertadas: number; usuariosCreados: number; errores: { fila: number; mensaje: string }[] } | null>(null)
+  // Crear el acceso de cada importado (igual que el alta individual) y enviarle la
+  // invitación. Se puede desactivar para cargar el histórico sin avisar todavía.
+  const [crearUsuarios, setCrearUsuarios] = useState(true)
 
   async function onArchivo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -67,11 +70,17 @@ export function ImportadorCliente() {
   async function confirmar() {
     if (!filas) return
     setImportando(true)
-    const res = await importarColaboradores({ archivoNombre, filas })
+    const res = await importarColaboradores({ archivoNombre, filas, crearUsuarios })
     setImportando(false)
     if (res.ok) {
       setResultado(res.datos)
-      if (res.datos.insertadas > 0) toast.success(`${res.datos.insertadas} colaborador(es) importado(s).`)
+      if (res.datos.insertadas > 0) {
+        toast.success(
+          res.datos.usuariosCreados > 0
+            ? `${res.datos.insertadas} colaborador(es) importado(s) · ${res.datos.usuariosCreados} usuario(s) con invitación enviada.`
+            : `${res.datos.insertadas} colaborador(es) importado(s).`,
+        )
+      }
       router.refresh()
     } else {
       toast.error(res.error)
@@ -156,6 +165,21 @@ export function ImportadorCliente() {
               </table>
             </div>
             {filas.length > 50 && <p className="text-xs text-muted-foreground">Mostrando las primeras 50 filas.</p>}
+            <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+              <input
+                type="checkbox" className="mt-0.5 size-4"
+                checked={crearUsuarios}
+                onChange={(e) => setCrearUsuarios(e.target.checked)}
+              />
+              <span>
+                Crear el usuario de acceso de cada colaborador y enviarle la invitación por correo
+                <span className="block text-xs text-muted-foreground">
+                  Solo para los que traigan correo en el archivo. Desmárcalo si estás cargando el
+                  histórico y aún no quieres avisar a nadie: los accesos se pueden crear después
+                  desde cada ficha.
+                </span>
+              </span>
+            </label>
             <div className="flex justify-end">
               <Button onClick={confirmar} disabled={importando}>
                 {importando ? <Spinner /> : <ArrowRight className="size-4" />} Importar {filas.length} colaborador(es)
@@ -174,7 +198,7 @@ export function ImportadorCliente() {
                 ? <CircleCheck className="size-5 text-emerald-600" />
                 : <TriangleAlert className="size-5 text-amber-500" />}
               <p className="font-medium">
-                {resultado.insertadas} importado(s) · {resultado.errores.length} con error
+                {resultado.insertadas} importado(s) · {resultado.usuariosCreados} con acceso creado · {resultado.errores.length} con error
               </p>
             </div>
             {resultado.errores.length > 0 && (

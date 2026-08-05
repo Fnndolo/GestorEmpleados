@@ -1,13 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm, type UseFormRegister } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { Save } from 'lucide-react'
 import { colaboradorSchema, type ColaboradorInput } from '@/lib/validaciones/colaborador'
-import { crearColaborador, editarColaborador } from './acciones'
+import { crearColaborador, editarColaborador, sincronizarAccesoColaborador, type SugerenciaAcceso } from './acciones'
+import {
+  AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import type { CatalogosColaborador } from '@/server/consultas/catalogos'
 import {
   TIPO_DOCUMENTO_IDENTIDAD, GENERO, ESTADO_CIVIL, GRUPO_SANGUINEO, NIVEL_EDUCATIVO,
@@ -33,6 +37,9 @@ export function FormColaborador({ catalogos, valores, puedeEditarSalud }: Props)
   const router = useRouter()
   const esEdicion = Boolean(valores?.id)
   const [guardando, setGuardando] = useState(false)
+  const [sugerencia, setSugerencia] = useState<SugerenciaAcceso | null>(null)
+  const [sincronizando, setSincronizando] = useState(false)
+  const decididoRef = useRef(false)
 
   const form = useForm<ColaboradorInput>({
     resolver: zodResolver(colaboradorSchema),
@@ -56,31 +63,65 @@ export function FormColaborador({ catalogos, valores, puedeEditarSalud }: Props)
     ? catalogos.cargos.filter((c) => c.areaId === areaSeleccionada)
     : catalogos.cargos
 
+  function irADetalle(id: string) {
+    if (decididoRef.current) return
+    decididoRef.current = true
+    router.push(`/colaboradores/${id}`)
+    router.refresh()
+  }
+
   async function onSubmit(datos: ColaboradorInput) {
     setGuardando(true)
     const res = esEdicion
       ? await editarColaborador({ ...datos, id: valores!.id! })
       : await crearColaborador(datos)
     setGuardando(false)
+    if (!res.ok) { toast.error(res.error); return }
+
+    if (esEdicion) {
+      toast.success('Colaborador actualizado.')
+      const d = res.datos as { sugerencia?: SugerenciaAcceso | null }
+      if (d.sugerencia) { setSugerencia(d.sugerencia); return } // esperar decisión del admin
+      irADetalle(valores!.id!)
+      return
+    }
+
+    const d = res.datos as { id: string; usuarioCreado?: boolean; sinCorreo?: boolean; correoYaTeniaUsuario?: boolean }
+    if (d.usuarioCreado) toast.success('Colaborador creado. Se creó su usuario y se le envió la invitación por correo.')
+    else if (d.correoYaTeniaUsuario) toast.warning('Colaborador creado, pero ese correo YA tiene un usuario en el sistema: no se creó cuenta nueva ni se envió invitación. Usa un correo distinto si es otra persona.', { duration: 9000 })
+    else if (d.sinCorreo) toast.success('Colaborador creado. No tiene correo: no se creó usuario de acceso (puedes crearlo luego en Usuarios).')
+    else toast.warning('Colaborador creado, pero no se pudo crear su usuario de acceso. Revisa el correo o créalo luego en Usuarios.')
+    irADetalle(d.id)
+  }
+
+  async function aplicarSugerencia() {
+    if (!sugerencia) return
+    setSincronizando(true)
+    const res = await sincronizarAccesoColaborador({
+      colaboradorId: valores!.id!,
+      tipo: sugerencia.tipo,
+      rolId: sugerencia.tipo === 'rol' ? sugerencia.rolId : undefined,
+    })
+    setSincronizando(false)
     if (res.ok) {
-      if (esEdicion) {
-        toast.success('Colaborador actualizado.')
-      } else {
-        const d = res.datos as { id: string; usuarioCreado?: boolean; sinCorreo?: boolean; correoYaTeniaUsuario?: boolean }
-        if (d.usuarioCreado) toast.success('Colaborador creado. Se creó su usuario y se le envió la invitación por correo.')
-        else if (d.correoYaTeniaUsuario) toast.warning('Colaborador creado, pero ese correo YA tiene un usuario en el sistema: no se creó cuenta nueva ni se envió invitación. Usa un correo distinto si es otra persona.', { duration: 9000 })
-        else if (d.sinCorreo) toast.success('Colaborador creado. No tiene correo: no se creó usuario de acceso (puedes crearlo luego en Usuarios).')
-        else toast.warning('Colaborador creado, pero no se pudo crear su usuario de acceso. Revisa el correo o créalo luego en Usuarios.')
-      }
-      const id = esEdicion ? valores!.id! : (res.datos as { id: string }).id
-      router.push(`/colaboradores/${id}`)
-      router.refresh()
+      toast.success(sugerencia.tipo === 'rol'
+        ? 'Rol de acceso actualizado.'
+        : 'Se creó el usuario de acceso y se envió la invitación por correo.')
     } else {
       toast.error(res.error)
     }
+    setSugerencia(null)
+    irADetalle(valores!.id!)
+  }
+
+  function descartarSugerencia() {
+    if (sincronizando) return
+    setSugerencia(null)
+    irADetalle(valores!.id!)
   }
 
   return (
+    <>
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pb-4">
       {/* Identificación */}
       <Seccion titulo="Identificación">
@@ -161,6 +202,31 @@ export function FormColaborador({ catalogos, valores, puedeEditarSalud }: Props)
         </Button>
       </div>
     </form>
+
+    <AlertDialog open={!!sugerencia} onOpenChange={(abierto) => { if (!abierto) descartarSugerencia() }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {sugerencia?.tipo === 'rol' ? 'Actualizar el rol de acceso' : 'Crear usuario de acceso'}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {sugerencia?.tipo === 'rol'
+              ? `El cargo cambió. ¿Actualizar el rol de acceso de "${sugerencia.rolActual ?? '—'}" a "${sugerencia.rolNombre}"? Esto cambia los permisos del usuario en el sistema.`
+              : sugerencia?.tipo === 'crearCuenta'
+                ? `Este colaborador está activo y tiene correo (${sugerencia.email}) pero aún no tiene usuario de acceso. ¿Crearlo y enviarle la invitación por correo?`
+                : ''}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <Button variant="outline" disabled={sincronizando} onClick={descartarSugerencia}>Ahora no</Button>
+          <Button disabled={sincronizando} onClick={aplicarSugerencia}>
+            {sincronizando ? <Spinner /> : null}
+            {sugerencia?.tipo === 'rol' ? 'Actualizar rol' : 'Crear acceso'}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }
 

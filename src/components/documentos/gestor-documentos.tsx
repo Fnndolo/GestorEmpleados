@@ -266,15 +266,20 @@ function DialogSubir({
               className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground"
             />
           </div>
-          <div className="space-y-1.5">
-            <Label>Tipo de documento</Label>
-            <Select value={tipoDocumentoId || undefined} onValueChange={setTipoDocumentoId}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="— Sin clasificar —" /></SelectTrigger>
-              <SelectContent>
-                {tiposDocumento.map((t) => <SelectItem key={t.id} value={t.id}>{t.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* El catálogo de tipos solo aplica donde hay clasificación (expediente del
+              colaborador). Donde no se pasan tipos (p. ej. anexos de contrato) no se
+              muestra un selector vacío: basta el nombre/descripción. */}
+          {tiposDocumento.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Tipo de documento</Label>
+              <Select value={tipoDocumentoId || undefined} onValueChange={setTipoDocumentoId}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="— Sin clasificar —" /></SelectTrigger>
+                <SelectContent>
+                  {tiposDocumento.map((t) => <SelectItem key={t.id} value={t.id}>{t.nombre}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Nombre / descripción</Label>
             <Input value={nombre} onChange={(e) => setNombre(e.target.value)} />

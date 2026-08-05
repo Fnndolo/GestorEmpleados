@@ -94,13 +94,116 @@ export const crearColaborador = accion(
   },
 )
 
+/**
+ * Sugerencia de sincronización del acceso tras editar un colaborador. NO cambia nada:
+ * solo informa al cliente para que pida confirmación (cargo y rol se ajustan a propósito
+ * por separado; nunca pisamos permisos sin que el admin lo apruebe).
+ */
+export type SugerenciaAcceso =
+  | { tipo: 'rol'; rolId: string; rolNombre: string; rolActual: string | null }
+  | { tipo: 'crearCuenta'; email: string }
+
+async function calcularSugerenciaAcceso(
+  previo: { cargoId: string | null; usuarioId: string | null } | null,
+  datos: ColaboradorInput,
+): Promise<SugerenciaAcceso | null> {
+  if (!previo) return null
+
+  // Caso 1: ya tiene cuenta y cambió el cargo → sugerir alinear el rol de acceso.
+  if (previo.usuarioId) {
+    const cargoNuevoId = v(datos.cargoId)
+    if (!cargoNuevoId || cargoNuevoId === previo.cargoId) return null
+    const cargo = await prisma.cargo.findUnique({ where: { id: cargoNuevoId }, select: { rolDefectoId: true } })
+    if (!cargo?.rolDefectoId) return null
+    const usuario = await prisma.user.findUnique({ where: { id: previo.usuarioId }, select: { rolId: true } })
+    if (!usuario || usuario.rolId === cargo.rolDefectoId) return null
+    const [rolNuevo, rolActual] = await Promise.all([
+      prisma.rol.findUnique({ where: { id: cargo.rolDefectoId }, select: { nombre: true } }),
+      prisma.rol.findUnique({ where: { id: usuario.rolId }, select: { nombre: true } }),
+    ])
+    if (!rolNuevo) return null
+    return { tipo: 'rol', rolId: cargo.rolDefectoId, rolNombre: rolNuevo.nombre, rolActual: rolActual?.nombre ?? null }
+  }
+
+  // Caso 2: no tiene cuenta, pero ahora está activo y con correo → sugerir crear el acceso.
+  const email = v(datos.emailCorporativo) ?? v(datos.emailPersonal)
+  if (datos.estado === 'ACTIVO' && email) {
+    const yaExiste = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true } })
+    if (!yaExiste) return { tipo: 'crearCuenta', email }
+  }
+  return null
+}
+
 export const editarColaborador = accion(
   { modulo: 'colaboradores', accion: 'EDITAR', schema: colaboradorSchema.extend({ id: z.uuid() }) },
   async (datos) => {
     const { id, ...resto } = datos
+    const previo = await prisma.colaborador.findUnique({
+      where: { id },
+      select: { cargoId: true, usuarioId: true },
+    })
     await dbAuditado.colaborador.update({ where: { id }, data: aDatosPrisma(resto) })
     revalidatePath('/colaboradores')
     revalidatePath(`/colaboradores/${id}`)
+
+    const sugerencia = await calcularSugerenciaAcceso(previo, resto)
+    return { sugerencia }
+  },
+)
+
+/**
+ * Aplica —solo tras confirmación explícita del admin— la sincronización sugerida por
+ * `editarColaborador`: actualizar el rol de acceso, o crear la cuenta que faltaba.
+ */
+export const sincronizarAccesoColaborador = accion(
+  {
+    modulo: 'colaboradores',
+    accion: 'EDITAR',
+    schema: z.object({
+      colaboradorId: z.uuid(),
+      tipo: z.enum(['rol', 'crearCuenta']),
+      rolId: z.uuid().optional(),
+    }),
+  },
+  async ({ colaboradorId, tipo, rolId }) => {
+    const col = await prisma.colaborador.findUniqueOrThrow({
+      where: { id: colaboradorId },
+      select: {
+        usuarioId: true, nombres: true, apellidos: true,
+        emailCorporativo: true, emailPersonal: true, sedeId: true, cargoId: true,
+      },
+    })
+
+    if (tipo === 'rol') {
+      if (!col.usuarioId) throw new ErrorNegocio('El colaborador no tiene usuario de acceso.')
+      if (!rolId) throw new ErrorNegocio('Falta el rol a asignar.')
+      const rol = await prisma.rol.findUniqueOrThrow({ where: { id: rolId } })
+      await dbAuditado.user.update({
+        where: { id: col.usuarioId },
+        data: { rolId, role: rol.nombre === 'Administrador' ? 'admin' : 'user' },
+      })
+      revalidatePath('/configuracion/usuarios')
+      revalidatePath(`/colaboradores/${colaboradorId}`)
+      return { rolNombre: rol.nombre }
+    }
+
+    // Crear la cuenta que faltaba, con el rol del cargo (o "Empleado" por defecto).
+    if (col.usuarioId) throw new ErrorNegocio('El colaborador ya tiene usuario de acceso.')
+    const email = v(col.emailCorporativo) ?? v(col.emailPersonal)
+    if (!email) throw new ErrorNegocio('El colaborador no tiene correo para crear el acceso.')
+    let rId = rolId ?? null
+    if (!rId) {
+      const cargo = col.cargoId
+        ? await prisma.cargo.findUnique({ where: { id: col.cargoId }, select: { rolDefectoId: true } })
+        : null
+      rId = cargo?.rolDefectoId ?? (await prisma.rol.findUnique({ where: { nombre: 'Empleado' }, select: { id: true } }))?.id ?? null
+    }
+    if (!rId) throw new ErrorNegocio('No hay un rol para asignar al usuario.')
+    const r = await crearUsuarioColaborador({
+      email, nombre: `${col.nombres} ${col.apellidos}`, rolId: rId, colaboradorId, sedeId: col.sedeId,
+    })
+    revalidatePath(`/colaboradores/${colaboradorId}`)
+    return { creado: !!r }
   },
 )
 

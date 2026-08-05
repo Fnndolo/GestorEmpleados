@@ -18,6 +18,9 @@ export const MODULOS = {
   juridica: 'Jurídica',
   calendario_legal: 'Calendario de obligaciones legales',
   sst: 'Seguridad y Salud en el Trabajo',
+  // Lo consume la app de control de asistencia (ArriveControl), que comparte
+  // usuarios y sesiones con esta plataforma. Ver docs/integraciones/.
+  asistencia: 'Control de asistencia (marcaciones)',
   vencimientos: 'Vencimientos y alertas',
   documentos: 'Gestión documental',
   reportes: 'Reportes y tableros',
