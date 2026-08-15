@@ -27,7 +27,7 @@ export default async function MisDisciplinariosPage() {
 
   if (!usuario.colaboradorId) {
     return (
-      <div className="mx-auto max-w-3xl">
+      <div className="max-w-5xl">
         <Encabezado titulo="Mis procesos disciplinarios" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Tu usuario no está vinculado a una ficha de colaborador.</CardContent></Card>
       </div>
@@ -57,7 +57,7 @@ export default async function MisDisciplinariosPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado titulo="Mis procesos disciplinarios" descripcion="Aquí puedes ver los procesos en tu contra y presentar tus descargos (derecho de defensa)." />
       {procesos.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground"><Gavel className="size-8" /><p>No tienes procesos disciplinarios.</p></CardContent></Card>

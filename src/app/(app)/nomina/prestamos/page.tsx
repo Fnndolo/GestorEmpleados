@@ -21,7 +21,7 @@ export default async function PrestamosPage() {
   })
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado titulo="Préstamos y descuentos" descripcion="Control de cuotas y saldo. Las cuotas se descuentan automáticamente al cerrar la nómina." />
       <PrestamosCliente puedeCrear={puedeCrear} />
       <Card className="mt-4"><CardContent className="p-0 divide-y">

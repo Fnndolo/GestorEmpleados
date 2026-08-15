@@ -28,7 +28,7 @@ export default async function CuentasCobroPage() {
   })
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado
         titulo="Cuentas de cobro"
         descripcion="Cuentas de cobro radicadas por colaboradores y contratistas (o por la empresa a su nombre). Revísalas, verifica la seguridad social (contratistas OPS) y apruébalas o recházalas."

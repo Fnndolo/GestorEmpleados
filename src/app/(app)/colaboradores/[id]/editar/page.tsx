@@ -34,12 +34,9 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
     estadoCivil: c.estadoCivil ?? '',
     grupoSanguineo: c.grupoSanguineo ?? '',
     direccion: e(c.direccion),
-    barrio: e(c.barrio),
     ciudadResidenciaId: e(c.ciudadResidenciaId),
     celular: c.celular,
-    telefono: e(c.telefono),
     emailPersonal: e(c.emailPersonal),
-    emailCorporativo: e(c.emailCorporativo),
     emergenciaNombre: e(c.emergenciaNombre),
     emergenciaParentesco: e(c.emergenciaParentesco),
     emergenciaTelefono: e(c.emergenciaTelefono),
@@ -67,7 +64,7 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado titulo={`Editar · ${c.nombres} ${c.apellidos}`} descripcion="Actualiza la ficha del colaborador." />
       <FormColaborador catalogos={catalogos} valores={valores} puedeEditarSalud={puedeEditarSalud} />
     </div>

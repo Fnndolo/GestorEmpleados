@@ -164,7 +164,7 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
   ]
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="max-w-7xl">
       {/* En el hub (tablero) se muestra el encabezado del módulo; las vistas internas traen su propio título con "‹ SST". */}
       {tab === 'tablero' && (
         <Encabezado titulo="Seguridad y Salud en el Trabajo" descripcion="SG-SST conforme al Decreto 1072/2015 y la Resolución 0312/2019." />

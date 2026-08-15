@@ -44,7 +44,7 @@ export default async function ParametrosNominaPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado
         titulo="Parámetros de nómina"
         descripcion="Valores legales vigentes que usa el motor de nómina. Registra una nueva vigencia cuando cambie la norma: el histórico se conserva para auditoría."

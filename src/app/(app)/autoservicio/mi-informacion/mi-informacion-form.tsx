@@ -74,9 +74,7 @@ export function MiInformacionForm({ catalogos, valores }: { catalogos: Catalogos
         <CardHeader><CardTitle className="text-base">Contacto</CardTitle></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Campo label="Dirección" full><Input {...register('direccion')} /></Campo>
-          <Campo label="Barrio"><Input {...register('barrio')} /></Campo>
           <Campo label="Ciudad de residencia"><Selector campo="ciudadResidenciaId" opciones={catalogos.ciudades} /></Campo>
-          <Campo label="Teléfono fijo"><Input {...register('telefono')} /></Campo>
         </CardContent>
       </Card>
 

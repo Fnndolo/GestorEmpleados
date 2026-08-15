@@ -43,7 +43,7 @@ export default async function EditarContratoPage({ params }: { params: Promise<{
   const fuente = snapshot?.plantillaFuente ?? null
 
   return (
-    <div className="mx-auto max-w-[1400px]">
+    <div className="max-w-[1600px]">
       <Encabezado
         titulo={`Editar contrato ${c.numero}`}
         descripcion={`${c.colaborador.nombres} ${c.colaborador.apellidos} — editable hasta que alguna de las partes firme; al guardar se regenera el documento.`}

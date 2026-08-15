@@ -67,7 +67,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
   const docAutorizacion = documentos.find((d) => d.nombre.startsWith('Autorización'))
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado titulo={`Contrato ${c.numero}`} descripcion={`${c.colaborador.nombres} ${c.colaborador.apellidos}`} />
 
       <Card className="mb-4"><CardContent className="py-4">

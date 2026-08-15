@@ -16,6 +16,10 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 
+// 3 MB de PDF ≈ 4 MB en base64, el tope del cuerpo de la Server Action
+// (ver serverActions.bodySizeLimit en next.config.ts).
+const MAX_PDF_BYTES = 3 * 1024 * 1024
+
 const TIPOS_LABORAL = [
   { v: 'TERMINO_INDEFINIDO', l: 'Término indefinido' },
   { v: 'TERMINO_FIJO', l: 'Término fijo' },
@@ -73,6 +77,12 @@ export function SubirContratoExistente({
 
   async function guardar() {
     if (!pdf) { toast.error('Adjunta el PDF del contrato.'); return }
+    // El PDF viaja como data URI dentro de la Server Action (base64: +33 %), y
+    // el cuerpo admite 4 MB. Se avisa aquí para no fallar tras la espera.
+    if (pdf.size > MAX_PDF_BYTES) {
+      toast.error(`El PDF pesa ${(pdf.size / 1024 / 1024).toFixed(1)} MB y el máximo son 3 MB. Comprímelo o escanéalo en blanco y negro a menor resolución.`)
+      return
+    }
     if (!fechaInicio) { toast.error('Indica la fecha de inicio.'); return }
     if (clase === 'OPS' && !fechaFin) { toast.error('Un contrato OPS requiere fecha de fin.'); return }
     if (clase === 'LABORAL' && tipo === 'TERMINO_FIJO' && !fechaFin) { toast.error('Un contrato a término fijo requiere fecha de fin.'); return }

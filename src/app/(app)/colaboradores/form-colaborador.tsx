@@ -46,8 +46,8 @@ export function FormColaborador({ catalogos, valores, puedeEditarSalud }: Props)
     defaultValues: {
       tipoDocumento: 'CC', numeroDocumento: '', fechaExpedicionDoc: '', lugarExpedicionDoc: '',
       nombres: '', apellidos: '', fechaNacimiento: '', lugarNacimiento: '', genero: '', estadoCivil: '',
-      grupoSanguineo: '', direccion: '', barrio: '', ciudadResidenciaId: '', celular: '', telefono: '',
-      emailPersonal: '', emailCorporativo: '', emergenciaNombre: '', emergenciaParentesco: '',
+      grupoSanguineo: '', direccion: '', ciudadResidenciaId: '', celular: '',
+      emailPersonal: '', emergenciaNombre: '', emergenciaParentesco: '',
       emergenciaTelefono: '', nivelEducativoMax: '', epsId: '', afpId: '', fondoCesantiasId: '',
       cajaCompensacionId: '', arlId: '', claseRiesgoArl: '', bancoId: '', tipoCuenta: '', numeroCuenta: '',
       tipoVinculo: 'TERMINO_INDEFINIDO', sedeId: '', areaId: '', cargoId: '', jefeInmediatoId: '',
@@ -141,11 +141,8 @@ export function FormColaborador({ catalogos, valores, puedeEditarSalud }: Props)
       {/* Contacto */}
       <Seccion titulo="Contacto">
         <CampoTexto label="Celular" reg={register('celular')} err={errors.celular?.message} />
-        <CampoTexto label="Teléfono fijo" reg={register('telefono')} />
         <CampoTexto label="Correo personal * (ahí llegan sus credenciales de acceso)" reg={register('emailPersonal')} err={errors.emailPersonal?.message} />
-        <CampoTexto label="Correo corporativo" reg={register('emailCorporativo')} err={errors.emailCorporativo?.message} />
         <CampoTexto label="Dirección" reg={register('direccion')} full />
-        <CampoTexto label="Barrio" reg={register('barrio')} />
         <CampoSelect label="Ciudad de residencia" valor={watch('ciudadResidenciaId') ?? ''} opciones={catalogos.ciudades.map((c) => ({ valor: c.id, etiqueta: `${c.nombre} · ${c.departamento}` }))} onChange={(v) => setValue('ciudadResidenciaId', v)} opcional />
       </Seccion>
 

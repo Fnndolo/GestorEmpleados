@@ -24,7 +24,7 @@ export default async function ModuloPage({ params }: { params: Promise<{ slug: s
   const puedeEditar = tienePermiso(usuario, 'configuracion', 'EDITAR') || tienePermiso(usuario, `custom:${slug}`, 'CREAR')
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado titulo={modulo.nombre} descripcion={modulo.descripcion ?? 'Módulo personalizado.'} />
       <ModuloDinamico
         moduloId={modulo.id}

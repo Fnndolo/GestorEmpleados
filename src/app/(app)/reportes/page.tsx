@@ -46,7 +46,7 @@ export default async function ReportesPage() {
   const datosVinculo = porVinculo.map((v) => ({ nombre: TIPO_VINCULO_CORTO[v.tipoVinculo], valor: v._count }))
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="max-w-7xl">
       <Encabezado titulo="Reportes y tableros" descripcion="Indicadores del personal, cumplimiento documental, contratos y SST." />
 
       <div className="mb-6 grid grid-cols-2 gap-2.5 lg:grid-cols-4">

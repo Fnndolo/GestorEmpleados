@@ -28,12 +28,9 @@ function aDatosPrisma(d: ColaboradorInput) {
     estadoCivil: (v(d.estadoCivil) as ColaboradorInput['estadoCivil']) || null,
     grupoSanguineo: (v(d.grupoSanguineo) as ColaboradorInput['grupoSanguineo']) || null,
     direccion: v(d.direccion),
-    barrio: v(d.barrio),
     ciudadResidenciaId: v(d.ciudadResidenciaId),
     celular: d.celular.trim(),
-    telefono: v(d.telefono),
     emailPersonal: v(d.emailPersonal),
-    emailCorporativo: v(d.emailCorporativo),
     emergenciaNombre: v(d.emergenciaNombre),
     emergenciaParentesco: v(d.emergenciaParentesco),
     emergenciaTelefono: v(d.emergenciaTelefono),
@@ -71,10 +68,10 @@ export const crearColaborador = accion(
     const creado = await dbAuditado.colaborador.create({ data: aDatosPrisma(datos) })
 
     // Crear el usuario de acceso del colaborador con el rol por defecto de su cargo
-    // (o "Empleado" si el cargo no lo define). Requiere un correo (corporativo o personal).
+    // (o "Empleado" si el cargo no lo define). El correo personal es obligatorio.
     let usuarioCreado = false
     let correoYaTeniaUsuario = false
-    const email = v(datos.emailCorporativo) ?? v(datos.emailPersonal)
+    const email = v(datos.emailPersonal)
     if (email && datos.estado === 'ACTIVO') {
       correoYaTeniaUsuario = !!(await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true } }))
       const cargo = datos.cargoId ? await prisma.cargo.findUnique({ where: { id: datos.cargoId }, select: { rolDefectoId: true } }) : null
@@ -126,7 +123,7 @@ async function calcularSugerenciaAcceso(
   }
 
   // Caso 2: no tiene cuenta, pero ahora está activo y con correo → sugerir crear el acceso.
-  const email = v(datos.emailCorporativo) ?? v(datos.emailPersonal)
+  const email = v(datos.emailPersonal)
   if (datos.estado === 'ACTIVO' && email) {
     const yaExiste = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true } })
     if (!yaExiste) return { tipo: 'crearCuenta', email }
@@ -170,7 +167,7 @@ export const sincronizarAccesoColaborador = accion(
       where: { id: colaboradorId },
       select: {
         usuarioId: true, nombres: true, apellidos: true,
-        emailCorporativo: true, emailPersonal: true, sedeId: true, cargoId: true,
+        emailPersonal: true, sedeId: true, cargoId: true,
       },
     })
 
@@ -189,7 +186,7 @@ export const sincronizarAccesoColaborador = accion(
 
     // Crear la cuenta que faltaba, con el rol del cargo (o "Empleado" por defecto).
     if (col.usuarioId) throw new ErrorNegocio('El colaborador ya tiene usuario de acceso.')
-    const email = v(col.emailCorporativo) ?? v(col.emailPersonal)
+    const email = v(col.emailPersonal)
     if (!email) throw new ErrorNegocio('El colaborador no tiene correo para crear el acceso.')
     let rId = rolId ?? null
     if (!rId) {

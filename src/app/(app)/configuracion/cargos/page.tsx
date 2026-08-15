@@ -21,7 +21,7 @@ export default async function CargosPage() {
   ])
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado
         titulo="Cargos"
         descripcion="Crea y edita los cargos de la empresa. El rol por defecto se asigna al usuario cuando se crea un colaborador con ese cargo. Al editar un cargo, el cambio se refleja en quienes lo tienen asignado."

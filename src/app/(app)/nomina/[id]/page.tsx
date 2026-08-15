@@ -122,7 +122,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="max-w-7xl">
       <Encabezado
         titulo={periodo.nombre}
         descripcion={`Periodo ${periodo.tipo === 'QUINCENAL' ? 'quincenal' : 'mensual'} · ${periodo.diasPeriodo} días`}

@@ -1,171 +1,108 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
-import { dividirDiurnoNocturno, PAREJA_TIPO_HORA, JORNADA_VIGENCIAS } from '@/server/nomina/horas'
-import { cargarFestivos } from '@/server/vencimientos/festivos'
+import { dividirDiurnoNocturno, PAREJA_TIPO_HORA } from '@/server/nomina/horas'
 
 /**
- * Horas con recargo DERIVADAS de las marcaciones de asistencia (esquema
- * `asistencia`, misma base de datos — las escribe ArriveControl al instante).
+ * Horas con recargo provenientes del sistema de asistencia (ArriveControl).
  *
- * Modelo: NADIE envía nada. Al liquidar/recalcular un periodo, este módulo
- * borra las novedades de origen asistencia del periodo y las regenera leyendo
- * las marcaciones actuales. Editar una marcación y recalcular SIEMPRE cuadra;
- * no existen copias que se desactualicen. Los periodos cerrados no se tocan
- * (liquidarPeriodo ya lo impide antes de llamar aquí).
+ * Reparto de responsabilidades (contrato en docs/integraciones/):
+ *  - ASISTENCIA calcula QUÉ horas son extra: conoce el turno, la jornada
+ *    pactada de cada empleado y el calendario. Aquí NO se recalcula nada.
+ *  - ESTA PLATAFORMA decide cómo se clasifican (corte diurno/nocturno de las
+ *    7 p.m., Ley 2466) y las liquida.
  *
- * Reglas (espejo de ArriveControl, congeladas hasta el RIT):
- *  - Jornada por DÍA: la pactada del empleado (jornada_semanal[lun..sáb]) o la
- *    legal vigente (Ley 2101, semanal/6). La extra del día es lo que exceda,
- *    atribuida a las últimas horas trabajadas.
- *  - Domingo/festivo: todo lo trabajado es extra dominical (HEDD).
- *  - El corte diurno/nocturno (7 p.m., Ley 2466) se aplica aquí con
- *    dividirDiurnoNocturno, igual que hacía la integración por API.
- *  - Tramos < 0.5 h se descartan (regla del contrato, pendiente con KUPOCELL).
+ * Se piden por HTTP, no leyendo su base de datos: son dos sistemas separados
+ * y cada uno es dueño de sus tablas. Al liquidar (o recalcular) se piden de
+ * nuevo, así que corregir una marcación en asistencia se refleja sola en el
+ * siguiente cálculo, sin copias que se desactualicen.
+ *
+ * Si `ARRIVECONTROL_URL` no está configurada, esta plataforma asume que el
+ * cliente no tiene el módulo de asistencia y liquida sin horas de marcaciones.
  */
 
-type Marca = {
-  empleado_id: string
-  cedula: string | null
-  jornada_semanal: number[] | null
-  tipo: 'entrada' | 'salida'
-  fecha: string // YYYY-MM-DD día Bogotá
-  minutos: number // minuto del día Bogotá
-  epoch: number
-  dow: number // 0=dom … 6=sáb
-}
-
-const round1 = (n: number) => Math.round(n * 10) / 10
-const hhmm = (min: number) => {
-  const m = ((min % 1440) + 1440) % 1440 // normaliza cruces de medianoche
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-}
-
-const horasDiaLegal = (fechaISO: string): number => {
-  const v = JORNADA_VIGENCIAS.find((x) => fechaISO >= x.desde) ?? JORNADA_VIGENCIAS[JORNADA_VIGENCIAS.length - 1]
-  return v.horasSemana / 6
-}
-
-type Tramo = {
-  cedula: string
-  fecha: string
-  horaInicio: string
-  horaFin: string
-  tipoHora: 'HED' | 'HEDD'
+type TramoAsistencia = {
+  documento: string
+  fecha: string // YYYY-MM-DD (día Bogotá)
+  horaInicio: string // HH:MM
+  horaFin: string // HH:MM
+  tipoHora: string // HED | HEDD | …
   horas: number
   referenciaExterna: string
-}
-
-/** Calcula los tramos de horas con recargo de un rango de fechas (días Bogotá). */
-export async function calcularTramosAsistencia(desdeISO: string, hastaISO: string): Promise<Tramo[]> {
-  const festivos = await cargarFestivos(Number(desdeISO.slice(0, 4)), Number(hastaISO.slice(0, 4)))
-
-  const rows = await prisma.$queryRaw<Marca[]>`
-    select m.empleado_id, e.cedula, e.jornada_semanal, m.tipo,
-           to_char(m.ts at time zone 'America/Bogota', 'YYYY-MM-DD') as fecha,
-           (extract(hour from m.ts at time zone 'America/Bogota') * 60
-            + extract(minute from m.ts at time zone 'America/Bogota'))::int as minutos,
-           extract(epoch from m.ts)::float8 as epoch,
-           extract(dow from m.ts at time zone 'America/Bogota')::int as dow
-      from asistencia.marcaciones m
-      join asistencia.empleados e on e.id = m.empleado_id
-     where not m.eliminada
-       and (m.ts at time zone 'America/Bogota')::date >= ${desdeISO}::date
-       and (m.ts at time zone 'America/Bogota')::date <= ${hastaISO}::date
-     order by m.empleado_id, m.ts`
-
-  // Agrupar por empleado y armar pares entrada→salida (entrada sin cerrar no suma).
-  const porEmpleado = new Map<string, { cedula: string | null; jornada: number[] | null; marcas: Marca[] }>()
-  for (const r of rows) {
-    if (!porEmpleado.has(r.empleado_id)) {
-      porEmpleado.set(r.empleado_id, { cedula: r.cedula, jornada: r.jornada_semanal, marcas: [] })
-    }
-    porEmpleado.get(r.empleado_id)!.marcas.push(r)
-  }
-
-  const tramos: Tramo[] = []
-  for (const e of porEmpleado.values()) {
-    if (!e.cedula) continue // sin cédula no hay a quién abonarle las horas
-
-    type Par = { fecha: string; desde: number; hastaAbs: number; horas: number; dow: number; dominical: boolean }
-    const pares: Par[] = []
-    let abierta: Marca | null = null
-    for (const m of e.marcas) {
-      if (m.tipo === 'entrada') abierta = m
-      else if (m.tipo === 'salida' && abierta) {
-        const horas = (m.epoch - abierta.epoch) / 3600
-        pares.push({
-          fecha: abierta.fecha, // el turno pertenece al día en que ENTRÓ
-          desde: abierta.minutos,
-          // Fin en minutos ABSOLUTOS desde las 0:00 del día de entrada: un
-          // turno 22:00→02:00 termina en el minuto 1560, no en el 120. Así la
-          // resta de la extra nunca produce horas negativas.
-          hastaAbs: abierta.minutos + Math.round(horas * 60),
-          horas,
-          dow: abierta.dow,
-          dominical: abierta.dow === 0 || festivos.has(abierta.fecha),
-        })
-        abierta = null
-      }
-    }
-
-    const porDia = new Map<string, Par[]>()
-    for (const p of pares) {
-      if (!porDia.has(p.fecha)) porDia.set(p.fecha, [])
-      porDia.get(p.fecha)!.push(p)
-    }
-
-    for (const [fecha, ps] of porDia) {
-      const empujar = (desdeMin: number, hastaMin: number, horas: number, tipoHora: 'HED' | 'HEDD') => {
-        if (horas < 0.5) return // mínimo del contrato
-        const hi = hhmm(desdeMin)
-        const hf = hhmm(hastaMin)
-        tramos.push({
-          cedula: e.cedula!, fecha, horaInicio: hi, horaFin: hf,
-          horas: round1(horas), tipoHora,
-          referenciaExterna: `arrive-${e.cedula}-${fecha.replaceAll('-', '')}-${hi.replace(':', '')}-${hf.replace(':', '')}-${tipoHora}`,
-        })
-      }
-
-      if (ps[0].dominical) {
-        // Domingo/festivo: no es día de jornada → todo el día es HEDD.
-        for (const p of ps) empujar(p.desde, p.hastaAbs, p.horas, 'HEDD')
-        continue
-      }
-
-      const jornadaDia = ps[0].dow >= 1 && ps[0].dow <= 6
-        ? (e.jornada?.[ps[0].dow - 1] ?? horasDiaLegal(fecha))
-        : horasDiaLegal(fecha)
-      const horasDia = ps.reduce((s, p) => s + p.horas, 0)
-      let restante = Math.max(0, horasDia - jornadaDia)
-      for (let i = ps.length - 1; i >= 0 && restante > 0.001; i--) {
-        const p = ps[i]
-        const toma = Math.min(p.horas, restante)
-        restante -= toma
-        const tomaMin = Math.round(toma * 60)
-        empujar(p.hastaAbs - tomaMin, p.hastaAbs, toma, 'HED')
-      }
-    }
-  }
-  return tramos
+  observaciones?: string
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
 
+/** ¿Está configurado el módulo de asistencia para este cliente? */
+export function asistenciaConfigurada(): boolean {
+  return Boolean(process.env.ARRIVECONTROL_URL)
+}
+
+/**
+ * Pide a ArriveControl los tramos de un rango. Lanza si está configurado pero
+ * no responde: preferimos que la liquidación falle a producir una nómina sin
+ * las horas extra de la gente.
+ */
+async function pedirTramos(desdeISO: string, hastaISO: string): Promise<TramoAsistencia[]> {
+  const base = process.env.ARRIVECONTROL_URL!.replace(/\/$/, '')
+  const url = `${base}/api/horas?desde=${desdeISO}&hasta=${hastaISO}`
+  const clave = process.env.ARRIVECONTROL_API_KEY ?? process.env.INTEGRACION_HORAS_API_KEY ?? ''
+
+  let res: Response
+  try {
+    res = await fetch(url, { headers: { 'X-API-Key': clave }, cache: 'no-store' })
+  } catch (e) {
+    throw new Error(
+      `No se pudo consultar las horas en el sistema de asistencia (${base}). ` +
+        `Verifica que esté disponible e inténtalo de nuevo. Detalle: ${String(e)}`,
+    )
+  }
+
+  const texto = await res.text()
+  let datos: { ok?: boolean; error?: string; registros?: TramoAsistencia[] } | null = null
+  try {
+    datos = JSON.parse(texto)
+  } catch {
+    throw new Error(`El sistema de asistencia respondió ${res.status} con algo que no es JSON.`)
+  }
+  if (!res.ok || !datos?.ok) {
+    throw new Error(`El sistema de asistencia rechazó la consulta (${res.status}): ${datos?.error ?? 'sin detalle'}`)
+  }
+  return datos.registros ?? []
+}
+
 /**
  * Regenera las novedades de horas de ORIGEN ASISTENCIA de un periodo abierto:
- * borra las `arrive-…` del periodo y las recrea desde las marcaciones
- * actuales, con el corte diurno/nocturno de las 7 p.m.
+ * borra las `arrive-…` del periodo y las recrea con lo que reporte el sistema
+ * de asistencia, aplicando el corte diurno/nocturno de las 7 p.m.
  * @returns resumen para mostrar en la UI de liquidación.
  */
 export async function regenerarNovedadesAsistencia(periodo: {
   id: string
   fechaInicio: Date
   fechaFin: Date
-}): Promise<{ generadas: number; sinColaborador: string[] }> {
-  const tramos = await calcularTramosAsistencia(iso(periodo.fechaInicio), iso(periodo.fechaFin))
+}): Promise<{ generadas: number; sinColaborador: string[]; omitido?: boolean }> {
+  if (!asistenciaConfigurada()) {
+    // Red de seguridad: si el periodo YA tiene horas de asistencia, este
+    // cliente sí usa el módulo y falta configuración. Liquidar así borraría
+    // sus horas extra en silencio, así que se detiene con un aviso claro.
+    const yaTiene = await prisma.novedadHoras.count({
+      where: { periodoId: periodo.id, referenciaExterna: { startsWith: 'arrive-' } },
+    })
+    if (yaTiene > 0) {
+      throw new Error(
+        'Este periodo tiene horas provenientes del sistema de asistencia, pero ARRIVECONTROL_URL no está configurada. ' +
+          'Configúrala antes de liquidar para no perder las horas extra.',
+      )
+    }
+    return { generadas: 0, sinColaborador: [], omitido: true }
+  }
+
+  // Se piden ANTES de tocar la base: si falla, no se borró nada todavía.
+  const tramos = await pedirTramos(iso(periodo.fechaInicio), iso(periodo.fechaFin))
 
   // Colaboradores por cédula (una sola consulta).
-  const cedulas = [...new Set(tramos.map((t) => t.cedula))]
+  const cedulas = [...new Set(tramos.map((t) => t.documento))]
   const colaboradores = cedulas.length
     ? await prisma.colaborador.findMany({
         where: { numeroDocumento: { in: cedulas } },
@@ -181,14 +118,15 @@ export async function regenerarNovedadesAsistencia(periodo: {
   }[] = []
 
   for (const t of tramos) {
-    const colab = porCedula.get(t.cedula)
+    const colab = porCedula.get(t.documento)
     if (!colab || colab.estado === 'RETIRADO') {
-      if (!sinColaborador.includes(t.cedula)) sinColaborador.push(t.cedula)
+      if (!sinColaborador.includes(t.documento)) sinColaborador.push(t.documento)
       continue
     }
-    // Corte diurno/nocturno de las 7 p.m. (Ley 2466), igual que la integración.
+    // Corte diurno/nocturno de las 7 p.m. (Ley 2466): responsabilidad nuestra.
     const { diurnas, nocturnas } = dividirDiurnoNocturno(t.horaInicio, t.horaFin)
     const pareja = PAREJA_TIPO_HORA[t.tipoHora]
+    if (!pareja) continue // código de hora desconocido: se ignora, no se adivina
     const partes = [
       ...(diurnas > 0 && pareja.diurno ? [{ tipoHora: pareja.diurno, horas: diurnas }] : []),
       ...(nocturnas > 0 ? [{ tipoHora: pareja.nocturno, horas: nocturnas }] : []),
@@ -203,7 +141,7 @@ export async function regenerarNovedadesAsistencia(periodo: {
         horaInicio: t.horaInicio,
         horaFin: t.horaFin,
         referenciaExterna: t.referenciaExterna,
-        observaciones: 'Calculada de las marcaciones de asistencia.',
+        observaciones: t.observaciones ?? 'Calculada de las marcaciones de asistencia.',
       })
     }
   }

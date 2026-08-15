@@ -30,6 +30,24 @@ export const cargoSchema = z.object({
 })
 export type CargoInput = z.infer<typeof cargoSchema>
 
+export const TIPOS_ENTIDAD_SS = ['EPS', 'ARL', 'AFP', 'FONDO_CESANTIAS', 'CAJA_COMPENSACION'] as const
+
+export const entidadSSSchema = z.object({
+  tipo: z.enum(TIPOS_ENTIDAD_SS),
+  nombre: z.string().trim().min(2, 'Mínimo 2 caracteres').max(120),
+  // Código del operador en PILA (opcional; lo exige la planilla, no la ficha).
+  codigo: z.string().trim().max(20).optional().or(z.literal('')),
+  activa: z.boolean(),
+})
+export type EntidadSSInput = z.infer<typeof entidadSSSchema>
+
+export const bancoSchema = z.object({
+  nombre: z.string().trim().min(2, 'Mínimo 2 caracteres').max(120),
+  codigoAch: z.string().trim().max(20).optional().or(z.literal('')),
+  activo: z.boolean(),
+})
+export type BancoInput = z.infer<typeof bancoSchema>
+
 export const empresaSchema = z.object({
   razonSocial: z.string().trim().min(2).max(150),
   nombreComercial: z.string().trim().min(2).max(150),

@@ -31,7 +31,7 @@ export default async function CalendarioColaboradorPage({
   const eventos = await eventosDelAnio(id, anio)
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="max-w-7xl">
       <Encabezado
         titulo={`Calendario · ${colab.nombres} ${colab.apellidos}`}
         descripcion="Vacaciones, permisos, licencias, día de la familia, compensatorios, incapacidades y suspensiones. Haz clic en un mes para verlo en detalle."

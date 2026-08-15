@@ -31,7 +31,7 @@ export default async function DenunciaPage({ params }: { params: Promise<{ id: s
   const soportes = evidencias.filter((x) => x.id !== d.documentoResolucionId)
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado
         titulo={`Denuncia ${d.codigo}`}
         descripcion={d.anonima ? 'Denuncia anónima · canal anti-acoso (Ley 2466 de 2025)' : `Denunciante: ${d.denuncianteNombre ?? '—'}`}

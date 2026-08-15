@@ -89,7 +89,7 @@ export default async function VencimientosPage({
       : clasificados // 'todos'
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="max-w-7xl">
       <Encabezado titulo="Vencimientos" descripcion="Semáforo de vencimientos de toda la plataforma, filtrable por sede." />
 
       {/* Resumen semáforo */}

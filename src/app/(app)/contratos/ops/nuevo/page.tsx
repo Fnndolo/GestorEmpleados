@@ -37,7 +37,7 @@ export default async function NuevoOpsPage() {
     : null
 
   return (
-    <div className="mx-auto max-w-[1400px]">
+    <div className="max-w-[1600px]">
       <Encabezado titulo="Nuevo contrato OPS" descripcion="Prestación de servicios. A la izquierda ves el contrato en vivo mientras completas los datos." />
       <ContratoOpsSplit sedes={sedes} cargos={cargos} empresa={empresaData} plantilla={plantillaData} />
     </div>
