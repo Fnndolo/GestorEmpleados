@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
       // el túnel reescribe Origin a localhost pero deja x-forwarded-host con su
       // dominio, y sin esto Next aborta por su protección anti-CSRF.
       allowedOrigins: ['localhost:3000', '*.devtunnels.ms'],
+      // Subir un contrato ya firmado manda el PDF como data URI dentro de la
+      // Server Action, y el límite por defecto (1 MB) rechazaba cualquier
+      // escaneo real. 4 MB es el techo útil: Vercel corta el cuerpo de la
+      // petición en 4,5 MB y base64 infla el archivo un 33 %.
+      bodySizeLimit: '4mb',
     },
   },
   async headers() {
