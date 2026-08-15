@@ -25,14 +25,11 @@ export const colaboradorSchema = z.object({
   grupoSanguineo: z.enum(['A_POS', 'A_NEG', 'B_POS', 'B_NEG', 'AB_POS', 'AB_NEG', 'O_POS', 'O_NEG']).optional().or(z.literal('')),
   // Contacto
   direccion: opcional(200),
-  barrio: opcional(),
   ciudadResidenciaId: uuidOpcional,
   celular: z.string().trim().min(7, 'Indica el celular').max(20),
-  telefono: opcional(20),
   // Obligatorio: es el canal por el que llegan las credenciales de acceso
   // (invitación con contraseña temporal) y las notificaciones.
   emailPersonal: z.email('Indica el correo personal — ahí llegan sus credenciales de acceso'),
-  emailCorporativo: z.union([z.email('Correo inválido'), z.literal('')]).optional(),
   // Emergencia
   emergenciaNombre: opcional(),
   emergenciaParentesco: opcional(60),
@@ -84,9 +81,7 @@ export const miFichaSchema = z.object({
   grupoSanguineo: z.enum(['A_POS', 'A_NEG', 'B_POS', 'B_NEG', 'AB_POS', 'AB_NEG', 'O_POS', 'O_NEG']).optional().or(z.literal('')),
   // Contacto
   direccion: opcional(200),
-  barrio: opcional(),
   ciudadResidenciaId: uuidOpcional,
-  telefono: opcional(20),
   // Emergencia
   emergenciaNombre: opcional(),
   emergenciaParentesco: opcional(60),
