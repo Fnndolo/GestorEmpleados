@@ -16,7 +16,7 @@ export default async function MisDesprendiblesPage() {
 
   if (!usuario.colaboradorId) {
     return (
-      <div className="mx-auto max-w-2xl">
+      <div className="max-w-3xl">
         <Encabezado titulo="Mis desprendibles" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
           Tu usuario no está vinculado a una ficha de colaborador. Contacta a Talento Humano.
@@ -33,7 +33,7 @@ export default async function MisDesprendiblesPage() {
   })
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="max-w-3xl">
       <Encabezado
         titulo="Mis desprendibles de pago"
         descripcion="Descarga la colilla de cada periodo de nómina. Solo tú y Talento Humano pueden verlas."

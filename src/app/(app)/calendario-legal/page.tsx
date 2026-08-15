@@ -37,7 +37,7 @@ export default async function CalendarioLegalPage({ searchParams }: { searchPara
   }))
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="max-w-7xl">
       <Encabezado
         titulo="Calendario de obligaciones legales"
         descripcion={`${totalObligaciones} obligaciones recurrentes (societarias, tributarias, laborales, habeas data y SST) con alertas automáticas. Haz clic en un mes para verlo en detalle.`}

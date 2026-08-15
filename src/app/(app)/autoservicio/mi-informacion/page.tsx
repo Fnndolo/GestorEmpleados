@@ -15,7 +15,7 @@ export default async function MiInformacionPage() {
   const usuario = await requerirPermiso('autoservicio', 'VER')
   if (!usuario.colaboradorId) {
     return (
-      <div className="mx-auto max-w-3xl">
+      <div className="max-w-5xl">
         <Encabezado titulo="Mi información" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Tu usuario no está vinculado a una ficha de colaborador. Contacta a Talento Humano.</CardContent></Card>
       </div>
@@ -49,9 +49,7 @@ export default async function MiInformacionPage() {
     estadoCivil: c.estadoCivil ?? '',
     grupoSanguineo: c.grupoSanguineo ?? '',
     direccion: e(c.direccion),
-    barrio: e(c.barrio),
     ciudadResidenciaId: e(c.ciudadResidenciaId),
-    telefono: e(c.telefono),
     emergenciaNombre: e(c.emergenciaNombre),
     emergenciaParentesco: e(c.emergenciaParentesco),
     emergenciaTelefono: e(c.emergenciaTelefono),
@@ -70,7 +68,7 @@ export default async function MiInformacionPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado
         titulo="Mi información"
         descripcion="Completa y mantén al día tus datos personales, de contacto, seguridad social y bancarios. Talento Humano los revisa."

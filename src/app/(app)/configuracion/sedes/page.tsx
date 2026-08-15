@@ -20,7 +20,7 @@ export default async function SedesPage() {
   ])
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado
         titulo="Sedes y ciudades"
         descripcion="Toda la información de la plataforma puede filtrarse por sede y ciudad."

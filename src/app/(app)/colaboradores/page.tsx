@@ -52,7 +52,7 @@ export default async function ColaboradoresPage({
   totalPorVinculo['TODOS'] = total
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="max-w-[1600px]">
       <Encabezado
         titulo="Colaboradores"
         descripcion="Personal de la empresa en todos sus tipos de vinculación."

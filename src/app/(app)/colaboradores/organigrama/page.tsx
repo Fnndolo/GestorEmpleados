@@ -31,7 +31,7 @@ export default async function OrganigramaPage() {
   }))
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="max-w-[1600px]">
       <Encabezado titulo="Organigrama" descripcion="Estructura organizacional por jefe inmediato." />
       {nodos.length === 0 ? (
         <p className="text-sm text-muted-foreground py-10 text-center border rounded-lg border-dashed">

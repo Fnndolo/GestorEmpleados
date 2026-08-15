@@ -66,7 +66,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado titulo={`OPS ${c.numero}`} descripcion={`${c.colaborador.nombres} ${c.colaborador.apellidos}`} />
 
       <Card className="mb-4"><CardContent className="py-4">

@@ -104,7 +104,7 @@ export default async function AutoservicioPage() {
 
   if (!usuario.colaboradorId) {
     return (
-      <div className="mx-auto max-w-5xl">
+      <div className="max-w-7xl">
         <h1 className="mb-4 text-xl font-bold">Autoservicio</h1>
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
           Tu usuario no está vinculado a una ficha de colaborador. Contacta a Talento Humano.
@@ -304,7 +304,7 @@ export default async function AutoservicioPage() {
   const itemsActividad = actividad.slice(0, 20).map((a) => a.item)
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="max-w-7xl">
       <h1 className="text-xl font-bold tracking-tight">Hola, {primerNombre}</h1>
       <p className="mt-0.5 text-[13px] text-muted-foreground">
         <span className="capitalize">{formatFechaLarga(hoyBogota())}</span> · {pendiente}

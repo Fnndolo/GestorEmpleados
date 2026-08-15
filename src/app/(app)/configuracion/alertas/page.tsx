@@ -11,7 +11,7 @@ export default async function AlertasConfigPage() {
   const reglas = await prisma.reglaAlerta.findMany({ orderBy: { clave: 'asc' } })
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado
         titulo="Reglas de alerta"
         descripcion="Días de anticipación de las alertas de vencimiento. La regla GLOBAL aplica salvo que un tipo tenga la suya."

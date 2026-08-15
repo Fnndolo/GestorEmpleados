@@ -84,7 +84,7 @@ export default async function InicioPage() {
         : `sesión activa como ${usuario.rolNombre}`
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="max-w-7xl">
       <h1 className="text-xl font-bold tracking-tight">{darSaludo()}, {usuario.nombre.split(' ')[0]}</h1>
       <p className="mt-0.5 text-[13px] text-muted-foreground">
         <span className="capitalize">{formatFechaLarga(hoy)}</span> · {pendiente}

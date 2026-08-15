@@ -24,7 +24,7 @@ export default async function CuentasRiesgoPage() {
   })
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado
         titulo="Cuentas de cobro OPS sin soporte de seguridad social"
         descripcion="Cuentas que no pueden pagarse hasta verificar el pago de seguridad social del contratista (requisito legal)."

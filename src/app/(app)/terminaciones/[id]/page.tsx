@@ -47,7 +47,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   ])
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado
         titulo={`${t.colaborador.nombres} ${t.colaborador.apellidos}`}
         descripcion={`${TIPO[t.tipo]} · ${formatFechaLarga(t.fechaRetiro)}`}

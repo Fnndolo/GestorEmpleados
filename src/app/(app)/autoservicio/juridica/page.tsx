@@ -43,7 +43,7 @@ export default async function AutoservicioJuridicaPage({ searchParams }: { searc
     : []
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="max-w-3xl">
       <Encabezado
         titulo={enc.titulo}
         descripcion={enc.descripcion}

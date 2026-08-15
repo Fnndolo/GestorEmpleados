@@ -28,7 +28,7 @@ export default async function TerminacionesPage() {
   })
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado
         titulo="Terminaciones y desvinculaciones"
         descripcion="Registro de retiros, liquidación definitiva y paz y salvo por área."

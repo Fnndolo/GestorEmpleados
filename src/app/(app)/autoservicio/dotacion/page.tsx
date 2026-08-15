@@ -12,7 +12,7 @@ export default async function MiDotacionPage() {
 
   if (!usuario.colaboradorId) {
     return (
-      <div className="mx-auto max-w-3xl">
+      <div className="max-w-5xl">
         <Encabezado titulo="Mis entregas" descripcion="" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
           Tu usuario no está vinculado a una ficha de colaborador.
@@ -39,7 +39,7 @@ export default async function MiDotacionPage() {
   ])
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado
         titulo="Mis entregas"
         descripcion="Todo lo que la empresa te ha entregado — activos a tu cargo, dotación de labor y elementos de protección — con su constancia firmada."

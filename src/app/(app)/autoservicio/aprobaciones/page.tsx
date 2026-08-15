@@ -48,7 +48,7 @@ export default async function AprobacionesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado titulo="Solicitudes por aprobar" descripcion="Aprueba o rechaza las solicitudes de autoservicio de tu equipo." />
       {visibles.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No tienes solicitudes pendientes.</CardContent></Card>

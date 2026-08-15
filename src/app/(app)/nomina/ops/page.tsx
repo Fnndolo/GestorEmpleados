@@ -95,7 +95,7 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
   const periodosOrdenados = [...grupos.keys()].sort((a, b) => b.localeCompare(a))
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Link href="/nomina" className="mb-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"><ChevronLeft className="size-3.5" /> Nómina</Link>
       <Encabezado
         titulo="Pagos a contratistas OPS"

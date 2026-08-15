@@ -10,7 +10,7 @@ export default async function EmpresaPage() {
   const empresa = await prisma.configuracionEmpresa.findFirst()
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="max-w-3xl">
       <Encabezado
         titulo="Datos de la empresa"
         descripcion="Aparecen en los documentos generados (desprendibles, certificaciones, actas)."

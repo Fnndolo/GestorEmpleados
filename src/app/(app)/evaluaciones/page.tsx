@@ -20,7 +20,7 @@ export default async function EvaluacionesPage() {
   })
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado titulo="Evaluación de desempeño" descripcion="Resultados de evaluación por colaborador y periodo." acciones={puedeCrear && <CrearEvaluacion />} />
       {evaluaciones.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground"><ClipboardCheck className="size-8" /><p>Sin evaluaciones registradas.</p></CardContent></Card>

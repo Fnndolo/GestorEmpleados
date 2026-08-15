@@ -21,7 +21,7 @@ export default async function NuevoContratoPage() {
     prisma.configuracionEmpresa.findFirst(),
   ])
   return (
-    <div className="mx-auto max-w-[1400px]">
+    <div className="max-w-[1600px]">
       <Encabezado titulo="Nuevo contrato laboral" descripcion="Registra un contrato; si el tipo tiene plantilla, el documento se genera al crear (vista previa a la derecha)." />
       <FormContrato
         catalogos={{

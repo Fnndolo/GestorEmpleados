@@ -21,7 +21,7 @@ export default async function UsuariosPage() {
   ])
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="max-w-7xl">
       <Encabezado
         titulo="Usuarios"
         descripcion="Crea cuentas, asigna rol y sedes. La invitación se envía por correo con una contraseña temporal."

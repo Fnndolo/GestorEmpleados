@@ -39,7 +39,7 @@ export default async function CapacitacionPage({ params }: { params: Promise<{ i
   ])
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado titulo={c.titulo} descripcion={`${TIPO[c.tipo]} · ${formatFechaLarga(c.fecha)}`} acciones={<Badge variant="outline">{c.asistencias.length} asistentes</Badge>} />
       {c.descripcion && <Card className="mb-4"><CardContent className="py-3 text-sm text-muted-foreground">{c.descripcion}</CardContent></Card>}
       <Asistencia

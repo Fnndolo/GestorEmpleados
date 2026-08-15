@@ -17,7 +17,7 @@ export default async function NotificacionesConfigPage() {
   for (const e of EVENTOS_NOTIF) popupPorEvento[e.clave] = guardadas.get(e.clave) ?? true
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado
         titulo="Notificaciones"
         descripcion="Elige qué eventos muestran un pop-up (aviso emergente) en pantalla. Los avisos que apagues aquí igual llegan a la campana, el correo y el celular; solo se omite el pop-up."

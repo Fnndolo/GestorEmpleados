@@ -14,7 +14,7 @@ export default async function ConceptosNominaPage() {
   })
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado
         titulo="Conceptos de nómina"
         descripcion="Catálogo de devengados y deducciones. Cada concepto se marca como constitutivo o no de salario (arts. 127 y 128 CST): eso decide si entra al IBC de seguridad social y a las bases de prestaciones."

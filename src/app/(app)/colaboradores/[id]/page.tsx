@@ -155,7 +155,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   const docsFaltan = semaforo.filter((s) => s.obligatorio && s.estado === 'falta').length
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado
         titulo="Ficha del colaborador"
         acciones={
@@ -253,10 +253,8 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
 
           <BloqueDatos titulo="Contacto" icono={Phone} color="bg-teal-500/12 text-teal-600 dark:text-teal-400" datos={[
             ['Celular', c.celular],
-            ['Teléfono', c.telefono ?? '—'],
             ['Correo personal', c.emailPersonal ?? '—'],
-            ['Correo corporativo', c.emailCorporativo ?? '—'],
-            ['Dirección', [c.direccion, c.barrio, c.ciudadResidencia?.nombre].filter(Boolean).join(', ') || '—'],
+            ['Dirección', [c.direccion, c.ciudadResidencia?.nombre].filter(Boolean).join(', ') || '—'],
           ]} />
 
           <BloqueDatos titulo="Contacto de emergencia" icono={HeartPulse} color="bg-rose-500/12 text-rose-600 dark:text-rose-400" datos={[

@@ -46,7 +46,7 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
   const nombre = (c: { nombres: string; apellidos: string }) => `${c.nombres} ${c.apellidos}`
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="max-w-7xl">
       <Encabezado titulo="Novedades" descripcion="Incapacidades, licencias, permisos, vacaciones y bonificaciones." />
 
       {puedeAprobar && (

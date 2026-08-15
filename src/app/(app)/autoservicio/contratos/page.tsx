@@ -13,7 +13,7 @@ export default async function MisContratosPage() {
   const usuario = await requerirPermiso('autoservicio', 'VER')
   if (!usuario.colaboradorId) {
     return (
-      <div className="mx-auto max-w-3xl">
+      <div className="max-w-5xl">
         <Encabezado titulo="Mis contratos" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Tu usuario no está vinculado a una ficha de colaborador.</CardContent></Card>
       </div>
@@ -88,7 +88,7 @@ export default async function MisContratosPage() {
   ]
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado
         titulo="Mis contratos"
         descripcion="Revisa tus contratos (laborales y de prestación de servicios) y fírmalos digitalmente."

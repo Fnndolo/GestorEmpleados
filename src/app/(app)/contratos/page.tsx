@@ -72,7 +72,7 @@ export default async function ContratosPage({
   }) : []
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="max-w-7xl">
       <Encabezado
         titulo="Contratación y vinculación"
         descripcion="Contratos laborales por modalidad y contratos de prestación de servicios (OPS)."

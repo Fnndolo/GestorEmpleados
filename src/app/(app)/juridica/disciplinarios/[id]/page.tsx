@@ -42,7 +42,7 @@ export default async function DisciplinarioPage({ params }: { params: Promise<{ 
   const acta = p.documentoActaId ? await prisma.documento.findUnique({ where: { id: p.documentoActaId }, select: { id: true, nombre: true } }) : null
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-5xl">
       <Encabezado
         titulo={p.asunto}
         descripcion={`${p.colaborador.nombres} ${p.colaborador.apellidos} · abierto ${formatFechaLarga(p.fechaApertura)}`}

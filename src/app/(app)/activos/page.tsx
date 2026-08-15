@@ -29,7 +29,7 @@ export default async function ActivosPage() {
   ])
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="max-w-7xl">
       <Encabezado titulo="Activos y dotación" descripcion="Inventario de activos con actas de entrega/devolución y dotación legal (3 entregas al año)." />
       <ActivosCliente
         puedeCrear={puedeCrear}

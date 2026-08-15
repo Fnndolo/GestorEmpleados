@@ -21,7 +21,7 @@ export default async function ObligacionesPage() {
   ])
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado
         titulo="Catálogo de obligaciones"
         descripcion="Las reglas de recurrencia que alimentan el calendario legal. Al editar una regla se recalculan sus próximas fechas."

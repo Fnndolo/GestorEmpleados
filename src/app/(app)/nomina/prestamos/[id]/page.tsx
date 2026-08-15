@@ -36,7 +36,7 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
     : null
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="max-w-3xl">
       <Encabezado
         titulo={`Préstamo · ${prestamo.colaborador.nombres} ${prestamo.colaborador.apellidos}`}
         descripcion={prestamo.descripcion ?? 'Detalle de cuotas y saldo.'}

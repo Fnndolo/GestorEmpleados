@@ -7,7 +7,7 @@ export const metadata = { title: 'Importar colaboradores · Smart Gadgets RH' }
 export default async function ImportarPage() {
   await requerirPermiso('colaboradores', 'CREAR')
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="max-w-6xl">
       <Encabezado
         titulo="Importar colaboradores"
         descripcion="Carga masiva desde una plantilla de Excel. Descarga la plantilla, complétala y súbela."
