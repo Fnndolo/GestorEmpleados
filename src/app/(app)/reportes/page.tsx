@@ -26,7 +26,7 @@ export default async function ReportesPage() {
     prisma.colaborador.count({ where: { estado: 'ACTIVO' } }),
     prisma.colaborador.groupBy({ by: ['tipoVinculo'], where: { estado: 'ACTIVO' }, _count: true }),
     prisma.colaborador.groupBy({ by: ['sedeId'], where: { estado: 'ACTIVO' }, _count: true }),
-    prisma.colaborador.count({ where: { estado: 'ACTIVO', modalidadTrabajo: { in: ['REMOTO', 'HIBRIDO', 'TELETRABAJO'] } } }),
+    prisma.colaborador.count({ where: { estado: 'ACTIVO', modalidadTrabajo: { in: ['REMOTO', 'HIBRIDO'] } } }),
     prisma.contrato.findMany({ where: { estado: 'ACTIVO' }, select: { salarioBase: true } }),
     prisma.contrato.count({ where: { estado: 'ACTIVO', tipo: 'TERMINO_FIJO', fechaFin: { gte: hoy, lte: en60 } } }),
     prisma.contrato.count({ where: { estado: 'ACTIVO', periodoPruebaFin: { gte: hoy, lte: en60 } } }),

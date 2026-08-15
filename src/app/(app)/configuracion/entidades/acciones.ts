@@ -15,6 +15,19 @@ import {
 const RUTA = '/configuracion/entidades'
 
 /**
+ * Estos catálogos (EPS/AFP/cesantías/cajas/ARL y bancos) no se listan solo aquí:
+ * los consumen los selectores de la ficha del colaborador (crear/editar), la
+ * importación y el autoservicio. Revalidar solo esta ruta dejaba las otras
+ * sirviendo la lista vieja desde la caché del router, y una entidad recién
+ * creada "no aparecía" hasta recargar a mano. Se invalida todo el árbol de la
+ * app: son datos globales que cambian muy de vez en cuando.
+ */
+function revalidarCatalogos() {
+  revalidatePath(RUTA)
+  revalidatePath('/', 'layout')
+}
+
+/**
  * Traduce la violación de índice único a un mensaje entendible.
  * En entidades el índice es (tipo, nombre); en bancos, el nombre.
  */
@@ -39,7 +52,7 @@ export const crearEntidad = accion(
     await sinDuplicados('Ya existe una entidad de ese tipo con ese nombre.', () =>
       dbAuditado.entidadSeguridadSocial.create({ data: datosEntidad(datos) }),
     )
-    revalidatePath(RUTA)
+    revalidarCatalogos()
     return { ok: true }
   },
 )
@@ -51,7 +64,7 @@ export const editarEntidad = accion(
     await sinDuplicados('Ya existe una entidad de ese tipo con ese nombre.', () =>
       dbAuditado.entidadSeguridadSocial.update({ where: { id }, data: datosEntidad(resto) }),
     )
-    revalidatePath(RUTA)
+    revalidarCatalogos()
     return { ok: true }
   },
 )
@@ -62,7 +75,7 @@ export const alternarEntidad = accion(
     // Desactivar NO borra: la entidad deja de ofrecerse en los formularios, pero
     // quienes ya la tienen asignada la conservan.
     await dbAuditado.entidadSeguridadSocial.update({ where: { id }, data: { activa } })
-    revalidatePath(RUTA)
+    revalidarCatalogos()
     return { ok: true }
   },
 )
@@ -77,7 +90,7 @@ export const crearBanco = accion(
     await sinDuplicados('Ya existe un banco con ese nombre.', () =>
       dbAuditado.banco.create({ data: datosBanco(datos) }),
     )
-    revalidatePath(RUTA)
+    revalidarCatalogos()
     return { ok: true }
   },
 )
@@ -88,7 +101,7 @@ export const editarBanco = accion(
     await sinDuplicados('Ya existe un banco con ese nombre.', () =>
       dbAuditado.banco.update({ where: { id }, data: datosBanco(resto) }),
     )
-    revalidatePath(RUTA)
+    revalidarCatalogos()
     return { ok: true }
   },
 )
@@ -97,7 +110,7 @@ export const alternarBanco = accion(
   { modulo: 'configuracion', accion: 'EDITAR', schema: z.object({ id: z.uuid(), activo: z.boolean() }) },
   async ({ id, activo }) => {
     await dbAuditado.banco.update({ where: { id }, data: { activo } })
-    revalidatePath(RUTA)
+    revalidarCatalogos()
     return { ok: true }
   },
 )

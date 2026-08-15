@@ -151,7 +151,7 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
               <Select value={modalidad || undefined} onValueChange={setModalidad}><SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="PRESENCIAL">Presencial</SelectItem><SelectItem value="REMOTO">Remoto</SelectItem>
-                  <SelectItem value="HIBRIDO">Híbrido</SelectItem><SelectItem value="TELETRABAJO">Teletrabajo</SelectItem>
+                  <SelectItem value="HIBRIDO">Híbrido</SelectItem>
                 </SelectContent></Select>
             </div>
           )}

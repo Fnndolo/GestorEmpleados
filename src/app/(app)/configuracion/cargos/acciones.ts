@@ -25,6 +25,9 @@ export const crearCargo = accion(
   async (datos) => {
     await dbAuditado.cargo.create({ data: datosCargo(datos) })
     revalidatePath('/configuracion/cargos')
+    // Los cargos alimentan los selectores de la ficha del colaborador y del
+    // contrato: sin esto, uno recién creado no aparece hasta recargar a mano.
+    revalidatePath('/', 'layout')
     return { ok: true }
   },
 )
@@ -35,6 +38,9 @@ export const editarCargo = accion(
     // El cambio se refleja automáticamente en colaboradores y contratos que referencian este cargo (FK).
     await dbAuditado.cargo.update({ where: { id }, data: datosCargo(resto) })
     revalidatePath('/configuracion/cargos')
+    // Los cargos alimentan los selectores de la ficha del colaborador y del
+    // contrato: sin esto, uno recién creado no aparece hasta recargar a mano.
+    revalidatePath('/', 'layout')
     return { ok: true }
   },
 )
@@ -44,6 +50,9 @@ export const alternarCargo = accion(
   async ({ id, activo }) => {
     await dbAuditado.cargo.update({ where: { id }, data: { activo } })
     revalidatePath('/configuracion/cargos')
+    // Los cargos alimentan los selectores de la ficha del colaborador y del
+    // contrato: sin esto, uno recién creado no aparece hasta recargar a mano.
+    revalidatePath('/', 'layout')
     return { ok: true }
   },
 )

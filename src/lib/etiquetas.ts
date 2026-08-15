@@ -22,7 +22,6 @@ export const MODALIDAD_TRABAJO: Record<string, string> = {
   PRESENCIAL: 'Presencial',
   REMOTO: 'Remoto',
   HIBRIDO: 'Híbrido',
-  TELETRABAJO: 'Teletrabajo',
 }
 
 export const TIPO_DOCUMENTO_IDENTIDAD: Record<string, string> = {

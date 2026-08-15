@@ -46,7 +46,7 @@ const importarSchema = z.object({
 
 const TIPOS_DOC = ['CC', 'CE', 'TI', 'PASAPORTE', 'PPT', 'NIT']
 const VINCULOS = ['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'OPS', 'PRACTICANTE']
-const MODALIDADES = ['PRESENCIAL', 'REMOTO', 'HIBRIDO', 'TELETRABAJO']
+const MODALIDADES = ['PRESENCIAL', 'REMOTO', 'HIBRIDO']
 const CUENTAS = ['AHORROS', 'CORRIENTE', 'BILLETERA_DIGITAL']
 
 const norm = (s: string) => s.trim().toLowerCase()

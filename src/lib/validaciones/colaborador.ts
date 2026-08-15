@@ -53,7 +53,7 @@ export const colaboradorSchema = z.object({
   areaId: uuidOpcional,
   cargoId: uuidOpcional,
   jefeInmediatoId: uuidOpcional,
-  modalidadTrabajo: z.enum(['PRESENCIAL', 'REMOTO', 'HIBRIDO', 'TELETRABAJO']),
+  modalidadTrabajo: z.enum(['PRESENCIAL', 'REMOTO', 'HIBRIDO']),
   fechaIngreso: fechaRequerida,
   estado: z.enum(['ACTIVO', 'INACTIVO', 'RETIRADO']),
   // Dotación

@@ -18,6 +18,9 @@ export const crearCiudad = accion(
   async (datos) => {
     await dbAuditado.ciudad.create({ data: limpiar(datos) })
     revalidatePath('/configuracion/sedes')
+    // Las sedes alimentan los selectores de la ficha, contratos y el cambiador
+    // de sede del shell: sin esto, una recién creada no aparece hasta recargar.
+    revalidatePath('/', 'layout')
   },
 )
 
@@ -29,6 +32,9 @@ export const crearSede = accion(
     }
     await dbAuditado.sede.create({ data: limpiar(datos) })
     revalidatePath('/configuracion/sedes')
+    // Las sedes alimentan los selectores de la ficha, contratos y el cambiador
+    // de sede del shell: sin esto, una recién creada no aparece hasta recargar.
+    revalidatePath('/', 'layout')
   },
 )
 
@@ -44,6 +50,9 @@ export const editarSede = accion(
     }
     await dbAuditado.sede.update({ where: { id }, data: limpiar(resto) })
     revalidatePath('/configuracion/sedes')
+    // Las sedes alimentan los selectores de la ficha, contratos y el cambiador
+    // de sede del shell: sin esto, una recién creada no aparece hasta recargar.
+    revalidatePath('/', 'layout')
   },
 )
 
@@ -56,5 +65,8 @@ export const alternarSede = accion(
     }
     await dbAuditado.sede.update({ where: { id }, data: { activa } })
     revalidatePath('/configuracion/sedes')
+    // Las sedes alimentan los selectores de la ficha, contratos y el cambiador
+    // de sede del shell: sin esto, una recién creada no aparece hasta recargar.
+    revalidatePath('/', 'layout')
   },
 )

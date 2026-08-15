@@ -11,7 +11,7 @@ export const contratoSchema = z.object({
   sedeId: z.uuid('Selecciona la sede'),
   jornada: z.enum(['TIEMPO_COMPLETO', 'MEDIO_TIEMPO', 'POR_DIAS']),
   horasSemanales: z.coerce.number().int().min(1).max(60).optional(),
-  modalidadTrabajo: z.enum(['PRESENCIAL', 'REMOTO', 'HIBRIDO', 'TELETRABAJO']),
+  modalidadTrabajo: z.enum(['PRESENCIAL', 'REMOTO', 'HIBRIDO']),
   salarioBase: z.coerce.number().min(0),
   ganaSalarioMinimo: z.boolean().optional(),
   tieneAuxTransporte: z.boolean().optional(),
@@ -73,7 +73,7 @@ export const otrosiSchema = z.object({
   salarioNuevo: z.coerce.number().min(0).optional(),
   cargoNuevoId: uuidOpc,
   sedeNuevaId: uuidOpc,
-  modalidadNueva: z.enum(['PRESENCIAL', 'REMOTO', 'HIBRIDO', 'TELETRABAJO']).optional().or(z.literal('')),
+  modalidadNueva: z.enum(['PRESENCIAL', 'REMOTO', 'HIBRIDO']).optional().or(z.literal('')),
   fechaFinNueva: fechaOpc,
 })
 export type OtrosiInput = z.infer<typeof otrosiSchema>

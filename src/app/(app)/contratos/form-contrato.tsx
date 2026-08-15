@@ -342,7 +342,7 @@ export function FormContrato({
                 <SelectItem value="PRESENCIAL">Presencial</SelectItem>
                 <SelectItem value="REMOTO">Remoto</SelectItem>
                 <SelectItem value="HIBRIDO">Híbrido</SelectItem>
-                <SelectItem value="TELETRABAJO">Teletrabajo</SelectItem>
+                
               </SelectContent>
             </Select>
           </Campo>

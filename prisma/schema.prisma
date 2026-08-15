@@ -474,11 +474,14 @@ enum TipoVinculo {
   @@map("tipo_vinculo")
 }
 
+// Modalidades que usa la empresa. El teletrabajo (Ley 1221/2008) es una figura
+// distinta del trabajo remoto (Ley 2121/2021) y exige obligaciones propias
+// (dotación de equipos, reporte del puesto a la ARL); KUPOCELL no la aplica,
+// así que no se ofrece para no registrar contratos con una figura que no se cumple.
 enum ModalidadTrabajo {
   PRESENCIAL
   REMOTO
   HIBRIDO
-  TELETRABAJO
 
   @@map("modalidad_trabajo")
 }
