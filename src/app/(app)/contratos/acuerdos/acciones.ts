@@ -1,6 +1,6 @@
 'use server'
 
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
@@ -163,9 +163,17 @@ export const crearAcuerdo = accion(
 
 export const enviarAcuerdo = accion(
   { modulo: 'contratos', accion: 'EDITAR', schema: z.object({ id: z.uuid() }) },
-  async ({ id }) => {
+  async ({ id }, usuario) => {
     const a = await prisma.acuerdoEvaluacion.findUniqueOrThrow({ where: { id } })
     const { pdf, numero, nombre } = await construirPdf(id)
+
+    // Enlace de un solo propósito para que el aspirante devuelva el firmado sin
+    // pasar por Talento Humano. Se renueva en cada envío: si el correo anterior
+    // se filtró o se reenvía a otra persona, el enlace viejo deja de servir.
+    const token = randomBytes(32).toString('base64url')
+    const expira = new Date()
+    expira.setUTCDate(expira.getUTCDate() + 30)
+    const url = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://gestor-empleados-iota.vercel.app'}/firmar-acuerdo/${token}`
 
     await enviarCorreo({
       para: a.email,
@@ -173,13 +181,19 @@ export const enviarAcuerdo = accion(
       html: `
         <p>Hola ${a.nombres},</p>
         <p>Adjuntamos el <b>acuerdo de evaluación previa</b> para el cargo de ${a.cargoEvaluado}.</p>
-        <p>Por favor imprímelo, fírmalo y devuélvelo escaneado respondiendo a este correo.</p>
+        <p>Imprímelo, fírmalo y <b>súbelo escaneado en este enlace</b>:</p>
+        <p><a href="${url}">${url}</a></p>
+        <p>El enlace es personal y caduca en 30 días. Si prefieres, también puedes responder
+        este correo con el documento adjunto.</p>
         <p>Ten en cuenta que este acuerdo <b>no constituye contrato de trabajo ni precontrato laboral</b>;
         su objeto es evaluar tu idoneidad para el cargo.</p>`,
       adjuntos: [{ nombre: `Acuerdo de evaluación ${numero} - ${nombre}.pdf`, contenido: pdf }],
     })
 
-    await dbAuditado.acuerdoEvaluacion.update({ where: { id }, data: { enviadoEn: new Date() } })
+    await dbAuditado.acuerdoEvaluacion.update({
+      where: { id },
+      data: { enviadoEn: new Date(), enviadoPorId: usuario.id, tokenSubida: token, tokenExpiraEn: expira },
+    })
     await auditar('EDITAR', 'AcuerdoEvaluacion', { registroId: id, descripcion: `Acuerdo ${numero} enviado a ${a.email}` })
     revalidatePath(RUTA)
     return { ok: true }

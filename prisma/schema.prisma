@@ -1227,6 +1227,21 @@ model AcuerdoEvaluacion {
   observaciones String?
   // Se envió al aspirante para firma (se guarda para saber si ya salió el correo).
   enviadoEn     DateTime?               @map("enviado_en")
+  // Quién envió el enlace: el aspirante no tiene cuenta, así que el documento que
+  // sube se atribuye a esta persona (Documento.subidoPorId es obligatorio). El
+  // nombre del archivo y la auditoría dejan claro que lo aportó el aspirante.
+  enviadoPorId  String?                 @map("enviado_por_id") @db.Uuid
+
+  /**
+   * Enlace público de un solo propósito para que el ASPIRANTE suba el acuerdo
+   * firmado sin tener cuenta en el sistema. Es un secreto portador: quien tenga
+   * el token puede subir un PDF a ESTE acuerdo y nada más — no lee ni modifica
+   * otros datos. Caduca para que un enlace viejo no quede abierto para siempre.
+   */
+  tokenSubida   String?   @unique @map("token_subida")
+  tokenExpiraEn DateTime? @map("token_expira_en")
+  firmadoEn     DateTime? @map("firmado_en")
+
   decididoEn    DateTime?               @map("decidido_en")
 
   // Ficha creada al aprobar; null mientras no se convierta.

@@ -20,7 +20,7 @@ import type { AcuerdoEvaluacionInput } from '@/lib/validaciones/acuerdo-evaluaci
 type Acuerdo = {
   id: string; numero: string; nombre: string; documento: string; email: string
   cargoEvaluado: string; sedeNombre: string; fechaInicio: string; fechaFin: string
-  estado: string; enviado: boolean; colaboradorId: string | null
+  estado: string; enviado: boolean; firmado: boolean; colaboradorId: string | null
   documentos: { id: string; nombre: string }[]
 }
 type Opcion = { id: string; nombre: string }
@@ -162,6 +162,7 @@ export function AcuerdosCliente({
                   <Badge variant={est.variante}>{est.texto}</Badge>
                   <Badge variant="outline">{a.numero}</Badge>
                   {a.enviado && <Badge variant="outline">Enviado</Badge>}
+                  {a.firmado && <Badge variant="outline">Firmado por el aspirante</Badge>}
                   {a.colaboradorId && <Badge variant="outline">Ya es colaborador</Badge>}
                 </div>
                 <p className="text-xs text-muted-foreground">

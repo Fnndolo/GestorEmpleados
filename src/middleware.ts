@@ -18,7 +18,10 @@ export const config = {
   // Protege todo salvo login, recursos públicos y endpoints de auth/cron.
   // `api/integraciones` queda fuera porque no usa sesión de navegador: se
   // autentica con la clave compartida X-API-Key dentro de cada handler.
+  // `firmar-acuerdo` también: lo abre el ASPIRANTE, que no tiene cuenta; su
+  // autorización es el token del enlace, comprobado en la propia página y en la
+  // acción de subida.
   matcher: [
-    '/((?!login|cambiar-password|api/auth|api/cron|api/integraciones|_next/static|_next/image|favicon.ico|icono.svg|manifest.webmanifest|sw.js|offline|.*\\.(?:png|jpg|jpeg|svg|webp|ico)).*)',
+    '/((?!login|cambiar-password|firmar-acuerdo|api/auth|api/cron|api/integraciones|_next/static|_next/image|favicon.ico|icono.svg|manifest.webmanifest|sw.js|offline|.*\\.(?:png|jpg|jpeg|svg|webp|ico)).*)',
   ],
 }

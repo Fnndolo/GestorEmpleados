@@ -55,6 +55,7 @@ export default async function AcuerdosPage() {
           fechaFin: formatFechaISO(a.fechaFin),
           estado: a.estado,
           enviado: Boolean(a.enviadoEn),
+          firmado: Boolean(a.firmadoEn),
           colaboradorId: a.colaborador?.id ?? null,
           documentos: docs
             .filter((d) => d.entidadId === a.id)
