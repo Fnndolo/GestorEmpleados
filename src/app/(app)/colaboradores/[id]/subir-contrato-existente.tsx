@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Upload } from 'lucide-react'
+import { Upload, HelpCircle } from 'lucide-react'
 import { subirContratoExistente } from '../../contratos/acciones'
 import { subirContratoOpsExistente } from '../../contratos/ops-acciones'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { fmtCOP } from '@/lib/moneda'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -18,6 +21,8 @@ import {
 
 // 3 MB de PDF ≈ 4 MB en base64, el tope del cuerpo de la Server Action
 // (ver serverActions.bodySizeLimit en next.config.ts).
+// Los dos PDF (contrato + autorización) viajan juntos en el mismo cuerpo, así que
+// el tope de 3 MB aplica a la SUMA de ambos.
 const MAX_PDF_BYTES = 3 * 1024 * 1024
 
 const TIPOS_LABORAL = [
@@ -30,6 +35,21 @@ const TIPOS_LABORAL = [
 
 type TipoLaboral = (typeof TIPOS_LABORAL)[number]['v']
 
+/** Signo de interrogación con la explicación al pasar el mouse (o al tocarlo en móvil). */
+function Ayuda({ children }: { children: React.ReactNode }) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" aria-label="Más información" className="text-muted-foreground hover:text-foreground">
+            <HelpCircle className="size-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-64 text-pretty">{children}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )}
+
 /**
  * Carga de un contrato que YA EXISTE (firmado en físico / hecho fuera del sistema)
  * para el colaborador de esta ficha: crea el registro del contrato con los datos
@@ -37,23 +57,27 @@ type TipoLaboral = (typeof TIPOS_LABORAL)[number]['v']
  * La creación de contratos NUEVOS (desde plantilla) vive en Contratación.
  */
 export function SubirContratoExistente({
-  colaboradorId, sedeId, cargoId,
+  colaboradorId, sedeId, cargoId, auxTransporte,
 }: {
   colaboradorId: string
   sedeId: string
   cargoId: string | null
+  /** Valor legal vigente del auxilio de transporte, solo informativo. */
+  auxTransporte: number
 }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [clase, setClase] = useState<'LABORAL' | 'OPS'>('LABORAL')
   const [pdf, setPdf] = useState<File | null>(null)
+  const [autorizacion, setAutorizacion] = useState<File | null>(null)
 
   // Campos comunes / laborales
   const [tipo, setTipo] = useState<TipoLaboral>('TERMINO_INDEFINIDO')
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaFin, setFechaFin] = useState('')
   const [salario, setSalario] = useState('')
+  const [tieneAuxTransporte, setTieneAuxTransporte] = useState(true)
   const [objetoObra, setObjetoObra] = useState('')
   // Campos OPS
   const [objeto, setObjeto] = useState('')
@@ -61,8 +85,8 @@ export function SubirContratoExistente({
   const [valorMensual, setValorMensual] = useState('')
 
   function limpiar() {
-    setPdf(null); setFechaInicio(''); setFechaFin(''); setSalario('')
-    setObjetoObra(''); setObjeto(''); setValorTotal(''); setValorMensual('')
+    setPdf(null); setAutorizacion(null); setFechaInicio(''); setFechaFin(''); setSalario('')
+    setTieneAuxTransporte(true); setObjetoObra(''); setObjeto(''); setValorTotal(''); setValorMensual('')
     setTipo('TERMINO_INDEFINIDO'); setClase('LABORAL')
   }
 
@@ -79,8 +103,9 @@ export function SubirContratoExistente({
     if (!pdf) { toast.error('Adjunta el PDF del contrato.'); return }
     // El PDF viaja como data URI dentro de la Server Action (base64: +33 %), y
     // el cuerpo admite 4 MB. Se avisa aquí para no fallar tras la espera.
-    if (pdf.size > MAX_PDF_BYTES) {
-      toast.error(`El PDF pesa ${(pdf.size / 1024 / 1024).toFixed(1)} MB y el máximo son 3 MB. Comprímelo o escanéalo en blanco y negro a menor resolución.`)
+    const pesoTotal = pdf.size + (autorizacion?.size ?? 0)
+    if (pesoTotal > MAX_PDF_BYTES) {
+      toast.error(`Los PDF suman ${(pesoTotal / 1024 / 1024).toFixed(1)} MB y el máximo son 3 MB en total. Comprímelos o escanéalos en blanco y negro a menor resolución.`)
       return
     }
     if (!fechaInicio) { toast.error('Indica la fecha de inicio.'); return }
@@ -89,8 +114,10 @@ export function SubirContratoExistente({
 
     setGuardando(true)
     let pdfBase64: string
+    let autorizacionBase64 = ''
     try {
       pdfBase64 = await leerPdf(pdf)
+      if (autorizacion) autorizacionBase64 = await leerPdf(autorizacion)
     } catch {
       setGuardando(false); toast.error('No se pudo leer el PDF.'); return
     }
@@ -99,14 +126,16 @@ export function SubirContratoExistente({
       ? await subirContratoExistente({
           colaboradorId, sedeId, cargoId: cargoId ?? '',
           tipo, jornada: 'TIEMPO_COMPLETO', modalidadTrabajo: 'PRESENCIAL', tipoSalario: 'ORDINARIO',
-          salarioBase: Number(salario) || 0, fechaInicio, fechaFin: fechaFin || '',
+          salarioBase: Number(salario) || 0, tieneAuxTransporte, fechaInicio, fechaFin: fechaFin || '',
           objetoObraLabor: objetoObra, pdfBase64, pdfNombre: pdf.name,
+          autorizacionBase64, autorizacionNombre: autorizacion?.name ?? '',
         })
       : await subirContratoOpsExistente({
           colaboradorId, sedeId, objeto,
           valorTotal: Number(valorTotal) || 0,
           valorMensual: valorMensual ? Number(valorMensual) : undefined,
           fechaInicio, fechaFin, pdfBase64, pdfNombre: pdf.name,
+          autorizacionBase64, autorizacionNombre: autorizacion?.name ?? '',
         })
 
     setGuardando(false)
@@ -128,10 +157,12 @@ export function SubirContratoExistente({
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Subir contrato existente</DialogTitle>
-            <DialogDescription>
-              Para contratos que ya tienes hechos y firmados en físico. Se registra el contrato con
-              estos datos (los necesitan nómina y las alertas de vencimiento) y se adjunta el PDF.
-              No se pide firma digital.
+            <DialogDescription className="flex items-center gap-1.5">
+              Contrato ya firmado en físico
+              <Ayuda>
+                Se registra el contrato con estos datos (los necesitan nómina y las alertas de
+                vencimiento) y se adjunta el PDF. No se pide firma digital.
+              </Ayuda>
             </DialogDescription>
           </DialogHeader>
 
@@ -161,6 +192,17 @@ export function SubirContratoExistente({
                 <div className="space-y-1.5">
                   <Label>Salario base</Label>
                   <Input type="number" step="1" value={salario} onChange={(e) => setSalario(e.target.value)} placeholder="0" />
+                </div>
+                {/* El VALOR del auxilio lo fija el parámetro legal vigente; aquí solo se
+                    indica si el contrato lo incluye. */}
+                <div className="flex items-center gap-2 rounded-lg border p-3">
+                  <Checkbox id="auxT-subir" checked={tieneAuxTransporte} onCheckedChange={(c) => setTieneAuxTransporte(c === true)} />
+                  <Label htmlFor="auxT-subir" className="font-normal">Auxilio de transporte</Label>
+                  <Ayuda>
+                    {auxTransporte > 0 ? `${fmtCOP(auxTransporte)}/mes. ` : ''}
+                    Solo se paga si el salario es ordinario y no supera 2 SMMLV. El valor lo fija el
+                    parámetro legal vigente, no se escribe aquí.
+                  </Ayuda>
                 </div>
                 {tipo === 'OBRA_LABOR' && (
                   <div className="space-y-1.5">
@@ -207,6 +249,19 @@ export function SubirContratoExistente({
                 className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
               />
               {pdf && <p className="text-xs text-muted-foreground">{pdf.name} ({(pdf.size / 1024).toFixed(0)} KB)</p>}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                Autorización de datos (opcional)
+                <Ayuda>Autorización de tratamiento de datos firmada en físico (Ley 1581). Si no la tienes digitalizada, puedes subirla después.</Ayuda>
+              </Label>
+              <input
+                type="file" accept="application/pdf"
+                onChange={(e) => setAutorizacion(e.target.files?.[0] ?? null)}
+                className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
+              />
+              {autorizacion && <p className="text-xs text-muted-foreground">{autorizacion.name} ({(autorizacion.size / 1024).toFixed(0)} KB)</p>}
             </div>
           </div>
 

@@ -54,6 +54,10 @@ export const subirContratoLaboralSchema = contratoSchema
   .extend({
     pdfBase64: z.string().min(1, 'Adjunta el PDF del contrato').startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
     pdfNombre: z.string().trim().max(200).optional().or(z.literal('')),
+    // Autorización de tratamiento de datos (Ley 1581) firmada en físico: opcional,
+    // porque no todo contrato antiguo la tiene digitalizada.
+    autorizacionBase64: z.string().startsWith('data:application/pdf', 'La autorización debe ser un PDF').optional().or(z.literal('')),
+    autorizacionNombre: z.string().trim().max(200).optional().or(z.literal('')),
   })
 export type SubirContratoLaboralInput = z.infer<typeof subirContratoLaboralSchema>
 
@@ -152,6 +156,10 @@ export const subirContratoOpsSchema = contratoOpsSchema
   .extend({
     pdfBase64: z.string().min(1, 'Adjunta el PDF del contrato').startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
     pdfNombre: z.string().trim().max(200).optional().or(z.literal('')),
+    // Autorización de tratamiento de datos (Ley 1581) firmada en físico: opcional,
+    // porque no todo contrato antiguo la tiene digitalizada.
+    autorizacionBase64: z.string().startsWith('data:application/pdf', 'La autorización debe ser un PDF').optional().or(z.literal('')),
+    autorizacionNombre: z.string().trim().max(200).optional().or(z.literal('')),
   })
 export type SubirContratoOpsInput = z.infer<typeof subirContratoOpsSchema>
 

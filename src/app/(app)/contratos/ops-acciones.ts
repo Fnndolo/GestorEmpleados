@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { subirArchivo } from '@/server/storage'
+import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subida'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { contratoOpsSchema, subirContratoOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, hoyBogota } from '@/lib/fechas'
@@ -225,6 +226,11 @@ export const subirContratoOpsExistente = accion(
         sedeId: c.sedeId,
         subidoPorId: usuario.id,
       },
+    })
+
+    await guardarAutorizacionSubida({
+      autorizacionBase64: d.autorizacionBase64, autorizacionNombre: d.autorizacionNombre,
+      entidadTipo: 'ContratoOps', entidadId: c.id, numero, sedeId: c.sedeId, usuarioId: usuario.id,
     })
 
     revalidatePath('/contratos')

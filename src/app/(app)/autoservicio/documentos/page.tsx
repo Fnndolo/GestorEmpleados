@@ -1,6 +1,6 @@
 import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { formatFechaCorta } from '@/lib/fechas'
+import { formatFechaCorta, formatFechaISO } from '@/lib/fechas'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { MisDocumentos } from './mis-documentos'
@@ -80,6 +80,11 @@ export default async function MisDocumentosPage() {
             fecha: formatFechaCorta(d.creadoEn),
             vence: d.fechaVencimiento ? formatFechaCorta(d.fechaVencimiento) : null,
             esImagen: d.mimeType.startsWith('image/'),
+            // Solo puede corregir/borrar lo que él mismo subió (no lo que produce la empresa).
+            editable: d.subidoPorId === usuario.id,
+            tipoId: d.tipoDocumentoId,
+            descripcion: d.descripcion,
+            venceIso: d.fechaVencimiento ? formatFechaISO(d.fechaVencimiento) : null,
           })),
           ...docsContratos.map((d) => ({
             id: d.id,
@@ -89,6 +94,10 @@ export default async function MisDocumentosPage() {
             fecha: formatFechaCorta(d.creadoEn),
             vence: null,
             esImagen: d.mimeType.startsWith('image/'),
+            editable: false,
+            tipoId: null,
+            descripcion: null,
+            venceIso: null,
           })),
         ]}
       />

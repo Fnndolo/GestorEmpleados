@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { duracionContrato } from '@/lib/fechas'
 
 type ClausulaEdit = { key: number; titulo: string; cuerpo: string; esFunciones: boolean }
 
@@ -249,6 +250,11 @@ export function FormContrato({
   const aplicaAux = watch('tieneAuxTransporte') !== false && watch('tipoSalario') === 'ORDINARIO' && catalogos.smmlv > 0 && salario > 0 && salario <= 2 * catalogos.smmlv
   const fechaInicio = watch('fechaInicio')
   const fechaFin = watch('fechaFin')
+  // Duración pactada, en vivo: se ve lo que se está firmando al elegir las fechas.
+  const duracion = duracionContrato(
+    fechaInicio ? new Date(`${fechaInicio}T00:00:00Z`) : null,
+    fechaFin ? new Date(`${fechaFin}T00:00:00Z`) : null,
+  )
   const hoyIso = new Date().toISOString().slice(0, 10)
 
   // ── estado de cada sección para las píldoras del acordeón ──
@@ -424,6 +430,14 @@ export function FormContrato({
           {tipo === 'TERMINO_FIJO' && (
             <Campo label="Fecha de fin (término fijo)">
               <Input type="date" {...register('fechaFin')} />
+            </Campo>
+          )}
+          {duracion && (
+            <Campo label="Duración">
+              <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">{duracion}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Se calcula de las fechas; el último día cuenta.
+              </p>
             </Campo>
           )}
           <Campo label="Días de periodo de prueba">

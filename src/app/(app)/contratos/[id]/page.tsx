@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { FileText } from 'lucide-react'
-import { formatFechaLarga, formatFechaCorta, formatFechaISO } from '@/lib/fechas'
+import { formatFechaLarga, formatFechaCorta, formatFechaISO, duracionContrato } from '@/lib/fechas'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { fmtCOP } from '@/lib/moneda'
 import { TIPO_VINCULO, MODALIDAD_TRABAJO } from '@/lib/etiquetas'
@@ -82,6 +82,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
           <Dato k="Modalidad" v={MODALIDAD_TRABAJO[c.modalidadTrabajo]} />
           <Dato k="Fecha de inicio" v={formatFechaLarga(c.fechaInicio)} />
           <Dato k="Fecha de fin" v={c.fechaFin ? formatFechaLarga(c.fechaFin) : 'Indefinida'} />
+          <Dato k="Duración" v={duracionContrato(c.fechaInicio, c.fechaFin)} />
           {c.periodoPruebaFin && <Dato k="Fin periodo de prueba" v={formatFechaLarga(c.periodoPruebaFin)} />}
           {c.objetoObraLabor && <Dato k="Objeto obra/labor" v={c.objetoObraLabor} full />}
         </dl>

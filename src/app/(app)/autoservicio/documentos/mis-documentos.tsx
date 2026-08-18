@@ -3,7 +3,13 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CloudUpload, Download, Eye, FileText, Image as ImageIcon, Paperclip, TriangleAlert } from 'lucide-react'
+import { CloudUpload, Download, Eye, FileText, Image as ImageIcon, MoreVertical, Paperclip, Pencil, Trash2, TriangleAlert } from 'lucide-react'
+import { borrarMiDocumento, editarMiDocumento } from '../documentos-acciones'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,7 +20,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
-type DocItem = { id: string; nombre: string; tipo: string | null; categoria: string; fecha: string; vence: string | null; esImagen: boolean }
+type DocItem = {
+  id: string; nombre: string; tipo: string | null; categoria: string; fecha: string
+  vence: string | null; esImagen: boolean
+  /** true solo si lo subió el propio colaborador: puede corregirlo o borrarlo. */
+  editable: boolean
+  tipoId: string | null; descripcion: string | null; venceIso: string | null
+}
 
 /** Orden fijo de las categorías; solo se muestran las que tienen documentos. */
 const CATEGORIAS = ['Expediente', 'Contratos', 'Desprendibles', 'Certificaciones', 'Actas', 'Otros']
@@ -30,6 +42,18 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
   const [abierto, setAbierto] = useState(false)
   const [imagen, setImagen] = useState<DocItem | null>(null)
   const [filtro, setFiltro] = useState<string>('Todos')
+  const [editando, setEditando] = useState<DocItem | null>(null)
+  const [borrando, setBorrando] = useState<DocItem | null>(null)
+  const [ocupado, setOcupado] = useState(false)
+
+  async function borrar() {
+    if (!borrando) return
+    setOcupado(true)
+    const res = await borrarMiDocumento({ id: borrando.id })
+    setOcupado(false)
+    if (res.ok) { toast.success('Documento eliminado.'); setBorrando(null); router.refresh() }
+    else toast.error(res.error)
+  }
 
   const categorias = CATEGORIAS.filter((c) => documentos.some((d) => d.categoria === c))
   const visibles = filtro === 'Todos' ? documentos : documentos.filter((d) => d.categoria === filtro)
@@ -92,13 +116,32 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
                 <Eye className="size-4 shrink-0 text-muted-foreground" />
               </>
             )
-            const clases = 'flex w-full items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset'
+            const clases = 'flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset'
             // El documento se abre DENTRO de la app: PDF con el visor embebido
             // (pdf.js en móvil) e imagen en un diálogo de ampliación.
-            return d.esImagen ? (
-              <button key={d.id} type="button" onClick={() => setImagen(d)} className={clases}>{info}</button>
+            const abrir = d.esImagen ? (
+              <button type="button" onClick={() => setImagen(d)} className={clases}>{info}</button>
             ) : (
-              <VisorPdf key={d.id} documentoId={d.id} titulo={d.nombre} className={clases}>{info}</VisorPdf>
+              <VisorPdf documentoId={d.id} titulo={d.nombre} className={clases}>{info}</VisorPdf>
+            )
+            return (
+              <div key={d.id} className="flex items-center pr-1.5">
+                {abrir}
+                {/* Solo lo que subió el propio colaborador se puede corregir o borrar. */}
+                {d.editable && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0 text-muted-foreground" aria-label="Acciones del documento">
+                        <MoreVertical className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => setEditando(d)}><Pencil className="size-4" /> Editar</DropdownMenuItem>
+                      <DropdownMenuItem variant="destructive" onSelect={() => setBorrando(d)}><Trash2 className="size-4" /> Eliminar</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
             )
           })}
         </CardContent></Card>
@@ -119,6 +162,33 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
           )}
         </DialogContent>
       </Dialog>
+
+      {editando && (
+        <DialogEditar
+          doc={editando}
+          colaboradorId={colaboradorId}
+          tipos={tipos}
+          onClose={() => setEditando(null)}
+          onDone={() => { setEditando(null); router.refresh() }}
+        />
+      )}
+
+      <AlertDialog open={borrando !== null} onOpenChange={(o) => { if (!o && !ocupado) setBorrando(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar este documento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se borrará «{borrando?.nombre}» de tu expediente. No se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={ocupado}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={ocupado} onClick={(e) => { e.preventDefault(); borrar() }}>
+              {ocupado && <Spinner />} Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {abierto && (
         <DialogSubir
@@ -217,6 +287,117 @@ function DialogSubir({ colaboradorId, tipos, onClose, onDone }: {
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button onClick={subir} disabled={g}>{g && <Spinner />} Subir documento</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * Corrección de un documento que el propio colaborador subió: cambia los datos y,
+ * si se equivocó de archivo, permite reemplazarlo (sube el nuevo y borra el viejo).
+ */
+function DialogEditar({ doc, colaboradorId, tipos, onClose, onDone }: {
+  doc: DocItem; colaboradorId: string; tipos: TipoDoc[]; onClose: () => void; onDone: () => void
+}) {
+  const inputArchivo = useRef<HTMLInputElement>(null)
+  const [tipoId, setTipoId] = useState(doc.tipoId ?? '')
+  const [nombre, setNombre] = useState(doc.nombre)
+  const [descripcion, setDescripcion] = useState(doc.descripcion ?? '')
+  const [vencimiento, setVencimiento] = useState(doc.venceIso ?? '')
+  const [archivo, setArchivo] = useState<File | null>(null)
+  const [g, setG] = useState(false)
+
+  const tipo = tipos.find((t) => t.id === tipoId) ?? null
+
+  async function guardar() {
+    if (!nombre.trim()) { toast.error('Escribe un nombre para el documento.'); return }
+    if (tipo?.requiereVencimiento && !vencimiento) { toast.error(`${tipo.nombre} requiere la fecha de vencimiento.`); return }
+    setG(true)
+
+    // Reemplazo del archivo: se sube el nuevo con los datos ya corregidos y se
+    // borra el anterior, para que no queden dos versiones en el expediente.
+    if (archivo) {
+      try {
+        const fd = new FormData()
+        fd.append('archivo', archivo)
+        fd.append('entidadTipo', 'Colaborador')
+        fd.append('entidadId', colaboradorId)
+        fd.append('nombre', nombre.trim())
+        if (tipoId) fd.append('tipoDocumentoId', tipoId)
+        if (descripcion.trim()) fd.append('descripcion', descripcion.trim())
+        if (vencimiento) fd.append('fechaVencimiento', vencimiento)
+        const res = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        if (!res.ok) {
+          const { error } = await res.json().catch(() => ({ error: null }))
+          toast.error(error ?? 'No se pudo subir el archivo nuevo.')
+          setG(false); return
+        }
+      } catch {
+        toast.error('No se pudo subir el archivo nuevo.'); setG(false); return
+      }
+      const borrado = await borrarMiDocumento({ id: doc.id })
+      setG(false)
+      if (!borrado.ok) { toast.error(borrado.error); return }
+      toast.success('Documento reemplazado.')
+      onDone()
+      return
+    }
+
+    const res = await editarMiDocumento({
+      id: doc.id,
+      nombre: nombre.trim(),
+      descripcion: descripcion.trim(),
+      tipoDocumentoId: tipoId,
+      fechaVencimiento: vencimiento,
+    })
+    setG(false)
+    if (res.ok) { toast.success('Documento actualizado.'); onDone() }
+    else toast.error(res.error)
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o && !g) onClose() }}>
+      <DialogContent className="max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Editar documento</DialogTitle>
+          <DialogDescription>Corrige los datos o reemplaza el archivo si subiste el equivocado.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Tipo de documento (opcional)</Label>
+            <Select value={tipoId} onValueChange={setTipoId}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona si aplica…" /></SelectTrigger>
+              <SelectContent>
+                {tipos.map((t) => <SelectItem key={t.id} value={t.id}>{t.nombre}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Nombre</Label>
+            <Input value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          </div>
+          {tipo?.requiereVencimiento && (
+            <div className="space-y-1.5">
+              <Label>Fecha de vencimiento</Label>
+              <Input type="date" value={vencimiento} onChange={(e) => setVencimiento(e.target.value)} />
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label>Descripción (opcional)</Label>
+            <Textarea rows={2} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Reemplazar archivo (opcional)</Label>
+            <input ref={inputArchivo} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />
+            <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
+              <Paperclip className="size-4" /> {archivo ? archivo.name : 'Mantener el archivo actual'}
+            </Button>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" disabled={g} onClick={onClose}>Cancelar</Button>
+          <Button onClick={guardar} disabled={g}>{g && <Spinner />} Guardar cambios</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

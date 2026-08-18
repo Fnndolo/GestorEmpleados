@@ -18,12 +18,13 @@ import { Stat, BloqueDatos } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
+import { valorParametroVigente } from '@/server/nomina/parametros'
 import { SubirContratoExistente } from './subir-contrato-existente'
 import { FotoUploader } from './foto-uploader'
 import { EducacionLista } from './educacion-lista'
 import { BotonCertificacion } from './boton-certificacion'
 import { BotonDisciplinario } from './boton-disciplinario'
-import { formatFechaLarga, formatFechaISO, formatFechaCorta, calcularEdad, antiguedad, hoyBogota } from '@/lib/fechas'
+import { formatFechaLarga, formatFechaISO, formatFechaCorta, calcularEdad, antiguedad, hoyBogota, duracionContrato } from '@/lib/fechas'
 
 const TIPO_CAPACITACION: Record<string, string> = { INDUCCION: 'Inducción', REINDUCCION: 'Reinducción', FORMACION: 'Formación', SST: 'SST' }
 
@@ -87,7 +88,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   // Los desprendibles los ve quien tiene permiso de nómina o el propio colaborador (su ficha)
   const esPropia = usuario.colaboradorId === id
   const mostrarPagos = tienePermiso(usuario, 'nomina', 'VER') || esPropia
-  const [contratos, contratosOps, eduDocs, liquidaciones, variacionesSalariales] = await Promise.all([
+  const [contratos, contratosOps, eduDocs, liquidaciones, variacionesSalariales, auxTransporte] = await Promise.all([
     prisma.contrato.findMany({ where: { colaboradorId: id }, include: { cargo: true, sede: true }, orderBy: { fechaInicio: 'desc' } }),
     prisma.contratoOps.findMany({ where: { colaboradorId: id }, include: { sede: true }, orderBy: { fechaInicio: 'desc' } }),
     prisma.documento.findMany({ where: { entidadTipo: 'EducacionColaborador', entidadId: { in: c.educacion.map((e) => e.id) } }, select: { id: true, entidadId: true } }),
@@ -96,6 +97,8 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
       : Promise.resolve([]),
     // Historial de variaciones salariales (requerimiento 3.4); cada otrosí de salario crea una.
     prisma.variacionSalarial.findMany({ where: { colaboradorId: id }, orderBy: { fechaVigencia: 'desc' } }),
+    // Valor legal vigente del auxilio de transporte, para mostrarlo al subir un contrato.
+    valorParametroVigente('AUX_TRANSPORTE'),
   ])
 
   // Capacitaciones internas del colaborador (RIT art. 95) para la pestaña Educación.
@@ -382,7 +385,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
               se crean desde Contratación, con su plantilla y firma digital. */}
           {puedeEditar && puedeVerContratos && (
             <div className="flex justify-end">
-              <SubirContratoExistente colaboradorId={c.id} sedeId={c.sedeId} cargoId={c.cargoId} />
+              <SubirContratoExistente colaboradorId={c.id} sedeId={c.sedeId} cargoId={c.cargoId} auxTransporte={auxTransporte ?? 0} />
             </div>
           )}
           {contratos.length === 0 && contratosOps.length === 0 ? (
@@ -392,7 +395,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             </CardContent></Card>
           ) : (
             <>
-              {contratos.map((ct) => (
+              {contratos.map((ct, i) => (
                 <Card key={ct.id}><CardContent className="py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -406,7 +409,24 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
                         {ct.tieneAuxTransporte ? ' · con aux. transporte' : ''}
                         {ct.auxConectividad ? ` · conectividad ${fmtCOP(Number(ct.auxConectividad))}` : ''}
                       </p>
-                      <p className="text-xs text-muted-foreground">{ct.cargo?.nombre ?? 'Sin cargo'} · {ct.sede.nombre} · desde {formatFechaLarga(ct.fechaInicio)}{ct.fechaFin ? ` hasta ${formatFechaLarga(ct.fechaFin)}` : ''}</p>
+                      <p className="text-xs text-muted-foreground">{ct.cargo?.nombre ?? 'Sin cargo'} · {ct.sede.nombre} · desde {formatFechaLarga(ct.fechaInicio)}{ct.fechaFin ? ` hasta ${formatFechaLarga(ct.fechaFin)}` : ''} · {duracionContrato(ct.fechaInicio, ct.fechaFin)}</p>
+                      {/* Enlace con el contrato inmediatamente anterior (la lista viene de
+                          más nuevo a más viejo). La interrupción entre uno y otro define
+                          si la relación laboral se considera continua para antigüedad y
+                          prestaciones, así que se muestra explícita. */}
+                      {(() => {
+                        const anterior = contratos[i + 1]
+                        if (!anterior?.fechaFin) return null
+                        const dias = Math.round(
+                          (ct.fechaInicio.getTime() - anterior.fechaFin.getTime()) / 86_400_000,
+                        ) - 1
+                        return (
+                          <p className="text-xs text-muted-foreground">
+                            Contrato anterior ({anterior.numero}) terminó el {formatFechaLarga(anterior.fechaFin)}
+                            {dias <= 0 ? ' · sin interrupción' : ` · ${dias} día${dias > 1 ? 's' : ''} de interrupción`}
+                          </p>
+                        )
+                      })()}
                     </div>
                     {puedeVerContratos && <Button asChild size="sm" variant="outline"><Link href={`/contratos/${ct.id}`}>Ver contrato</Link></Button>}
                   </div>
