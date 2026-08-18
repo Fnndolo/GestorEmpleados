@@ -15,9 +15,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
 import { cn } from '@/lib/utils'
 import { Chip, Pill, type PillTone } from '@/components/ui-kit'
+import { Ayuda } from '@/components/ui-kit/ayuda'
+import { Checkbox } from '@/components/ui/checkbox'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
-import { crearActivo, asignarActivo, devolverActivo, registrarDotacion } from './acciones'
+import { crearActivo, asignarActivos, devolverActivo, registrarDotacion } from './acciones'
 
 type Activo = { id: string; codigo: string; nombre: string; tipo: string; estado: string; valor: number | null; asignacion: { id: string; colaborador: string; actaEntregaDocId: string | null; actaFirmada: boolean } | null }
 type Dotacion = {
@@ -73,7 +75,7 @@ export function ActivosCliente({ activos, dotaciones, sedes, puedeCrear, puedeEd
                   <Button variant="ghost" size="icon" asChild aria-label="Acta"><a href={`/api/documentos/${a.asignacion.actaEntregaDocId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a></Button>
                 )}
                 {puedeEditar && a.estado === 'DISPONIBLE' && (
-                  <Button variant="outline" size="sm" onClick={() => { setAsignarActivoId(a.id); setDialogo('asignar') }}><UserPlus className="size-4" /> Asignar</Button>
+                  <Button variant="outline" size="sm" onClick={() => { setAsignarActivoId(a.id); setDialogo('asignar') }}><UserPlus className="size-4" /> Entregar</Button>
                 )}
                 {puedeEditar && a.asignacion && (
                   <DevolverBoton asignacionId={a.asignacion.id} />
@@ -105,7 +107,13 @@ export function ActivosCliente({ activos, dotaciones, sedes, puedeCrear, puedeEd
       )}
 
       {dialogo === 'activo' && <DialogActivo sedes={sedes} onClose={() => setDialogo(null)} />}
-      {dialogo === 'asignar' && asignarActivoId && <DialogAsignar activoId={asignarActivoId} onClose={() => { setDialogo(null); setAsignarActivoId(null) }} />}
+      {dialogo === 'asignar' && asignarActivoId && (
+        <DialogAsignar
+          activoId={asignarActivoId}
+          disponibles={activos.filter((a) => a.estado === 'DISPONIBLE')}
+          onClose={() => { setDialogo(null); setAsignarActivoId(null) }}
+        />
+      )}
       {dialogo === 'dotacion' && <DialogDotacion onClose={() => setDialogo(null)} />}
     </div>
   )
@@ -159,27 +167,88 @@ function DialogActivo({ sedes, onClose }: { sedes: Sede[]; onClose: () => void }
   )
 }
 
-function DialogAsignar({ activoId, onClose }: { activoId: string; onClose: () => void }) {
+/**
+ * Entrega de activos. Arranca con el activo desde el que se pulsó "Asignar", y
+ * permite sumar los demás disponibles: todos los marcados salen en UNA sola acta.
+ */
+function DialogAsignar({ activoId, disponibles, onClose }: {
+  activoId: string
+  /** Activos en estado DISPONIBLE, incluido el de partida. */
+  disponibles: Activo[]
+  onClose: () => void
+}) {
   const router = useRouter()
   const [colaboradorId, setColaboradorId] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
+  const [seleccion, setSeleccion] = useState<string[]>([activoId])
+  const [busqueda, setBusqueda] = useState('')
   const [g, setG] = useState(false)
+
+  function alternar(id: string) {
+    setSeleccion((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
+  }
+
+  const q = busqueda.trim().toLowerCase()
+  const listados = q
+    ? disponibles.filter((a) => `${a.nombre} ${a.codigo} ${a.tipo}`.toLowerCase().includes(q))
+    : disponibles
+  const total = disponibles.filter((a) => seleccion.includes(a.id)).reduce((s, a) => s + (a.valor ?? 0), 0)
+
   async function guardar() {
     if (!colaboradorId) { toast.error('Selecciona un colaborador.'); return }
+    if (seleccion.length === 0) { toast.error('Marca al menos un activo.'); return }
     setG(true)
-    const res = await asignarActivo({ activoId, colaboradorId, fechaEntrega: fecha })
+    const res = await asignarActivos({ activoIds: seleccion, colaboradorId, fechaEntrega: fecha })
     setG(false)
-    if (res.ok) { toast.success('Activo asignado. Acta de entrega generada.'); onClose(); router.refresh() } else toast.error(res.error)
+    if (res.ok) {
+      toast.success(seleccion.length === 1 ? 'Activo asignado. Acta de entrega generada.' : `${seleccion.length} activos asignados en una sola acta.`)
+      onClose(); router.refresh()
+    } else toast.error(res.error)
   }
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Asignar activo</DialogTitle></DialogHeader>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-1.5">
+            Entregar activos
+            <Ayuda texto="Marca todos los que entregas en el mismo acto: se generan como una sola acta, que el colaborador firma una única vez desde su autoservicio." />
+          </DialogTitle>
+        </DialogHeader>
         <div className="space-y-4">
           <Campo label="Colaborador"><SelectorColaborador value={colaboradorId} onChange={(id) => setColaboradorId(id)} /></Campo>
           <Campo label="Fecha de entrega"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label>Activos a entregar</Label>
+              <span className="text-xs text-muted-foreground">
+                {seleccion.length} marcado(s){total > 0 && ` · ${fmtCOP(total)}`}
+              </span>
+            </div>
+            {disponibles.length > 6 && (
+              <Input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre, código o tipo…" />
+            )}
+            <div className="max-h-56 divide-y overflow-y-auto rounded-lg border">
+              {listados.length === 0 ? (
+                <p className="p-3 text-sm text-muted-foreground">Ningún activo disponible coincide.</p>
+              ) : listados.map((a) => (
+                <label key={a.id} className="flex cursor-pointer items-center gap-2.5 p-2.5 hover:bg-accent/40">
+                  <Checkbox checked={seleccion.includes(a.id)} onCheckedChange={() => alternar(a.id)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm">{a.nombre}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{a.codigo} · {a.tipo}</span>
+                  </span>
+                  {a.valor != null && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{fmtCOP(a.valor)}</span>}
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
-        <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Asignar</Button></DialogFooter>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button onClick={guardar} disabled={g}>{g && <Spinner />}Entregar y generar acta</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

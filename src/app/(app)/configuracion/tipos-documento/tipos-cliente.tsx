@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
 import { Input } from '@/components/ui/input'

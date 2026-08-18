@@ -66,6 +66,8 @@ export default async function MiDotacionPage() {
           actaEntregaDocId: a.actaEntregaDocId,
           actaDevolucionDocId: a.actaDevolucionDocId,
           firmaEntregaEn: a.firmaEntregaEn ? formatFechaCorta(a.firmaEntregaEn) : null,
+          // Cuántos activos cubre la MISMA acta (entregas hechas en un solo acto).
+          activosEnActa: a.loteId ? asignaciones.filter((x) => x.loteId === a.loteId).length : 1,
         }))}
         epps={epps.map((e) => ({
           id: e.id,

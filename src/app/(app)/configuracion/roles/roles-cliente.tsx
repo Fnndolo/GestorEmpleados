@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, ShieldCheck, ChevronRight, Pencil, Trash2, Save } from 'lucide-react'
+import { Plus, ShieldCheck, ChevronRight, Pencil, Save } from 'lucide-react'
 import { ACCIONES, type Accion, type Alcance } from '@/lib/permisos/modulos'
 import { crearRol, editarRol, eliminarRol, guardarMatriz } from './acciones'
 import { Button } from '@/components/ui/button'

@@ -1,5 +1,6 @@
 'use server'
 
+import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
@@ -37,53 +38,95 @@ export const crearActivo = accion(
   },
 )
 
+/**
+ * Genera UNA acta para uno o varios activos entregados (o devueltos) en el mismo
+ * acto. `activoIds` conserva el orden en que se eligieron, que es el que se ve
+ * en la tabla del PDF.
+ */
 async function generarActa(
   tipo: 'entrega' | 'devolucion',
-  activoId: string,
+  activoIds: string[],
   colaboradorId: string,
   usuarioId: string,
   firma?: { dataUri: string; fecha: Date },
 ): Promise<string> {
-  const activo = await prisma.activo.findUniqueOrThrow({ where: { id: activoId } })
+  if (activoIds.length === 0) throw new ErrorNegocio('No hay activos para el acta.')
+  const encontrados = await prisma.activo.findMany({ where: { id: { in: activoIds } } })
+  if (encontrados.length !== activoIds.length) throw new ErrorNegocio('Alguno de los activos ya no existe.')
+  // findMany no respeta el orden de `in`: se reordena para que el acta liste los
+  // activos como los eligió quien la genera.
+  const porId = new Map(encontrados.map((a) => [a.id, a]))
+  const activos = activoIds.map((id) => porId.get(id)!)
+
   const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: colaboradorId }, include: { cargo: true, sede: { include: { ciudad: true } } } })
   const empresa = await prisma.configuracionEmpresa.findFirstOrThrow()
   const pdf = await renderActaActivo({
     tipo,
     empresa: { razonSocial: empresa.razonSocial, nombreComercial: empresa.nombreComercial, nit: empresa.nit, direccion: empresa.direccion, telefono: empresa.telefono, emailContacto: empresa.emailContacto },
     colaborador: { nombre: `${colab.nombres} ${colab.apellidos}`, documento: colab.numeroDocumento, cargo: colab.cargo?.nombre ?? null },
-    activo: { codigo: activo.codigo, nombre: activo.nombre, tipo: activo.tipo, marca: activo.marca, serie: activo.serie, valor: activo.valor ? Number(activo.valor) : null },
+    activos: activos.map((a) => ({ codigo: a.codigo, nombre: a.nombre, tipo: a.tipo, marca: a.marca, serie: a.serie, valor: a.valor ? Number(a.valor) : null })),
     ciudad: colab.sede.ciudad.nombre,
     fecha: hoyBogota(),
     firmaDataUri: firma?.dataUri ?? null,
     firmaFecha: firma?.fecha ?? null,
   })
-  const archivo = await subirArchivo(`activos/${activoId}`, `acta-${tipo}${firma ? '-firmada' : ''}.pdf`, pdf, 'application/pdf')
+
+  const nombreActa = activos.length === 1
+    ? `Acta de ${tipo} — ${activos[0].nombre}`
+    : `Acta de ${tipo} — ${activos.length} activos`
+  const archivo = await subirArchivo(`activos/${activoIds[0]}`, `acta-${tipo}${firma ? '-firmada' : ''}.pdf`, pdf, 'application/pdf')
   const doc = await prisma.documento.create({
-    data: { entidadTipo: 'Colaborador', entidadId: colaboradorId, nombre: `Acta de ${tipo} — ${activo.nombre}${firma ? ' (firmada)' : ''}`, bucket: archivo.bucket, storagePath: archivo.storagePath, mimeType: 'application/pdf', tamanoBytes: archivo.tamanoBytes, nivelAcceso: 'GENERAL', sedeId: colab.sedeId, subidoPorId: usuarioId },
+    data: { entidadTipo: 'Colaborador', entidadId: colaboradorId, nombre: `${nombreActa}${firma ? ' (firmada)' : ''}`, bucket: archivo.bucket, storagePath: archivo.storagePath, mimeType: 'application/pdf', tamanoBytes: archivo.tamanoBytes, nivelAcceso: 'GENERAL', sedeId: colab.sedeId, subidoPorId: usuarioId },
   })
   return doc.id
 }
 
-export const asignarActivo = accion(
+/**
+ * Entrega uno o varios activos a un colaborador en un mismo acto: se genera UNA
+ * sola acta con todos y cada asignación queda marcada con el mismo `loteId`, de
+ * modo que firmarla cubre el lote completo.
+ */
+export const asignarActivos = accion(
   {
     modulo: 'activos',
     accion: 'CREAR',
-    schema: z.object({ activoId: z.uuid(), colaboradorId: z.uuid(), fechaEntrega: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), observaciones: z.string().max(300).optional() }),
+    schema: z.object({
+      activoIds: z.array(z.uuid()).min(1, 'Selecciona al menos un activo').max(50),
+      colaboradorId: z.uuid(),
+      fechaEntrega: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      observaciones: z.string().max(300).optional(),
+    }),
   },
   async (d, usuario) => {
-    const activo = await prisma.activo.findUniqueOrThrow({ where: { id: d.activoId } })
-    if (activo.estado === 'ASIGNADO') throw new ErrorNegocio('El activo ya está asignado.')
-    const actaId = await generarActa('entrega', d.activoId, d.colaboradorId, usuario.id)
-    await dbAuditado.asignacionActivo.create({
-      data: { activoId: d.activoId, colaboradorId: d.colaboradorId, fechaEntrega: parseFechaISO(d.fechaEntrega)!, actaEntregaDocId: actaId, observaciones: v(d.observaciones) },
+    // Se quitan repetidos por si el cliente manda dos veces el mismo activo.
+    const activoIds = [...new Set(d.activoIds)]
+    const activos = await prisma.activo.findMany({ where: { id: { in: activoIds } } })
+    if (activos.length !== activoIds.length) throw new ErrorNegocio('Alguno de los activos ya no existe.')
+    const ocupados = activos.filter((a) => a.estado === 'ASIGNADO')
+    if (ocupados.length > 0) {
+      throw new ErrorNegocio(`Ya está(n) asignado(s): ${ocupados.map((a) => a.nombre).join(', ')}.`)
+    }
+
+    const actaId = await generarActa('entrega', activoIds, d.colaboradorId, usuario.id)
+    const loteId = randomUUID()
+    const fechaEntrega = parseFechaISO(d.fechaEntrega)!
+    await dbAuditado.asignacionActivo.createMany({
+      data: activoIds.map((activoId) => ({
+        activoId, colaboradorId: d.colaboradorId, fechaEntrega,
+        actaEntregaDocId: actaId, loteId, observaciones: v(d.observaciones),
+      })),
     })
-    await dbAuditado.activo.update({ where: { id: d.activoId }, data: { estado: 'ASIGNADO' } })
+    await dbAuditado.activo.updateMany({ where: { id: { in: activoIds } }, data: { estado: 'ASIGNADO' } })
+
     // Aviso informativo: el acta ya quedó en su expediente.
     const usuarioColab = await usuarioDeColaborador(d.colaboradorId)
     if (usuarioColab) {
+      const detalle = activos.length === 1
+        ? `"${activos[0].nombre}" (${activos[0].codigo})`
+        : `${activos.length} activos: ${activos.map((a) => a.nombre).join(', ')}`
       await avisar(usuarioColab, {
-        titulo: 'Se te asignó un activo — firma el acta',
-        mensaje: `Se te entregó "${activo.nombre}" (${activo.codigo}). Entra a tu autoservicio para firmar el acta de entrega; recuerda custodiarlo y devolverlo cuando la empresa lo requiera.`,
+        titulo: `Se te asignó ${activos.length === 1 ? 'un activo' : 'material'} — firma el acta`,
+        mensaje: `Se te entregó ${detalle}. Entra a tu autoservicio para firmar el acta de entrega; recuerda custodiar${activos.length === 1 ? 'lo' : 'los'} y devolver${activos.length === 1 ? 'lo' : 'los'} cuando la empresa lo requiera.`,
         enlace: '/autoservicio/dotacion', llamadoAccion: 'Firmar el acta', evento: 'activo_asignado',
       })
     }
@@ -107,10 +150,16 @@ export const firmarActaEntrega = accion(
     const asig = await prisma.asignacionActivo.findUniqueOrThrow({ where: { id: d.asignacionId } })
     if (asig.colaboradorId !== usuario.colaboradorId) throw new ErrorNegocio('Esta asignación no es tuya.')
     if (asig.firmaEntregaEn) throw new ErrorNegocio('El acta de entrega ya está firmada.')
+
+    // El acta cubre todo el lote: se regenera con los mismos activos y la firma
+    // se aplica a todas las asignaciones que comparten esa hoja.
+    const hermanas = asig.loteId
+      ? await prisma.asignacionActivo.findMany({ where: { loteId: asig.loteId }, orderBy: { creadoEn: 'asc' } })
+      : [asig]
     const fecha = new Date()
-    const actaId = await generarActa('entrega', asig.activoId, asig.colaboradorId, usuario.id, { dataUri: d.firmaDataUri, fecha })
-    await dbAuditado.asignacionActivo.update({
-      where: { id: d.asignacionId },
+    const actaId = await generarActa('entrega', hermanas.map((h) => h.activoId), asig.colaboradorId, usuario.id, { dataUri: d.firmaDataUri, fecha })
+    await dbAuditado.asignacionActivo.updateMany({
+      where: { id: { in: hermanas.map((h) => h.id) } },
       data: { actaEntregaDocId: actaId, firmaEntregaEn: fecha },
     })
     revalidatePath('/autoservicio/dotacion')
@@ -124,7 +173,7 @@ export const devolverActivo = accion(
   async ({ asignacionId }, usuario) => {
     const asig = await prisma.asignacionActivo.findUniqueOrThrow({ where: { id: asignacionId } })
     if (asig.fechaDevolucion) throw new ErrorNegocio('El activo ya fue devuelto.')
-    const actaId = await generarActa('devolucion', asig.activoId, asig.colaboradorId, usuario.id)
+    const actaId = await generarActa('devolucion', [asig.activoId], asig.colaboradorId, usuario.id)
     await dbAuditado.asignacionActivo.update({ where: { id: asignacionId }, data: { fechaDevolucion: hoyBogota(), actaDevolucionDocId: actaId } })
     await dbAuditado.activo.update({ where: { id: asig.activoId }, data: { estado: 'DISPONIBLE' } })
     revalidatePath('/activos')

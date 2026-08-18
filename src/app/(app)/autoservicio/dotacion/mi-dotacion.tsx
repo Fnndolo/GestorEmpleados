@@ -27,6 +27,8 @@ type ActivoAsignado = {
   fechaEntrega: string; fechaDevolucion: string | null
   actaEntregaDocId: string | null; actaDevolucionDocId: string | null
   firmaEntregaEn: string | null
+  /** Nº de activos que cubre la misma acta; >1 si se entregaron en un solo acto. */
+  activosEnActa: number
 }
 
 export function MiDotacion({ entregas, activos, epps }: { entregas: Entrega[]; activos: ActivoAsignado[]; epps: EntregaEpp[] }) {
@@ -59,10 +61,15 @@ export function MiDotacion({ entregas, activos, epps }: { entregas: Entrega[]; a
         <p className="truncate text-xs text-muted-foreground">
           {a.tipo}{a.marca ? ` · ${a.marca}` : ''}{a.serie ? ` · serie ${a.serie}` : ''} · a tu cargo desde {a.fechaEntrega}
         </p>
-        <div className="mt-1">
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
           {a.firmaEntregaEn
             ? <Badge className="bg-emerald-500/12 text-[10px] text-emerald-700 dark:text-emerald-400" variant="secondary">Acta firmada · {a.firmaEntregaEn}</Badge>
             : <Badge className="bg-amber-500/12 text-[10px] text-amber-700 dark:text-amber-400" variant="secondary">Acta pendiente de firma</Badge>}
+          {/* Varios activos entregados el mismo día van en una sola acta: se avisa
+              para que no parezca que falta firmar los demás por separado. */}
+          {a.activosEnActa > 1 && (
+            <span className="text-[10px] text-muted-foreground">Una sola acta para {a.activosEnActa} activos</span>
+          )}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
