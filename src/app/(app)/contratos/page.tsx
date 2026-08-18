@@ -6,7 +6,7 @@ import { Encabezado } from '@/components/shell/encabezado'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Plus, FileText, ChevronRight, FileExclamationPoint, Receipt } from 'lucide-react'
+import { Plus, FileText, ChevronRight, FileExclamationPoint, Receipt, ClipboardCheck } from 'lucide-react'
 import { Chip, Pill, type PillTone } from '@/components/ui-kit'
 import { colorAvatar, iniciales } from '@/lib/etiquetas'
 import { FiltroTabs } from '@/components/shell/filtro-tabs'
@@ -78,12 +78,15 @@ export default async function ContratosPage({
         descripcion="Contratos laborales por modalidad y contratos de prestación de servicios (OPS)."
         acciones={
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" asChild>
+            <Button size="sm" asChild>
               <Link href="/contratos/cuentas-cobro"><Receipt className="size-4" /> Cuentas de cobro</Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link href="/contratos/acuerdos"><ClipboardCheck className="size-4" /> Evaluación previa</Link>
             </Button>
             {puedeCrear && (
               <>
-                <Button size="sm" variant="outline" asChild>
+                <Button size="sm" asChild>
                   <Link href="/contratos/ops/nuevo"><Plus className="size-4" /> OPS</Link>
                 </Button>
                 <Button size="sm" asChild>

@@ -224,6 +224,7 @@ model Sede {
   contratos     Contrato[]
   contratosOps  ContratoOps[]
   activos       Activo[]
+  acuerdosEvaluacion AcuerdoEvaluacion[]
 
   @@map("sede")
 }
@@ -378,6 +379,7 @@ model Cargo {
   colaboradores Colaborador[]
   contratos     Contrato[]
   contratosOps  ContratoOps[]
+  acuerdosEvaluacion AcuerdoEvaluacion[]
 
   @@unique([nombre, areaId])
   @@map("cargo")
@@ -624,6 +626,8 @@ model Colaborador {
   brigadas              Brigadista[]
   designacionesSgsst    ResponsableSgsst[]
   novedadesArl          NovedadArl[]
+  /// Acuerdo de evaluación del que nació esta ficha (si vino de una evaluación previa).
+  acuerdoEvaluacion     AcuerdoEvaluacion? @relation("ColaboradorDesdeEvaluacion")
 
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
@@ -1167,6 +1171,73 @@ enum EstadoContratoOps {
   TERMINADO
 
   @@map("estado_contrato_ops")
+}
+
+enum EstadoAcuerdoEvaluacion {
+  EN_EVALUACION
+  APROBADO
+  NO_APROBADO
+
+  @@map("estado_acuerdo_evaluacion")
+}
+
+/**
+ * Acuerdo de evaluación previa SIN relación laboral: la empresa evalúa a un
+ * ASPIRANTE antes de decidir si lo contrata.
+ *
+ * Deliberadamente NO es un Colaborador ni un Contrato. El acuerdo declara que no
+ * hay contrato de trabajo ni precontrato, y registrar a esa persona en la base de
+ * empleados diría lo contrario: ante una inspección o una demanda por contrato
+ * realidad, el propio sistema contradiría el documento firmado. Además arrastraría
+ * afiliaciones, expediente, nómina y vacaciones que no le corresponden, y falsearía
+ * el headcount.
+ *
+ * Si la evaluación se aprueba, `colaboradorId` guarda la ficha que se creó a partir
+ * de este acuerdo (ver convertirEnColaborador): ahí sí nace la relación contractual.
+ */
+model AcuerdoEvaluacion {
+  id     String @id @default(uuid(7)) @db.Uuid
+  numero String @unique
+
+  // Aspirante — datos mínimos que exige el documento (no hay ficha que consultar).
+  nombres            String
+  apellidos          String
+  tipoDocumento      TipoDocumentoIdentidad @default(CC) @map("tipo_documento")
+  numeroDocumento    String                 @map("numero_documento")
+  lugarExpedicionDoc String?                @map("lugar_expedicion_doc")
+  direccion          String?
+  email              String
+  celular            String?
+
+  // Qué se evalúa y dónde
+  cargoEvaluado String  @map("cargo_evaluado")
+  cargoId       String? @map("cargo_id") @db.Uuid
+  cargo         Cargo?  @relation(fields: [cargoId], references: [id])
+  sedeId        String? @map("sede_id") @db.Uuid
+  sede          Sede?   @relation(fields: [sedeId], references: [id])
+
+  // Vigencia de la evaluación (sin prórroga tácita, cláusula tercera)
+  fechaInicio DateTime @map("fecha_inicio") @db.Date
+  fechaFin    DateTime @map("fecha_fin") @db.Date
+
+  ciudadFirma            String? @map("ciudad_firma")
+  aniosConfidencialidad  Int     @default(2) @map("anios_confidencialidad")
+
+  estado        EstadoAcuerdoEvaluacion @default(EN_EVALUACION)
+  observaciones String?
+  // Se envió al aspirante para firma (se guarda para saber si ya salió el correo).
+  enviadoEn     DateTime?               @map("enviado_en")
+  decididoEn    DateTime?               @map("decidido_en")
+
+  // Ficha creada al aprobar; null mientras no se convierta.
+  colaboradorId String?      @unique @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador? @relation("ColaboradorDesdeEvaluacion", fields: [colaboradorId], references: [id])
+
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  @@index([estado])
+  @@map("acuerdo_evaluacion")
 }
 
 model ContratoOps {

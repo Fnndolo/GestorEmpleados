@@ -5,10 +5,18 @@
  *  - resend  → envía con Resend (requiere dominio verificado)
  */
 
+/** Archivo adjunto (p. ej. el PDF de un acuerdo que el destinatario debe firmar). */
+export type Adjunto = {
+  nombre: string
+  contenido: Buffer
+  tipo?: string
+}
+
 export type Correo = {
   para: string
   asunto: string
   html: string
+  adjuntos?: Adjunto[]
 }
 
 const FROM_DEFECTO = 'Smart Gadgets <onboarding@resend.dev>'
@@ -31,6 +39,7 @@ export async function enviarCorreo(correo: Correo): Promise<void> {
       to: correo.para,
       subject: correo.asunto,
       html: correo.html,
+      attachments: correo.adjuntos?.map((a) => ({ filename: a.nombre, content: a.contenido, contentType: a.tipo ?? 'application/pdf' })),
     })
     return
   }
@@ -44,6 +53,7 @@ export async function enviarCorreo(correo: Correo): Promise<void> {
       to: correo.para,
       subject: correo.asunto,
       html: correo.html,
+      attachments: correo.adjuntos?.map((a) => ({ filename: a.nombre, content: a.contenido })),
     })
     if (error) throw new Error(`Resend: ${error.message}`)
     return
@@ -51,6 +61,6 @@ export async function enviarCorreo(correo: Correo): Promise<void> {
 
   // ── Consola (desarrollo) ─────────────────────────────────────────────────
   console.log(
-    `\n┌─ [correo simulado — EMAIL_DRIVER=${driver ?? 'console'}] ─────────────\n│ Para: ${correo.para}\n│ Asunto: ${correo.asunto}\n└──────────────────────────────────────────────────────────\n${correo.html}\n`,
+    `\n┌─ [correo simulado — EMAIL_DRIVER=${driver ?? 'console'}] ─────────────\n│ Para: ${correo.para}\n│ Asunto: ${correo.asunto}\n│ Adjuntos: ${correo.adjuntos?.map((a) => a.nombre).join(', ') ?? 'ninguno'}\n└──────────────────────────────────────────────────────────\n${correo.html}\n`,
   )
 }
