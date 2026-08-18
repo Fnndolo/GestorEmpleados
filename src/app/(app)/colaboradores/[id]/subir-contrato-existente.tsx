@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Upload, HelpCircle } from 'lucide-react'
+import { Upload } from 'lucide-react'
 import { subirContratoExistente } from '../../contratos/acciones'
 import { subirContratoOpsExistente } from '../../contratos/ops-acciones'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Ayuda } from '@/components/ui-kit/ayuda'
 import { fmtCOP } from '@/lib/moneda'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -25,6 +25,15 @@ import {
 // el tope de 3 MB aplica a la SUMA de ambos.
 const MAX_PDF_BYTES = 3 * 1024 * 1024
 
+/**
+ * Quita las flechitas de incremento del <input type="number">. En importes no
+ * sirven —nadie sube un salario de a un peso— y encima invitan a un clic que
+ * cambia la cifra sin querer. Se conserva type="number" para que el móvil
+ * siga abriendo el teclado numérico.
+ */
+const SIN_FLECHAS =
+  '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+
 const TIPOS_LABORAL = [
   { v: 'TERMINO_INDEFINIDO', l: 'Término indefinido' },
   { v: 'TERMINO_FIJO', l: 'Término fijo' },
@@ -34,21 +43,6 @@ const TIPOS_LABORAL = [
 ] as const
 
 type TipoLaboral = (typeof TIPOS_LABORAL)[number]['v']
-
-/** Signo de interrogación con la explicación al pasar el mouse (o al tocarlo en móvil). */
-function Ayuda({ children }: { children: React.ReactNode }) {
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button type="button" aria-label="Más información" className="text-muted-foreground hover:text-foreground">
-            <HelpCircle className="size-3.5" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-64 text-pretty">{children}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  )}
 
 /**
  * Carga de un contrato que YA EXISTE (firmado en físico / hecho fuera del sistema)
@@ -127,15 +121,15 @@ export function SubirContratoExistente({
           colaboradorId, sedeId, cargoId: cargoId ?? '',
           tipo, jornada: 'TIEMPO_COMPLETO', modalidadTrabajo: 'PRESENCIAL', tipoSalario: 'ORDINARIO',
           salarioBase: Number(salario) || 0, tieneAuxTransporte, fechaInicio, fechaFin: fechaFin || '',
-          objetoObraLabor: objetoObra, pdfBase64, pdfNombre: pdf.name,
-          autorizacionBase64, autorizacionNombre: autorizacion?.name ?? '',
+          objetoObraLabor: objetoObra, pdfBase64,
+          autorizacionBase64,
         })
       : await subirContratoOpsExistente({
           colaboradorId, sedeId, objeto,
           valorTotal: Number(valorTotal) || 0,
           valorMensual: valorMensual ? Number(valorMensual) : undefined,
-          fechaInicio, fechaFin, pdfBase64, pdfNombre: pdf.name,
-          autorizacionBase64, autorizacionNombre: autorizacion?.name ?? '',
+          fechaInicio, fechaFin, pdfBase64,
+          autorizacionBase64,
         })
 
     setGuardando(false)
@@ -159,10 +153,7 @@ export function SubirContratoExistente({
             <DialogTitle>Subir contrato existente</DialogTitle>
             <DialogDescription className="flex items-center gap-1.5">
               Contrato ya firmado en físico
-              <Ayuda>
-                Se registra el contrato con estos datos (los necesitan nómina y las alertas de
-                vencimiento) y se adjunta el PDF. No se pide firma digital.
-              </Ayuda>
+              <Ayuda texto="Se registra el contrato con estos datos (los necesitan nómina y las alertas de vencimiento) y se adjunta el PDF. No se pide firma digital." />
             </DialogDescription>
           </DialogHeader>
 
@@ -191,18 +182,14 @@ export function SubirContratoExistente({
                 </div>
                 <div className="space-y-1.5">
                   <Label>Salario base</Label>
-                  <Input type="number" step="1" value={salario} onChange={(e) => setSalario(e.target.value)} placeholder="0" />
+                  <Input type="number" step="1" className={SIN_FLECHAS} value={salario} onChange={(e) => setSalario(e.target.value)} placeholder="0" />
                 </div>
                 {/* El VALOR del auxilio lo fija el parámetro legal vigente; aquí solo se
                     indica si el contrato lo incluye. */}
                 <div className="flex items-center gap-2 rounded-lg border p-3">
                   <Checkbox id="auxT-subir" checked={tieneAuxTransporte} onCheckedChange={(c) => setTieneAuxTransporte(c === true)} />
                   <Label htmlFor="auxT-subir" className="font-normal">Auxilio de transporte</Label>
-                  <Ayuda>
-                    {auxTransporte > 0 ? `${fmtCOP(auxTransporte)}/mes. ` : ''}
-                    Solo se paga si el salario es ordinario y no supera 2 SMMLV. El valor lo fija el
-                    parámetro legal vigente, no se escribe aquí.
-                  </Ayuda>
+                  <Ayuda texto={`${auxTransporte > 0 ? `${fmtCOP(auxTransporte)}/mes. ` : ''}Solo se paga si el salario es ordinario y no supera 2 SMMLV. El valor lo fija el parámetro legal vigente, no se escribe aquí.`} />
                 </div>
                 {tipo === 'OBRA_LABOR' && (
                   <div className="space-y-1.5">
@@ -220,11 +207,11 @@ export function SubirContratoExistente({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>Valor total</Label>
-                    <Input type="number" step="1" value={valorTotal} onChange={(e) => setValorTotal(e.target.value)} placeholder="0" />
+                    <Input type="number" step="1" className={SIN_FLECHAS} value={valorTotal} onChange={(e) => setValorTotal(e.target.value)} placeholder="0" />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Valor mensual (opcional)</Label>
-                    <Input type="number" step="1" value={valorMensual} onChange={(e) => setValorMensual(e.target.value)} placeholder="0" />
+                    <Input type="number" step="1" className={SIN_FLECHAS} value={valorMensual} onChange={(e) => setValorMensual(e.target.value)} placeholder="0" />
                   </div>
                 </div>
               </>
@@ -254,7 +241,7 @@ export function SubirContratoExistente({
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5">
                 Autorización de datos (opcional)
-                <Ayuda>Autorización de tratamiento de datos firmada en físico (Ley 1581). Si no la tienes digitalizada, puedes subirla después.</Ayuda>
+                <Ayuda texto="Autorización de tratamiento de datos firmada en físico (Ley 1581). Si no la tienes digitalizada, puedes subirla después." />
               </Label>
               <input
                 type="file" accept="application/pdf"

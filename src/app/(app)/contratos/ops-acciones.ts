@@ -216,7 +216,7 @@ export const subirContratoOpsExistente = accion(
       data: {
         entidadTipo: 'ContratoOps',
         entidadId: c.id,
-        nombre: (d.pdfNombre && d.pdfNombre.trim()) || `Contrato OPS ${numero} (subido)`,
+        nombre: `Contrato OPS ${numero}`,
         bucket: archivo.bucket,
         storagePath: archivo.storagePath,
         mimeType: 'application/pdf',
@@ -229,7 +229,7 @@ export const subirContratoOpsExistente = accion(
     })
 
     await guardarAutorizacionSubida({
-      autorizacionBase64: d.autorizacionBase64, autorizacionNombre: d.autorizacionNombre,
+      autorizacionBase64: d.autorizacionBase64,
       entidadTipo: 'ContratoOps', entidadId: c.id, numero, sedeId: c.sedeId, usuarioId: usuario.id,
     })
 

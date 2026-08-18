@@ -11,10 +11,9 @@ import { ErrorNegocio } from '@/server/accion'
  * PDF del contrato.
  */
 export async function guardarAutorizacionSubida({
-  autorizacionBase64, autorizacionNombre, entidadTipo, entidadId, numero, sedeId, usuarioId,
+  autorizacionBase64, entidadTipo, entidadId, numero, sedeId, usuarioId,
 }: {
   autorizacionBase64?: string | null
-  autorizacionNombre?: string | null
   entidadTipo: 'Contrato' | 'ContratoOps'
   entidadId: string
   numero: string
@@ -35,7 +34,7 @@ export async function guardarAutorizacionSubida({
     data: {
       entidadTipo,
       entidadId,
-      nombre: (autorizacionNombre && autorizacionNombre.trim()) || `Autorización de tratamiento de datos ${numero} (subida)`,
+      nombre: `Autorización de datos ${numero}`,
       bucket: archivo.bucket,
       storagePath: archivo.storagePath,
       mimeType: 'application/pdf',
