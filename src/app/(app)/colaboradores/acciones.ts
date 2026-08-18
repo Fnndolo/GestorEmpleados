@@ -139,6 +139,15 @@ export const editarColaborador = accion(
       where: { id },
       select: { cargoId: true, usuarioId: true },
     })
+    // El documento identifica a la persona: no puede quedar el de OTRO colaborador.
+    // La base ya lo impide (@@unique tipoDocumento+numeroDocumento), pero aquí se
+    // avisa con un mensaje entendible en vez de dejar reventar la restricción.
+    const dup = await prisma.colaborador.findUnique({
+      where: { tipoDocumento_numeroDocumento: { tipoDocumento: resto.tipoDocumento, numeroDocumento: resto.numeroDocumento.trim() } },
+      select: { id: true },
+    })
+    if (dup && dup.id !== id) throw new ErrorNegocio('Ya existe otro colaborador con ese documento.')
+
     await dbAuditado.colaborador.update({ where: { id }, data: aDatosPrisma(resto) })
     revalidatePath('/colaboradores')
     revalidatePath(`/colaboradores/${id}`)
