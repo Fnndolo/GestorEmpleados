@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -161,10 +162,11 @@ export function TiposDocumentoCliente({
                 </Button>
               </>
             )}
-            {puedeEliminar && t.documentos === 0 && (
-              <Button size="icon" variant="ghost" onClick={() => eliminar(t)} aria-label="Eliminar">
-                <Trash2 className="size-4" />
-              </Button>
+            {puedeEliminar && (
+              <BotonEliminar
+                onEliminar={() => eliminar(t)}
+                motivoBloqueo={t.documentos > 0 ? `No se puede eliminar: hay ${t.documentos} documento(s) cargado(s) de este tipo. Desactívalo si ya no se debe usar.` : null}
+              />
             )}
           </div>
         ))}

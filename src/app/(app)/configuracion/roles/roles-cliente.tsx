@@ -6,6 +6,7 @@ import { Plus, ShieldCheck, ChevronRight, Pencil, Trash2, Save } from 'lucide-re
 import { ACCIONES, type Accion, type Alcance } from '@/lib/permisos/modulos'
 import { crearRol, editarRol, eliminarRol, guardarMatriz } from './acciones'
 import { Button } from '@/components/ui/button'
+import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -84,11 +85,10 @@ export function RolesCliente({
                     <Button variant="ghost" size="icon" onClick={() => setEditandoRol(r)} aria-label="Editar">
                       <Pencil className="size-4" />
                     </Button>
-                    {!r.esSistema && (
-                      <Button variant="ghost" size="icon" onClick={() => setEliminar(r)} aria-label="Eliminar">
-                        <Trash2 className="size-4 text-destructive" />
-                      </Button>
-                    )}
+                    <BotonEliminar
+                      onEliminar={() => setEliminar(r)}
+                      motivoBloqueo={r.esSistema ? 'No se puede eliminar: es un rol del sistema. Puedes ajustar sus permisos, pero no borrarlo.' : null}
+                    />
                   </>
                 )}
               </div>

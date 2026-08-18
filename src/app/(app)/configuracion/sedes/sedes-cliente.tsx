@@ -9,6 +9,7 @@ import { Plus, Pencil, Building2, MapPin, Star, Trash2 } from 'lucide-react'
 import { sedeSchema, ciudadSchema, type SedeInput, type CiudadInput } from '@/lib/validaciones/catalogos'
 import { crearSede, editarSede, crearCiudad, editarCiudad, eliminarCiudad } from './acciones'
 import { Button } from '@/components/ui/button'
+import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -130,11 +131,14 @@ export function SedesCliente({
                   <Pencil className="size-3.5" />
                 </Button>
               )}
-              {/* Solo se ofrece borrar si nadie la usa; el servidor lo revalida igual. */}
-              {puedeEliminar && c.enUso === 0 && (
-                <Button size="icon" variant="ghost" className="size-7" onClick={() => borrarCiudad(c)} aria-label="Eliminar ciudad">
-                  <Trash2 className="size-3.5" />
-                </Button>
+              {/* La papelera queda visible pero inerte cuando la ciudad está en uso,
+                  para que se vea POR QUÉ no se puede borrar; el servidor lo revalida igual. */}
+              {puedeEliminar && (
+                <BotonEliminar
+                  onEliminar={() => borrarCiudad(c)}
+                  etiqueta="Eliminar ciudad"
+                  motivoBloqueo={c.enUso > 0 ? `No se puede eliminar: la ciudad está en uso en ${c.enUso} registro(s), entre sedes y colaboradores.` : null}
+                />
               )}
             </div>
           ))}
