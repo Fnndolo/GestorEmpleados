@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Mail, Upload, Check, X, UserPlus, FileText } from 'lucide-react'
+import { Plus, Pencil, Mail, Upload, Check, X, UserPlus, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Ayuda } from '@/components/ui-kit/ayuda'
-import { crearAcuerdo, enviarAcuerdo, subirAcuerdoFirmado, decidirAcuerdo, convertirEnColaborador } from './acciones'
+import { crearAcuerdo, editarAcuerdo, enviarAcuerdo, subirAcuerdoFirmado, decidirAcuerdo, convertirEnColaborador } from './acciones'
 import type { AcuerdoEvaluacionInput } from '@/lib/validaciones/acuerdo-evaluacion'
 
 type Acuerdo = {
@@ -22,6 +22,10 @@ type Acuerdo = {
   cargoEvaluado: string; sedeNombre: string; fechaInicio: string; fechaFin: string
   estado: string; enviado: boolean; firmado: boolean; colaboradorId: string | null
   documentos: { id: string; nombre: string }[]
+  // Valores crudos para reabrir el formulario al editar.
+  nombres: string; apellidos: string; tipoDocumento: string; numeroDocumento: string
+  lugarExpedicionDoc: string; direccion: string; celular: string
+  cargoId: string; sedeId: string; ciudadFirma: string; observaciones: string
 }
 type Opcion = { id: string; nombre: string }
 
@@ -55,6 +59,7 @@ export function AcuerdosCliente({
 }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
+  const [editando, setEditando] = useState<Acuerdo | null>(null)
   const [guardando, setGuardando] = useState(false)
   const [f, setF] = useState<Formulario>(VACIO)
   const [ocupado, setOcupado] = useState<string | null>(null)
@@ -78,12 +83,44 @@ export function AcuerdosCliente({
       aniosConfidencialidad: 2, observaciones: f.observaciones,
     }
     setGuardando(true)
-    const res = await crearAcuerdo(payload)
+    const res = editando
+      ? await editarAcuerdo({ id: editando.id, ...payload })
+      : await crearAcuerdo(payload)
     setGuardando(false)
-    if (res.ok) {
-      toast.success('Acuerdo creado. Ya puedes enviarlo para firma.')
-      setAbierto(false); setF(VACIO); router.refresh()
-    } else toast.error(res.error)
+    if (!res.ok) { toast.error(res.error); return }
+
+    if (editando) {
+      // Si ya se había enviado, el PDF que tiene el aspirante quedó viejo: hay
+      // que decirlo, no dejar que se entere cuando devuelva una firma inservible.
+      const d = res.datos as { reenviar?: boolean }
+      toast.success(
+        d.reenviar
+          ? 'Acuerdo actualizado. Se generó un PDF nuevo y se anuló el enlace anterior: vuelve a enviarlo.'
+          : 'Acuerdo actualizado.',
+        { duration: d.reenviar ? 8000 : 4000 },
+      )
+    } else toast.success('Acuerdo creado. Ya puedes enviarlo para firma.')
+
+    setAbierto(false); setEditando(null); setF(VACIO); router.refresh()
+  }
+
+  function abrirNuevo() {
+    setEditando(null)
+    setF(VACIO)
+    setAbierto(true)
+  }
+
+  function abrirEditar(a: Acuerdo) {
+    setEditando(a)
+    setF({
+      nombres: a.nombres, apellidos: a.apellidos, tipoDocumento: a.tipoDocumento,
+      numeroDocumento: a.numeroDocumento, lugarExpedicionDoc: a.lugarExpedicionDoc,
+      direccion: a.direccion, email: a.email, celular: a.celular,
+      cargoEvaluado: a.cargoEvaluado, cargoId: a.cargoId, sedeId: a.sedeId,
+      fechaInicio: a.fechaInicio, fechaFin: a.fechaFin,
+      ciudadFirma: a.ciudadFirma, observaciones: a.observaciones,
+    })
+    setAbierto(true)
   }
 
   async function enviar(a: Acuerdo) {
@@ -140,7 +177,7 @@ export function AcuerdosCliente({
     <>
       {puedeCrear && (
         <div className="mb-3 flex justify-end">
-          <Button size="sm" onClick={() => { setF(VACIO); setAbierto(true) }}>
+          <Button size="sm" onClick={abrirNuevo}>
             <Plus className="size-4" /> Nueva evaluación
           </Button>
         </div>
@@ -185,6 +222,11 @@ export function AcuerdosCliente({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                {puedeEditar && a.estado === 'EN_EVALUACION' && (
+                  <Button size="sm" variant="outline" disabled={trabajando} onClick={() => abrirEditar(a)}>
+                    <Pencil className="size-4" /> Editar
+                  </Button>
+                )}
                 {puedeEditar && (
                   <>
                     <Button size="sm" variant="outline" disabled={trabajando} onClick={() => enviar(a)}>
@@ -225,15 +267,23 @@ export function AcuerdosCliente({
       </CardContent></Card>
 
       {/* Nueva evaluación */}
-      <Dialog open={abierto} onOpenChange={setAbierto}>
+      <Dialog open={abierto} onOpenChange={(o) => { setAbierto(o); if (!o) setEditando(null) }}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Nueva evaluación previa</DialogTitle>
+            <DialogTitle>{editando ? `Editar evaluación ${editando.numero}` : 'Nueva evaluación previa'}</DialogTitle>
             <DialogDescription className="flex items-center gap-1.5">
               Acuerdo sin relación laboral
               <Ayuda texto="El aspirante NO se registra como colaborador: el acuerdo declara que no hay contrato de trabajo ni precontrato. Si la evaluación se aprueba, desde aquí se crea su ficha." />
             </DialogDescription>
           </DialogHeader>
+
+          {editando?.enviado && (
+            <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+              Este acuerdo ya se envió{editando.firmado ? ' y el aspirante lo devolvió firmado' : ''}. Si cambias
+              los datos se generará un PDF nuevo y el enlace anterior dejará de servir: tendrás que enviarlo otra vez
+              {editando.firmado ? ' y pedir una firma nueva. El documento firmado anterior se conserva.' : '.'}
+            </p>
+          )}
 
           <div className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -309,8 +359,8 @@ export function AcuerdosCliente({
           </div>
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setAbierto(false)}>Cancelar</Button>
-            <Button onClick={guardar} disabled={guardando}>{guardando && <Spinner />} Crear y generar PDF</Button>
+            <Button variant="ghost" onClick={() => { setAbierto(false); setEditando(null) }}>Cancelar</Button>
+            <Button onClick={guardar} disabled={guardando}>{guardando && <Spinner />} {editando ? "Guardar cambios" : "Crear y generar PDF"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

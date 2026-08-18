@@ -161,6 +161,69 @@ export const crearAcuerdo = accion(
   },
 )
 
+/**
+ * Ajusta un acuerdo ya creado (un nombre mal escrito, una fecha corrida).
+ *
+ * Solo mientras siga EN_EVALUACION: con la decisión tomada el documento ya
+ * produjo efectos y cambiarlo seria reescribir la historia.
+ *
+ * Al cambiar los datos, el PDF que se envió queda obsoleto. Por eso:
+ *  - se genera el PDF nuevo como documento aparte, conservando el anterior
+ *    (si el aspirante ya firmó, esa firma es evidencia y no se borra);
+ *  - se anula el enlace de subida y la marca de enviado, para que nadie firme
+ *    una versión vieja y para que quede claro que hay que reenviarlo.
+ */
+export const editarAcuerdo = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: acuerdoEvaluacionSchema.extend({ id: z.uuid() }) },
+  async ({ id, ...d }, usuario) => {
+    const previo = await prisma.acuerdoEvaluacion.findUniqueOrThrow({ where: { id } })
+    if (previo.estado !== 'EN_EVALUACION') {
+      throw new ErrorNegocio('No se puede editar un acuerdo que ya fue aprobado o rechazado.')
+    }
+
+    await dbAuditado.acuerdoEvaluacion.update({
+      where: { id },
+      data: {
+        nombres: d.nombres,
+        apellidos: d.apellidos,
+        tipoDocumento: d.tipoDocumento,
+        numeroDocumento: d.numeroDocumento.trim(),
+        lugarExpedicionDoc: v(d.lugarExpedicionDoc),
+        direccion: v(d.direccion),
+        email: d.email.toLowerCase(),
+        celular: v(d.celular),
+        cargoEvaluado: d.cargoEvaluado,
+        cargoId: v(d.cargoId),
+        sedeId: v(d.sedeId),
+        fechaInicio: parseFechaISO(d.fechaInicio)!,
+        fechaFin: parseFechaISO(d.fechaFin)!,
+        ciudadFirma: v(d.ciudadFirma),
+        aniosConfidencialidad: d.aniosConfidencialidad,
+        observaciones: v(d.observaciones),
+        // El acuerdo cambió: el enlace y la firma anteriores ya no le corresponden.
+        tokenSubida: null,
+        tokenExpiraEn: null,
+        enviadoEn: null,
+        firmadoEn: null,
+      },
+    })
+
+    // Versión nueva del PDF. Se numera para distinguirla del que ya circuló.
+    const versiones = await prisma.documento.count({
+      where: { entidadTipo: 'AcuerdoEvaluacion', entidadId: id, nombre: { startsWith: `Acuerdo de evaluación ${previo.numero}` } },
+    })
+    const { pdf } = await construirPdf(id)
+    await guardarDocumento(id, `${previo.numero}-v${versiones + 1}`, pdf, `Acuerdo de evaluación ${previo.numero} (v${versiones + 1})`, usuario.id, v(d.sedeId))
+
+    await auditar('EDITAR', 'AcuerdoEvaluacion', {
+      registroId: id,
+      descripcion: `Acuerdo ${previo.numero} ajustado; se regeneró el PDF y se anuló el enlace anterior`,
+    })
+    revalidatePath(RUTA)
+    return { ok: true, reenviar: Boolean(previo.enviadoEn) }
+  },
+)
+
 export const enviarAcuerdo = accion(
   { modulo: 'contratos', accion: 'EDITAR', schema: z.object({ id: z.uuid() }) },
   async ({ id }, usuario) => {
