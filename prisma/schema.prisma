@@ -2056,6 +2056,9 @@ model AsignacionActivo {
   colaborador        Colaborador @relation(fields: [colaboradorId], references: [id])
   fechaEntrega       DateTime    @map("fecha_entrega") @db.Date
   fechaDevolucion    DateTime?   @map("fecha_devolucion") @db.Date
+  // Entregas hechas en un mismo acto comparten loteId y, por tanto, UNA sola acta
+  // (actaEntregaDocId apunta al mismo Documento en todas las filas del lote).
+  loteId             String?     @map("lote_id") @db.Uuid
   actaEntregaDocId   String?     @map("acta_entrega_doc_id") @db.Uuid
   actaDevolucionDocId String?    @map("acta_devolucion_doc_id") @db.Uuid
   // Firma digital del colaborador sobre el acta de entrega (desde su autoservicio)
@@ -2065,6 +2068,7 @@ model AsignacionActivo {
 
   @@index([colaboradorId])
   @@index([activoId])
+  @@index([loteId])
   @@map("asignacion_activo")
 }
 
