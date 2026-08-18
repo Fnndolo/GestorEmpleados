@@ -24,6 +24,38 @@ export const crearCiudad = accion(
   },
 )
 
+export const editarCiudad = accion(
+  { modulo: 'configuracion', accion: 'EDITAR', schema: ciudadSchema.extend({ id: z.uuid() }) },
+  async ({ id, ...resto }) => {
+    await dbAuditado.ciudad.update({ where: { id }, data: limpiar(resto) })
+    revalidatePath('/configuracion/sedes')
+    revalidatePath('/', 'layout')
+  },
+)
+
+export const eliminarCiudad = accion(
+  { modulo: 'configuracion', accion: 'ELIMINAR', schema: z.object({ id: z.uuid() }) },
+  async ({ id }) => {
+    // La ciudad no tiene estado activo/inactivo: solo se puede borrar si nadie
+    // la usa, ni como sede ni como ciudad de residencia de un colaborador.
+    const ciudad = await prisma.ciudad.findUniqueOrThrow({
+      where: { id },
+      include: { _count: { select: { sedes: true, colaboradores: true } } },
+    })
+    const { sedes, colaboradores } = ciudad._count
+    if (sedes > 0 || colaboradores > 0) {
+      const usos = [
+        sedes > 0 ? `${sedes} sede(s)` : null,
+        colaboradores > 0 ? `${colaboradores} colaborador(es)` : null,
+      ].filter(Boolean).join(' y ')
+      throw new ErrorNegocio(`No se puede eliminar: la ciudad está en uso por ${usos}.`)
+    }
+    await dbAuditado.ciudad.delete({ where: { id } })
+    revalidatePath('/configuracion/sedes')
+    revalidatePath('/', 'layout')
+  },
+)
+
 export const crearSede = accion(
   { modulo: 'configuracion', accion: 'CREAR', schema: sedeSchema },
   async (datos) => {

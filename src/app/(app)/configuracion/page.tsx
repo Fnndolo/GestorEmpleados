@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { requerirPermiso } from '@/server/sesion'
 import { tienePermiso } from '@/server/sesion'
 import { Encabezado } from '@/components/shell/encabezado'
-import { Building2, Users, ShieldCheck, MapPin, Bell, BellRing, FileStack, Layers, Receipt, Briefcase, Coins, Landmark } from 'lucide-react'
+import { Building2, Users, ShieldCheck, MapPin, Bell, BellRing, FileStack, Layers, Receipt, Briefcase, Coins, Landmark, Network } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CHIP, Chip, type ChipColor } from '@/components/ui-kit'
 
@@ -11,6 +11,7 @@ export const metadata = { title: 'Configuración · Smart Gadgets RH' }
 const SECCIONES: { titulo: string; desc: string; href: string; icono: typeof Building2; color: ChipColor; modulo: 'configuracion' | 'usuarios' }[] = [
   { titulo: 'Empresa', desc: 'Razón social, NIT, representante legal y parámetros generales.', href: '/configuracion/empresa', icono: Building2, color: 'ink', modulo: 'configuracion' },
   { titulo: 'Sedes y ciudades', desc: 'Administra las sedes y ciudades donde opera la empresa.', href: '/configuracion/sedes', icono: MapPin, color: 'teal', modulo: 'configuracion' },
+  { titulo: 'Áreas', desc: 'Estructura organizativa: áreas, de quién dependen y quién responde por cada una. Van antes que los cargos.', href: '/configuracion/areas', icono: Network, color: 'violet', modulo: 'configuracion' },
   { titulo: 'Cargos', desc: 'Crea y edita los cargos; los cambios se reflejan en quienes los tienen asignados.', href: '/configuracion/cargos', icono: Briefcase, color: 'indigo', modulo: 'configuracion' },
   { titulo: 'Entidades y bancos', desc: 'EPS, ARL, pensiones, cesantías, cajas de compensación y bancos disponibles en la ficha del colaborador.', href: '/configuracion/entidades', icono: Landmark, color: 'sky', modulo: 'configuracion' },
   { titulo: 'Parámetros de nómina', desc: 'Salario mínimo (SMMLV) y auxilio de transporte vigentes.', href: '/configuracion/parametros-nomina', icono: Coins, color: 'emerald', modulo: 'configuracion' },

@@ -4,9 +4,10 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { Plus, Pencil, Building2, MapPin, Star } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Plus, Pencil, Building2, MapPin, Star, Trash2 } from 'lucide-react'
 import { sedeSchema, ciudadSchema, type SedeInput, type CiudadInput } from '@/lib/validaciones/catalogos'
-import { crearSede, editarSede, crearCiudad } from './acciones'
+import { crearSede, editarSede, crearCiudad, editarCiudad, eliminarCiudad } from './acciones'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,16 +27,25 @@ type Sede = {
   id: string; nombre: string; ciudadId: string; ciudadNombre: string
   direccion: string; telefono: string | null; esPrincipal: boolean; activa: boolean
 }
-type Ciudad = { id: string; nombre: string; departamento: string }
+type Ciudad = { id: string; nombre: string; departamento: string; codigoDane: string; enUso: number }
 
 export function SedesCliente({
-  sedes, ciudades, puedeCrear, puedeEditar,
+  sedes, ciudades, puedeCrear, puedeEditar, puedeEliminar,
 }: {
-  sedes: Sede[]; ciudades: Ciudad[]; puedeCrear: boolean; puedeEditar: boolean
+  sedes: Sede[]; ciudades: Ciudad[]; puedeCrear: boolean; puedeEditar: boolean; puedeEliminar: boolean
 }) {
   const [editar, setEditar] = useState<Sede | null>(null)
   const [nuevaSede, setNuevaSede] = useState(false)
   const [nuevaCiudad, setNuevaCiudad] = useState(false)
+  const [editarCiudadItem, setEditarCiudadItem] = useState<Ciudad | null>(null)
+  const router = useRouter()
+
+  async function borrarCiudad(c: Ciudad) {
+    if (!confirm(`¿Eliminar la ciudad "${c.nombre}"?`)) return
+    const res = await eliminarCiudad({ id: c.id })
+    if (res.ok) { toast.success('Ciudad eliminada.'); router.refresh() }
+    else toast.error(res.error)
+  }
 
   return (
     <div className="space-y-8">
@@ -112,9 +122,21 @@ export function SedesCliente({
         </div>
         <div className="flex flex-wrap gap-2">
           {ciudades.map((c) => (
-            <Badge key={c.id} variant="outline" className="text-sm py-1">
-              {c.nombre} · {c.departamento}
-            </Badge>
+            <div key={c.id} className="flex items-center gap-1 rounded-md border py-1 pl-3 pr-1 text-sm">
+              <span>{c.nombre} · {c.departamento}</span>
+              {c.codigoDane && <Badge variant="secondary" className="ml-1">DANE {c.codigoDane}</Badge>}
+              {puedeEditar && (
+                <Button size="icon" variant="ghost" className="size-7" onClick={() => setEditarCiudadItem(c)} aria-label="Editar ciudad">
+                  <Pencil className="size-3.5" />
+                </Button>
+              )}
+              {/* Solo se ofrece borrar si nadie la usa; el servidor lo revalida igual. */}
+              {puedeEliminar && c.enUso === 0 && (
+                <Button size="icon" variant="ghost" className="size-7" onClick={() => borrarCiudad(c)} aria-label="Eliminar ciudad">
+                  <Trash2 className="size-3.5" />
+                </Button>
+              )}
+            </div>
           ))}
           {ciudades.length === 0 && <p className="text-sm text-muted-foreground">Aún no hay ciudades.</p>}
         </div>
@@ -127,7 +149,12 @@ export function SedesCliente({
           onClose={() => { setNuevaSede(false); setEditar(null) }}
         />
       )}
-      {nuevaCiudad && <DialogCiudad onClose={() => setNuevaCiudad(false)} />}
+      {(nuevaCiudad || editarCiudadItem) && (
+        <DialogCiudad
+          ciudad={editarCiudadItem}
+          onClose={() => { setNuevaCiudad(false); setEditarCiudadItem(null) }}
+        />
+      )}
     </div>
   )
 }
@@ -201,18 +228,20 @@ function DialogSede({ ciudades, sede, onClose }: { ciudades: Ciudad[]; sede: Sed
   )
 }
 
-function DialogCiudad({ onClose }: { onClose: () => void }) {
+function DialogCiudad({ ciudad, onClose }: { ciudad: Ciudad | null; onClose: () => void }) {
   const [guardando, setGuardando] = useState(false)
   const { register, handleSubmit, formState: { errors } } = useForm<CiudadInput>({
     resolver: zodResolver(ciudadSchema),
-    defaultValues: { nombre: '', departamento: '', codigoDane: '' },
+    defaultValues: ciudad
+      ? { nombre: ciudad.nombre, departamento: ciudad.departamento, codigoDane: ciudad.codigoDane }
+      : { nombre: '', departamento: '', codigoDane: '' },
   })
 
   async function onSubmit(datos: CiudadInput) {
     setGuardando(true)
-    const res = await crearCiudad(datos)
+    const res = ciudad ? await editarCiudad({ ...datos, id: ciudad.id }) : await crearCiudad(datos)
     setGuardando(false)
-    if (res.ok) { toast.success('Ciudad creada.'); onClose() }
+    if (res.ok) { toast.success(ciudad ? 'Ciudad actualizada.' : 'Ciudad creada.'); onClose() }
     else toast.error(res.error)
   }
 
@@ -220,7 +249,7 @@ function DialogCiudad({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nueva ciudad</DialogTitle>
+          <DialogTitle>{ciudad ? 'Editar ciudad' : 'Nueva ciudad'}</DialogTitle>
           <DialogDescription>El código DANE es útil para ICA por municipio.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

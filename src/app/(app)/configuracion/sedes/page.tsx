@@ -16,7 +16,10 @@ export default async function SedesPage() {
       include: { ciudad: true },
       orderBy: [{ esPrincipal: 'desc' }, { nombre: 'asc' }],
     }),
-    prisma.ciudad.findMany({ orderBy: { nombre: 'asc' } }),
+    prisma.ciudad.findMany({
+      orderBy: { nombre: 'asc' },
+      include: { _count: { select: { sedes: true, colaboradores: true } } },
+    }),
   ])
 
   return (
@@ -40,9 +43,12 @@ export default async function SedesPage() {
           id: c.id,
           nombre: c.nombre,
           departamento: c.departamento,
+          codigoDane: c.codigoDane ?? '',
+          enUso: c._count.sedes + c._count.colaboradores,
         }))}
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
+        puedeEliminar={tienePermiso(usuario, 'configuracion', 'ELIMINAR')}
       />
     </div>
   )

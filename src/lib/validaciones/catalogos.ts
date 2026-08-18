@@ -17,6 +17,32 @@ export const sedeSchema = z.object({
 })
 export type SedeInput = z.infer<typeof sedeSchema>
 
+export const areaSchema = z.object({
+  nombre: z.string().trim().min(2, 'Mínimo 2 caracteres').max(100),
+  // Área de la que depende (organigrama). Vacío = área de primer nivel.
+  padreId: z.union([z.uuid(), z.literal('')]).optional(),
+  // Colaborador que responde por el área. Puede serlo de varias a la vez.
+  responsableId: z.union([z.uuid(), z.literal('')]).optional(),
+  activa: z.boolean(),
+})
+export type AreaInput = z.infer<typeof areaSchema>
+
+export const tipoDocumentoSchema = z.object({
+  nombre: z.string().trim().min(2, 'Mínimo 2 caracteres').max(120),
+  descripcion: z.string().trim().max(300).optional().or(z.literal('')),
+  requiereVencimiento: z.boolean(),
+  nivelAcceso: z.enum(['GENERAL', 'RRHH', 'SST_MEDICO', 'JURIDICA', 'ADMIN']),
+  // Override de los días de alerta; vacío = usa la regla global del tipo.
+  diasPrimeraAlerta: z.number().int().min(1).max(365).nullable().optional(),
+  diasUltimaAlerta: z.number().int().min(1).max(365).nullable().optional(),
+  activo: z.boolean(),
+  // Vínculos para los que este documento es obligatorio.
+  vinculosObligatorios: z.array(
+    z.enum(['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'OPS', 'PRACTICANTE']),
+  ),
+})
+export type TipoDocumentoInput = z.infer<typeof tipoDocumentoSchema>
+
 export const cargoSchema = z.object({
   nombre: z.string().trim().min(2, 'Mínimo 2 caracteres').max(120),
   areaId: z.uuid('Selecciona un área'),
