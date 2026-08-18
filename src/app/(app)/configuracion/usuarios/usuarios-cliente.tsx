@@ -22,9 +22,11 @@ import {
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Ayuda } from '@/components/ui-kit/ayuda'
 
 type Usuario = {
   id: string; nombre: string; email: string; rolId: string; rolNombre: string
+  rolIdsExtra: string[]; rolNombresExtra: string[]
   estado: string; telefonoE164: string | null; debeCambiarPassword: boolean
   ultimoAcceso: string | null; sedeIds: string[]; sedeNombres: string[]
 }
@@ -68,7 +70,14 @@ export function UsuariosCliente({
                   <p className="font-medium">{u.nombre}</p>
                   <p className="text-xs text-muted-foreground">{u.email}</p>
                 </TableCell>
-                <TableCell><Badge variant="outline">{u.rolNombre}</Badge></TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    <Badge variant="outline">{u.rolNombre}</Badge>
+                    {u.rolNombresExtra.map((n) => (
+                      <Badge key={n} variant="secondary" title="Rol adicional">{n}</Badge>
+                    ))}
+                  </div>
+                </TableCell>
                 <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
                   {u.sedeNombres.length ? u.sedeNombres.join(', ') : 'Todas'}
                 </TableCell>
@@ -140,13 +149,59 @@ function SelectorSedes({
   )
 }
 
+/**
+ * Roles adicionales al principal. El principal se excluye de la lista para que
+ * no se pueda marcar dos veces, y se muestra deshabilitado como recordatorio.
+ */
+function SelectorRolesExtra({
+  roles, rolPrincipalId, seleccionados, onChange,
+}: { roles: Rol[]; rolPrincipalId: string; seleccionados: string[]; onChange: (ids: string[]) => void }) {
+  const disponibles = roles.filter((r) => r.id !== rolPrincipalId)
+  function alternar(id: string, checked: boolean) {
+    onChange(checked ? [...seleccionados, id] : seleccionados.filter((x) => x !== id))
+  }
+  return (
+    <div className="space-y-1.5">
+      <Label className="flex items-center gap-1.5">
+        Roles adicionales <span className="font-normal text-muted-foreground">(opcional)</span>
+        <Ayuda
+          texto="Para quien cubre más de un frente a la vez. Sus permisos serán la suma del rol principal y estos; cuando un permiso llega por ambos, gana el alcance más amplio."
+          etiqueta="Sobre los roles adicionales"
+        />
+      </Label>
+      <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border p-3">
+        {disponibles.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No hay otros roles.</p>
+        ) : disponibles.map((r) => (
+          <label key={r.id} className="flex cursor-pointer items-center gap-2 text-sm">
+            <Checkbox
+              checked={seleccionados.includes(r.id)}
+              onCheckedChange={(v) => alternar(r.id, Boolean(v))}
+            />
+            {r.nombre}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function DialogNuevo({ roles, sedes, onClose }: { roles: Rol[]; sedes: Sede[]; onClose: () => void }) {
   const [guardando, setGuardando] = useState(false)
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<CrearUsuarioInput>({
     resolver: zodResolver(crearUsuarioSchema),
-    defaultValues: { nombre: '', email: '', rolId: '', telefonoE164: '', sedeIds: [] },
+    defaultValues: { nombre: '', email: '', rolId: '', rolIdsExtra: [], telefonoE164: '', sedeIds: [] },
   })
   const sedeIds = watch('sedeIds')
+  const rolId = watch('rolId')
+  const rolIdsExtra = watch('rolIdsExtra')
+
+  // Si el rol principal cambia a uno que estaba marcado como adicional, se
+  // retira de los adicionales para no guardarlo por duplicado.
+  function cambiarRolPrincipal(v: string) {
+    setValue('rolId', v)
+    setValue('rolIdsExtra', rolIdsExtra.filter((id) => id !== v))
+  }
 
   async function onSubmit(datos: CrearUsuarioInput) {
     setGuardando(true)
@@ -176,8 +231,8 @@ function DialogNuevo({ roles, sedes, onClose }: { roles: Rol[]; sedes: Sede[]; o
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Rol</Label>
-              <Select onValueChange={(v) => setValue('rolId', v)}>
+              <Label>Rol principal</Label>
+              <Select onValueChange={cambiarRolPrincipal}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
                 <SelectContent>{roles.map((r) => <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>)}</SelectContent>
               </Select>
@@ -188,6 +243,12 @@ function DialogNuevo({ roles, sedes, onClose }: { roles: Rol[]; sedes: Sede[]; o
               <Input {...register('telefonoE164')} placeholder="+57…" />
             </div>
           </div>
+          <SelectorRolesExtra
+            roles={roles}
+            rolPrincipalId={rolId}
+            seleccionados={rolIdsExtra}
+            onChange={(ids) => setValue('rolIdsExtra', ids)}
+          />
           <SelectorSedes sedes={sedes} seleccionadas={sedeIds} onChange={(ids) => setValue('sedeIds', ids)} />
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
@@ -207,11 +268,19 @@ function DialogEditar({ usuario, roles, sedes, onClose }: { usuario: Usuario; ro
     resolver: zodResolver(editarUsuarioSchema),
     defaultValues: {
       id: usuario.id, nombre: usuario.nombre, rolId: usuario.rolId,
+      rolIdsExtra: usuario.rolIdsExtra,
       estado: usuario.estado as EditarUsuarioInput['estado'],
       telefonoE164: usuario.telefonoE164 ?? '', sedeIds: usuario.sedeIds,
     },
   })
   const sedeIds = watch('sedeIds')
+  const rolId = watch('rolId')
+  const rolIdsExtra = watch('rolIdsExtra')
+
+  function cambiarRolPrincipal(v: string) {
+    setValue('rolId', v)
+    setValue('rolIdsExtra', rolIdsExtra.filter((id) => id !== v))
+  }
 
   async function onSubmit(datos: EditarUsuarioInput) {
     setGuardando(true)
@@ -236,8 +305,8 @@ function DialogEditar({ usuario, roles, sedes, onClose }: { usuario: Usuario; ro
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Rol</Label>
-              <Select defaultValue={usuario.rolId} onValueChange={(v) => setValue('rolId', v)}>
+              <Label>Rol principal</Label>
+              <Select defaultValue={usuario.rolId} onValueChange={cambiarRolPrincipal}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>{roles.map((r) => <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>)}</SelectContent>
               </Select>
@@ -258,6 +327,12 @@ function DialogEditar({ usuario, roles, sedes, onClose }: { usuario: Usuario; ro
             <Label>Teléfono</Label>
             <Input {...register('telefonoE164')} placeholder="+57…" />
           </div>
+          <SelectorRolesExtra
+            roles={roles}
+            rolPrincipalId={rolId}
+            seleccionados={rolIdsExtra}
+            onChange={(ids) => setValue('rolIdsExtra', ids)}
+          />
           <SelectorSedes sedes={sedes} seleccionadas={sedeIds} onChange={(ids) => setValue('sedeIds', ids)} />
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>

@@ -10,6 +10,26 @@ import { auditar } from '@/lib/auditoria'
 import { enviarCorreo } from '@/server/notificaciones/correo'
 import { crearUsuarioSchema, editarUsuarioSchema } from '@/lib/validaciones/usuarios'
 
+/**
+ * Reemplaza los roles adicionales del usuario. El rol principal se descarta de
+ * la lista para no duplicarlo: ya vive en `User.rolId`.
+ */
+async function guardarRolesExtra(userId: string, rolPrincipalId: string, rolIdsExtra: string[]) {
+  const ids = [...new Set(rolIdsExtra)].filter((id) => id !== rolPrincipalId)
+  await prisma.usuarioRol.deleteMany({ where: { userId } })
+  if (ids.length > 0) {
+    await prisma.usuarioRol.createMany({ data: ids.map((rolId) => ({ userId, rolId })) })
+  }
+}
+
+/** Nombres de los roles adicionales, para dejar rastro legible en auditoría. */
+async function nombresRoles(rolIdsExtra: string[], rolPrincipalId: string): Promise<string> {
+  const ids = [...new Set(rolIdsExtra)].filter((id) => id !== rolPrincipalId)
+  if (ids.length === 0) return ''
+  const roles = await prisma.rol.findMany({ where: { id: { in: ids } }, select: { nombre: true } })
+  return roles.map((r) => r.nombre).join(', ')
+}
+
 /** Genera una contraseña temporal robusta (cumple política mínima). */
 function passwordTemporal(): string {
   const base = randomBytes(9).toString('base64').replace(/[+/=]/g, '')
@@ -45,13 +65,15 @@ export const crearUsuario = accion(
         data: datos.sedeIds.map((sedeId) => ({ userId: creado.user.id, sedeId })),
       })
     }
+    await guardarRolesExtra(creado.user.id, datos.rolId, datos.rolIdsExtra)
 
+    const extra = await nombresRoles(datos.rolIdsExtra, datos.rolId)
     await auditar('CREAR', 'User', {
       registroId: creado.user.id,
-      descripcion: `Usuario creado: ${datos.email} (rol ${rol.nombre})`,
+      descripcion: `Usuario creado: ${datos.email} (rol ${rol.nombre}${extra ? ` + ${extra}` : ''})`,
     })
 
-    const url = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    const url = process.env.NEXT_PUBLIC_APP_URL ?? 'https://gestor-empleados-iota.vercel.app'
     await enviarCorreo({
       para: datos.email,
       asunto: 'Tu acceso a la Plataforma Smart Gadgets',
@@ -91,6 +113,7 @@ export const editarUsuario = accion(
         data: datos.sedeIds.map((sedeId) => ({ userId: datos.id, sedeId })),
       })
     }
+    await guardarRolesExtra(datos.id, datos.rolId, datos.rolIdsExtra)
     revalidatePath('/configuracion/usuarios')
   },
 )
@@ -103,7 +126,7 @@ export const reenviarAcceso = accion(
     await auth.api.setUserPassword({ body: { userId: id, newPassword: tmp } })
     await prisma.user.update({ where: { id }, data: { debeCambiarPassword: true } })
 
-    const url = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    const url = process.env.NEXT_PUBLIC_APP_URL ?? 'https://gestor-empleados-iota.vercel.app'
     await enviarCorreo({
       para: usuario.email,
       asunto: 'Nueva contraseña temporal — Plataforma Smart Gadgets',

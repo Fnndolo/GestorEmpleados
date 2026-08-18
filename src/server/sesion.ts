@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db'
 import type { Accion, Alcance, ModuloClave } from '@/lib/permisos/modulos'
 import {
   alcanceDe,
+  fusionarPermisos,
   tienePermiso,
   type PermisoEfectivo,
   type UsuarioSesion,
@@ -27,11 +28,25 @@ export const obtenerSesion = cache(async (): Promise<UsuarioSesion | null> => {
     where: { id: sesion.user.id },
     include: {
       rol: { include: { permisos: true } },
+      rolesExtra: { include: { rol: { include: { permisos: true } } } },
       sedes: true,
       colaborador: { select: { id: true } },
     },
   })
   if (!usuario) return null
+
+  // Los permisos efectivos son la unión del rol principal y los adicionales,
+  // quedándose con el alcance más amplio cuando un permiso llega por varias vías.
+  const roles = [usuario.rol, ...usuario.rolesExtra.map((r) => r.rol)]
+  const permisos = fusionarPermisos(
+    roles.map((rol) =>
+      rol.permisos.map((p) => ({
+        modulo: p.modulo,
+        accion: p.accion as Accion,
+        alcance: p.alcance as Alcance,
+      })),
+    ),
+  )
 
   return {
     id: usuario.id,
@@ -39,15 +54,12 @@ export const obtenerSesion = cache(async (): Promise<UsuarioSesion | null> => {
     nombre: usuario.name,
     rolId: usuario.rolId,
     rolNombre: usuario.rol.nombre,
+    rolNombres: roles.map((r) => r.nombre),
     estado: usuario.estado,
     debeCambiarPassword: usuario.debeCambiarPassword,
     colaboradorId: usuario.colaborador?.id ?? null,
     sedeIds: usuario.sedes.map((s) => s.sedeId),
-    permisos: usuario.rol.permisos.map((p) => ({
-      modulo: p.modulo,
-      accion: p.accion as Accion,
-      alcance: p.alcance as Alcance,
-    })),
+    permisos,
   }
 })
 

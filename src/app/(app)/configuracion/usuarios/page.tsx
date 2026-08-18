@@ -13,7 +13,11 @@ export default async function UsuariosPage() {
 
   const [usuarios, roles, sedes] = await Promise.all([
     prisma.user.findMany({
-      include: { rol: true, sedes: { include: { sede: true } } },
+      include: {
+        rol: true,
+        rolesExtra: { include: { rol: { select: { id: true, nombre: true } } } },
+        sedes: { include: { sede: true } },
+      },
       orderBy: { createdAt: 'asc' },
     }),
     prisma.rol.findMany({ orderBy: { nombre: 'asc' } }),
@@ -24,7 +28,7 @@ export default async function UsuariosPage() {
     <div className="max-w-7xl">
       <Encabezado
         titulo="Usuarios"
-        descripcion="Crea cuentas, asigna rol y sedes. La invitación se envía por correo con una contraseña temporal."
+        descripcion="Crea cuentas, asigna rol y sedes. La invitación se envía por correo con una contraseña temporal. Si alguien cubre dos frentes a la vez, puedes darle roles adicionales: sus permisos serán la suma de todos."
       />
       <UsuariosCliente
         usuarios={usuarios.map((u) => ({
@@ -33,6 +37,8 @@ export default async function UsuariosPage() {
           email: u.email,
           rolId: u.rolId,
           rolNombre: u.rol.nombre,
+          rolIdsExtra: u.rolesExtra.map((r) => r.rolId),
+          rolNombresExtra: u.rolesExtra.map((r) => r.rol.nombre),
           estado: u.estado,
           telefonoE164: u.telefonoE164,
           debeCambiarPassword: u.debeCambiarPassword,

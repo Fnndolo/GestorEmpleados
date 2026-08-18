@@ -51,9 +51,28 @@ model User {
   sessions    Session[]
   accounts    Account[]
   sedes       UsuarioSede[]
+  // Roles adicionales al principal (`rolId`). Los permisos efectivos son la
+  // unión de todos; ver fusionarPermisos() en src/lib/permisos/tipos.ts.
+  rolesExtra  UsuarioRol[]
   colaborador Colaborador?
 
   @@map("user")
+}
+
+/**
+ * Roles adicionales de un usuario. El rol principal sigue en `User.rolId`
+ * (es el que se muestra en los listados y define si es admin de Better Auth);
+ * esta tabla agrega los demás sombreros que lleve la misma persona, p. ej.
+ * quien cubre Jurídica y Talento Humano mientras la empresa crece.
+ */
+model UsuarioRol {
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rolId  String @map("rol_id") @db.Uuid
+  rol    Rol    @relation(fields: [rolId], references: [id], onDelete: Cascade)
+
+  @@id([userId, rolId])
+  @@map("usuario_rol")
 }
 
 model Session {
@@ -139,6 +158,7 @@ model Rol {
 
   permisos RolPermiso[]
   usuarios User[]
+  usuariosExtra UsuarioRol[]
   cargosDefecto Cargo[] @relation("CargoRolDefecto")
 
   @@map("rol")
