@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado, auditar } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { subirArchivo } from '@/server/storage'
+import { subirArchivo, eliminarArchivo } from '@/server/storage'
 import { enviarCorreo } from '@/server/notificaciones/correo'
 import { crearUsuarioColaborador } from '@/server/usuarios'
 import { renderAcuerdoEvaluacion } from '@/server/pdf/acuerdo-evaluacion'
@@ -165,13 +165,18 @@ export const crearAcuerdo = accion(
  * Ajusta un acuerdo ya creado (un nombre mal escrito, una fecha corrida).
  *
  * Solo mientras siga EN_EVALUACION: con la decisión tomada el documento ya
- * produjo efectos y cambiarlo seria reescribir la historia.
+ * produjo efectos y cambiarlo sería reescribir la historia.
  *
- * Al cambiar los datos, el PDF que se envió queda obsoleto. Por eso:
- *  - se genera el PDF nuevo como documento aparte, conservando el anterior
- *    (si el aspirante ya firmó, esa firma es evidencia y no se borra);
- *  - se anula el enlace de subida y la marca de enviado, para que nadie firme
- *    una versión vieja y para que quede claro que hay que reenviarlo.
+ * El trato depende de si el acuerdo YA SALIÓ o no, porque el riesgo es distinto:
+ *
+ *  - Aún sin enviar: no circuló nada. Se corrige y se reemplaza el PDF, sin
+ *    dejar versiones sueltas ni avisos. Es el caso normal — para eso el envío
+ *    es un paso aparte del guardado.
+ *
+ *  - Ya enviado: el aspirante tiene un PDF viejo en su correo. Se genera una
+ *    versión nueva CONSERVANDO la anterior (si ya venía firmada, esa firma es
+ *    evidencia), y se anulan enlace y marca de enviado para que nadie firme una
+ *    versión obsoleta.
  */
 export const editarAcuerdo = accion(
   { modulo: 'contratos', accion: 'EDITAR', schema: acuerdoEvaluacionSchema.extend({ id: z.uuid() }) },
@@ -180,6 +185,8 @@ export const editarAcuerdo = accion(
     if (previo.estado !== 'EN_EVALUACION') {
       throw new ErrorNegocio('No se puede editar un acuerdo que ya fue aprobado o rechazado.')
     }
+
+    const yaCirculo = Boolean(previo.enviadoEn)
 
     await dbAuditado.acuerdoEvaluacion.update({
       where: { id },
@@ -200,27 +207,43 @@ export const editarAcuerdo = accion(
         ciudadFirma: v(d.ciudadFirma),
         aniosConfidencialidad: d.aniosConfidencialidad,
         observaciones: v(d.observaciones),
-        // El acuerdo cambió: el enlace y la firma anteriores ya no le corresponden.
-        tokenSubida: null,
-        tokenExpiraEn: null,
-        enviadoEn: null,
-        firmadoEn: null,
+        // Solo si ya salió: el enlace y la firma anteriores dejan de corresponder.
+        ...(yaCirculo ? { tokenSubida: null, tokenExpiraEn: null, enviadoEn: null, firmadoEn: null } : {}),
       },
     })
 
-    // Versión nueva del PDF. Se numera para distinguirla del que ya circuló.
-    const versiones = await prisma.documento.count({
-      where: { entidadTipo: 'AcuerdoEvaluacion', entidadId: id, nombre: { startsWith: `Acuerdo de evaluación ${previo.numero}` } },
-    })
     const { pdf } = await construirPdf(id)
-    await guardarDocumento(id, `${previo.numero}-v${versiones + 1}`, pdf, `Acuerdo de evaluación ${previo.numero} (v${versiones + 1})`, usuario.id, v(d.sedeId))
 
-    await auditar('EDITAR', 'AcuerdoEvaluacion', {
-      registroId: id,
-      descripcion: `Acuerdo ${previo.numero} ajustado; se regeneró el PDF y se anuló el enlace anterior`,
-    })
+    if (yaCirculo) {
+      // Versión nueva, numerada para distinguirla de la que ya circuló.
+      const versiones = await prisma.documento.count({
+        where: { entidadTipo: 'AcuerdoEvaluacion', entidadId: id },
+      })
+      await guardarDocumento(id, `${previo.numero}-v${versiones + 1}`, pdf, `Acuerdo de evaluación ${previo.numero} (v${versiones + 1})`, usuario.id, v(d.sedeId))
+      await auditar('EDITAR', 'AcuerdoEvaluacion', {
+        registroId: id,
+        descripcion: `Acuerdo ${previo.numero} ajustado tras enviarlo; PDF regenerado y enlace anulado`,
+      })
+    } else {
+      // Nunca salió: el PDF viejo no lo vio nadie, así que se reemplaza en vez de
+      // dejar un rastro de versiones que solo estorba.
+      const anteriores = await prisma.documento.findMany({
+        where: { entidadTipo: 'AcuerdoEvaluacion', entidadId: id },
+        select: { id: true, storagePath: true },
+      })
+      for (const doc of anteriores) {
+        await eliminarArchivo(doc.storagePath).catch(() => {}) // el archivo pudo no existir
+        await prisma.documento.delete({ where: { id: doc.id } }).catch(() => {})
+      }
+      await guardarDocumento(id, previo.numero, pdf, `Acuerdo de evaluación ${previo.numero}`, usuario.id, v(d.sedeId))
+      await auditar('EDITAR', 'AcuerdoEvaluacion', {
+        registroId: id,
+        descripcion: `Acuerdo ${previo.numero} ajustado antes de enviarlo`,
+      })
+    }
+
     revalidatePath(RUTA)
-    return { ok: true, reenviar: Boolean(previo.enviadoEn) }
+    return { ok: true, reenviar: yaCirculo }
   },
 )
 
