@@ -261,6 +261,14 @@ export const enviarAcuerdo = accion(
     expira.setUTCDate(expira.getUTCDate() + 30)
     const url = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://gestor-empleados-iota.vercel.app'}/firmar-acuerdo/${token}`
 
+    // El token se guarda ANTES de enviar. Al revés, si la escritura falla el
+    // correo ya salió con un enlace que no existe en la base: el aspirante
+    // recibe un enlace muerto y nadie se entera hasta que él reclama.
+    await dbAuditado.acuerdoEvaluacion.update({
+      where: { id },
+      data: { enviadoPorId: usuario.id, tokenSubida: token, tokenExpiraEn: expira },
+    })
+
     await enviarCorreo({
       para: a.email,
       asunto: `Acuerdo de evaluación previa ${numero}`,
@@ -276,10 +284,9 @@ export const enviarAcuerdo = accion(
       adjuntos: [{ nombre: `Acuerdo de evaluación ${numero} - ${nombre}.pdf`, contenido: pdf }],
     })
 
-    await dbAuditado.acuerdoEvaluacion.update({
-      where: { id },
-      data: { enviadoEn: new Date(), enviadoPorId: usuario.id, tokenSubida: token, tokenExpiraEn: expira },
-    })
+    // Se marca como enviado solo si el correo salió: si falla, la pantalla debe
+    // seguir mostrando "sin enviar" para que se reintente.
+    await dbAuditado.acuerdoEvaluacion.update({ where: { id }, data: { enviadoEn: new Date() } })
     await auditar('EDITAR', 'AcuerdoEvaluacion', { registroId: id, descripcion: `Acuerdo ${numero} enviado a ${a.email}` })
     revalidatePath(RUTA)
     return { ok: true }
