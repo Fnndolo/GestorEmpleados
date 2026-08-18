@@ -6,6 +6,7 @@
 import 'dotenv/config'
 import { prisma } from '../src/lib/db'
 import { normalizarTexto } from '../src/lib/texto'
+import { seedEstructuraDemo } from './seed-catalogos'
 import type { TipoVinculo, ModalidadTrabajo } from '../src/generated/prisma/enums'
 
 const D = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d))
@@ -65,6 +66,11 @@ async function seedUsuariosDemo() {
 }
 
 async function main() {
+  // Áreas y cargos de ejemplo: el seed base ya NO los siembra (son propios de
+  // cada empresa y se crean desde Configuración), pero el demo los necesita
+  // para colgarle los colaboradores.
+  await seedEstructuraDemo()
+
   // El demo crea sus propias ciudades/sedes (el seed de producción ya NO siembra
   // ninguna: producción arranca en blanco y el admin crea su sede real desde la app).
   const bogota = await prisma.ciudad.upsert({

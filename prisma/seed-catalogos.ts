@@ -15,6 +15,12 @@ const BANCOS = [
   'Nequi', 'Daviplata', 'Banco AV Villas', 'Itaú',
 ]
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Estructura organizativa de EJEMPLO. NO se siembra en una instalación nueva:
+// las áreas y los cargos son propios de cada empresa y se crean desde
+// Configuración → Áreas y Configuración → Cargos. Solo la usa el seed de demo
+// (`pnpm db:seed:demo`), que necesita cargos para colgarles colaboradores.
+// ─────────────────────────────────────────────────────────────────────────────
 const AREAS = ['Dirección General', 'Administrativa y Financiera', 'Talento Humano', 'Comercial y Ventas', 'Servicio Técnico', 'Logística y Bodega', 'Tecnología']
 
 const CARGOS: { area: string; nombre: string; nivel: string }[] = [
@@ -78,14 +84,6 @@ export async function seedCatalogos() {
   for (const nombre of BANCOS) {
     await prisma.banco.upsert({ where: { nombre }, create: { nombre }, update: {} })
   }
-  for (const nombre of AREAS) {
-    await prisma.area.upsert({ where: { nombre }, create: { nombre }, update: {} })
-  }
-  for (const c of CARGOS) {
-    const area = await prisma.area.findUniqueOrThrow({ where: { nombre: c.area } })
-    const existe = await prisma.cargo.findFirst({ where: { nombre: c.nombre, areaId: area.id } })
-    if (!existe) await prisma.cargo.create({ data: { nombre: c.nombre, areaId: area.id, nivel: c.nivel } })
-  }
   for (const t of TIPOS_DOC) {
     await prisma.tipoDocumento.upsert({
       where: { nombre: t.nombre },
@@ -109,5 +107,22 @@ export async function seedCatalogos() {
       })
     }
   }
-  console.log('Catálogos listos (EPS/ARL/AFP/cajas, bancos, áreas, cargos, tipos de documento)')
+  console.log('Catálogos listos (EPS/ARL/AFP/cajas, bancos, tipos de documento)')
+}
+
+/**
+ * Siembra la estructura organizativa de ejemplo (áreas y cargos). Solo la usa
+ * el seed de demostración: una instalación real crea la suya desde la app.
+ * Es idempotente — no pisa lo que ya exista con el mismo nombre.
+ */
+export async function seedEstructuraDemo() {
+  for (const nombre of AREAS) {
+    await prisma.area.upsert({ where: { nombre }, create: { nombre }, update: {} })
+  }
+  for (const c of CARGOS) {
+    const area = await prisma.area.findUniqueOrThrow({ where: { nombre: c.area } })
+    const existe = await prisma.cargo.findFirst({ where: { nombre: c.nombre, areaId: area.id } })
+    if (!existe) await prisma.cargo.create({ data: { nombre: c.nombre, areaId: area.id, nivel: c.nivel } })
+  }
+  console.log('Estructura de ejemplo lista (áreas y cargos de demostración)')
 }

@@ -1,10 +1,15 @@
 /**
- * Seed inicial: roles del sistema + matriz de permisos, configuración de empresa,
- * catálogos, parámetros legales y usuario administrador. NO siembra ciudades ni
- * sedes: producción arranca en blanco y el admin crea su sede real desde la app
- * (Configuración → Sedes). El demo (seed-demo.ts) crea las suyas por su cuenta.
+ * Seed inicial: SOLO el mínimo común a cualquier empresa colombiana — roles del
+ * sistema + matriz de permisos, configuración de empresa, catálogos legales
+ * (EPS/ARL/AFP/cajas, bancos, tipos de documento), parámetros de nómina,
+ * calendario de obligaciones, plantillas y el usuario administrador.
  *
- * Idempotente: puede ejecutarse varias veces sin duplicar datos.
+ * NO siembra lo que es propio de cada empresa — ciudades, sedes, áreas y
+ * cargos —: una instalación nueva arranca en blanco y el administrador los crea
+ * desde Configuración. El demo (seed-demo.ts) siembra los suyos por su cuenta.
+ *
+ * Idempotente: puede ejecutarse varias veces sin duplicar datos. Usa upsert y
+ * nunca borra: lo que ya exista en la base se conserva tal cual.
  * Uso: pnpm db:seed
  */
 import 'dotenv/config'
