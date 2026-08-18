@@ -64,6 +64,47 @@ export function calcularEdad(fechaNacimiento: Date | null | undefined): number |
   return edad
 }
 
+/**
+ * Duración pactada de un contrato, legible ("6 meses", "1 año, 2 meses").
+ * Se calcula de las fechas y no se guarda: así nunca queda desfasada si se
+ * corrige una fecha o se registra una prórroga.
+ *
+ * Sin fecha de fin es indefinido. El último día está incluido (un contrato del
+ * 1-ene al 30-jun dura 6 meses, no 5 meses y 29 días), como se cuenta el
+ * término en la práctica laboral.
+ */
+export function duracionContrato(
+  fechaInicio: Date | null | undefined,
+  fechaFin: Date | null | undefined,
+): string {
+  if (!fechaInicio) return ''
+  if (!fechaFin) return 'Indefinido'
+  if (fechaFin < fechaInicio) return ''
+
+  // Se cuenta hasta el día siguiente al último: el fin es inclusivo.
+  const finExclusivo = new Date(fechaFin)
+  finExclusivo.setUTCDate(finExclusivo.getUTCDate() + 1)
+
+  let meses =
+    (finExclusivo.getUTCFullYear() - fechaInicio.getUTCFullYear()) * 12 +
+    (finExclusivo.getUTCMonth() - fechaInicio.getUTCMonth())
+  if (finExclusivo.getUTCDate() < fechaInicio.getUTCDate()) meses--
+  if (meses < 0) meses = 0
+
+  // Días sueltos que sobran tras descontar los meses completos.
+  const trasMeses = new Date(fechaInicio)
+  trasMeses.setUTCMonth(trasMeses.getUTCMonth() + meses)
+  const dias = Math.round((finExclusivo.getTime() - trasMeses.getTime()) / 86_400_000)
+
+  const anios = Math.floor(meses / 12)
+  const restoMeses = meses % 12
+  const partes: string[] = []
+  if (anios > 0) partes.push(`${anios} año${anios > 1 ? 's' : ''}`)
+  if (restoMeses > 0) partes.push(`${restoMeses} mes${restoMeses > 1 ? 'es' : ''}`)
+  if (dias > 0) partes.push(`${dias} día${dias > 1 ? 's' : ''}`)
+  return partes.join(', ') || '1 día'
+}
+
 /** Antigüedad legible ("2 años, 3 meses"). */
 export function antiguedad(fechaIngreso: Date | null | undefined): string {
   if (!fechaIngreso) return ''

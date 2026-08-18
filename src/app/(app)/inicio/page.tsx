@@ -7,6 +7,7 @@ import { Users, Building2, Bell, ShieldCheck, AlertCircle, Inbox, type LucideIco
 import { cn } from '@/lib/utils'
 import { CHIP, type ChipColor } from '@/components/ui-kit'
 import { hoyBogota, formatFechaCorta, formatFechaLarga } from '@/lib/fechas'
+import { BannerPush } from '@/components/pwa/banner-push'
 
 export const metadata = { title: 'Inicio · Smart Gadgets RH' }
 
@@ -89,6 +90,10 @@ export default async function InicioPage() {
       <p className="mt-0.5 text-[13px] text-muted-foreground">
         <span className="capitalize">{formatFechaLarga(hoy)}</span> · {pendiente}
       </p>
+
+      {/* El aviso vive solo aquí: en el resto de pantallas empujaba el contenido
+          hacia abajo y se llevaba por delante los encabezados fijos. */}
+      <BannerPush />
 
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         <Stat icono={Users} color="sky" valor={String(usuarios)} label="Usuarios activos" />

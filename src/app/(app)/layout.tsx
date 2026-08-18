@@ -12,7 +12,6 @@ import { BottomNav } from '@/components/shell/bottom-nav'
 import { Campana } from '@/components/shell/campana'
 import { BusquedaGlobal } from '@/components/shell/busqueda-global'
 import { RegistrarSW } from '@/components/pwa/registrar-sw'
-import { BannerPush } from '@/components/pwa/banner-push'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const usuario = await requerirSesion()
@@ -78,7 +77,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
         {/* Contenido */}
         <main className="flex-1 p-4 pb-24 lg:p-6 lg:pb-6">
-          <BannerPush />
           {children}
         </main>
       </div>

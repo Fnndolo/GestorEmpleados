@@ -49,7 +49,7 @@ export async function crearUsuarioColaborador(opts: {
   }
   await auditar('CREAR', 'User', { registroId: creado.user.id, descripcion: `Usuario creado para colaborador: ${email} (rol ${rol.nombre})` })
 
-  const url = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  const url = process.env.NEXT_PUBLIC_APP_URL ?? 'https://gestor-empleados-iota.vercel.app'
   await enviarCorreo({
     para: email,
     asunto: 'Tu acceso a la Plataforma Smart Gadgets',

@@ -11,8 +11,8 @@ export default async function NuevoColaboradorPage() {
   const puedeEditarSalud = tienePermiso(usuario, 'colaboradores_salud', 'CREAR') || tienePermiso(usuario, 'colaboradores_salud', 'EDITAR')
 
   return (
-    <div className="max-w-6xl">
-      <Encabezado titulo="Nuevo colaborador" descripcion="Completa la ficha. Solo el documento, nombres, celular, sede, vínculo y fecha de ingreso son obligatorios." />
+    <div>
+      <Encabezado fijo titulo="Nuevo colaborador" descripcion="Completa la ficha. Solo el documento, nombres, celular, sede, vínculo y fecha de ingreso son obligatorios." />
       <FormColaborador catalogos={catalogos} puedeEditarSalud={puedeEditarSalud} />
     </div>
   )

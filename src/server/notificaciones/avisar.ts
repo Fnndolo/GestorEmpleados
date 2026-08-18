@@ -30,7 +30,7 @@ export async function notificarUsuario(
   }
 }
 
-const APP_URL = () => process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+const APP_URL = () => process.env.NEXT_PUBLIC_APP_URL ?? 'https://gestor-empleados-iota.vercel.app'
 
 function plantillaCorreo(nombre: string, titulo: string, mensaje: string, enlace?: string, llamado?: string): string {
   const url = enlace ? `${APP_URL()}${enlace}` : APP_URL()

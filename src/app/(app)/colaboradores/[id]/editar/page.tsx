@@ -64,8 +64,8 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
   }
 
   return (
-    <div className="max-w-6xl">
-      <Encabezado titulo={`Editar · ${c.nombres} ${c.apellidos}`} descripcion="Actualiza la ficha del colaborador." />
+    <div>
+      <Encabezado fijo titulo={`Editar · ${c.nombres} ${c.apellidos}`} descripcion="Actualiza la ficha del colaborador." />
       <FormColaborador catalogos={catalogos} valores={valores} puedeEditarSalud={puedeEditarSalud} />
     </div>
   )

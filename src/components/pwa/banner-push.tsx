@@ -85,19 +85,21 @@ export function BannerPush() {
   if (!mostrar) return null
 
   return (
-    <div className="mb-4 flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
-      <BellRing className="size-5 shrink-0 text-primary" />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">Activa las notificaciones</p>
-        <p className="text-xs text-muted-foreground">
-          Recibe los avisos en este dispositivo, incluso con la app cerrada.
-        </p>
-      </div>
-      <Button size="sm" onClick={activar} disabled={trabajando}>
-        {trabajando ? <Spinner /> : <BellRing className="size-4" />} Activar
+    // Una sola línea: es un ofrecimiento, no una tarea pendiente. Solo aparece
+    // en Inicio, así que no compite con el contenido de las demás pantallas.
+    <div className="mt-3 flex items-center gap-2 rounded-md border border-primary/25 bg-primary/5 px-2.5 py-1.5 text-[13px]">
+      <BellRing className="size-3.5 shrink-0 text-primary" />
+      <p className="min-w-0 flex-1 truncate">
+        Activa las notificaciones para recibir los avisos en este dispositivo.
+      </p>
+      <Button size="sm" variant="outline" className="h-7 shrink-0 px-2.5 text-xs" onClick={activar} disabled={trabajando}>
+        {trabajando ? <Spinner /> : null} Activar
       </Button>
-      <Button variant="ghost" size="icon" aria-label="Ahora no" onClick={ocultar} className="shrink-0">
-        <X className="size-4" />
+      <Button
+        variant="ghost" size="icon" aria-label="Ahora no" onClick={ocultar}
+        className="size-7 shrink-0 text-muted-foreground"
+      >
+        <X className="size-3.5" />
       </Button>
     </div>
   )
