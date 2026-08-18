@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { crearEntidad, editarEntidad, alternarEntidad, crearBanco, editarBanco, alternarBanco } from './acciones'
 import { TIPOS_ENTIDAD_SS } from '@/lib/validaciones/catalogos'
+import { Ayuda } from '@/components/ui-kit/ayuda'
 
 type TipoEntidad = (typeof TIPOS_ENTIDAD_SS)[number]
 type Entidad = { id: string; tipo: TipoEntidad; nombre: string; codigo: string; activa: boolean; asignados: number }
@@ -37,6 +38,58 @@ const PESTANAS: Pestana[] = [...TIPOS_ENTIDAD_SS, BANCOS]
 
 type Formulario = { nombre: string; codigo: string; activo: boolean }
 const VACIO: Formulario = { nombre: '', codigo: '', activo: true }
+
+/** Lista de una pestaña. Va fuera del componente para no recrearse en cada render. */
+function Lista({
+  items, puedeEditar, onAlternar, onEditar,
+}: {
+  items: (Entidad | Banco)[]
+  puedeEditar: boolean
+  onAlternar: (item: Entidad | Banco) => void
+  onEditar: (item: Entidad | Banco) => void
+}) {
+  if (items.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center text-sm text-muted-foreground">
+          Todavía no hay registros aquí. Usa «Agregar» para crear el primero.
+        </CardContent>
+      </Card>
+    )
+  }
+  return (
+    <Card>
+      <CardContent className="p-0 divide-y">
+        {items.map((item) => {
+          const activo = 'activa' in item ? item.activa : item.activo
+          const codigo = 'activa' in item ? item.codigo : item.codigoAch
+          return (
+            <div key={item.id} className="flex items-center gap-3 p-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium">{item.nombre}</p>
+                  {!activo && <Badge variant="secondary">Inactivo</Badge>}
+                  {codigo && <Badge variant="outline">{codigo}</Badge>}
+                </div>
+                {item.asignados > 0 && (
+                  <p className="text-xs text-muted-foreground">{item.asignados} colaborador(es)</p>
+                )}
+              </div>
+              {puedeEditar && (
+                <>
+                  <Switch checked={activo} onCheckedChange={() => onAlternar(item)} />
+                  <Button size="sm" variant="outline" onClick={() => onEditar(item)}>
+                    <Pencil className="size-4" /> Editar
+                  </Button>
+                </>
+              )}
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
+  )
+}
 
 export function EntidadesCliente({
   puedeCrear,
@@ -105,50 +158,6 @@ export function EntidadesCliente({
     else toast.error(res.error)
   }
 
-  function Lista({ items }: { items: (Entidad | Banco)[] }) {
-    if (items.length === 0) {
-      return (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Todavía no hay registros aquí. Usa «Agregar» para crear el primero.
-          </CardContent>
-        </Card>
-      )
-    }
-    return (
-      <Card>
-        <CardContent className="p-0 divide-y">
-          {items.map((item) => {
-            const activo = 'activa' in item ? item.activa : item.activo
-            const codigo = 'activa' in item ? item.codigo : item.codigoAch
-            return (
-              <div key={item.id} className="flex items-center gap-3 p-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium">{item.nombre}</p>
-                    {!activo && <Badge variant="secondary">Inactivo</Badge>}
-                    {codigo && <Badge variant="outline">{codigo}</Badge>}
-                  </div>
-                  {item.asignados > 0 && (
-                    <p className="text-xs text-muted-foreground">{item.asignados} colaborador(es)</p>
-                  )}
-                </div>
-                {puedeEditar && (
-                  <>
-                    <Switch checked={activo} onCheckedChange={() => alternar(item)} />
-                    <Button size="sm" variant="outline" onClick={() => abrirEditar(item)}>
-                      <Pencil className="size-4" /> Editar
-                    </Button>
-                  </>
-                )}
-              </div>
-            )
-          })}
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
     <>
       <Tabs value={pestana} onValueChange={(v) => setPestana(v as Pestana)}>
@@ -171,11 +180,16 @@ export function EntidadesCliente({
 
         {TIPOS_ENTIDAD_SS.map((t) => (
           <TabsContent key={t} value={t}>
-            <Lista items={entidades.filter((e) => e.tipo === t)} />
+            <Lista
+              items={entidades.filter((e) => e.tipo === t)}
+              puedeEditar={puedeEditar}
+              onAlternar={alternar}
+              onEditar={abrirEditar}
+            />
           </TabsContent>
         ))}
         <TabsContent value={BANCOS}>
-          <Lista items={bancos} />
+          <Lista items={bancos} puedeEditar={puedeEditar} onAlternar={alternar} onEditar={abrirEditar} />
         </TabsContent>
       </Tabs>
 
@@ -192,9 +206,11 @@ export function EntidadesCliente({
               <Input value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} autoFocus />
             </div>
             <div className="space-y-1.5">
-              <Label>{etiqueta.codigo} (opcional)</Label>
+              <Label className="flex items-center gap-1.5">
+                {etiqueta.codigo} <span className="font-normal text-muted-foreground">(opcional)</span>
+                <Ayuda texto={etiqueta.ayudaCodigo} etiqueta={`Sobre el ${etiqueta.codigo}`} />
+              </Label>
               <Input value={f.codigo} onChange={(e) => setF({ ...f, codigo: e.target.value })} />
-              <p className="text-xs text-muted-foreground">{etiqueta.ayudaCodigo}</p>
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={f.activo} onCheckedChange={(v) => setF({ ...f, activo: v })} />
