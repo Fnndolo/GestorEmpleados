@@ -295,8 +295,10 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             <BloqueDatos titulo="Datos bancarios" icono={Landmark} color="bg-foreground/8 text-foreground" datos={[
               ['Banco', c.banco?.nombre ?? '—'],
               ['Tipo de cuenta', c.tipoCuenta ? TIPO_CUENTA[c.tipoCuenta] : '—'],
-              // Enmascarada: el número completo se consulta en edición si hace falta.
-              ['Número de cuenta', c.numeroCuenta ? `•••• ${c.numeroCuenta.slice(-4)}` : '—'],
+              // Completo: es un dato operativo que se necesita para pagar, y este
+              // bloque ya solo lo ve quien puede editar la ficha o ver datos
+              // sensibles. Nómina y cuentas OPS lo muestran igual.
+              ['Número de cuenta', c.numeroCuenta ?? '—'],
             ]} />
           )}
 
