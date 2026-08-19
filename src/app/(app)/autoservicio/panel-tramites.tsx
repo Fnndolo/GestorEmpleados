@@ -7,7 +7,7 @@ import {
   Receipt, Landmark, ShieldAlert, Lock, Inbox, ChevronDown, CloudUpload, Shirt, GraduationCap, UserPen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { aplicaTramite, esOps, AVISO_OPS, type Tramite } from '@/lib/tramites-vinculo'
+import { aplicaTramite, esOps, type Tramite } from '@/lib/tramites-vinculo'
 import { CHIP } from '@/components/ui-kit'
 import { NuevaSolicitud, type TipoSol } from './nueva-solicitud'
 
@@ -106,14 +106,6 @@ export function PanelTramites({
           pero no crear solicitudes de vacaciones, permisos, licencias ni incapacidades.
         </div>
       )}
-      {/* Se explica una vez por qué su panel tiene menos opciones, en vez de dejar
-          que busque trámites que nunca va a encontrar. */}
-      {activo && ops && (
-        <div className="mt-6 rounded-xl border bg-muted/40 p-3.5 text-sm text-muted-foreground">
-          {AVISO_OPS}
-        </div>
-      )}
-
       <Seccion titulo="¿Qué necesitas solicitar?">
         {/* Trámites operativos: solo con vínculo activo. */}
         {activo && aplica('vacaciones') && (

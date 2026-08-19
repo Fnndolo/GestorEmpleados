@@ -72,15 +72,6 @@ export function aplicaTramite(tipoVinculo: string | null | undefined, tramite: T
 }
 
 /**
- * Aviso que se muestra en el autoservicio del contratista, en lugar de dejar que
- * busque trámites que no encontrará.
- */
-export const AVISO_OPS =
-  'Tu vínculo es de prestación de servicios: no aplican los trámites laborales ' +
-  '(vacaciones, permisos, licencias, incapacidades, desprendibles ni dotación). ' +
-  'Tus pagos se gestionan por cuenta de cobro.'
-
-/**
  * La certificación del contratista NO es una certificación laboral: no hay cargo,
  * salario ni funciones, sino objeto contractual y valor. Se emite con plantilla
  * propia (ver `certificacion` en el módulo de certificaciones).
