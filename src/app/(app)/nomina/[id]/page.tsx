@@ -12,6 +12,7 @@ import { formatFechaCorta } from '@/lib/fechas'
 import { TIPO_CUENTA } from '@/lib/etiquetas'
 import { AccionesPeriodo } from './acciones-cliente'
 import { NovedadesPeriodo } from './novedades-periodo'
+import { urlPanelAsistencia } from '@/server/asistencia/horas-asistencia'
 
 export const metadata = { title: 'Periodo de nómina · Smart Gadgets RH' }
 
@@ -178,7 +179,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
           }))}
           // Panel del sistema de control de asistencia, origen de estas horas.
           // Si la variable no está configurada, el enlace no se muestra.
-          urlAsistencia={process.env.ASISTENCIA_URL ?? null}
+          urlAsistencia={urlPanelAsistencia()}
         />
       )}
 

@@ -39,6 +39,19 @@ export function asistenciaConfigurada(): boolean {
 }
 
 /**
+ * Enlace al panel de ArriveControl para revisar las marcaciones a mano.
+ *
+ * Sale del MISMO `ARRIVECONTROL_URL` que usa la API: antes había una segunda
+ * variable (`ASISTENCIA_URL`) con el enlace completo escrito aparte, así que
+ * mudarse de dominio obligaba a acordarse de las dos y podían quedar apuntando
+ * a servidores distintos sin que nadie lo notara.
+ */
+export function urlPanelAsistencia(): string | null {
+  const base = process.env.ARRIVECONTROL_URL?.replace(/\/+$/, '')
+  return base ? `${base}/admin?tab=equipo` : null
+}
+
+/**
  * Pide a ArriveControl los tramos de un rango. Lanza si está configurado pero
  * no responde: preferimos que la liquidación falle a producir una nómina sin
  * las horas extra de la gente.
