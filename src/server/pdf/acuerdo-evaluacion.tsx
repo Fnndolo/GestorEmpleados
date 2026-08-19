@@ -196,6 +196,10 @@ function DocumentoAcuerdo({ d, fondo }: { d: DatosAcuerdoEvaluacionPdf; fondo?: 
           </View>
           <View style={s.firmaCol}>
             <Text style={s.negrita}>ASPIRANTE:</Text>
+            {/* El aspirante SIEMPRE firma a mano sobre el papel: este espacio en
+                blanco es donde va su firma. Sin él, la línea queda pegada al
+                nombre y no hay dónde firmar. */}
+            <View style={s.firmaEspacio} />
             <View style={s.firmaLinea}>
               <Text style={s.firmaNombre}>{d.aspiranteNombre}</Text>
               <Text style={s.firmaLinea2}>{d.aspiranteDocumento}</Text>

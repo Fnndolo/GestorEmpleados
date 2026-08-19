@@ -302,6 +302,47 @@ export const eliminarAcuerdo = accion(
   },
 )
 
+/**
+ * Vuelve a generar el PDF con los mismos datos.
+ *
+ * Sirve cuando cambia el formato —un arreglo de diseño, un membrete nuevo, la
+ * firma de la empresa— y hay acuerdos ya creados: sin esto habría que borrarlos
+ * y volver a teclear todo.
+ *
+ * NO toca el documento que devolvió firmado el aspirante: ese es evidencia y se
+ * conserva tal cual. Solo se reemplaza el generado por el sistema.
+ */
+export const regenerarPdfAcuerdo = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: z.object({ id: z.uuid() }) },
+  async ({ id }, usuario) => {
+    const a = await prisma.acuerdoEvaluacion.findUniqueOrThrow({ where: { id } })
+
+    const previos = await prisma.documento.findMany({
+      where: { entidadTipo: 'AcuerdoEvaluacion', entidadId: id },
+      select: { id: true, nombre: true, storagePath: true },
+    })
+    // Los nombres de estos documentos los pone el sistema, no el usuario, así
+    // que distinguir por nombre es fiable aquí. Se compara sin acentos por si
+    // alguno viejo quedó escrito distinto.
+    const esFirmado = (n: string) => n.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().includes('firmad')
+
+    for (const doc of previos.filter((d) => !esFirmado(d.nombre))) {
+      await eliminarArchivo(doc.storagePath).catch(() => {})
+      await prisma.documento.delete({ where: { id: doc.id } }).catch(() => {})
+    }
+
+    const { pdf } = await construirPdf(id)
+    await guardarDocumento(id, a.numero, pdf, `Acuerdo de evaluación ${a.numero}`, usuario.id, a.sedeId)
+
+    await auditar('EDITAR', 'AcuerdoEvaluacion', {
+      registroId: id,
+      descripcion: `PDF del acuerdo ${a.numero} regenerado con el formato vigente`,
+    })
+    revalidatePath(RUTA)
+    return { ok: true, habiaEnviado: Boolean(a.enviadoEn) }
+  },
+)
+
 export const enviarAcuerdo = accion(
   { modulo: 'contratos', accion: 'EDITAR', schema: z.object({ id: z.uuid() }) },
   async ({ id }, usuario) => {

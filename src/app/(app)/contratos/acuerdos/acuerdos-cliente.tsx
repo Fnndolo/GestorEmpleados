@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Pencil, Mail, Upload, Check, X, UserPlus, FileText } from 'lucide-react'
+import { Plus, Pencil, Mail, Upload, Check, X, UserPlus, FileText, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Ayuda } from '@/components/ui-kit/ayuda'
 import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
-import { crearAcuerdo, editarAcuerdo, enviarAcuerdo, subirAcuerdoFirmado, decidirAcuerdo, convertirEnColaborador, eliminarAcuerdo } from './acciones'
+import { crearAcuerdo, editarAcuerdo, enviarAcuerdo, subirAcuerdoFirmado, decidirAcuerdo, convertirEnColaborador, eliminarAcuerdo, regenerarPdfAcuerdo } from './acciones'
 import type { AcuerdoEvaluacionInput } from '@/lib/validaciones/acuerdo-evaluacion'
 import { mensajeError } from '@/lib/errores-accion'
 
@@ -162,6 +162,23 @@ export function AcuerdosCliente({
     setAbierto(true)
   }
 
+  async function regenerar(a: Acuerdo) {
+    setOcupado(a.id)
+    const res = await regenerarPdfAcuerdo({ id: a.id })
+    setOcupado(null)
+    if (!res.ok) { toast.error(res.error); return }
+    const d = res.datos as { habiaEnviado?: boolean }
+    // Si ya se había enviado, el aspirante tiene en su correo el PDF anterior:
+    // conviene reenviarlo para que firme el que corresponde al formato nuevo.
+    toast.success(
+      d.habiaEnviado
+        ? 'PDF regenerado. El aspirante tiene el anterior en su correo: reenvíalo para que firme este.'
+        : 'PDF regenerado con el formato vigente.',
+      { duration: d.habiaEnviado ? 8000 : 4000 },
+    )
+    router.refresh()
+  }
+
   async function enviar(a: Acuerdo) {
     setOcupado(a.id)
     const res = await enviarAcuerdo({ id: a.id })
@@ -273,6 +290,17 @@ export function AcuerdosCliente({
                 {puedeEditar && a.estado === 'EN_EVALUACION' && (
                   <Button size="sm" variant="outline" disabled={trabajando} onClick={() => abrirEditar(a)}>
                     <Pencil className="size-4" /> Editar
+                  </Button>
+                )}
+                {puedeEditar && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={trabajando}
+                    onClick={() => regenerar(a)}
+                    title="Vuelve a generar el PDF con los mismos datos y el formato vigente"
+                  >
+                    <RefreshCw className="size-4" /> Regenerar PDF
                   </Button>
                 )}
                 {puedeEditar && (
