@@ -17,6 +17,7 @@ import { Ayuda } from '@/components/ui-kit/ayuda'
 import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
 import { crearAcuerdo, editarAcuerdo, enviarAcuerdo, subirAcuerdoFirmado, decidirAcuerdo, convertirEnColaborador, eliminarAcuerdo } from './acciones'
 import type { AcuerdoEvaluacionInput } from '@/lib/validaciones/acuerdo-evaluacion'
+import { mensajeError } from '@/lib/errores-accion'
 
 type Acuerdo = {
   id: string; numero: string; nombre: string; documento: string; email: string
@@ -34,6 +35,25 @@ const ESTADO: Record<string, { texto: string; variante: 'default' | 'secondary' 
   EN_EVALUACION: { texto: 'En evaluación', variante: 'secondary' },
   APROBADO: { texto: 'Aprobado', variante: 'default' },
   NO_APROBADO: { texto: 'No aprobado', variante: 'destructive' },
+}
+
+/** Nombre técnico del campo → el rótulo que se ve en el formulario. */
+const ETIQUETAS_CAMPO: Record<string, string> = {
+  nombres: 'Nombres',
+  apellidos: 'Apellidos',
+  tipoDocumento: 'Tipo de documento',
+  numeroDocumento: 'Número de documento',
+  lugarExpedicionDoc: 'Expedido en',
+  direccion: 'Dirección',
+  email: 'Correo',
+  celular: 'Celular',
+  cargoEvaluado: 'Cargo a evaluar',
+  cargoId: 'Cargo del catálogo',
+  sedeId: 'Sede',
+  fechaInicio: 'Inicio de la evaluación',
+  fechaFin: 'Fin de la evaluación',
+  ciudadFirma: 'Ciudad de firma',
+  observaciones: 'Observaciones',
 }
 
 const TIPOS_DOC = ['CC', 'CE', 'TI', 'PASAPORTE', 'PPT'] as const
@@ -84,9 +104,13 @@ export function AcuerdosCliente({
 
   async function guardar() {
     if (!f.nombres.trim() || !f.apellidos.trim()) { toast.error('Indica nombres y apellidos.'); return }
+    // El documento identifica al aspirante y sale impreso en el acuerdo; sin
+    // esta comprobación el fallo llegaba desde el servidor sin decir cuál era.
+    if (f.numeroDocumento.trim().length < 4) { toast.error('Indica el número de documento.'); return }
     if (!f.email.trim()) { toast.error('Indica el correo: por ahí se envía el acuerdo.'); return }
     if (!f.cargoEvaluado.trim()) { toast.error('Indica el cargo a evaluar.'); return }
     if (!f.fechaInicio || !f.fechaFin) { toast.error('Indica las fechas de la evaluación.'); return }
+    if (f.fechaFin < f.fechaInicio) { toast.error('La fecha de fin no puede ser anterior a la de inicio.'); return }
 
     const payload: AcuerdoEvaluacionInput = {
       nombres: f.nombres, apellidos: f.apellidos,
@@ -102,7 +126,7 @@ export function AcuerdosCliente({
       ? await editarAcuerdo({ id: editando.id, ...payload })
       : await crearAcuerdo(payload)
     setGuardando(false)
-    if (!res.ok) { toast.error(res.error); return }
+    if (!res.ok) { toast.error(mensajeError(res, ETIQUETAS_CAMPO), { duration: 8000 }); return }
 
     if (editando) {
       // Si ya se había enviado, el PDF que tiene el aspirante quedó viejo: hay
