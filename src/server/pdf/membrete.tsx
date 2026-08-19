@@ -25,17 +25,31 @@ export function pieContacto(empresa: DatosEmpresa): string {
 // pinta `fixed` → se repite en cada página, detrás del contenido.
 const m = StyleSheet.create({
   fondo: { position: 'absolute', top: 0, left: 0, width: 612, height: 792 }, // carta en pt
+  // Sobre la franja del pie, centrado y por encima de la imagen.
+  pie: {
+    position: 'absolute', bottom: 46, left: 72, right: 72,
+    textAlign: 'center', fontSize: 7.5, color: '#475569',
+  },
 })
 
 /**
- * Fondo de papel membretado para contratos y autorizaciones. Debe ir como PRIMER
- * hijo del <Page> (para quedar detrás del contenido). Las páginas deben reservar
- * espacio con paddingTop ≥ ~118 y paddingBottom ≥ ~64 para no pisar encabezado/pie.
+ * Fondo de papel membretado para contratos, autorizaciones y acuerdos. Debe ir
+ * como PRIMER hijo del <Page> (para quedar detrás del contenido). Las páginas
+ * deben reservar espacio con paddingTop ≥ ~118 y paddingBottom ≥ ~64 para no
+ * pisar encabezado ni pie.
  *
- * El pie de contacto ya viene impreso en la imagen del membrete.
+ * Sin argumentos usa el membrete de fábrica, que ya trae el pie de contacto
+ * impreso en la imagen. Cuando la empresa sube el suyo —que se espera SIN pie,
+ * ver `fondoMembrete`— la app escribe encima el correo, NIT y sitio web tomados
+ * de Configuración → Empresa, para que cambiarlos no obligue a rehacer la imagen.
  */
-export function MembreteFondo() {
-  return <Image src={MEMBRETE_FONDO} style={m.fondo} fixed />
+export function MembreteFondo({ fondo, empresa }: { fondo?: string; empresa?: DatosEmpresa } = {}) {
+  return (
+    <>
+      <Image src={fondo ?? MEMBRETE_FONDO} style={m.fondo} fixed />
+      {fondo && empresa && <Text style={m.pie} fixed>{pieContacto(empresa)}</Text>}
+    </>
+  )
 }
 
 export function Membrete({ empresa }: { empresa: DatosEmpresa }) {

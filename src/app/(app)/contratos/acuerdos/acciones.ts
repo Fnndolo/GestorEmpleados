@@ -11,6 +11,7 @@ import { subirArchivo, eliminarArchivo } from '@/server/storage'
 import { enviarCorreo } from '@/server/notificaciones/correo'
 import { crearUsuarioColaborador } from '@/server/usuarios'
 import { renderAcuerdoEvaluacion } from '@/server/pdf/acuerdo-evaluacion'
+import { leerFirmaComoDataUri } from '@/server/contratos-ops-pdf'
 import { parseFechaISO, hoyBogota } from '@/lib/fechas'
 import {
   acuerdoEvaluacionSchema,
@@ -99,6 +100,12 @@ async function construirPdf(acuerdoId: string): Promise<{ pdf: Buffer; numero: s
     fechaFirmaTexto: fechaFirmaEnLetras(a.creadoEn),
     ciudadFirma: a.ciudadFirma ?? '',
     aniosConfidencialidad: aniosEnLetras(a.aniosConfidencialidad),
+    // El acuerdo sale ya firmado por la empresa: así el aspirante solo pone la
+    // suya y no hay que devolver el documento para una segunda firma. La imagen
+    // se lee aquí, en el servidor; nunca viaja al navegador.
+    firmaEmpresaImg: empresa.firmaRepLegalPath
+      ? await leerFirmaComoDataUri(empresa.firmaRepLegalPath).catch(() => null)
+      : null,
   })
   return { pdf, numero: a.numero, nombre: nombreAspirante }
 }

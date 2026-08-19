@@ -23,8 +23,10 @@ export default async function ModulosPage() {
         acciones={<Constructor />}
       />
       {modulos.length === 0 ? (
-        <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
-          <Layers className="size-8" /><p>Aún no has creado módulos personalizados.</p>
+        <Card><CardContent className="flex flex-col items-center gap-1.5 py-12 text-center text-muted-foreground">
+          <Layers className="size-8" />
+          <p className="font-medium text-foreground">Ninguno creado</p>
+          <p className="max-w-prose text-sm">Sirven para registrar cosas propias del negocio —pólizas, convenios, activos especiales— sin esperar a que se programen.</p>
         </CardContent></Card>
       ) : (
         <Card><CardContent className="p-0 divide-y">

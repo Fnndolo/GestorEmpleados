@@ -159,3 +159,41 @@
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.04), 0 8px 16px -8px rgba(0, 0, 0, 0.06);
   }
 }
+/* Barras de desplazamiento ocultas en toda la app: se sigue pudiendo desplazar
+   con rueda, gesto táctil, teclado y arrastre, pero la barra no ocupa espacio
+   ni interrumpe el diseño. Se aplica a todo elemento —no solo a la página—
+   porque los carruseles y menús laterales son los que más molestaban. */
+@layer base {
+  * {
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* Edge heredado */
+  }
+  *::-webkit-scrollbar {            /* Chrome, Safari */
+    width: 0;
+    height: 0;
+  }
+}
+
+/* Cascarón: el menú lateral se puede plegar desde la barra superior. El estado
+   vive en un atributo del <html> —no en React— para que sobreviva a la
+   navegación entre páginas sin volver a montar el layout ni parpadear.
+
+   Va SIN @layer a propósito: el CSS sin capa gana a todas las capas de
+   Tailwind, y aquí hace falta vencer a la utilidad `lg:flex` del <aside> y a
+   `lg:grid-cols-[260px_1fr]` del contenedor. En @layer components perdería. */
+:root[data-lateral='oculto'] .cascaron-lateral {
+  display: none;
+}
+@media (min-width: 1024px) {
+  :root[data-lateral='oculto'] .cascaron {
+    grid-template-columns: 1fr;
+  }
+  /* El botón de reabrir solo aparece cuando el menú está plegado: mientras está
+     abierto, el que manda es el que vive junto al logo. */
+  .mostrar-lateral {
+    display: none;
+  }
+  :root[data-lateral='oculto'] .mostrar-lateral {
+    display: inline-flex;
+  }
+}

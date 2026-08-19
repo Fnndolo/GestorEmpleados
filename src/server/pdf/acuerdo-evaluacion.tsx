@@ -1,6 +1,7 @@
-import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
 import { estilos } from './estilos'
 import { MembreteFondo, type DatosEmpresa } from './membrete'
+import { fondoMembrete } from './fondo-membrete'
 import { registrarBookman } from './fuentes'
 
 /**
@@ -34,7 +35,9 @@ const s = StyleSheet.create({
   cierre: { marginTop: 14, marginBottom: 4, textAlign: 'justify' },
   firmas: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 56 },
   firmaCol: { width: '45%' },
-  firmaLinea: { borderTopWidth: 1, borderTopColor: '#1e293b', paddingTop: 4, marginTop: 30 },
+  firmaLinea: { borderTopWidth: 1, borderTopColor: '#1e293b', paddingTop: 4 },
+  firmaImg: { width: 150, height: 52, objectFit: 'contain', alignSelf: 'flex-start', marginBottom: -6 },
+  firmaEspacio: { height: 46 },
   firmaNombre: { fontFamily: 'Bookman Old Style', fontWeight: 'bold', fontSize: 9.5 },
   firmaLinea2: { fontSize: 9 },
   nota: { marginTop: 26, fontSize: 7.5, color: '#64748b', textAlign: 'center' },
@@ -57,6 +60,12 @@ export type DatosAcuerdoEvaluacionPdf = {
   fechaFirmaTexto: string
   ciudadFirma: string
   aniosConfidencialidad: string
+  /**
+   * Firma del representante legal (data URI PNG). El acuerdo sale ya firmado por
+   * la empresa, así el aspirante solo pone la suya y no hay que devolver el
+   * documento para una segunda firma.
+   */
+  firmaEmpresaImg?: string | null
 }
 
 function CampoEnc({ label, valor, borde }: { label: string; valor: string; borde?: boolean }) {
@@ -68,17 +77,16 @@ function CampoEnc({ label, valor, borde }: { label: string; valor: string; borde
   )
 }
 
-function DocumentoAcuerdo({ d }: { d: DatosAcuerdoEvaluacionPdf }) {
+function DocumentoAcuerdo({ d, fondo }: { d: DatosAcuerdoEvaluacionPdf; fondo?: string }) {
   const empresa = d.empresa.razonSocial
   return (
     <Document>
       <Page size="LETTER" style={[estilos.page, s.page]}>
-        <MembreteFondo />
+        <MembreteFondo fondo={fondo} empresa={d.empresa} />
 
         <View style={s.tablaEnc}>
           <View style={s.tituloRow}>
             <Text style={s.tituloTabla}>ACUERDO DE EVALUACIÓN PREVIA – SIN RELACIÓN LABORAL</Text>
-            <Text style={s.numeroTabla}>{d.numero}</Text>
           </View>
           <View style={s.encHeadRow}>
             <View style={s.encCol}><Text style={s.encHead}>EVALUADOR</Text></View>
@@ -172,6 +180,14 @@ function DocumentoAcuerdo({ d }: { d: DatosAcuerdoEvaluacionPdf }) {
         <View style={s.firmas}>
           <View style={s.firmaCol}>
             <Text style={s.negrita}>EVALUADOR:</Text>
+            {/* La firma se dibuja SOBRE la línea: el margen negativo la baja
+                hasta apoyarse en ella, como una firma a mano. Sin firma
+                configurada queda el espacio en blanco para firmar impreso. */}
+            {d.firmaEmpresaImg ? (
+              <Image src={d.firmaEmpresaImg} style={s.firmaImg} />
+            ) : (
+              <View style={s.firmaEspacio} />
+            )}
             <View style={s.firmaLinea}>
               <Text style={s.firmaNombre}>{empresa}</Text>
               <Text style={s.firmaLinea2}>{d.representanteLegal}</Text>
@@ -200,5 +216,9 @@ function DocumentoAcuerdo({ d }: { d: DatosAcuerdoEvaluacionPdf }) {
 
 export async function renderAcuerdoEvaluacion(d: DatosAcuerdoEvaluacionPdf): Promise<Buffer> {
   registrarBookman()
-  return renderToBuffer(<DocumentoAcuerdo d={d} />)
+  // El membrete puede venir de Ajustes; sin uno propio, `fondo` queda indefinido
+  // y se usa el de fábrica, que ya trae el pie impreso en la imagen.
+  const { src, propio } = await fondoMembrete()
+  const fondo = propio ? src : undefined
+  return renderToBuffer(<DocumentoAcuerdo d={d} fondo={fondo} />)
 }

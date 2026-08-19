@@ -23,7 +23,7 @@ export const crearPlantillaCC = accion(
     const p = await dbAuditado.plantillaCuentaCobro.create({
       data: { nombre: d.nombre, encabezado: v(d.encabezado), cuerpo: d.cuerpo, pieLegal: v(d.pieLegal), esDefecto: d.esDefecto },
     })
-    revalidatePath('/configuracion/plantillas-cuenta-cobro')
+    revalidatePath('/configuracion/plantillas/cuentas-cobro')
     return { id: p.id }
   },
 )
@@ -36,7 +36,7 @@ export const editarPlantillaCC = accion(
       where: { id: d.id },
       data: { nombre: d.nombre, encabezado: v(d.encabezado), cuerpo: d.cuerpo, pieLegal: v(d.pieLegal), esDefecto: d.esDefecto },
     })
-    revalidatePath('/configuracion/plantillas-cuenta-cobro')
+    revalidatePath('/configuracion/plantillas/cuentas-cobro')
   },
 )
 
@@ -44,6 +44,6 @@ export const eliminarPlantillaCC = accion(
   { modulo: 'configuracion', accion: 'ELIMINAR', schema: z.object({ id: z.uuid() }) },
   async ({ id }) => {
     await dbAuditado.plantillaCuentaCobro.delete({ where: { id } })
-    revalidatePath('/configuracion/plantillas-cuenta-cobro')
+    revalidatePath('/configuracion/plantillas/cuentas-cobro')
   },
 )

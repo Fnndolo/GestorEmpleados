@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
 import { estilos } from './estilos'
 import { MembreteFondo, type DatosEmpresa } from './membrete'
+import { fondoMembrete } from './fondo-membrete'
 import { registrarBookman } from './fuentes'
 
 /**
@@ -36,14 +37,14 @@ const s = StyleSheet.create({
   firmaFecha: { fontSize: 7.5, color: '#64748b', marginTop: 2 },
 })
 
-function DocumentoAutorizacion({ d, firmaImg, firmaFecha }: { d: DatosAutorizacionPdf; firmaImg?: string | null; firmaFecha?: string | null }) {
+function DocumentoAutorizacion({ d, firmaImg, firmaFecha, fondo }: { d: DatosAutorizacionPdf; firmaImg?: string | null; firmaFecha?: string | null; fondo?: string }) {
   const masc = d.genero === 'MASCULINO'
   const identificado = masc ? 'identificado' : 'identificada'
   const informado = masc ? 'informado' : 'informada'
   return (
     <Document>
       <Page size="LETTER" style={[estilos.page, s.page]}>
-        <MembreteFondo />
+        <MembreteFondo fondo={fondo} empresa={d.empresa} />
 
         <Text style={s.fecha}>{d.ciudadFecha}</Text>
 
@@ -103,5 +104,9 @@ export async function renderAutorizacionDatos(
   firmaFecha?: string | null,
 ): Promise<Buffer> {
   registrarBookman()
-  return renderToBuffer(<DocumentoAutorizacion d={d} firmaImg={firmaImg} firmaFecha={firmaFecha} />)
+  // El membrete puede venir de Ajustes; si no hay uno propio, `fondo` queda
+  // indefinido y se usa el de fábrica, que ya trae el pie impreso.
+  const { src, propio } = await fondoMembrete()
+  const fondo = propio ? src : undefined
+  return renderToBuffer(<DocumentoAutorizacion d={d} firmaImg={firmaImg} firmaFecha={firmaFecha} fondo={fondo} />)
 }

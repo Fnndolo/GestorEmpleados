@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
 import { estilos } from './estilos'
 import { MembreteFondo, type DatosEmpresa } from './membrete'
+import { fondoMembrete } from './fondo-membrete'
 import { registrarBookman } from './fuentes'
 import type { PlantillaResuelta } from '@/lib/contrato-variables'
 
@@ -111,12 +112,12 @@ function TablaEncabezado({ e, titulo, numero }: { e: EncabezadoContratoLaboral; 
   )
 }
 
-function DocumentoContrato({ d }: { d: DatosContratoLaboralPdf }) {
+function DocumentoContrato({ d, fondo }: { d: DatosContratoLaboralPdf; fondo?: string }) {
   const { plantilla: p } = d
   return (
     <Document>
       <Page size="LETTER" style={[estilos.page, s.page]}>
-        <MembreteFondo />
+        <MembreteFondo fondo={fondo} empresa={d.empresa} />
         <TablaEncabezado e={d.encabezado} titulo={p.titulo} numero={p.numero} />
         {/* wrap={false} por párrafo/viñeta: el texto justificado de react-pdf se
             superpone si un párrafo queda partido en el salto de página; así los
@@ -182,5 +183,9 @@ function DocumentoContrato({ d }: { d: DatosContratoLaboralPdf }) {
 
 export async function renderContratoLaboral(d: DatosContratoLaboralPdf): Promise<Buffer> {
   registrarBookman()
-  return renderToBuffer(<DocumentoContrato d={d} />)
+  // El membrete puede venir de Ajustes; si no hay uno propio, `fondo` queda
+  // indefinido y se usa el de fábrica, que ya trae el pie impreso.
+  const { src, propio } = await fondoMembrete()
+  const fondo = propio ? src : undefined
+  return renderToBuffer(<DocumentoContrato d={d} fondo={fondo} />)
 }

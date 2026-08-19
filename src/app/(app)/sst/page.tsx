@@ -1,7 +1,6 @@
 import { requerirPermiso, tienePermiso, alcanceDe } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { sedeActualId } from '@/server/sede-actual'
-import { Encabezado } from '@/components/shell/encabezado'
 import { hoyBogota, formatFechaISO } from '@/lib/fechas'
 import { SstCliente } from './sst-cliente'
 
@@ -165,11 +164,6 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
 
   return (
     <div className="max-w-7xl">
-      {/* En el hub (tablero) se muestra el encabezado del módulo; las vistas internas traen su propio título con "‹ SST". */}
-      {tab === 'tablero' && (
-        <Encabezado titulo="Seguridad y Salud en el Trabajo" descripcion="SG-SST conforme al Decreto 1072/2015 y la Resolución 0312/2019." />
-      )}
-
       <SstCliente
         tab={tab}
         puedeCrear={puedeCrear}

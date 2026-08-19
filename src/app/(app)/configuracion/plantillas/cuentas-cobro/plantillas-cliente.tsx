@@ -32,7 +32,11 @@ export function PlantillasCliente({ plantillas }: { plantillas: Plantilla[] }) {
     <div className="space-y-4">
       <div className="flex justify-end"><Button size="sm" onClick={() => setNueva(true)}><Plus className="size-4" /> Nueva plantilla</Button></div>
       {plantillas.length === 0 ? (
-        <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground"><FileText className="size-8" /><p>Aún no hay plantillas. Crea la primera.</p></CardContent></Card>
+        <Card><CardContent className="flex flex-col items-center gap-1.5 py-12 text-center text-muted-foreground">
+          <FileText className="size-8" />
+          <p className="font-medium text-foreground">Sin plantillas</p>
+          <p className="max-w-prose text-sm">Los contratistas OPS no pueden radicar cuentas de cobro hasta que exista al menos una.</p>
+        </CardContent></Card>
       ) : (
         <Card><CardContent className="p-0 divide-y">
           {plantillas.map((p) => (

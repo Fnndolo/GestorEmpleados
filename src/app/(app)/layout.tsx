@@ -12,6 +12,7 @@ import { BottomNav } from '@/components/shell/bottom-nav'
 import { Campana } from '@/components/shell/campana'
 import { BusquedaGlobal } from '@/components/shell/busqueda-global'
 import { RegistrarSW } from '@/components/pwa/registrar-sw'
+import { PlegarLateral, ScriptLateral } from '@/components/shell/plegar-lateral'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const usuario = await requerirSesion()
@@ -34,13 +35,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .map((m) => ({ slug: m.slug, nombre: m.nombre }))
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
+    <div className="cascaron min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
       <RegistrarSW />
+      <ScriptLateral />
 
       {/* Sidebar de escritorio */}
-      <aside className="hidden lg:flex flex-col border-r bg-card sticky top-0 h-screen">
-        <div className="p-4 border-b">
+      <aside className="cascaron-lateral hidden lg:flex flex-col border-r bg-card sticky top-0 h-screen">
+        <div className="flex items-center justify-between gap-2 border-b p-4">
           <Logo />
+          <PlegarLateral />
         </div>
         <div className="p-3 border-b">
           <SelectorSede sedes={sedes} actual={sedeActual} />
@@ -57,6 +60,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex flex-col min-h-screen">
         {/* Barra superior */}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
+          <PlegarLateral variante="barra" />
           <DrawerMovil
             hrefsVisibles={visibles}
             modulosCustom={modulosCustom}

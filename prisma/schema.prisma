@@ -245,6 +245,25 @@ model ConfiguracionEmpresa {
   direccion          String?
   sitioWeb           String? @map("sitio_web")
   logoUrl            String? @map("logo_url")
+  /**
+   * Papel membretado de los documentos legales (contratos, autorizaciones,
+   * acuerdos): imagen de página completa SIN el pie de contacto, porque ese lo
+   * escribe la app con los datos de aquí mismo. Así cambiar el correo o el NIT
+   * es editar un campo, no rehacer la imagen en Word.
+   *
+   * Vacío = se usa el membrete que viene con la aplicación.
+   */
+  membreteFondoPath  String? @map("membrete_fondo_path")
+  /**
+   * Firma escaneada del representante legal, para estampar en los documentos que
+   * la empresa emite ya firmados (hoy, el acuerdo de evaluación previa).
+   *
+   * Es un activo delicado: quien tenga la imagen puede estamparla donde quiera.
+   * Por eso NO se expone por ninguna URL —no hay endpoint que la devuelva— y
+   * solo se lee en el servidor al generar el PDF. Se guarda la ruta, no el
+   * archivo, igual que el resto de documentos privados.
+   */
+  firmaRepLegalPath  String? @map("firma_rep_legal_path")
   // Días hábiles: el sábado cuenta como hábil salvo configuración contraria (C6)
   sabadoHabil        Boolean @default(true) @map("sabado_habil")
   // Interruptores de nómina (editables por RRHH sin cambio de código):

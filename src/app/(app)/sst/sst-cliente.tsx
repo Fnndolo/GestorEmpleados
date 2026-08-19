@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Paperclip, OctagonAlert, Flame, ClipboardCheck, IdCard, Landmark, Scale, CircleCheck, CircleAlert, CircleX, FileWarning, LayoutGrid, ChartLine } from 'lucide-react'
+import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Paperclip, OctagonAlert, Flame, ClipboardCheck, IdCard, Landmark, Scale, CircleCheck, CircleAlert, CircleX, FileWarning, LayoutGrid, ChartLine, ChevronLeft } from 'lucide-react'
 import { Chip, Pill, Stat, type PillTone } from '@/components/ui-kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +33,7 @@ import {
 } from './acciones'
 
 const TITULO_TAB: Record<string, string> = {
+  tablero: 'Tablero',
   estructura: 'Estructura del SG-SST', matriz: 'Matriz legal (normograma)', examenes: 'Exámenes médicos',
   arl: 'Novedades de ARL', accidentes: 'Accidentes e incidentes', comites: 'Comités', epp: 'Elementos de protección personal',
   ipevr: 'Matriz de peligros (IPEVR)', profesiograma: 'Profesiograma', emergencias: 'Plan de emergencias',
@@ -145,6 +146,7 @@ export function SstCliente(p: Props) {
     setTab(p.tab)
   }
 
+  const router = useRouter()
   const [dialogo, setDialogo] = useState<string | null>(null)
   const [accidenteAbierto, setAccidenteAbierto] = useState<Props['accidentes'][number] | null>(null)
   const [comiteAbierto, setComiteAbierto] = useState<Props['comites'][number] | null>(null)
@@ -203,22 +205,6 @@ export function SstCliente(p: Props) {
     },
   ]
 
-  /** Estado de cada sección para el punto de color del riel. */
-  const ESTADO_SECCION: Record<string, 'ok' | 'warn' | 'bad' | null> = {
-    estructura: pendEstructura > 0 ? 'warn' : 'ok',
-    matriz: normasSinCumplir > 0 ? 'bad' : 'ok',
-    autoeval: !p.autoeval ? 'bad' : accionesMejora.some((a) => a.vencida && !a.cumplida) ? 'warn' : 'ok',
-    examenes: examenesVencidos > 0 ? 'bad' : 'ok',
-    arl: null,
-    accidentes: furatPendientes > 0 ? 'bad' : 'ok',
-    ipevr: ipevrCriticos > 0 ? 'warn' : 'ok',
-    profesiograma: null,
-    emergencias: planVigente ? 'ok' : 'bad',
-    inspecciones: inspAbiertas > 0 ? 'warn' : 'ok',
-    comites: semComites?.estado ?? null,
-    epp: eppSinFirma > 0 ? 'warn' : 'ok',
-  }
-
   const GRUPOS: { titulo: string; items: { tab: string; etiqueta: string; icono: typeof Landmark }[] }[] = [
     {
       titulo: 'Vista general',
@@ -247,22 +233,26 @@ export function SstCliente(p: Props) {
     document.getElementById(`tab-${destino}`)?.focus()
   }
 
+  /**
+   * Menú completo y quieto, al estilo de una pantalla de ajustes: todas las
+   * secciones a la vista, y la elegida marcada con una barra de acento a la
+   * izquierda en vez de un relleno fuerte.
+   */
   const riel = (
     <nav
       role="tablist"
       aria-label="Secciones de SST"
       aria-orientation="vertical"
       onKeyDown={navegarConTeclado}
-      className="flex gap-1.5 overflow-x-auto rounded-xl border bg-card p-2 lg:sticky lg:top-4 lg:flex-col lg:gap-0.5 lg:overflow-visible"
+      className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:sticky lg:top-4 lg:mx-0 lg:flex-col lg:gap-px lg:overflow-visible lg:px-0 lg:pb-0"
     >
       {GRUPOS.map((g) => (
         <div key={g.titulo} className="contents lg:block">
-          <p className="hidden px-2 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground first:pt-1 lg:block">
+          <p className="hidden px-3 pt-3.5 pb-1 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground first:pt-0 lg:block">
             {g.titulo}
           </p>
           {g.items.map((it) => {
             const activo = it.tab === tab
-            const estado = ESTADO_SECCION[it.tab]
             return (
               <button
                 key={it.tab}
@@ -274,22 +264,20 @@ export function SstCliente(p: Props) {
                 tabIndex={activo ? 0 : -1}
                 onClick={() => irA(it.tab)}
                 className={cn(
-                  'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-2.5 py-2 text-[13px] transition-colors lg:w-full',
+                  'relative flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-[13.5px] transition-colors lg:w-full',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-                  activo ? 'bg-primary/10 font-semibold text-primary' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                  // En móvil son pastillas sueltas; en escritorio, filas de menú.
+                  'border bg-card lg:border-0 lg:bg-transparent',
+                  activo
+                    ? 'border-primary font-semibold text-foreground lg:bg-card lg:shadow-sm'
+                    : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
                 )}
               >
-                <it.icono className="hidden size-4 shrink-0 lg:block" />
-                <span className="min-w-0 flex-1 truncate text-left">{it.etiqueta}</span>
-                {estado && (
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'size-1.5 shrink-0 rounded-full',
-                      estado === 'ok' ? 'bg-emerald-500' : estado === 'warn' ? 'bg-amber-500' : 'bg-destructive',
-                    )}
-                  />
+                {activo && (
+                  <span aria-hidden className="absolute left-0 top-1/2 hidden h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary lg:block" />
                 )}
+                <it.icono className={cn('hidden size-[18px] shrink-0 lg:block', activo ? 'text-primary' : 'text-muted-foreground')} />
+                <span className="min-w-0 flex-1 truncate text-left">{it.etiqueta}</span>
               </button>
             )
           })}
@@ -299,19 +287,40 @@ export function SstCliente(p: Props) {
   )
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[232px_minmax(0,1fr)]">
+    <>
+      {/* Cabecera: la flecha devuelve al tablero (o sale del módulo si ya estás
+          en él) y la ruta, en pequeño, dice dónde estás. El título grande vive
+          dentro del panel, que es donde da jerarquía. */}
+      <div className="mb-3 flex items-center gap-2">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-8 shrink-0 text-muted-foreground"
+          aria-label={tab === 'tablero' ? 'Salir de SST' : 'Volver al tablero de SST'}
+          onClick={() => (tab === 'tablero' ? router.push('/') : irA('tablero'))}
+        >
+          <ChevronLeft className="size-[18px]" />
+        </Button>
+        <nav aria-label="Ruta" className="flex min-w-0 items-center gap-1.5 text-[13.5px] font-semibold">
+          <span className="truncate">Seguridad y Salud en el Trabajo</span>
+          {tab !== 'tablero' && (
+            <>
+              <span className="font-normal text-muted-foreground">›</span>
+              <span className="truncate font-medium text-muted-foreground">{TITULO_TAB[tab] ?? 'SST'}</span>
+            </>
+          )}
+        </nav>
+      </div>
+
+      <div className="grid items-start gap-5 lg:grid-cols-[236px_minmax(0,1fr)]">
       {riel}
 
       <div className="space-y-4">
-      {tab !== 'tablero' && (
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="text-base font-semibold">{TITULO_TAB[tab] ?? 'SST'}</p>
-          </div>
-          {p.puedeCrear && !['emergencias', 'estructura', 'indicadores', 'autoeval'].includes(tab) && <Button size="sm" onClick={() => setDialogo(tab)}><Plus className="size-4" /> Nuevo</Button>}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-2xl font-bold tracking-tight">{TITULO_TAB[tab] ?? 'Tablero'}</h1>
+          {p.puedeCrear && !['tablero', 'emergencias', 'estructura', 'indicadores', 'autoeval'].includes(tab) && <Button size="sm" onClick={() => setDialogo(tab)}><Plus className="size-4" /> Nuevo</Button>}
           {p.puedeCrear && tab === 'autoeval' && <Button size="sm" onClick={() => setDialogo('autoeval')}><Plus className="size-4" /> Nuevo</Button>}
         </div>
-      )}
 
       {tab === 'tablero' && (
         <div className="space-y-5">
@@ -625,7 +634,8 @@ export function SstCliente(p: Props) {
       {normaAbierta && <DialogNorma norma={normaAbierta} puedeEditar={p.puedeEditar} onClose={() => setNormaAbierta(null)} />}
       {indicadorAbierto && <DialogIndicadorSst onClose={() => setIndicadorAbierto(false)} />}
       </div>
-    </div>
+      </div>
+    </>
   )
 }
 

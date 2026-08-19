@@ -53,7 +53,7 @@ export function ConceptosCliente({ puedeEditar, conceptos }: { puedeEditar: bool
           <h2 className="mb-2 text-[13px] font-bold">{g.titulo}</h2>
           {g.items.length === 0 ? (
             <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
-              Aún no hay conceptos propios. Crea el primero (p. ej. "Auxilio de alimentación").
+              Aún no hay conceptos propios. Crea el primero (p. ej. «Auxilio de alimentación»).
             </CardContent></Card>
           ) : (
             <Card><CardContent className="divide-y p-0">
