@@ -44,12 +44,35 @@ export default async function MisContratosPage() {
     orderBy: { creadoEn: 'desc' },
     select: { id: true, entidadId: true, nombre: true },
   })
-  const docPorContrato = new Map<string, string>()
-  const autorizacionPorContrato = new Map<string, string>()
+  /**
+   * TODOS los documentos de cada contrato, no uno por casilla.
+   *
+   * Antes se repartían en dos casillas ("contrato" y "autorización") mirando si
+   * el nombre empezaba por "Autorización". Los contratos subidos antes de que se
+   * nombraran de forma descriptiva conservan el nombre del archivo original
+   * (p. ej. "DOC-20260724-WA0002.pdf"), así que ninguno encajaba en la casilla
+   * de autorización: los dos caían en la misma y el segundo se descartaba en
+   * silencio. El colaborador veía UN documento y el otro desaparecía.
+   *
+   * Adivinar por el nombre es frágil; se listan todos y cada uno se muestra con
+   * el nombre con el que quedó guardado.
+   */
+  const docsPorContrato = new Map<string, { id: string; nombre: string }[]>()
   for (const d of documentos) {
-    const mapa = d.nombre.startsWith('Autorización') ? autorizacionPorContrato : docPorContrato
-    if (!mapa.has(d.entidadId)) mapa.set(d.entidadId, d.id)
+    const lista = docsPorContrato.get(d.entidadId) ?? []
+    lista.push({ id: d.id, nombre: d.nombre })
+    docsPorContrato.set(d.entidadId, lista)
   }
+
+  /** Sin acentos y en minúsculas: los nombres viejos no son de fiar. */
+  const esAutorizacion = (nombre: string) =>
+    nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().includes('autoriz')
+
+  /** El PDF del contrato en sí: el primero que no sea la autorización. */
+  const contratoDocId = (id: string) =>
+    docsPorContrato.get(id)?.find((d) => !esAutorizacion(d.nombre))?.id ??
+    docsPorContrato.get(id)?.[0]?.id ??
+    null
 
   const TIPO_LABORAL: Record<string, string> = {
     TERMINO_FIJO: 'Contrato de trabajo a término fijo', TERMINO_INDEFINIDO: 'Contrato de trabajo a término indefinido',
@@ -65,8 +88,8 @@ export default async function MisContratosPage() {
       estado: c.firmaEmpleadoPath && c.firmaEmpleadorPath ? 'FIRMADO' : c.estado,
       valorTotal: `${fmtCOP(Number(c.salarioBase))}/mes`,
       vigencia: c.fechaFin ? `${formatFechaLarga(c.fechaInicio)} — ${formatFechaLarga(c.fechaFin)}` : `Desde ${formatFechaLarga(c.fechaInicio)}`,
-      documentoId: docPorContrato.get(c.id) ?? null,
-      autorizacionId: autorizacionPorContrato.get(c.id) ?? null,
+      documentoId: contratoDocId(c.id),
+      documentos: docsPorContrato.get(c.id) ?? [],
       firmadoPorMi: !!c.firmaEmpleadoPath,
       fechaMiFirma: c.firmaEmpleadoFecha ? formatFechaLarga(c.firmaEmpleadoFecha) : null,
       tieneDocumento: !!c.contenidoPdf,
@@ -79,8 +102,8 @@ export default async function MisContratosPage() {
       estado: c.estado,
       valorTotal: fmtCOP(Number(c.valorTotal)),
       vigencia: `${formatFechaLarga(c.fechaInicio)} — ${formatFechaLarga(c.fechaFin)}`,
-      documentoId: docPorContrato.get(c.id) ?? null,
-      autorizacionId: autorizacionPorContrato.get(c.id) ?? null,
+      documentoId: contratoDocId(c.id),
+      documentos: docsPorContrato.get(c.id) ?? [],
       firmadoPorMi: !!c.firmaContratistaPath,
       fechaMiFirma: c.firmaContratistaFecha ? formatFechaLarga(c.firmaContratistaFecha) : null,
       tieneDocumento: !!c.contenidoPdf,

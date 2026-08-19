@@ -28,13 +28,30 @@ type ContratoItem = {
   valorTotal: string
   vigencia: string
   documentoId: string | null
-  autorizacionId: string | null
+  documentos: { id: string; nombre: string }[]
   firmadoPorMi: boolean
   fechaMiFirma: string | null
   tieneDocumento: boolean
 }
 
 const ESTADO: Record<string, string> = { BORRADOR: 'Borrador', ACTIVO: 'Activo', FIRMADO: 'Firmado', TERMINADO: 'Terminado' }
+
+/** Sin acentos y en minúsculas: los documentos viejos guardan el nombre del archivo. */
+function esAutorizacion(nombre: string): boolean {
+  return nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().includes('autoriz')
+}
+
+/**
+ * Etiqueta del botón. La autorización se rotula por lo que es; el resto muestra
+ * su propio nombre.
+ *
+ * Rotular todo lo demás como "Contrato" dejaría dos botones idénticos cuando un
+ * contrato viejo trae dos PDF con el nombre del archivo escaneado, y el
+ * colaborador no sabría cuál abrir. El nombre crudo es feo, pero distingue.
+ */
+function etiquetaDoc(nombre: string): string {
+  return esAutorizacion(nombre) ? 'Autorización de datos' : nombre
+}
 
 /** Botón que abre un documento en el visor: ícono representativo + nombre corto. */
 function DocBoton({
@@ -54,8 +71,10 @@ function DocBoton({
       titulo={titulo}
       className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' gap-2'}
     >
-      <Icono className="size-4 text-primary" />
-      {etiqueta}
+      <Icono className="size-4 shrink-0 text-primary" />
+      {/* Los nombres heredados de archivos escaneados son largos: se recortan
+          para que el botón no se desborde en móvil. */}
+      <span className="max-w-[220px] truncate">{etiqueta}</span>
     </VisorPdf>
   )
 }
@@ -131,10 +150,17 @@ function ContratoCard({ c }: { c: ContratoItem }) {
         </div>
 
         {/* Documentos: botones claros con nombre corto */}
-        {(c.documentoId || c.autorizacionId) && (
+        {c.documentos.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
-            {c.documentoId && <DocBoton documentoId={c.documentoId} titulo={`Contrato ${c.numero}`} etiqueta="Contrato" Icono={FileText} />}
-            {c.autorizacionId && <DocBoton documentoId={c.autorizacionId} titulo={`Autorización de datos ${c.numero}`} etiqueta="Autorización de datos" Icono={ShieldCheck} />}
+            {c.documentos.map((d) => (
+              <DocBoton
+                key={d.id}
+                documentoId={d.id}
+                titulo={d.nombre}
+                etiqueta={etiquetaDoc(d.nombre)}
+                Icono={esAutorizacion(d.nombre) ? ShieldCheck : FileText}
+              />
+            ))}
           </div>
         )}
 
@@ -160,8 +186,15 @@ function ContratoCard({ c }: { c: ContratoItem }) {
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-wrap gap-2">
-              {c.documentoId && <DocBoton documentoId={c.documentoId} titulo={`Contrato ${c.numero}`} etiqueta="Contrato" Icono={FileText} />}
-              {c.autorizacionId && <DocBoton documentoId={c.autorizacionId} titulo={`Autorización de datos ${c.numero}`} etiqueta="Autorización de datos" Icono={ShieldCheck} />}
+              {c.documentos.map((d) => (
+                <DocBoton
+                  key={d.id}
+                  documentoId={d.id}
+                  titulo={d.nombre}
+                  etiqueta={etiquetaDoc(d.nombre)}
+                  Icono={esAutorizacion(d.nombre) ? ShieldCheck : FileText}
+                />
+              ))}
             </div>
 
             {/* Paso 1: autorización por código enviado al correo */}

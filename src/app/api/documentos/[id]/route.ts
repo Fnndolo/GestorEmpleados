@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { obtenerSesion } from '@/server/sesion'
+import { obtenerSesion, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { leerArchivo } from '@/server/storage'
 import { puedeVerNivel } from '@/server/documentos'
@@ -23,10 +23,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Sin permiso para este documento' }, { status: 403 })
   }
 
+  // Un acuerdo de evaluación previa pertenece al proceso de selección, no al
+  // expediente de nadie: lo firma alguien que ni siquiera es colaborador.
+  // El nivel GENERAL no alcanza para protegerlo —significa "cualquiera con
+  // sesión"— y los niveles existentes tampoco: RRHH exige permiso de
+  // `colaboradores`, que el propio empleado tiene para ver su ficha. Así que se
+  // exige el permiso del módulo que sí gobierna esto: Contratación.
+  if (doc.entidadTipo === 'AcuerdoEvaluacion' && !tienePermiso(usuario, 'contratos', 'VER')) {
+    return NextResponse.json({ error: 'Sin permiso para este documento' }, { status: 403 })
+  }
+
   try {
     const contenido = await leerArchivo(doc.storagePath)
-    // Registra el acceso a documentos sensibles (Ley 1581 / trazabilidad)
-    if (doc.nivelAcceso !== 'GENERAL') {
+    // Registra el acceso a documentos sensibles (Ley 1581 / trazabilidad). Los
+    // acuerdos de evaluación entran aunque su nivel sea GENERAL: llevan datos de
+    // alguien que no es colaborador y conviene saber quién los abrió.
+    if (doc.nivelAcceso !== 'GENERAL' || doc.entidadTipo === 'AcuerdoEvaluacion') {
       await ejecutarConContexto({ userId: usuario.id, userEmail: usuario.email, ip: null }, () =>
         auditar('ACCESO', 'Documento', { registroId: doc.id, descripcion: `Acceso a documento ${doc.nombre}` }),
       )
