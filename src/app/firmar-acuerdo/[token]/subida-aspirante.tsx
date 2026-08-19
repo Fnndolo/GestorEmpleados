@@ -26,21 +26,16 @@ export function SubidaAspirante({ token, yaSubido }: { token: string; yaSubido: 
     }
     setError(null)
     setEnviando(true)
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const r = new FileReader()
-      r.onload = () => resolve(r.result as string)
-      r.onerror = () => reject(new Error('lectura'))
-      r.readAsDataURL(archivo)
-    }).catch(() => '')
 
-    if (!base64) {
-      setEnviando(false)
-      setError('No se pudo leer el archivo. Intenta de nuevo.')
-      return
-    }
+    // El archivo va como FormData (multipart), no como data URI: así no pasa por
+    // la serialización de argumentos de la Server Action ni se infla un 33 %.
+    const datos = new FormData()
+    datos.set('token', token)
+    datos.set('archivo', archivo)
 
-    const res = await subirAcuerdoConToken(token, base64)
+    const res = await subirAcuerdoConToken(datos).catch(() => null)
     setEnviando(false)
+    if (!res) { setError('No se pudo enviar el archivo. Revisa tu conexión e intenta de nuevo.'); return }
     if (res.ok) setListo(true)
     else setError(res.error)
   }

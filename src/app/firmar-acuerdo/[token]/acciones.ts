@@ -19,8 +19,18 @@ const MAX_BYTES = 5 * 1024 * 1024
 
 export type ResultadoSubida = { ok: true } | { ok: false; error: string }
 
-export async function subirAcuerdoConToken(token: string, pdfBase64: string): Promise<ResultadoSubida> {
+/**
+ * Recibe FormData, no un data URI. Mandar el PDF como base64 dentro de los
+ * argumentos de la Server Action reventaba la serialización de Next ("Maximum
+ * array nesting exceeded") y, de paso, inflaba el archivo un 33 %. Con FormData
+ * el archivo viaja como multipart, que es para lo que está hecho.
+ */
+export async function subirAcuerdoConToken(formData: FormData): Promise<ResultadoSubida> {
+  const token = String(formData.get('token') ?? '')
+  const adjunto = formData.get('archivo')
+
   if (!token || token.length < 20) return { ok: false, error: 'Enlace inválido.' }
+  if (!(adjunto instanceof File)) return { ok: false, error: 'No llegó ningún archivo.' }
 
   const a = await prisma.acuerdoEvaluacion.findUnique({ where: { tokenSubida: token } })
   if (!a) return { ok: false, error: 'Este enlace no es válido.' }
@@ -32,16 +42,14 @@ export async function subirAcuerdoConToken(token: string, pdfBase64: string): Pr
   }
   if (!a.enviadoPorId) return { ok: false, error: 'El enlace no está listo. Contacta a la empresa.' }
 
-  // El navegador ya filtra por accept, pero eso es cosmético: aquí se comprueba
-  // de verdad que lo que llega sea un PDF y no otra cosa renombrada.
-  if (!pdfBase64.startsWith('data:application/pdf')) {
-    return { ok: false, error: 'El archivo debe ser un PDF.' }
-  }
-  const pdf = Buffer.from(pdfBase64.split(',')[1] ?? '', 'base64')
-  if (pdf.byteLength === 0) return { ok: false, error: 'El archivo está vacío.' }
-  if (pdf.byteLength > MAX_BYTES) return { ok: false, error: 'El PDF supera los 5 MB.' }
+  if (adjunto.size === 0) return { ok: false, error: 'El archivo está vacío.' }
+  if (adjunto.size > MAX_BYTES) return { ok: false, error: 'El PDF supera los 5 MB.' }
+
+  const pdf = Buffer.from(await adjunto.arrayBuffer())
+  // El accept del navegador y el tipo declarado son cosméticos: cualquiera puede
+  // renombrar un archivo. Lo que decide es la cabecera real.
   if (pdf.subarray(0, 5).toString('latin1') !== '%PDF-') {
-    return { ok: false, error: 'El archivo no es un PDF válido.' }
+    return { ok: false, error: 'El archivo debe ser un PDF.' }
   }
 
   const sha256 = createHash('sha256').update(pdf).digest('hex')
