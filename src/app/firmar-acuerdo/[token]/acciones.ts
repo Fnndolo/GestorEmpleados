@@ -27,12 +27,9 @@ export async function subirAcuerdoConToken(token: string, pdfBase64: string): Pr
   if (a.tokenExpiraEn && a.tokenExpiraEn < new Date()) {
     return { ok: false, error: 'Este enlace ya caducó. Pide uno nuevo a la empresa.' }
   }
-  // A propósito NO se mira el estado del acuerdo. La decisión de la empresa y la
-  // firma del aspirante son cosas distintas: si se aprueba (o se descarta) antes
-  // de que él alcance a subir el papel, bloquearlo dejaría a la empresa sin el
-  // documento firmado, que es justo la evidencia de que el acuerdo existió y de
-  // que la confidencialidad quedó pactada. Lo que acota la ventana es el token,
-  // que caduca a los 30 días.
+  if (a.estado !== 'EN_EVALUACION') {
+    return { ok: false, error: 'Este acuerdo ya no admite cargas.' }
+  }
   if (!a.enviadoPorId) return { ok: false, error: 'El enlace no está listo. Contacta a la empresa.' }
 
   // El navegador ya filtra por accept, pero eso es cosmético: aquí se comprueba

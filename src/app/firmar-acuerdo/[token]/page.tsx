@@ -17,14 +17,13 @@ export default async function FirmarAcuerdoPage({ params }: { params: Promise<{ 
     where: { tokenSubida: token },
     select: {
       numero: true, nombres: true, apellidos: true, cargoEvaluado: true,
-      fechaInicio: true, fechaFin: true, tokenExpiraEn: true, firmadoEn: true,
+      fechaInicio: true, fechaFin: true, estado: true, tokenExpiraEn: true, firmadoEn: true,
     },
   })
 
   const invalido = !a
   const caducado = !!a?.tokenExpiraEn && a.tokenExpiraEn < new Date()
-  // Que la empresa ya haya decidido no impide subir el firmado: son cosas
-  // distintas, y el documento firmado interesa igual. Ver acciones.ts.
+  const cerrado = a?.estado !== 'EN_EVALUACION'
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-6 p-6">
@@ -44,6 +43,10 @@ export default async function FirmarAcuerdoPage({ params }: { params: Promise<{ 
       ) : caducado ? (
         <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
           Este enlace ya caducó. Pide uno nuevo a la empresa.
+        </p>
+      ) : cerrado ? (
+        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          Este acuerdo ya no admite cargas.
         </p>
       ) : (
         <>
