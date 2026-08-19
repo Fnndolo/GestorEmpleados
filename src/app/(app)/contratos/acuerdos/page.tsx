@@ -12,6 +12,7 @@ export default async function AcuerdosPage() {
   const puedeEditar = tienePermiso(usuario, 'contratos', 'EDITAR')
   const puedeAprobar = tienePermiso(usuario, 'contratos', 'APROBAR')
   const puedeCrearColaborador = tienePermiso(usuario, 'colaboradores', 'CREAR')
+  const puedeEliminar = tienePermiso(usuario, 'contratos', 'ELIMINAR')
 
   const [acuerdos, cargos, sedes] = await Promise.all([
     prisma.acuerdoEvaluacion.findMany({
@@ -41,6 +42,7 @@ export default async function AcuerdosPage() {
         puedeEditar={puedeEditar}
         puedeAprobar={puedeAprobar}
         puedeCrearColaborador={puedeCrearColaborador}
+        puedeEliminar={puedeEliminar}
         cargos={cargos}
         sedes={sedes}
         acuerdos={acuerdos.map((a) => ({

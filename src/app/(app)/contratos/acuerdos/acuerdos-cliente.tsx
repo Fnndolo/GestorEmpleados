@@ -14,7 +14,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Ayuda } from '@/components/ui-kit/ayuda'
-import { crearAcuerdo, editarAcuerdo, enviarAcuerdo, subirAcuerdoFirmado, decidirAcuerdo, convertirEnColaborador } from './acciones'
+import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
+import { crearAcuerdo, editarAcuerdo, enviarAcuerdo, subirAcuerdoFirmado, decidirAcuerdo, convertirEnColaborador, eliminarAcuerdo } from './acciones'
 import type { AcuerdoEvaluacionInput } from '@/lib/validaciones/acuerdo-evaluacion'
 
 type Acuerdo = {
@@ -51,10 +52,24 @@ const VACIO: Formulario = {
   fechaInicio: '', fechaFin: '', ciudadFirma: '', observaciones: '',
 }
 
+/**
+ * Por qué NO se puede borrar esta evaluación, o null si sí se puede. El botón
+ * queda visible pero inerte con el motivo, en vez de desaparecer sin explicar.
+ */
+function motivoNoEliminar(a: Acuerdo): string | null {
+  if (a.colaboradorId) return 'No se puede eliminar: de esta evaluación ya nació una ficha de colaborador.'
+  if (a.firmado) {
+    return 'No se puede eliminar: el aspirante ya devolvió el acuerdo firmado y ese documento es la evidencia de que existió. Márcala como no aprobada si el proceso no siguió.'
+  }
+  if (a.estado !== 'EN_EVALUACION') return 'No se puede eliminar una evaluación que ya fue aprobada o rechazada.'
+  return null
+}
+
 export function AcuerdosCliente({
-  puedeCrear, puedeEditar, puedeAprobar, puedeCrearColaborador, acuerdos, cargos, sedes,
+  puedeCrear, puedeEditar, puedeAprobar, puedeCrearColaborador, puedeEliminar, acuerdos, cargos, sedes,
 }: {
-  puedeCrear: boolean; puedeEditar: boolean; puedeAprobar: boolean; puedeCrearColaborador: boolean
+  puedeCrear: boolean; puedeEditar: boolean; puedeAprobar: boolean
+  puedeCrearColaborador: boolean; puedeEliminar: boolean
   acuerdos: Acuerdo[]; cargos: Opcion[]; sedes: Opcion[]
 }) {
   const router = useRouter()
@@ -159,6 +174,15 @@ export function AcuerdosCliente({
     else toast.error(res.error)
   }
 
+  async function eliminar(a: Acuerdo) {
+    if (!confirm(`¿Eliminar la evaluación ${a.numero} de ${a.nombre}? Se borra también su PDF y no se puede deshacer.`)) return
+    setOcupado(a.id)
+    const res = await eliminarAcuerdo({ id: a.id })
+    setOcupado(null)
+    if (res.ok) { toast.success('Evaluación eliminada.'); router.refresh() }
+    else toast.error(res.error)
+  }
+
   async function hacerConversion() {
     if (!convertir) return
     if (!sedeConversion) { toast.error('Selecciona la sede.'); return }
@@ -259,6 +283,13 @@ export function AcuerdosCliente({
                   <Button size="sm" onClick={() => { setConvertir(a); setSedeConversion(''); setFechaIngreso('') }}>
                     <UserPlus className="size-4" /> Crear ficha
                   </Button>
+                )}
+                {puedeEliminar && (
+                  <BotonEliminar
+                    onEliminar={() => eliminar(a)}
+                    etiqueta="Eliminar evaluación"
+                    motivoBloqueo={motivoNoEliminar(a)}
+                  />
                 )}
               </div>
             </div>

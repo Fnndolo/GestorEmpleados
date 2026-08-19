@@ -1,6 +1,7 @@
 'use server'
 
 import { createHash, randomBytes } from 'node:crypto'
+import { urlApp } from '@/lib/app-url'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
@@ -247,6 +248,53 @@ export const editarAcuerdo = accion(
   },
 )
 
+/**
+ * Borra una evaluación creada por error, con sus PDF.
+ *
+ * No se permite si dejó rastro que importe: una ficha de colaborador que nació
+ * de ella, o el acuerdo ya firmado por el aspirante — ese documento es la
+ * prueba de que el acuerdo existió y de que la confidencialidad quedó pactada,
+ * que sigue viva dos años aunque no se contrate. Para esos casos el camino es
+ * marcarla como no aprobada, no borrarla.
+ */
+export const eliminarAcuerdo = accion(
+  { modulo: 'contratos', accion: 'ELIMINAR', schema: z.object({ id: z.uuid() }) },
+  async ({ id }) => {
+    const a = await prisma.acuerdoEvaluacion.findUniqueOrThrow({ where: { id } })
+
+    if (a.colaboradorId) {
+      throw new ErrorNegocio('No se puede eliminar: de esta evaluación ya nació una ficha de colaborador.')
+    }
+    if (a.firmadoEn) {
+      throw new ErrorNegocio(
+        'No se puede eliminar: el aspirante ya devolvió el acuerdo firmado y ese documento es la evidencia de que existió. Márcala como no aprobada si el proceso no siguió.',
+      )
+    }
+    if (a.estado !== 'EN_EVALUACION') {
+      throw new ErrorNegocio('No se puede eliminar una evaluación que ya fue aprobada o rechazada.')
+    }
+
+    // Los PDF se van con ella: dejar los archivos sueltos en el almacenamiento
+    // solo acumula basura que nadie va a poder relacionar con nada.
+    const docs = await prisma.documento.findMany({
+      where: { entidadTipo: 'AcuerdoEvaluacion', entidadId: id },
+      select: { id: true, storagePath: true },
+    })
+    for (const doc of docs) {
+      await eliminarArchivo(doc.storagePath).catch(() => {})
+      await prisma.documento.delete({ where: { id: doc.id } }).catch(() => {})
+    }
+
+    await dbAuditado.acuerdoEvaluacion.delete({ where: { id } })
+    await auditar('ELIMINAR', 'AcuerdoEvaluacion', {
+      registroId: id,
+      descripcion: `Acuerdo ${a.numero} eliminado (${a.nombres} ${a.apellidos})`,
+    })
+    revalidatePath(RUTA)
+    return { ok: true }
+  },
+)
+
 export const enviarAcuerdo = accion(
   { modulo: 'contratos', accion: 'EDITAR', schema: z.object({ id: z.uuid() }) },
   async ({ id }, usuario) => {
@@ -259,7 +307,7 @@ export const enviarAcuerdo = accion(
     const token = randomBytes(32).toString('base64url')
     const expira = new Date()
     expira.setUTCDate(expira.getUTCDate() + 30)
-    const url = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://gestor-empleados-iota.vercel.app'}/firmar-acuerdo/${token}`
+    const url = urlApp(`/firmar-acuerdo/${token}`)
 
     // El token se guarda ANTES de enviar. Al revés, si la escritura falla el
     // correo ya salió con un enlace que no existe en la base: el aspirante
