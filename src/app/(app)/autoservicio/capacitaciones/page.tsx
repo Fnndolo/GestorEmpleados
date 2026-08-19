@@ -1,4 +1,5 @@
 import { requerirPermiso } from '@/server/sesion'
+import { tramiteAplica, NoAplica } from '../no-aplica'
 import { prisma } from '@/lib/db'
 import { formatFechaCorta } from '@/lib/fechas'
 import { Encabezado } from '@/components/shell/encabezado'
@@ -23,6 +24,10 @@ export default async function MisCapacitacionesPage() {
         </CardContent></Card>
       </div>
     )
+  }
+
+  if (!(await tramiteAplica(usuario.colaboradorId, 'capacitaciones'))) {
+    return <NoAplica titulo="Mis capacitaciones" motivo="Las capacitaciones de la empresa aplican a la relación laboral. Si necesitas una constancia de formación, escribe a Talento Humano." />
   }
 
   const asistencias = await prisma.asistenciaCapacitacion.findMany({

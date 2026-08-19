@@ -39,7 +39,6 @@ const TIPOS_LABORAL = [
   { v: 'TERMINO_FIJO', l: 'Término fijo' },
   { v: 'OBRA_LABOR', l: 'Obra o labor' },
   { v: 'APRENDIZAJE_SENA', l: 'Aprendizaje SENA' },
-  { v: 'PRACTICA', l: 'Práctica' },
 ] as const
 
 type TipoLaboral = (typeof TIPOS_LABORAL)[number]['v']

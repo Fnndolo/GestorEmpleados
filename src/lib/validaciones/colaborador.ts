@@ -48,7 +48,7 @@ export const colaboradorSchema = z.object({
   tipoCuenta: z.enum(['AHORROS', 'CORRIENTE', 'BILLETERA_DIGITAL']).optional().or(z.literal('')),
   numeroCuenta: opcional(30),
   // Organizacional
-  tipoVinculo: z.enum(['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'OPS', 'PRACTICANTE']),
+  tipoVinculo: z.enum(['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'OPS']),
   sedeId: z.uuid('Selecciona una sede'),
   areaId: uuidOpcional,
   cargoId: uuidOpcional,

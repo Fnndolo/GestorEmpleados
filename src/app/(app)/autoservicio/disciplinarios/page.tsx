@@ -1,4 +1,5 @@
 import { requerirSesion } from '@/server/sesion'
+import { tramiteAplica, NoAplica } from '../no-aplica'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
@@ -32,6 +33,10 @@ export default async function MisDisciplinariosPage() {
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Tu usuario no está vinculado a una ficha de colaborador.</CardContent></Card>
       </div>
     )
+  }
+
+  if (!(await tramiteAplica(usuario.colaboradorId, 'disciplinarios'))) {
+    return <NoAplica titulo="Mis disciplinarios" motivo="El proceso disciplinario aplica a la relación laboral. En un contrato de prestación de servicios, los incumplimientos se manejan por las cláusulas del contrato." />
   }
 
   const procesos = await prisma.procesoDisciplinario.findMany({

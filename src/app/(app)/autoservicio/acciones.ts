@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
+import { aplicaTramite, type Tramite } from '@/lib/tramites-vinculo'
 import { parseFechaISO } from '@/lib/fechas'
 import { diasHabilesRango } from '@/app/(app)/novedades/acciones'
 import { generarCertificacion } from '@/server/certificaciones'
@@ -74,6 +75,20 @@ async function exigirColaboradorActivo(colaboradorId: string): Promise<void> {
   }
 }
 
+/**
+ * Tercera barrera: hay trámites que no existen para un contratista OPS (no tiene
+ * vacaciones, permisos, licencias ni incapacidades a cargo de la empresa).
+ * Ocultar el botón no basta: la acción tiene que rechazarlo.
+ */
+async function exigirTramiteAplicable(colaboradorId: string, tramite: Tramite): Promise<void> {
+  const c = await prisma.colaborador.findUnique({ where: { id: colaboradorId }, select: { tipoVinculo: true } })
+  if (!aplicaTramite(c?.tipoVinculo, tramite)) {
+    throw new ErrorNegocio(
+      'Tu vínculo es de prestación de servicios: este trámite no aplica a tu contrato. Si tienes dudas, escribe a Talento Humano.',
+    )
+  }
+}
+
 /** Vacío → null (para no guardar cadenas vacías en campos opcionales). */
 const vv = (s: string | undefined | null) => (s && s !== '' ? s : null)
 
@@ -137,6 +152,12 @@ export const crearSolicitud = accion(
     // Vacaciones, permisos, licencias e incapacidades solo con vínculo activo.
     // La certificación laboral queda disponible aunque esté retirado.
     if (d.tipo !== 'CERTIFICACION_LABORAL') await exigirColaboradorActivo(colaboradorId)
+    // Trámites que no existen para un contrato de prestación de servicios.
+    const TRAMITE_DE: Partial<Record<typeof d.tipo, Tramite>> = {
+      VACACIONES: 'vacaciones', PERMISO: 'permisos', LICENCIA: 'licencias', INCAPACIDAD: 'incapacidades',
+    }
+    const tramite = TRAMITE_DE[d.tipo]
+    if (tramite) await exigirTramiteAplicable(colaboradorId, tramite)
     if (d.tipo === 'LICENCIA' && !d.licenciaTipo) throw new ErrorNegocio('Indica el tipo de licencia.')
 
     // Vacaciones: aplicar las reglas del RIT (cap. 9) antes de crear la solicitud.

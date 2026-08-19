@@ -1,6 +1,7 @@
 'use server'
 
 import { randomBytes } from 'node:crypto'
+import { urlApp } from '@/lib/app-url'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
@@ -73,7 +74,6 @@ export const crearUsuario = accion(
       descripcion: `Usuario creado: ${datos.email} (rol ${rol.nombre}${extra ? ` + ${extra}` : ''})`,
     })
 
-    const url = process.env.NEXT_PUBLIC_APP_URL ?? 'https://gestor-empleados-iota.vercel.app'
     await enviarCorreo({
       para: datos.email,
       asunto: 'Tu acceso a la Plataforma Smart Gadgets',
@@ -81,7 +81,7 @@ export const crearUsuario = accion(
         <p>Hola ${datos.nombre},</p>
         <p>Se creó tu cuenta en la plataforma de gestión humana de Smart Gadgets.</p>
         <p><b>Correo:</b> ${datos.email}<br/><b>Contraseña temporal:</b> ${tmp}</p>
-        <p>Ingresa en <a href="${url}/login">${url}/login</a>. Por seguridad, el sistema te pedirá
+        <p>Ingresa en <a href="${urlApp('/login')}">${urlApp('/login')}</a>. Por seguridad, el sistema te pedirá
         crear una contraseña nueva en tu primer ingreso.</p>
         <p>Rol asignado: <b>${rol.nombre}</b>.</p>`,
     })
@@ -126,12 +126,11 @@ export const reenviarAcceso = accion(
     await auth.api.setUserPassword({ body: { userId: id, newPassword: tmp } })
     await prisma.user.update({ where: { id }, data: { debeCambiarPassword: true } })
 
-    const url = process.env.NEXT_PUBLIC_APP_URL ?? 'https://gestor-empleados-iota.vercel.app'
     await enviarCorreo({
       para: usuario.email,
       asunto: 'Nueva contraseña temporal — Plataforma Smart Gadgets',
       html: `<p>Hola ${usuario.name},</p><p>Se generó una nueva contraseña temporal: <b>${tmp}</b></p>
-        <p>Ingresa en <a href="${url}/login">${url}/login</a> y créala de nuevo en tu primer acceso.</p>`,
+        <p>Ingresa en <a href="${urlApp('/login')}">${urlApp('/login')}</a> y créala de nuevo en tu primer acceso.</p>`,
     })
     await auditar('EDITAR', 'User', { registroId: id, descripcion: 'Reenvío de acceso (contraseña temporal)' })
     revalidatePath('/configuracion/usuarios')

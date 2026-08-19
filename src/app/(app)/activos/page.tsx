@@ -35,6 +35,9 @@ export default async function ActivosPage() {
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
         sedes={sedes.map((s) => ({ id: s.id, nombre: s.nombre, ciudad: s.ciudad.nombre }))}
+        // La lista filtra por la sede activa: un activo creado sin sede se saldría
+        // del listado, así que el formulario arranca con la sede en la que estás.
+        sedeActual={sede ?? ''}
         activos={activos.map((a) => ({
           id: a.id, codigo: a.codigo, nombre: a.nombre, tipo: a.tipo, estado: a.estado,
           valor: a.valor ? Number(a.valor) : null,

@@ -14,27 +14,50 @@ import { avisar, avisarPorRol, usuarioDeColaborador } from '@/server/notificacio
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
 
-export const crearActivo = accion(
-  {
-    modulo: 'activos',
-    accion: 'CREAR',
-    schema: z.object({
-      codigo: z.string().trim().min(1).max(40),
-      nombre: z.string().trim().min(2).max(120),
-      tipo: z.string().trim().min(2).max(60),
-      marca: z.string().trim().max(60).optional(),
-      serie: z.string().trim().max(60).optional(),
-      valor: z.coerce.number().min(0).optional(),
-      sedeId: z.union([z.uuid(), z.literal('')]).optional(),
-    }),
-  },
+const activoSchema = z.object({
+  codigo: z.string().trim().min(1).max(40),
+  nombre: z.string().trim().min(2).max(120),
+  tipo: z.string().trim().min(2).max(60),
+  marca: z.string().trim().max(60).optional(),
+  serie: z.string().trim().max(60).optional(),
+  valor: z.coerce.number().min(0).optional(),
+  sedeId: z.union([z.uuid(), z.literal('')]).optional(),
+})
+
+/**
+ * Alta de uno o varios activos de golpe (un computador, un mouse, un teclado…).
+ *
+ * Se valida TODO antes de crear nada: si el sexto código está repetido, no deben
+ * quedar cinco activos creados y un error a medias. Por eso los duplicados —los
+ * de la propia lista y los que ya están en la base— se detectan primero y la
+ * inserción va dentro de una transacción.
+ */
+export const crearActivos = accion(
+  { modulo: 'activos', accion: 'CREAR', schema: z.object({ activos: z.array(activoSchema).min(1, 'Añade al menos un activo').max(100) }) },
   async (d) => {
-    const dup = await prisma.activo.findUnique({ where: { codigo: d.codigo } })
-    if (dup) throw new ErrorNegocio('Ya existe un activo con ese código.')
-    await dbAuditado.activo.create({
-      data: { codigo: d.codigo, nombre: d.nombre, tipo: d.tipo, marca: v(d.marca), serie: v(d.serie), valor: d.valor ?? null, sedeId: v(d.sedeId), estado: 'DISPONIBLE' },
-    })
+    const codigos = d.activos.map((a) => a.codigo)
+
+    const repetidosEnLista = codigos.filter((c, i) => codigos.indexOf(c) !== i)
+    if (repetidosEnLista.length > 0) {
+      throw new ErrorNegocio(`Repetiste el código ${[...new Set(repetidosEnLista)].join(', ')} en la lista.`)
+    }
+    const existentes = await prisma.activo.findMany({ where: { codigo: { in: codigos } }, select: { codigo: true } })
+    if (existentes.length > 0) {
+      throw new ErrorNegocio(`Ya existe(n) activo(s) con el código: ${existentes.map((e) => e.codigo).join(', ')}.`)
+    }
+
+    await dbAuditado.$transaction(
+      d.activos.map((a) =>
+        dbAuditado.activo.create({
+          data: {
+            codigo: a.codigo, nombre: a.nombre, tipo: a.tipo, marca: v(a.marca), serie: v(a.serie),
+            valor: a.valor ?? null, sedeId: v(a.sedeId), estado: 'DISPONIBLE',
+          },
+        }),
+      ),
+    )
     revalidatePath('/activos')
+    return { creados: d.activos.length }
   },
 )
 

@@ -65,7 +65,6 @@ const TIPOS = [
   { v: 'TERMINO_FIJO', l: 'Término fijo' },
   { v: 'OBRA_LABOR', l: 'Obra o labor' },
   { v: 'APRENDIZAJE_SENA', l: 'Aprendizaje SENA' },
-  { v: 'PRACTICA', l: 'Práctica' },
 ]
 
 /** Meses completos entre dos fechas ISO (para la duración del término fijo). */

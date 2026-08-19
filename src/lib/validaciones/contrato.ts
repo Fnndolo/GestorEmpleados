@@ -6,7 +6,7 @@ const uuidOpc = z.union([z.uuid(), z.literal('')]).optional()
 
 export const contratoSchema = z.object({
   colaboradorId: z.uuid('Selecciona el colaborador'),
-  tipo: z.enum(['TERMINO_FIJO', 'TERMINO_INDEFINIDO', 'OBRA_LABOR', 'APRENDIZAJE_SENA', 'PRACTICA']),
+  tipo: z.enum(['TERMINO_FIJO', 'TERMINO_INDEFINIDO', 'OBRA_LABOR', 'APRENDIZAJE_SENA']),
   cargoId: uuidOpc,
   sedeId: z.uuid('Selecciona la sede'),
   jornada: z.enum(['TIEMPO_COMPLETO', 'MEDIO_TIEMPO', 'POR_DIAS']),

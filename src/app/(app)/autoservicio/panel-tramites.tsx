@@ -7,6 +7,7 @@ import {
   Receipt, Landmark, ShieldAlert, Lock, Inbox, ChevronDown, CloudUpload, Shirt, GraduationCap, UserPen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { aplicaTramite, esOps, AVISO_OPS, type Tramite } from '@/lib/tramites-vinculo'
 import { CHIP } from '@/components/ui-kit'
 import { NuevaSolicitud, type TipoSol } from './nueva-solicitud'
 
@@ -72,10 +73,12 @@ function Seccion({ titulo, children }: { titulo: string; children: React.ReactNo
 }
 
 export function PanelTramites({
-  activo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, documentosFaltantes, dotacionPorFirmar,
+  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, documentosFaltantes, dotacionPorFirmar,
 }: {
   /** Colaborador con vínculo activo: solo entonces se ofrecen los trámites operativos. */
   activo: boolean
+  /** Decide qué trámites aplican: el OPS no tiene los laborales. */
+  tipoVinculo: string
   /** Cuántos datos clave de la ficha faltan por completar (para el aviso). */
   fichaFaltantes: number
   contratosPorFirmar: number
@@ -91,6 +94,9 @@ export function PanelTramites({
   const [verTodo, setVerTodo] = useState(false)
   /** Oculto en móvil hasta desplegar; en escritorio siempre visible. */
   const tras = cn(!verTodo && 'hidden sm:block')
+  /** Atajo local: `aplica('vacaciones')` en vez de repetir el tipo de vínculo. */
+  const aplica = (t: Tramite) => aplicaTramite(tipoVinculo, t)
+  const ops = esOps(tipoVinculo)
 
   return (
     <>
@@ -100,14 +106,21 @@ export function PanelTramites({
           pero no crear solicitudes de vacaciones, permisos, licencias ni incapacidades.
         </div>
       )}
+      {/* Se explica una vez por qué su panel tiene menos opciones, en vez de dejar
+          que busque trámites que nunca va a encontrar. */}
+      {activo && ops && (
+        <div className="mt-6 rounded-xl border bg-muted/40 p-3.5 text-sm text-muted-foreground">
+          {AVISO_OPS}
+        </div>
+      )}
 
       <Seccion titulo="¿Qué necesitas solicitar?">
         {/* Trámites operativos: solo con vínculo activo. */}
-        {activo && (
+        {activo && aplica('vacaciones') && (
           <Tile icono={TreePalm} color="emerald" titulo="Pedir vacaciones" corto="Vacaciones"
             desc="Tu jefe y RRHH aprueban las fechas" onClick={() => setSolicitar('VACACIONES')} />
         )}
-        {activo && (
+        {activo && aplica('permisos') && (
           <Tile icono={Clock} color="sky" titulo="Pedir permiso" corto="Permiso"
             desc="Por día o por horas" onClick={() => setSolicitar('PERMISO')} />
         )}
@@ -115,20 +128,23 @@ export function PanelTramites({
           desc="Completa tus datos, banco y emergencia"
           aviso={fichaFaltantes > 0 ? `${fichaFaltantes} por completar` : null}
           href="/autoservicio/mi-informacion" />
-        <Tile icono={FileCheck} color="ink" titulo="Descargar desprendibles" corto="Desprendibles"
-          desc="Todos tus pagos en PDF" nuevo href="/autoservicio/desprendibles" />
+        {aplica('desprendibles') && (
+          <Tile icono={FileCheck} color="ink" titulo="Descargar desprendibles" corto="Desprendibles"
+            desc="Todos tus pagos en PDF" nuevo href="/autoservicio/desprendibles" />
+        )}
         <Tile icono={CloudUpload} color="indigo" titulo="Mis documentos" corto="Documentos"
           desc="Sube cédula, diplomas, certificados…"
           aviso={documentosFaltantes > 0 ? `${documentosFaltantes} pendiente${documentosFaltantes > 1 ? 's' : ''}` : null}
           nuevo href="/autoservicio/documentos" />
         {/* La certificación laboral sigue disponible aunque esté retirado (habeas data). */}
-        <Tile icono={File} color="teal" titulo="Pedir certificación" corto="Certificación"
-          desc="Laboral, con salario, para banco" onClick={() => setSolicitar('CERTIFICACION_LABORAL')} />
-        {activo && (
+        <Tile icono={File} color="teal" titulo={ops ? 'Pedir certificación contractual' : 'Pedir certificación'} corto="Certificación"
+          desc={ops ? 'De tu contrato de prestación de servicios' : 'Laboral, con salario, para banco'}
+          onClick={() => setSolicitar('CERTIFICACION_LABORAL')} />
+        {activo && aplica('licencias') && (
           <Tile icono={File} color="violet" titulo="Reportar licencia" corto="Licencia"
             desc="Maternidad, luto, estudio…" nuevo onClick={() => setSolicitar('LICENCIA')} className={tras} />
         )}
-        {activo && (
+        {activo && aplica('incapacidades') && (
           <Tile icono={Stethoscope} color="rose" titulo="Subir incapacidad" corto="Incapacidad"
             desc="RRHH la valida y registra" onClick={() => setSolicitar('INCAPACIDAD')} className={tras} />
         )}
@@ -145,16 +161,23 @@ export function PanelTramites({
               seguridad social; si no, se radica igual. Ver `crearMiCuentaCobro`. */}
           <Tile icono={Receipt} color="teal" titulo="Cuenta de cobro" corto="Cuenta de cobro"
             desc="Servicios, comisiones o saldos a tu favor" href="/autoservicio/cuentas-cobro" />
-          <Tile icono={GraduationCap} color="violet" titulo="Mis capacitaciones" corto="Capacitaciones"
-            desc="Tu historial de formación y notas" href="/autoservicio/capacitaciones" />
+          {aplica('capacitaciones') && (
+            <Tile icono={GraduationCap} color="violet" titulo="Mis capacitaciones" corto="Capacitaciones"
+              desc="Tu historial de formación y notas" href="/autoservicio/capacitaciones" />
+          )}
+          {/* Al OPS sí se le pueden entregar activos en custodia; dotación y EPP no. */}
           <Tile icono={Shirt} color="indigo" titulo="Mis entregas" corto="Mis entregas"
-            desc="Activos, dotación y EPP con su recibido"
+            desc={ops ? 'Activos a tu cargo con su acta' : 'Activos, dotación y EPP con su recibido'}
             aviso={dotacionPorFirmar > 0 ? `${dotacionPorFirmar} por firmar` : null}
             href="/autoservicio/dotacion" />
-          <Tile icono={Landmark} color="ink" titulo="Mis disciplinarios" corto="Disciplinarios"
-            desc="Presentar descargos o apelar"
-            aviso={disciplinariosAbiertos > 0 ? `${disciplinariosAbiertos} abierto${disciplinariosAbiertos > 1 ? 's' : ''}` : null}
-            href="/autoservicio/disciplinarios" />
+          {/* El poder disciplinario sobre un contratista es el indicio más fuerte
+              de subordinación: no se le ofrece el módulo. */}
+          {aplica('disciplinarios') && (
+            <Tile icono={Landmark} color="ink" titulo="Mis disciplinarios" corto="Disciplinarios"
+              desc="Presentar descargos o apelar"
+              aviso={disciplinariosAbiertos > 0 ? `${disciplinariosAbiertos} abierto${disciplinariosAbiertos > 1 ? 's' : ''}` : null}
+              href="/autoservicio/disciplinarios" />
+          )}
           <Tile icono={ShieldAlert} color="rose" titulo="Canal anti-acoso" corto="Canal anti-acoso"
             desc="Denuncia confidencial o anónima" href="/autoservicio/juridica?vista=anti-acoso" />
           <Tile icono={Lock} color="indigo" titulo="Habeas data" corto="Habeas data"

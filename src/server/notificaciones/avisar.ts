@@ -1,4 +1,5 @@
 import 'server-only'
+import { urlApp } from '@/lib/app-url'
 import { prisma } from '@/lib/db'
 import { enviarCorreo } from '@/server/notificaciones/correo'
 import { enviarPush } from '@/server/notificaciones/push'
@@ -30,10 +31,9 @@ export async function notificarUsuario(
   }
 }
 
-const APP_URL = () => process.env.NEXT_PUBLIC_APP_URL ?? 'https://gestor-empleados-iota.vercel.app'
 
 function plantillaCorreo(nombre: string, titulo: string, mensaje: string, enlace?: string, llamado?: string): string {
-  const url = enlace ? `${APP_URL()}${enlace}` : APP_URL()
+  const url = urlApp(enlace)
   return `
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1e293b">
       <div style="background:#0f172a;color:#fff;padding:16px 20px;border-radius:8px 8px 0 0">

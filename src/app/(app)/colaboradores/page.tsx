@@ -11,7 +11,7 @@ import type { Prisma } from '@/generated/prisma/client'
 
 export const metadata = { title: 'Colaboradores · Smart Gadgets RH' }
 
-const VINCULOS = ['TODOS', 'TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'OPS', 'PRACTICANTE'] as const
+const VINCULOS = ['TODOS', 'TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'OPS'] as const
 
 export default async function ColaboradoresPage({
   searchParams,

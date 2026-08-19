@@ -1,4 +1,5 @@
 import 'server-only'
+import { urlApp } from '@/lib/app-url'
 import { randomBytes } from 'node:crypto'
 import { prisma } from '@/lib/db'
 import { auth } from '@/lib/auth'
@@ -49,7 +50,6 @@ export async function crearUsuarioColaborador(opts: {
   }
   await auditar('CREAR', 'User', { registroId: creado.user.id, descripcion: `Usuario creado para colaborador: ${email} (rol ${rol.nombre})` })
 
-  const url = process.env.NEXT_PUBLIC_APP_URL ?? 'https://gestor-empleados-iota.vercel.app'
   await enviarCorreo({
     para: email,
     asunto: 'Tu acceso a la Plataforma Smart Gadgets',
@@ -57,7 +57,7 @@ export async function crearUsuarioColaborador(opts: {
       <p>Hola ${opts.nombre},</p>
       <p>Se creó tu cuenta en la plataforma de gestión humana de Smart Gadgets.</p>
       <p><b>Correo:</b> ${email}<br/><b>Contraseña temporal:</b> ${tmp}</p>
-      <p>Ingresa en <a href="${url}/login">${url}/login</a>. Por seguridad, el sistema te pedirá
+      <p>Ingresa en <a href="${urlApp('/login')}">${urlApp('/login')}</a>. Por seguridad, el sistema te pedirá
       crear una contraseña nueva en tu primer ingreso.</p>
       <p>Al entrar, ve a <b>Autoservicio → Mi información</b> para completar tus datos personales,
       de contacto, seguridad social y bancarios.</p>

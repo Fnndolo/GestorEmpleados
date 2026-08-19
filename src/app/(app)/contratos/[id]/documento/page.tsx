@@ -80,7 +80,8 @@ export default async function EditarContratoPage({ params }: { params: Promise<{
           colaboradorNombre: `${c.colaborador.nombres} ${c.colaborador.apellidos}`,
           form: {
             colaboradorId: c.colaboradorId,
-            tipo: c.tipo,
+            // PRACTICA salió del catálogo; un contrato viejo se edita como término fijo.
+            tipo: c.tipo === 'PRACTICA' ? 'TERMINO_FIJO' : c.tipo,
             cargoId: c.cargoId ?? '',
             sedeId: c.sedeId,
             jornada: c.jornada,

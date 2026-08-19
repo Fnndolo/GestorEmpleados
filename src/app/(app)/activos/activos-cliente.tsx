@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Laptop, Shirt, Download, UserPlus, Undo2 } from 'lucide-react'
+import { Plus, Laptop, Shirt, Download, UserPlus, Undo2, Trash2, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,7 +19,7 @@ import { Ayuda } from '@/components/ui-kit/ayuda'
 import { Checkbox } from '@/components/ui/checkbox'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
-import { crearActivo, asignarActivos, devolverActivo, registrarDotacion } from './acciones'
+import { crearActivos, asignarActivos, devolverActivo, registrarDotacion } from './acciones'
 
 type Activo = { id: string; codigo: string; nombre: string; tipo: string; estado: string; valor: number | null; asignacion: { id: string; colaborador: string; actaEntregaDocId: string | null; actaFirmada: boolean } | null }
 type Dotacion = {
@@ -33,10 +33,12 @@ type Sede = { id: string; nombre: string; ciudad: string }
 const ESTADO: Record<string, string> = { DISPONIBLE: 'Disponible', ASIGNADO: 'Asignado', EN_MANTENIMIENTO: 'Mantenimiento', DADO_DE_BAJA: 'De baja' }
 const TONO_ACTIVO: Record<string, PillTone> = { DISPONIBLE: 'ok', ASIGNADO: 'info', EN_MANTENIMIENTO: 'warn', DADO_DE_BAJA: 'muted' }
 
-export function ActivosCliente({ activos, dotaciones, sedes, puedeCrear, puedeEditar }: { activos: Activo[]; dotaciones: Dotacion[]; sedes: Sede[]; puedeCrear: boolean; puedeEditar: boolean }) {
+export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCrear, puedeEditar }: { activos: Activo[]; dotaciones: Dotacion[]; sedes: Sede[]; sedeActual: string; puedeCrear: boolean; puedeEditar: boolean }) {
   const [tab, setTab] = useState<'activos' | 'dotacion'>('activos')
   const [dialogo, setDialogo] = useState<'activo' | 'asignar' | 'dotacion' | null>(null)
   const [asignarActivoId, setAsignarActivoId] = useState<string | null>(null)
+  const disponibles = activos.filter((a) => a.estado === 'DISPONIBLE')
+  const hayDisponibles = disponibles.length > 0
 
   return (
     <div className="space-y-4">
@@ -48,11 +50,20 @@ export function ActivosCliente({ activos, dotaciones, sedes, puedeCrear, puedeEd
             </button>
           ))}
         </div>
-        {puedeCrear && (
-          <Button size="sm" onClick={() => setDialogo(tab === 'activos' ? 'activo' : 'dotacion')}>
-            <Plus className="size-4" /> {tab === 'activos' ? 'Nuevo activo' : 'Registrar dotación'}
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {/* Entrega desde el inventario: se eligen los activos y luego a quién van.
+              El botón por fila sigue existiendo como atajo cuando ya sabes cuál. */}
+          {tab === 'activos' && puedeEditar && hayDisponibles && (
+            <Button size="sm" variant="outline" onClick={() => { setAsignarActivoId(''); setDialogo('asignar') }}>
+              <UserPlus className="size-4" /> Asignar
+            </Button>
+          )}
+          {puedeCrear && (
+            <Button size="sm" onClick={() => setDialogo(tab === 'activos' ? 'activo' : 'dotacion')}>
+              <Plus className="size-4" /> {tab === 'activos' ? 'Nuevos activos' : 'Registrar dotación'}
+            </Button>
+          )}
+        </div>
       </div>
 
       {tab === 'activos' ? (
@@ -106,11 +117,11 @@ export function ActivosCliente({ activos, dotaciones, sedes, puedeCrear, puedeEd
         )
       )}
 
-      {dialogo === 'activo' && <DialogActivo sedes={sedes} onClose={() => setDialogo(null)} />}
-      {dialogo === 'asignar' && asignarActivoId && (
+      {dialogo === 'activo' && <DialogActivo sedes={sedes} sedeActual={sedeActual} onClose={() => setDialogo(null)} />}
+      {dialogo === 'asignar' && asignarActivoId !== null && (
         <DialogAsignar
           activoId={asignarActivoId}
-          disponibles={activos.filter((a) => a.estado === 'DISPONIBLE')}
+          disponibles={disponibles}
           onClose={() => { setDialogo(null); setAsignarActivoId(null) }}
         />
       )}
@@ -134,34 +145,129 @@ function DevolverBoton({ asignacionId }: { asignacionId: string }) {
   )
 }
 
-function DialogActivo({ sedes, onClose }: { sedes: Sede[]; onClose: () => void }) {
+/** Una línea del alta en lote. La sede es común a todas y va aparte. */
+type FilaActivo = { codigo: string; nombre: string; tipo: string; marca: string; serie: string; valor: string }
+const FILA_VACIA: FilaActivo = { codigo: '', nombre: '', tipo: '', marca: '', serie: '', valor: '' }
+
+/**
+ * Alta de activos en lote: un computador, un mouse, un teclado y una silla se
+ * registran de una sola vez en vez de abrir el formulario cuatro veces.
+ */
+function DialogActivo({ sedes, sedeActual, onClose }: { sedes: Sede[]; sedeActual: string; onClose: () => void }) {
   const router = useRouter()
-  const [f, setF] = useState<Record<string, string>>({})
+  const [filas, setFilas] = useState<FilaActivo[]>([{ ...FILA_VACIA }])
+  const [sedeId, setSedeId] = useState(sedeActual)
+  /** Índice del activo abierto en el acordeón; los demás quedan resumidos. */
+  const [abierto, setAbierto] = useState(0)
   const [g, setG] = useState(false)
-  const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
-  async function guardar() {
-    setG(true)
-    const res = await crearActivo({ codigo: f.codigo ?? '', nombre: f.nombre ?? '', tipo: f.tipo ?? '', marca: f.marca, serie: f.serie, valor: f.valor ? Number(f.valor) : undefined, sedeId: f.sedeId })
-    setG(false)
-    if (res.ok) { toast.success('Activo creado.'); onClose(); router.refresh() } else toast.error(res.error)
+
+  const set = (i: number, k: keyof FilaActivo, v: string) =>
+    setFilas((p) => p.map((f, j) => (j === i ? { ...f, [k]: v } : f)))
+
+  function añadir() {
+    setFilas((p) => [...p, { ...FILA_VACIA }])
+    setAbierto(filas.length) // el nuevo entra abierto y el anterior se pliega
   }
+
+  function quitar(i: number) {
+    setFilas((p) => p.filter((_, j) => j !== i))
+    // Al borrar una tarjeta, el índice abierto se corre para no apuntar a otra.
+    setAbierto((a) => (a > i ? a - 1 : Math.min(a, filas.length - 2)))
+  }
+
+  /** Se ignoran las filas que quedaron en blanco al añadir una de más. */
+  const llenas = filas.filter((f) => f.codigo.trim() || f.nombre.trim() || f.tipo.trim())
+
+  async function guardar() {
+    if (llenas.length === 0) { toast.error('Completa al menos un activo.'); return }
+    const incompleta = llenas.findIndex((f) => !f.codigo.trim() || !f.nombre.trim() || !f.tipo.trim())
+    if (incompleta >= 0) { toast.error(`Al activo ${incompleta + 1} le falta código, nombre o tipo.`); return }
+
+    setG(true)
+    const res = await crearActivos({
+      activos: llenas.map((f) => ({
+        codigo: f.codigo.trim(), nombre: f.nombre.trim(), tipo: f.tipo.trim(),
+        marca: f.marca.trim(), serie: f.serie.trim(),
+        valor: f.valor ? Number(f.valor) : undefined,
+        sedeId,
+      })),
+    })
+    setG(false)
+    if (res.ok) {
+      toast.success(llenas.length === 1 ? 'Activo creado.' : `${llenas.length} activos creados.`)
+      onClose(); router.refresh()
+    } else toast.error(res.error)
+  }
+
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Nuevo activo</DialogTitle></DialogHeader>
-        <div className="grid grid-cols-2 gap-3">
-          <Campo label="Código"><Input onChange={(e) => set('codigo', e.target.value)} /></Campo>
-          <Campo label="Tipo"><Input onChange={(e) => set('tipo', e.target.value)} placeholder="Computador…" /></Campo>
-          <div className="col-span-2"><Campo label="Nombre"><Input onChange={(e) => set('nombre', e.target.value)} /></Campo></div>
-          <Campo label="Marca"><Input onChange={(e) => set('marca', e.target.value)} /></Campo>
-          <Campo label="Serie"><Input onChange={(e) => set('serie', e.target.value)} /></Campo>
-          <Campo label="Valor"><Input type="number" onChange={(e) => set('valor', e.target.value)} /></Campo>
-          <Campo label="Sede">
-            <Select onValueChange={(v) => set('sedeId', v)}><SelectTrigger className="w-full"><SelectValue placeholder="Sede…" /></SelectTrigger>
-              <SelectContent>{sedes.map((s) => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)}</SelectContent></Select>
+    <Dialog open onOpenChange={(o) => { if (!o && !g) onClose() }}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-1.5">
+            Nuevos activos
+            <Ayuda texto="Puedes registrar varios de una vez: computador, mouse, teclado, silla… Se crean todos juntos o ninguno, así que un código repetido no deja el inventario a medias." />
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <Campo label="Sede (para todos)">
+            <Select value={sedeId} onValueChange={setSedeId}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Sede…" /></SelectTrigger>
+              <SelectContent>{sedes.map((s) => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)}</SelectContent>
+            </Select>
           </Campo>
+
+          {/* Acordeón: solo el activo en edición está abierto. Los ya escritos se
+              resumen en una línea, para que al llenar el quinto se siga viendo la
+              lista completa en vez de un formulario kilométrico. */}
+          {filas.map((f, i) => {
+            const abierta = i === abierto
+            const resumen = [f.nombre.trim(), f.codigo.trim(), f.tipo.trim()].filter(Boolean).join(' · ')
+            return (
+              <div key={i} className="overflow-hidden rounded-lg border">
+                <div className={cn('flex items-center gap-2 px-3 py-2', !abierta && 'bg-muted/40')}>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-semibold text-muted-foreground">Activo {i + 1}</span>
+                    {!abierta && (
+                      <span className="block truncate text-sm">{resumen || <span className="text-muted-foreground">Sin datos</span>}</span>
+                    )}
+                  </span>
+                  {!abierta && (
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setAbierto(i)}>
+                      <Pencil className="size-4" /> Editar
+                    </Button>
+                  )}
+                  {filas.length > 1 && (
+                    <Button type="button" size="icon" variant="ghost" className="size-7" onClick={() => quitar(i)} aria-label="Quitar activo">
+                      <Trash2 className="size-4" />
+                    </Button>
+                  )}
+                </div>
+                {abierta && (
+                  <div className="grid grid-cols-2 gap-3 border-t p-3">
+                    <Campo label="Código"><Input value={f.codigo} onChange={(e) => set(i, 'codigo', e.target.value)} placeholder="EQ-001" /></Campo>
+                    <Campo label="Tipo"><Input value={f.tipo} onChange={(e) => set(i, 'tipo', e.target.value)} placeholder="Computador, Mouse, Silla…" /></Campo>
+                    <div className="col-span-2"><Campo label="Nombre"><Input value={f.nombre} onChange={(e) => set(i, 'nombre', e.target.value)} placeholder="Portátil Lenovo ThinkPad E14" /></Campo></div>
+                    <Campo label="Marca"><Input value={f.marca} onChange={(e) => set(i, 'marca', e.target.value)} /></Campo>
+                    <Campo label="Serie"><Input value={f.serie} onChange={(e) => set(i, 'serie', e.target.value)} /></Campo>
+                    <div className="col-span-2"><Campo label="Valor"><Input type="number" value={f.valor} onChange={(e) => set(i, 'valor', e.target.value)} placeholder="0" /></Campo></div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          <Button type="button" variant="outline" size="sm" className="w-full" onClick={añadir}>
+            <Plus className="size-4" /> Añadir otro activo
+          </Button>
         </div>
-        <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Crear</Button></DialogFooter>
+
+        <DialogFooter>
+          <Button variant="ghost" disabled={g} onClick={onClose}>Cancelar</Button>
+          <Button onClick={guardar} disabled={g}>
+            {g && <Spinner />}{llenas.length > 1 ? `Crear ${llenas.length} activos` : 'Crear activo'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -172,6 +278,7 @@ function DialogActivo({ sedes, onClose }: { sedes: Sede[]; onClose: () => void }
  * permite sumar los demás disponibles: todos los marcados salen en UNA sola acta.
  */
 function DialogAsignar({ activoId, disponibles, onClose }: {
+  /** Activo desde el que se abrió (queda premarcado). Vacío si se entró por el botón general. */
   activoId: string
   /** Activos en estado DISPONIBLE, incluido el de partida. */
   disponibles: Activo[]
@@ -180,7 +287,7 @@ function DialogAsignar({ activoId, disponibles, onClose }: {
   const router = useRouter()
   const [colaboradorId, setColaboradorId] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
-  const [seleccion, setSeleccion] = useState<string[]>([activoId])
+  const [seleccion, setSeleccion] = useState<string[]>(activoId ? [activoId] : [])
   const [busqueda, setBusqueda] = useState('')
   const [g, setG] = useState(false)
 

@@ -33,7 +33,6 @@ const VINCULOS: { v: Vinculo; l: string }[] = [
   { v: 'OBRA_LABOR', l: 'Obra o labor' },
   { v: 'APRENDIZ_SENA', l: 'Aprendiz SENA' },
   { v: 'OPS', l: 'Prestación de servicios (OPS)' },
-  { v: 'PRACTICANTE', l: 'Practicante' },
 ]
 
 const NIVELES: { v: string; l: string }[] = [

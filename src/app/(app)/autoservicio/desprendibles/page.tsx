@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { tramiteAplica, NoAplica } from '../no-aplica'
 import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
@@ -23,6 +24,10 @@ export default async function MisDesprendiblesPage() {
         </CardContent></Card>
       </div>
     )
+  }
+
+  if (!(await tramiteAplica(usuario.colaboradorId, 'desprendibles'))) {
+    return <NoAplica titulo="Mis desprendibles" motivo="Como tu vínculo es de prestación de servicios, no hay nómina ni desprendibles de pago: tus pagos se gestionan por cuenta de cobro." />
   }
 
   const liquidaciones = await prisma.liquidacionNomina.findMany({

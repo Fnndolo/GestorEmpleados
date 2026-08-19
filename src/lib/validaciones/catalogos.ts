@@ -38,7 +38,7 @@ export const tipoDocumentoSchema = z.object({
   activo: z.boolean(),
   // Vínculos para los que este documento es obligatorio.
   vinculosObligatorios: z.array(
-    z.enum(['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'OPS', 'PRACTICANTE']),
+    z.enum(['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'OPS']),
   ),
 })
 export type TipoDocumentoInput = z.infer<typeof tipoDocumentoSchema>

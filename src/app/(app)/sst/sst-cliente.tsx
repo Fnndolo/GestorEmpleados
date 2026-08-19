@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Paperclip, OctagonAlert, Flame, ClipboardCheck, IdCard, Landmark, Scale, CircleCheck, CircleAlert, CircleX, ChevronLeft, FileWarning } from 'lucide-react'
+import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Paperclip, OctagonAlert, Flame, ClipboardCheck, IdCard, Landmark, Scale, CircleCheck, CircleAlert, CircleX, FileWarning, LayoutGrid, ChartLine } from 'lucide-react'
 import { Chip, Pill, Stat, type PillTone } from '@/components/ui-kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
 import { formatFechaCorta } from '@/lib/fechas'
+import { cn } from '@/lib/utils'
 import {
   crearComite, registrarReunionComite, vincularActaReunion, agregarMiembroComite, eliminarMiembroComite,
   crearExamenMedico, vincularSoporteExamen, reportarAccidente, actualizarAccidente, entregarEpp, crearEpp,
@@ -111,6 +112,39 @@ type Props = {
 }
 
 export function SstCliente(p: Props) {
+  // La sección vive en estado, no en la URL: cambiar de sección no recarga la
+  // página ni pierde el scroll. La URL se sincroniza con history.pushState para
+  // que los enlaces `/sst?tab=x` sigan sirviendo y el botón Atrás funcione.
+  const [tab, setTab] = useState(p.tab)
+
+  const irA = useCallback((destino: string) => {
+    setTab(destino)
+    const url = destino === 'tablero' ? '/sst' : `/sst?tab=${destino}`
+    window.history.pushState({ tab: destino }, '', url)
+    // El panel puede quedar más arriba que el punto donde se hizo clic.
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  useEffect(() => {
+    const alVolver = () => {
+      const params = new URLSearchParams(window.location.search)
+      setTab(params.get('tab') ?? 'tablero')
+    }
+    window.addEventListener('popstate', alVolver)
+    return () => window.removeEventListener('popstate', alVolver)
+  }, [])
+
+  // Si se llega a /sst desde fuera (menú lateral, un enlace de otro módulo), el
+  // servidor manda el tab de la URL y hay que obedecerlo: sin esto el panel se
+  // quedaría en la sección anterior porque el componente no se desmonta.
+  // Se ajusta durante el render —el patrón que React recomienda para derivar
+  // estado de una prop— en vez de en un efecto, que provocaría un repintado extra.
+  const [tabDeLaUrl, setTabDeLaUrl] = useState(p.tab)
+  if (p.tab !== tabDeLaUrl) {
+    setTabDeLaUrl(p.tab)
+    setTab(p.tab)
+  }
+
   const [dialogo, setDialogo] = useState<string | null>(null)
   const [accidenteAbierto, setAccidenteAbierto] = useState<Props['accidentes'][number] | null>(null)
   const [comiteAbierto, setComiteAbierto] = useState<Props['comites'][number] | null>(null)
@@ -169,20 +203,117 @@ export function SstCliente(p: Props) {
     },
   ]
 
+  /** Estado de cada sección para el punto de color del riel. */
+  const ESTADO_SECCION: Record<string, 'ok' | 'warn' | 'bad' | null> = {
+    estructura: pendEstructura > 0 ? 'warn' : 'ok',
+    matriz: normasSinCumplir > 0 ? 'bad' : 'ok',
+    autoeval: !p.autoeval ? 'bad' : accionesMejora.some((a) => a.vencida && !a.cumplida) ? 'warn' : 'ok',
+    examenes: examenesVencidos > 0 ? 'bad' : 'ok',
+    arl: null,
+    accidentes: furatPendientes > 0 ? 'bad' : 'ok',
+    ipevr: ipevrCriticos > 0 ? 'warn' : 'ok',
+    profesiograma: null,
+    emergencias: planVigente ? 'ok' : 'bad',
+    inspecciones: inspAbiertas > 0 ? 'warn' : 'ok',
+    comites: semComites?.estado ?? null,
+    epp: eppSinFirma > 0 ? 'warn' : 'ok',
+  }
+
+  const GRUPOS: { titulo: string; items: { tab: string; etiqueta: string; icono: typeof Landmark }[] }[] = [
+    {
+      titulo: 'Vista general',
+      items: [
+        { tab: 'tablero', etiqueta: 'Tablero', icono: LayoutGrid },
+        { tab: 'indicadores', etiqueta: 'Indicadores', icono: ChartLine },
+      ],
+    },
+    ...SECCIONES.map((sec) => ({
+      titulo: sec.titulo,
+      items: sec.tiles.map((t) => ({ tab: t.tab, etiqueta: t.titulo, icono: t.icono })),
+    })),
+  ]
+
+  /** Flechas para recorrer las secciones sin soltar el teclado (patrón ARIA de tabs). */
+  const todasLasTabs = GRUPOS.flatMap((g) => g.items.map((i) => i.tab))
+  function navegarConTeclado(e: React.KeyboardEvent<HTMLElement>) {
+    const salto = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key]
+    if (!salto && e.key !== 'Home' && e.key !== 'End') return
+    e.preventDefault()
+    const i = todasLasTabs.indexOf(tab)
+    const destino = e.key === 'Home' ? todasLasTabs[0]
+      : e.key === 'End' ? todasLasTabs[todasLasTabs.length - 1]
+      : todasLasTabs[(i + salto! + todasLasTabs.length) % todasLasTabs.length]
+    irA(destino)
+    document.getElementById(`tab-${destino}`)?.focus()
+  }
+
+  const riel = (
+    <nav
+      role="tablist"
+      aria-label="Secciones de SST"
+      aria-orientation="vertical"
+      onKeyDown={navegarConTeclado}
+      className="flex gap-1.5 overflow-x-auto rounded-xl border bg-card p-2 lg:sticky lg:top-4 lg:flex-col lg:gap-0.5 lg:overflow-visible"
+    >
+      {GRUPOS.map((g) => (
+        <div key={g.titulo} className="contents lg:block">
+          <p className="hidden px-2 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground first:pt-1 lg:block">
+            {g.titulo}
+          </p>
+          {g.items.map((it) => {
+            const activo = it.tab === tab
+            const estado = ESTADO_SECCION[it.tab]
+            return (
+              <button
+                key={it.tab}
+                id={`tab-${it.tab}`}
+                type="button"
+                role="tab"
+                aria-selected={activo}
+                aria-controls={`panel-${it.tab}`}
+                tabIndex={activo ? 0 : -1}
+                onClick={() => irA(it.tab)}
+                className={cn(
+                  'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-2.5 py-2 text-[13px] transition-colors lg:w-full',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                  activo ? 'bg-primary/10 font-semibold text-primary' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                )}
+              >
+                <it.icono className="hidden size-4 shrink-0 lg:block" />
+                <span className="min-w-0 flex-1 truncate text-left">{it.etiqueta}</span>
+                {estado && (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'size-1.5 shrink-0 rounded-full',
+                      estado === 'ok' ? 'bg-emerald-500' : estado === 'warn' ? 'bg-amber-500' : 'bg-destructive',
+                    )}
+                  />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      ))}
+    </nav>
+  )
+
   return (
-    <div className="space-y-4">
-      {p.tab !== 'tablero' && (
+    <div className="grid items-start gap-4 lg:grid-cols-[232px_minmax(0,1fr)]">
+      {riel}
+
+      <div className="space-y-4">
+      {tab !== 'tablero' && (
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <Link href="/sst" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"><ChevronLeft className="size-3.5" /> SST</Link>
-            <p className="text-base font-semibold">{TITULO_TAB[p.tab] ?? 'SST'}</p>
+            <p className="text-base font-semibold">{TITULO_TAB[tab] ?? 'SST'}</p>
           </div>
-          {p.puedeCrear && !['emergencias', 'estructura', 'indicadores', 'autoeval'].includes(p.tab) && <Button size="sm" onClick={() => setDialogo(p.tab)}><Plus className="size-4" /> Nuevo</Button>}
-          {p.puedeCrear && p.tab === 'autoeval' && <Button size="sm" onClick={() => setDialogo('autoeval')}><Plus className="size-4" /> Nuevo</Button>}
+          {p.puedeCrear && !['emergencias', 'estructura', 'indicadores', 'autoeval'].includes(tab) && <Button size="sm" onClick={() => setDialogo(tab)}><Plus className="size-4" /> Nuevo</Button>}
+          {p.puedeCrear && tab === 'autoeval' && <Button size="sm" onClick={() => setDialogo('autoeval')}><Plus className="size-4" /> Nuevo</Button>}
         </div>
       )}
 
-      {p.tab === 'tablero' && (
+      {tab === 'tablero' && (
         <div className="space-y-5">
           <div className="grid items-start gap-3 lg:grid-cols-2">
             {/* Semáforo de cumplimiento documental del SG-SST */}
@@ -195,13 +326,13 @@ export function SstCliente(p: Props) {
               </div>
               <div className="divide-y">
                 {p.semaforo.map((s) => (
-                  <Link key={s.label} href={`/sst?tab=${s.tab}`} className="flex items-center gap-3 p-3 hover:bg-accent/40">
+                  <button key={s.label} type="button" onClick={() => irA(s.tab)} className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
                     {s.estado === 'ok' ? <CircleCheck className="size-5 shrink-0 text-emerald-600" />
                       : s.estado === 'warn' ? <CircleAlert className="size-5 shrink-0 text-amber-500" />
                       : <CircleX className="size-5 shrink-0 text-destructive" />}
                     <div className="min-w-0 flex-1"><p className="text-sm font-medium">{s.label}</p><p className="text-xs text-muted-foreground">{s.detalle}</p></div>
                     <Pill tone={s.estado === 'ok' ? 'ok' : s.estado === 'warn' ? 'warn' : 'bad'}>{s.estado === 'ok' ? 'Al día' : s.estado === 'warn' ? 'Atención' : 'Falta'}</Pill>
-                  </Link>
+                  </button>
                 ))}
               </div>
             </CardContent></Card>
@@ -210,11 +341,11 @@ export function SstCliente(p: Props) {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <Stat icono={Users} color="sky" valor={p.headcount} label="Trabajadores activos" />
-                <Stat icono={FileWarning} color="rose" valor={furatPendientes} label="FURAT pendientes" href="/sst?tab=accidentes" className={furatPendientes > 0 ? 'border-destructive/40 bg-destructive/5' : undefined} />
-                <Stat icono={Stethoscope} color="rose" valor={examenesVencidos} label="Exámenes vencidos" href="/sst?tab=examenes" />
-                <Stat icono={HardHat} color="amber" valor={eppSinFirma} label="EPP sin firma" href="/sst?tab=epp" />
+                <Stat icono={FileWarning} color="rose" valor={furatPendientes} label="FURAT pendientes" onClick={() => irA('accidentes')} className={furatPendientes > 0 ? 'border-destructive/40 bg-destructive/5' : undefined} />
+                <Stat icono={Stethoscope} color="rose" valor={examenesVencidos} label="Exámenes vencidos" onClick={() => irA('examenes')} />
+                <Stat icono={HardHat} color="amber" valor={eppSinFirma} label="EPP sin firma" onClick={() => irA('epp')} />
               </div>
-              <Link href="/sst?tab=indicadores" className="block">
+              <button type="button" onClick={() => irA('indicadores')} className="block w-full text-left">
                 <Card className="transition-colors hover:bg-accent/40"><CardContent className="py-4">
                   <div className="flex items-baseline justify-between gap-2">
                     <p className="text-sm font-medium">Accidentalidad y ausentismo</p>
@@ -224,7 +355,7 @@ export function SstCliente(p: Props) {
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{p.indicadores.length} mes{p.indicadores.length === 1 ? '' : 'es'} registrado{p.indicadores.length === 1 ? '' : 's'} · índices de frecuencia, severidad y ausentismo</p>
                 </CardContent></Card>
-              </Link>
+              </button>
             </div>
           </div>
 
@@ -234,7 +365,7 @@ export function SstCliente(p: Props) {
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{sec.titulo}</p>
               <div className="grid gap-3 sm:grid-cols-3">
                 {sec.tiles.map((t) => (
-                  <Link key={t.tab} href={`/sst?tab=${t.tab}`}>
+                  <button key={t.tab} type="button" onClick={() => irA(t.tab)} className="text-left">
                     <Card className="h-full transition-colors hover:bg-accent/40"><CardContent className="flex items-center gap-3 py-3">
                       <Chip icono={t.icono} color={t.color} />
                       <div className="min-w-0 flex-1">
@@ -243,7 +374,7 @@ export function SstCliente(p: Props) {
                       </div>
                       {t.pill}
                     </CardContent></Card>
-                  </Link>
+                  </button>
                 ))}
               </div>
             </div>
@@ -251,7 +382,7 @@ export function SstCliente(p: Props) {
         </div>
       )}
 
-      {p.tab === 'indicadores' && (
+      {tab === 'indicadores' && (
         <div className="space-y-3">
           <Card><CardContent className="py-5 space-y-3">
             <div className="flex items-center justify-between">
@@ -295,11 +426,11 @@ export function SstCliente(p: Props) {
         </div>
       )}
 
-      {p.tab === 'estructura' && (
+      {tab === 'estructura' && (
         <EstructuraSgsst estructura={p.estructura} puedeEditar={p.puedeEditar} />
       )}
 
-      {p.tab === 'matriz' && (p.normas.length === 0 ? <Vacio /> : (
+      {tab === 'matriz' && (p.normas.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.normas.map((n) => (
           <button key={n.id} type="button" onClick={() => setNormaAbierta(n)} className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent/40">
             <Chip icono={Scale} color="violet" />
@@ -313,7 +444,7 @@ export function SstCliente(p: Props) {
         ))}</CardContent></Card>
       ))}
 
-      {p.tab === 'examenes' && (p.examenes.length === 0 ? <Vacio /> : (
+      {tab === 'examenes' && (p.examenes.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.examenes.map((e) => (
           <div key={e.id} className="flex items-center gap-3 p-3">
             <Chip icono={Stethoscope} color="rose" />
@@ -351,7 +482,7 @@ export function SstCliente(p: Props) {
         ))}</CardContent></Card>
       ))}
 
-      {p.tab === 'arl' && (p.novedadesArl.length === 0 ? <Vacio /> : (
+      {tab === 'arl' && (p.novedadesArl.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.novedadesArl.map((n) => (
           <div key={n.id} className="flex items-center gap-3 p-3">
             <Chip icono={ShieldAlert} color="emerald" />
@@ -373,7 +504,7 @@ export function SstCliente(p: Props) {
         ))}</CardContent></Card>
       ))}
 
-      {p.tab === 'accidentes' && (p.accidentes.length === 0 ? <Vacio /> : (
+      {tab === 'accidentes' && (p.accidentes.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.accidentes.map((a) => (
           <button key={a.id} type="button" onClick={() => setAccidenteAbierto(a)} className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent/40">
             <Chip icono={TriangleAlert} color={a.esIncidente ? 'sky' : 'amber'} />
@@ -386,7 +517,7 @@ export function SstCliente(p: Props) {
         ))}</CardContent></Card>
       ))}
 
-      {p.tab === 'comites' && (p.comites.length === 0 ? <Vacio /> : (
+      {tab === 'comites' && (p.comites.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.comites.map((c) => (
           <button key={c.id} type="button" onClick={() => setComiteAbierto(c)} className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent/40">
             <Chip icono={Users} color="teal" />
@@ -399,7 +530,7 @@ export function SstCliente(p: Props) {
         ))}</CardContent></Card>
       ))}
 
-      {p.tab === 'epp' && (
+      {tab === 'epp' && (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">{p.epps.map((e) => <Badge key={e.id} variant="outline">{e.nombre}</Badge>)}</div>
           {p.entregasEpp.length === 0 ? <Vacio /> : (
@@ -417,7 +548,7 @@ export function SstCliente(p: Props) {
         </div>
       )}
 
-      {p.tab === 'ipevr' && (p.peligros.length === 0 ? <Vacio /> : (
+      {tab === 'ipevr' && (p.peligros.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.peligros.map((pe) => (
           <div key={pe.id} className="flex items-start gap-3 p-3">
             <Chip icono={ShieldAlert} color="rose" />
@@ -439,7 +570,7 @@ export function SstCliente(p: Props) {
         ))}</CardContent></Card>
       ))}
 
-      {p.tab === 'profesiograma' && (p.profesiogramas.length === 0 ? <Vacio /> : (
+      {tab === 'profesiograma' && (p.profesiogramas.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.profesiogramas.map((pr) => (
           <div key={pr.id} className="space-y-1 p-3">
             <div className="flex items-center gap-3"><Chip icono={IdCard} color="indigo" /><p className="text-sm font-medium">{pr.cargo}</p></div>
@@ -451,7 +582,7 @@ export function SstCliente(p: Props) {
         ))}</CardContent></Card>
       ))}
 
-      {p.tab === 'emergencias' && (
+      {tab === 'emergencias' && (
         <div className="space-y-6">
           <SeccionEmergencia titulo="Plan de emergencias" puedeCrear={p.puedeCrear} sedes={p.sedes} planes={p.planesEmergencia} />
           <SeccionBrigadistas puedeCrear={p.puedeCrear} sedes={p.sedes} brigadistas={p.brigadistas} />
@@ -459,7 +590,7 @@ export function SstCliente(p: Props) {
         </div>
       )}
 
-      {p.tab === 'inspecciones' && (p.inspecciones.length === 0 ? <Vacio /> : (
+      {tab === 'inspecciones' && (p.inspecciones.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.inspecciones.map((i) => (
           <button key={i.id} type="button" onClick={() => setInspeccionAbierta(i)} className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent/40">
             <Chip icono={ClipboardCheck} color="teal" />
@@ -473,7 +604,7 @@ export function SstCliente(p: Props) {
         ))}</CardContent></Card>
       ))}
 
-      {p.tab === 'autoeval' && (
+      {tab === 'autoeval' && (
         <PanelAutoeval autoeval={p.autoeval} puedeEditar={p.puedeEditar} />
       )}
 
@@ -493,6 +624,7 @@ export function SstCliente(p: Props) {
       {examenAbierto && <DialogSeguimientoRecomendaciones examen={examenAbierto} onClose={() => setExamenAbierto(null)} />}
       {normaAbierta && <DialogNorma norma={normaAbierta} puedeEditar={p.puedeEditar} onClose={() => setNormaAbierta(null)} />}
       {indicadorAbierto && <DialogIndicadorSst onClose={() => setIndicadorAbierto(false)} />}
+      </div>
     </div>
   )
 }

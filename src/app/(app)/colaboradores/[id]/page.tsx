@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { esOps } from '@/lib/tramites-vinculo'
 import { notFound } from 'next/navigation'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
@@ -229,8 +230,11 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
           valor={`${docsAlDia} de ${semaforo.length}`}
           label={`Documentos al día${docsPorVencer > 0 ? ` · ${docsPorVencer} por vencer` : ''}${docsFaltan > 0 ? ` · ${docsFaltan} falta${docsFaltan > 1 ? 'n' : ''}` : ''}`}
         />
-        <Stat icono={TreePalm} color="bg-teal-500/12 text-teal-600 dark:text-teal-400"
-          valor={`${saldoVac.saldo} días`} label="Vacaciones disponibles" />
+        {/* Un contrato de prestación de servicios no causa vacaciones. */}
+        {!esOps(c.tipoVinculo) && (
+          <Stat icono={TreePalm} color="bg-teal-500/12 text-teal-600 dark:text-teal-400"
+            valor={`${saldoVac.saldo} días`} label="Vacaciones disponibles" />
+        )}
       </div>
 
       <TabsResponsive

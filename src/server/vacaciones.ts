@@ -1,4 +1,5 @@
 import 'server-only'
+import { esOps } from '@/lib/tramites-vinculo'
 import { prisma } from '@/lib/db'
 import { hoyBogota } from '@/lib/fechas'
 
@@ -15,8 +16,15 @@ export async function saldoVacaciones(colaboradorId: string): Promise<{
 }> {
   const colab = await prisma.colaborador.findUniqueOrThrow({
     where: { id: colaboradorId },
-    select: { fechaIngreso: true },
+    select: { fechaIngreso: true, tipoVinculo: true },
   })
+
+  // Un contrato de prestación de servicios no causa vacaciones: no hay relación
+  // laboral. Se corta aquí, en la fuente, para que ninguna pantalla ni reporte
+  // llegue a mostrarle días "disponibles" que no existen.
+  if (esOps(colab.tipoVinculo)) {
+    return { causadas: 0, disfrutadas: 0, pendientesAprobacion: 0, saldo: 0 }
+  }
 
   const hoy = hoyBogota()
   const diasTrabajados = Math.max(0, (hoy.getTime() - colab.fechaIngreso.getTime()) / 86_400_000)

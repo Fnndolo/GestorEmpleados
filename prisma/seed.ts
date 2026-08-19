@@ -143,6 +143,15 @@ async function seedReglasAlerta() {
       diasPrimeraAlerta: 5, primeraEnHabiles: true,
       diasUltimaAlerta: 1, ultimaEnHabiles: false,
     },
+    {
+      // Días CALENDARIO, no hábiles: el preaviso de no prórroga del art. 46 CST
+      // son 30 días calendario. La primera alerta a los 40 deja 10 días de
+      // margen para decidir y redactar la carta antes de que se cierre el plazo.
+      clave: 'CONTRATO_FIJO',
+      descripcion: 'Vencimiento de contratos a término fijo (40 y 30 días calendario antes; el preaviso legal es de 30)',
+      diasPrimeraAlerta: 40, primeraEnHabiles: false,
+      diasUltimaAlerta: 30, ultimaEnHabiles: false,
+    },
   ]
   for (const r of reglas) {
     await prisma.reglaAlerta.upsert({
@@ -151,7 +160,9 @@ async function seedReglasAlerta() {
       update: { descripcion: r.descripcion },
     })
   }
-  console.log('Reglas de alerta listas (GLOBAL 10/3 hábiles, calendario legal 5h/1)')
+  // El upsert solo refresca la descripción: si alguien ajustó los días desde
+  // Configuración, volver a sembrar no le pisa el ajuste.
+  console.log('Reglas de alerta listas (GLOBAL 10/3 hábiles, calendario legal 5h/1, contrato fijo 40/30 calendario)')
 }
 
 async function main() {

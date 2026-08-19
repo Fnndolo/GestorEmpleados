@@ -1,4 +1,6 @@
 import { requerirPermiso } from '@/server/sesion'
+import { vinculoDe } from '../no-aplica'
+import { aplicaTramite } from '@/lib/tramites-vinculo'
 import { prisma } from '@/lib/db'
 import { formatFechaCorta } from '@/lib/fechas'
 import { Encabezado } from '@/components/shell/encabezado'
@@ -21,21 +23,27 @@ export default async function MiDotacionPage() {
     )
   }
 
+  // Al contratista OPS sí se le entregan activos en custodia, pero no dotación
+  // (arts. 230-234 CST, solo empleados) ni EPP: esas listas se dejan vacías.
+  const vinculo = await vinculoDe(usuario.colaboradorId)
+  const verDotacion = aplicaTramite(vinculo, 'dotacion')
+  const verEpp = aplicaTramite(vinculo, 'epp')
+
   const [entregas, asignaciones, epps] = await Promise.all([
-    prisma.entregaDotacion.findMany({
+    verDotacion ? prisma.entregaDotacion.findMany({
       where: { colaboradorId: usuario.colaboradorId },
       orderBy: [{ anio: 'desc' }, { fechaEntrega: 'desc' }],
-    }),
+    }) : Promise.resolve([]),
     prisma.asignacionActivo.findMany({
       where: { colaboradorId: usuario.colaboradorId },
       include: { activo: true },
       orderBy: [{ fechaDevolucion: 'asc' }, { fechaEntrega: 'desc' }],
     }),
-    prisma.entregaEpp.findMany({
+    verEpp ? prisma.entregaEpp.findMany({
       where: { colaboradorId: usuario.colaboradorId },
       include: { elementoEpp: true },
       orderBy: { fechaEntrega: 'desc' },
-    }),
+    }) : Promise.resolve([]),
   ])
 
   return (

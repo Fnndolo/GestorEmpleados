@@ -59,8 +59,12 @@ export function Pill({ tone, className, children }: {
 }
 
 /** Stat de dato clave: chip + cifra + etiqueta (fila de "de un vistazo"). */
-export function Stat({ icono, color, valor, label, href, className }: {
-  icono: LucideIcon; color: ChipColor | string; valor: string | number; label: string; href?: string; className?: string
+export function Stat({ icono, color, valor, label, href, onClick, className }: {
+  icono: LucideIcon; color: ChipColor | string; valor: string | number; label: string
+  href?: string
+  /** Alternativa a `href` cuando la cifra cambia de panel sin salir de la pantalla. */
+  onClick?: () => void
+  className?: string
 }) {
   const contenido = (
     <>
@@ -72,9 +76,10 @@ export function Stat({ icono, color, valor, label, href, className }: {
     </>
   )
   const clases = cn('flex items-center gap-3 rounded-xl border bg-card p-3', className)
-  return href
-    ? <Link href={href} className={cn(clases, 'transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md')}>{contenido}</Link>
-    : <div className={clases}>{contenido}</div>
+  const clasesInteractivo = cn(clases, 'w-full text-left transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')
+  if (href) return <Link href={href} className={clasesInteractivo}>{contenido}</Link>
+  if (onClick) return <button type="button" onClick={onClick} className={clasesInteractivo}>{contenido}</button>
+  return <div className={clases}>{contenido}</div>
 }
 
 /** Bloque de pares etiqueta → valor con cabecera de chip (fichas, resúmenes). */

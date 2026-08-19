@@ -1,4 +1,5 @@
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
+import { esOps } from '@/lib/tramites-vinculo'
 import { prisma } from '@/lib/db'
 import { Prisma } from '@/generated/prisma/client'
 import { saldoVacaciones } from '@/server/vacaciones'
@@ -311,7 +312,10 @@ export default async function AutoservicioPage() {
       </p>
 
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        <Stat icono={TreePalm} color="bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" valor={String(saldo.saldo)} label="Días de vacaciones disponibles" />
+        {/* El OPS no causa vacaciones: mostrarle "0 días disponibles" confunde más que omitirlo. */}
+        {!esOps(colab.tipoVinculo) && (
+          <Stat icono={TreePalm} color="bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" valor={String(saldo.saldo)} label="Días de vacaciones disponibles" />
+        )}
         <Stat icono={Clock} color="bg-amber-500/12 text-amber-600 dark:text-amber-400" valor={String(enTramite)} label="Solicitudes en trámite" />
         <Stat
           icono={CreditCard} color="bg-foreground/8 text-foreground"
@@ -323,6 +327,7 @@ export default async function AutoservicioPage() {
 
       <PanelTramites
         activo={colab.estado === 'ACTIVO'}
+        tipoVinculo={colab.tipoVinculo}
         fichaFaltantes={[colab.direccion, colab.emergenciaNombre, colab.epsId, colab.afpId, colab.bancoId, colab.numeroCuenta].filter((x) => !x).length}
         contratosPorFirmar={contratosPorFirmar}
         disciplinariosAbiertos={disciplinariosAbiertos}

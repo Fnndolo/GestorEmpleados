@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { esOps } from '@/lib/tramites-vinculo'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
@@ -69,9 +70,24 @@ export const registrarLicencia = accion(
   },
 )
 
+/**
+ * Impide registrarle a un contratista OPS una novedad que solo existe en la
+ * relación laboral. Además de ser inaplicable, dejar el registro sería prueba
+ * escrita de subordinación en un eventual proceso por contrato realidad.
+ */
+async function exigirVinculoLaboral(colaboradorId: string, novedad: 'vacaciones' | 'permiso'): Promise<void> {
+  const c = await prisma.colaborador.findUnique({ where: { id: colaboradorId }, select: { tipoVinculo: true } })
+  if (esOps(c?.tipoVinculo)) {
+    throw new ErrorNegocio(
+      `No se pueden registrar ${novedad === 'vacaciones' ? 'vacaciones' : 'permisos'} a un contratista de prestación de servicios: no hay relación laboral.`,
+    )
+  }
+}
+
 export const registrarPermiso = accion(
   { modulo: 'novedades', accion: 'CREAR', schema: permisoSchema },
   async (d) => {
+    await exigirVinculoLaboral(d.colaboradorId, 'permiso')
     await dbAuditado.permiso.create({
       data: {
         colaboradorId: d.colaboradorId, fecha: parseFechaISO(d.fecha)!,
@@ -86,6 +102,7 @@ export const registrarPermiso = accion(
 export const registrarVacaciones = accion(
   { modulo: 'novedades', accion: 'CREAR', schema: vacacionesSchema },
   async (d) => {
+    await exigirVinculoLaboral(d.colaboradorId, 'vacaciones')
     // Cuando la empresa fija la época de vacaciones debe notificar al trabajador con
     // al menos 15 días de anticipación (RIT art. 34, en concordancia con el art. 187 CST).
     const inicio = parseFechaISO(d.fechaInicio)!
@@ -164,12 +181,15 @@ export const registrarVacacionesColectivas = accion(
     const colaboradores = await prisma.colaborador.findMany({
       where: {
         estado: 'ACTIVO',
+        // Los contratistas OPS no entran en la vacación colectiva: no tienen
+        // vacaciones que disfrutar y programárselas sería tratarlos como empleados.
+        tipoVinculo: { not: 'OPS' },
         ...(d.alcance === 'SEDE' ? { sedeId: d.sedeId } : {}),
         ...(d.alcance === 'AREA' ? { areaId: d.areaId } : {}),
       },
       select: { id: true, usuarioId: true },
     })
-    if (colaboradores.length === 0) throw new ErrorNegocio('No hay colaboradores activos en el alcance elegido.')
+    if (colaboradores.length === 0) throw new ErrorNegocio('No hay colaboradores activos con vínculo laboral en el alcance elegido.')
 
     let creados = 0, anticipados = 0, omitidos = 0
     for (const c of colaboradores) {

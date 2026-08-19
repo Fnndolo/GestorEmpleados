@@ -50,7 +50,9 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
     bancoId: e(c.bancoId),
     tipoCuenta: c.tipoCuenta ?? '',
     numeroCuenta: e(c.numeroCuenta),
-    tipoVinculo: c.tipoVinculo,
+    // PRACTICANTE ya no se ofrece (la empresa no los maneja); una ficha antigua
+    // con ese valor cae en el vínculo laboral más cercano al abrir el formulario.
+    tipoVinculo: c.tipoVinculo === 'PRACTICANTE' ? 'TERMINO_FIJO' : c.tipoVinculo,
     sedeId: c.sedeId,
     areaId: e(c.areaId),
     cargoId: e(c.cargoId),

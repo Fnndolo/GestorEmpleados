@@ -1,4 +1,5 @@
 import 'server-only'
+import { claseCertificacion } from '@/lib/tramites-vinculo'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { subirArchivo } from '@/server/storage'
@@ -26,8 +27,27 @@ export async function generarCertificacion(opts: {
     orderBy: { fechaInicio: 'desc' },
   })
 
+  // El contratista OPS no tiene certificación LABORAL: se emite con la plantilla
+  // contractual (objeto y honorarios, sin cargo ni salario). Ver `claseCertificacion`.
+  const clase = claseCertificacion(colab.tipoVinculo)
+  const contratoOps = clase === 'CONTRACTUAL'
+    ? await prisma.contratoOps.findFirst({
+        where: { colaboradorId: opts.colaboradorId, estado: 'ACTIVO' },
+        orderBy: { fechaInicio: 'desc' },
+      })
+    : null
+
   const datos: DatosCertificacion = {
     tipo: opts.tipo,
+    clase,
+    contratoOps: contratoOps && {
+      numero: contratoOps.numero,
+      objeto: contratoOps.objeto,
+      valorTotal: Number(contratoOps.valorTotal),
+      valorMensual: contratoOps.valorMensual != null ? Number(contratoOps.valorMensual) : null,
+      fechaInicio: contratoOps.fechaInicio,
+      fechaFin: contratoOps.fechaFin,
+    },
     dirigidaA: opts.dirigidaA ?? null,
     empresa: {
       razonSocial: empresa.razonSocial,

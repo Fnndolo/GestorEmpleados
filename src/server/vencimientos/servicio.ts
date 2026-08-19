@@ -121,6 +121,66 @@ export async function publicarVencimiento(params: PublicarVencimientoParams) {
 }
 
 /** Marca un vencimiento como resuelto (deja de alertar). */
+/**
+ * Reaplica una regla a los vencimientos que YA estaban publicados.
+ *
+ * Cambiar la regla solo afecta a lo que se publique después: los pasos de
+ * alerta se materializan al publicar. Sin esto, poner los contratos fijos en
+ * 40 días no movería ni una sola alerta de los contratos vigentes, que es
+ * justo lo que se quiere lograr al cambiarla.
+ *
+ * Los pasos ya despachados no se tocan: un aviso enviado no se reescribe.
+ * Devuelve cuántos vencimientos quedaron reprogramados.
+ */
+export async function reaplicarReglaAlerta(clave: string): Promise<number> {
+  // La regla GLOBAL alcanza a todo origen que no tenga la suya propia.
+  let origenes: OrigenVencimiento[]
+  if (clave === 'GLOBAL') {
+    const propias = await prisma.reglaAlerta.findMany({ where: { clave: { not: 'GLOBAL' } }, select: { clave: true } })
+    const conReglaPropia = new Set(propias.map((r) => r.clave))
+    const usados = await prisma.vencimiento.findMany({ where: { estado: 'PENDIENTE' }, select: { origen: true }, distinct: ['origen'] })
+    origenes = usados.map((u) => u.origen).filter((o) => !conReglaPropia.has(o))
+  } else {
+    origenes = [clave as OrigenVencimiento]
+  }
+  if (origenes.length === 0) return 0
+
+  const vencimientos = await prisma.vencimiento.findMany({
+    where: { origen: { in: origenes }, estado: 'PENDIENTE' },
+    include: { alertas: true },
+  })
+  if (vencimientos.length === 0) return 0
+
+  const sabHabil = await sabadoHabil()
+  const anios = vencimientos.map((v) => v.fechaVencimiento.getUTCFullYear())
+  const festivos = await cargarFestivos(Math.min(...anios) - 1, Math.max(...anios) + 1)
+
+  let reprogramados = 0
+  for (const v of vencimientos) {
+    const regla = await resolverRegla(v.origen)
+    const iso = formatFechaISO(v.fechaVencimiento)
+    const nuevas: Record<'PRIMERA' | 'ULTIMA', Date> = {
+      PRIMERA: parseFechaISO(fechaAlerta(iso, regla.diasPrimeraAlerta, regla.primeraEnHabiles, festivos, sabHabil))!,
+      ULTIMA: parseFechaISO(fechaAlerta(iso, regla.diasUltimaAlerta, regla.ultimaEnHabiles, festivos, sabHabil))!,
+    }
+    let tocado = false
+    for (const paso of ['PRIMERA', 'ULTIMA'] as const) {
+      const actual = v.alertas.find((a) => a.paso === paso)
+      if (actual?.despachada) continue
+      const fecha = nuevas[paso]
+      if (actual) {
+        if (actual.fechaProgramada.getTime() === fecha.getTime()) continue
+        await prisma.alertaVencimiento.update({ where: { id: actual.id }, data: { fechaProgramada: fecha } })
+      } else {
+        await prisma.alertaVencimiento.create({ data: { vencimientoId: v.id, paso, fechaProgramada: fecha } })
+      }
+      tocado = true
+    }
+    if (tocado) reprogramados++
+  }
+  return reprogramados
+}
+
 export async function resolverVencimiento(entidadTipo: string, entidadId: string, origen: OrigenVencimiento) {
   const venc = await prisma.vencimiento.findUnique({
     where: { entidadTipo_entidadId_origen: { entidadTipo, entidadId, origen } },

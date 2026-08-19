@@ -1,4 +1,5 @@
 import 'server-only'
+import { urlApp } from '@/lib/app-url'
 import { prisma } from '@/lib/db'
 import { enviarCorreo } from '@/server/notificaciones/correo'
 import { hoyBogota, hoyBogotaISO, formatFechaCorta } from '@/lib/fechas'
@@ -100,7 +101,7 @@ export async function procesarAlertas(): Promise<{ vencidos: number; alertas: nu
             canal: 'EMAIL',
             destino: u.email,
             asunto: `[Smart Gadgets] ${titulo}`,
-            cuerpo: `<p>Hola ${u.nombre},</p><p>${titulo}</p><p>${mensaje}</p>${enlace ? `<p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? ''}${enlace}">Ver detalle</a></p>` : ''}`,
+            cuerpo: `<p>Hola ${u.nombre},</p><p>${titulo}</p><p>${mensaje}</p>${enlace ? `<p><a href="${urlApp(enlace)}">Ver detalle</a></p>` : ''}`,
             dedupeKey: `mail:${dedupe}`,
           },
         })
