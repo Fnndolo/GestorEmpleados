@@ -25,6 +25,7 @@ import { FotoUploader } from './foto-uploader'
 import { EducacionLista } from './educacion-lista'
 import { BotonCertificacion } from './boton-certificacion'
 import { BotonDisciplinario } from './boton-disciplinario'
+import { HistorialDisciplinario, type ItemHistorial } from './historial-disciplinario'
 import { formatFechaLarga, formatFechaISO, formatFechaCorta, calcularEdad, antiguedad, hoyBogota, duracionContrato } from '@/lib/fechas'
 
 const TIPO_CAPACITACION: Record<string, string> = { INDUCCION: 'Inducción', REINDUCCION: 'Reinducción', FORMACION: 'Formación', SST: 'SST' }
@@ -49,6 +50,8 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   const puedeEditar = tienePermiso(usuario, 'colaboradores', 'EDITAR')
   const verSalud = tienePermiso(usuario, 'colaboradores_salud', 'VER')
   const puedeDisciplinar = tienePermiso(usuario, 'juridica', 'CREAR')
+  const verDisciplinario = tienePermiso(usuario, 'juridica', 'VER')
+  const puedeBorrarLlamado = tienePermiso(usuario, 'juridica', 'ELIMINAR')
   // El botón "Ver contrato" lleva a la ruta administrativa; sin este permiso
   // (p. ej. un empleado viendo su propia ficha) daría "sin permiso": se
   // reemplaza por el enlace de autoservicio (OPS) o se oculta (laboral).
@@ -109,6 +112,38 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
     orderBy: { capacitacion: { fecha: 'desc' } },
   })
 
+  // Historial disciplinario: solo se consulta si el usuario puede verlo. Para
+  // un empleado mirando su propia ficha estas dos consultas sobran.
+  const [llamados, procesos] = verDisciplinario
+    ? await Promise.all([
+        prisma.llamadoAtencion.findMany({ where: { colaboradorId: id }, orderBy: { fecha: 'desc' } }),
+        prisma.procesoDisciplinario.findMany({ where: { colaboradorId: id }, orderBy: { fechaApertura: 'desc' } }),
+      ])
+    : [[], []]
+
+  // Se mezclan y ordenan por fecha: la secuencia es justamente lo que se lee
+  // (dos llamados y luego un proceso no es lo mismo que al revés).
+  // Se mezclan y ordenan por fecha: la secuencia es justamente lo que se lee
+  // (dos llamados y luego un proceso no es lo mismo que al revés).
+  const historial: ItemHistorial[] = [
+    ...llamados.map((l) => ({
+      orden: l.fecha.getTime(),
+      item: {
+        clase: 'llamado' as const, id: l.id, fecha: formatFechaCorta(l.fecha),
+        tipo: l.tipo, motivo: l.motivo, detalle: l.detalle,
+      },
+    })),
+    ...procesos.map((pr) => ({
+      orden: pr.fechaApertura.getTime(),
+      item: {
+        clase: 'proceso' as const, id: pr.id, fecha: formatFechaCorta(pr.fechaApertura),
+        asunto: pr.asunto, etapa: pr.etapa as string, cerrado: pr.cerrado, decision: pr.decision,
+      },
+    })),
+  ]
+    .sort((a, b) => b.orden - a.orden)
+    .map((x) => x.item)
+
   const certDocPorEdu = new Map<string, string>()
   for (const d of eduDocs) if (!certDocPorEdu.has(d.entidadId)) certDocPorEdu.set(d.entidadId, d.id)
 
@@ -167,7 +202,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             <Button asChild size="sm" variant="outline">
               <Link href={`/colaboradores/${id}/calendario`}><CalendarDays className="size-4" /> Calendario</Link>
             </Button>
-            {puedeDisciplinar && <BotonDisciplinario colaboradorId={id} nombre={`${c.nombres} ${c.apellidos}`} />}
+            {puedeDisciplinar && <BotonDisciplinario colaboradorId={id} nombre={`${c.nombres} ${c.apellidos}`} esOps={esOps(c.tipoVinculo)} />}
             {puedeEditar && (
               <>
                 <BotonCertificacion colaboradorId={id} />
@@ -243,6 +278,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
           { valor: 'contrato', label: 'Contrato' },
           { valor: 'documentos', label: 'Documentos', alerta: semaforo.some((s) => s.obligatorio && s.estado === 'falta') },
           { valor: 'educacion', label: 'Educación' },
+          ...(verDisciplinario ? [{ valor: 'disciplinario', label: 'Disciplinario' }] : []),
           ...(mostrarPagos ? [{ valor: 'pagos', label: 'Pagos' }] : []),
         ]}
       >
@@ -548,6 +584,18 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             )}
           </CardContent></Card>
         </TabsContent>
+
+        {/* Historial disciplinario: llamados de atención + procesos, en una sola línea de tiempo */}
+        {verDisciplinario && (
+          <TabsContent value="disciplinario" className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Los llamados de atención son correctivos y quedan como antecedente. Los procesos
+              disciplinarios son los que pueden terminar en sanción y se gestionan en Jurídica.
+              Ambos se registran con el botón «Disciplinario» de arriba.
+            </p>
+            <HistorialDisciplinario puedeEliminar={puedeBorrarLlamado} items={historial} />
+          </TabsContent>
+        )}
 
         {/* Pagos: desprendibles de nómina */}
         {mostrarPagos && (

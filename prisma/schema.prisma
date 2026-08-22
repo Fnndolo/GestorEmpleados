@@ -636,6 +636,7 @@ model Colaborador {
   asistencias           AsistenciaCapacitacion[]
   evaluaciones          EvaluacionDesempeno[]
   procesosDisciplinarios ProcesoDisciplinario[]
+  llamadosAtencion       LlamadoAtencion[]
   autorizacionesDatos   AutorizacionDatos[]
   consultasHabeas       ConsultaReclamoDatos[]
   examenesMedicos       ExamenMedico[]
@@ -2313,6 +2314,33 @@ enum EtapaDisciplinaria {
   CERRADO
 
   @@map("etapa_disciplinaria")
+}
+
+/// Llamado de atencion: medida correctiva, NO una sancion.
+/// A diferencia del proceso disciplinario no abre descargos ni plazos: su valor
+/// es quedar como antecedente que demuestre que la falta fue reiterada. Por eso
+/// se registra y se notifica, pero no exige firma del colaborador.
+model LlamadoAtencion {
+  id            String              @id @default(uuid(7)) @db.Uuid
+  colaboradorId String              @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador         @relation(fields: [colaboradorId], references: [id])
+  tipo          TipoLlamadoAtencion
+  motivo        String
+  detalle       String?
+  fecha         DateTime            @db.Date
+  creadoPorId   String?             @map("creado_por_id")
+  creadoEn      DateTime            @default(now()) @map("creado_en")
+  actualizadoEn DateTime            @updatedAt @map("actualizado_en")
+
+  @@index([colaboradorId, fecha])
+  @@map("llamado_atencion")
+}
+
+enum TipoLlamadoAtencion {
+  VERBAL
+  ESCRITO
+
+  @@map("tipo_llamado_atencion")
 }
 
 model ProcesoDisciplinario {

@@ -13,6 +13,7 @@ export type ClaveEvento =
   | 'cuenta_cobro_radicada'
   | 'denuncia_acoso'
   | 'habeas_data'
+  | 'llamado_atencion'
   | 'disciplinario_citacion'
   | 'disciplinario_descargos'
   | 'disciplinario_avance'
@@ -44,6 +45,7 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
   // Jurídica
   { clave: 'denuncia_acoso', etiqueta: 'Denuncia anti-acoso', descripcion: 'Se recibe una nueva denuncia por el canal anti-acoso.', modulo: 'Jurídica' },
   { clave: 'habeas_data', etiqueta: 'Consulta / reclamo de habeas data', descripcion: 'Un colaborador presenta una consulta o reclamo (Ley 1581).', modulo: 'Jurídica' },
+  { clave: 'llamado_atencion', etiqueta: 'Llamado de atención', descripcion: 'Se registra un llamado de atención (medida correctiva, sin descargos).', modulo: 'Jurídica' },
   { clave: 'disciplinario_citacion', etiqueta: 'Citación a descargos', descripcion: 'Se cita al colaborador a descargos en un proceso disciplinario.', modulo: 'Jurídica' },
   { clave: 'disciplinario_descargos', etiqueta: 'Descargos presentados', descripcion: 'El colaborador presenta sus descargos.', modulo: 'Jurídica' },
   { clave: 'disciplinario_avance', etiqueta: 'Avance de proceso disciplinario', descripcion: 'El proceso disciplinario cambia de etapa.', modulo: 'Jurídica' },

@@ -341,3 +341,78 @@ export const crearConsultaReclamo = accion(
     revalidatePath('/juridica')
   },
 )
+
+/**
+ * Registra un llamado de atención: medida correctiva, no una sanción.
+ *
+ * No abre descargos ni plazos —eso es lo que lo distingue del proceso
+ * disciplinario (art. 115 CST, que exige oír al trabajador antes de sancionar)—.
+ * Su valor está en quedar como antecedente: tres llamados por lo mismo son lo
+ * que después sustenta que la falta fue reiterada. Por eso solo se notifica al
+ * colaborador; no se le pide firma.
+ */
+export const crearLlamadoAtencion = accion(
+  {
+    modulo: 'juridica',
+    accion: 'CREAR',
+    schema: z.object({
+      colaboradorId: z.uuid(),
+      tipo: z.enum(['VERBAL', 'ESCRITO']),
+      motivo: z.string().trim().min(3).max(200),
+      detalle: z.string().max(2000).optional(),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }),
+  },
+  async (d, usuario) => {
+    const colab = await prisma.colaborador.findUniqueOrThrow({
+      where: { id: d.colaboradorId },
+      select: { nombres: true, tipoVinculo: true },
+    })
+    // El poder disciplinario es el indicio más fuerte de subordinación: dejarlo
+    // registrado contra un contratista es prueba en contra en un pleito por
+    // contrato realidad. El botón ya lo bloquea, pero la regla vive aquí.
+    if (colab.tipoVinculo === 'OPS') {
+      throw new ErrorNegocio('En prestación de servicios no se registran llamados de atención: los incumplimientos se manejan por las cláusulas del contrato.')
+    }
+    const ll = await dbAuditado.llamadoAtencion.create({
+      data: {
+        colaboradorId: d.colaboradorId,
+        tipo: d.tipo,
+        motivo: d.motivo,
+        detalle: v(d.detalle),
+        fecha: parseFechaISO(d.fecha)!,
+        creadoPorId: usuario.id,
+      },
+    })
+    const userId = await usuarioDeColaborador(d.colaboradorId)
+    if (userId) {
+      await avisar(userId, {
+        evento: 'llamado_atencion',
+        titulo: `Llamado de atención ${d.tipo === 'VERBAL' ? 'verbal' : 'escrito'}`,
+        mensaje: `${colab.nombres}, se registró un llamado de atención por: "${d.motivo}". No es una sanción y no requiere que presentes descargos, pero queda en tu historial.`,
+        enlace: '/autoservicio/disciplinarios',
+        llamadoAccion: 'Ver mi historial',
+      })
+    }
+    revalidatePath(`/colaboradores/${d.colaboradorId}`)
+    revalidatePath('/juridica')
+    return { id: ll.id }
+  },
+)
+
+/**
+ * Borra un llamado de atención registrado por equivocación.
+ *
+ * Se permite porque un llamado no tiene etapas ni actos del colaborador de por
+ * medio: no hay nada que se pierda al borrarlo, salvo el antecedente mismo. La
+ * auditoría conserva el rastro de quién lo quitó.
+ */
+export const eliminarLlamadoAtencion = accion(
+  { modulo: 'juridica', accion: 'ELIMINAR', schema: z.object({ id: z.uuid() }) },
+  async (d) => {
+    const ll = await prisma.llamadoAtencion.findUniqueOrThrow({ where: { id: d.id }, select: { colaboradorId: true } })
+    await dbAuditado.llamadoAtencion.delete({ where: { id: d.id } })
+    revalidatePath(`/colaboradores/${ll.colaboradorId}`)
+    revalidatePath('/juridica')
+  },
+)

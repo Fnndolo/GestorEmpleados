@@ -244,7 +244,12 @@ export function SstCliente(p: Props) {
       aria-label="Secciones de SST"
       aria-orientation="vertical"
       onKeyDown={navegarConTeclado}
-      className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:sticky lg:top-4 lg:mx-0 lg:flex-col lg:gap-px lg:overflow-visible lg:px-0 lg:pb-0"
+      className={cn(
+        '-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1',
+        // En escritorio el menú tiene su PROPIO desplazamiento: rueda sobre él y
+        // el contenido de la derecha no se mueve, y al revés.
+        'lg:mx-0 lg:min-h-0 lg:flex-col lg:gap-px lg:overflow-y-auto lg:overflow-x-visible lg:px-0 lg:pb-4 lg:pr-2',
+      )}
     >
       {GRUPOS.map((g) => (
         <div key={g.titulo} className="contents lg:block">
@@ -287,11 +292,17 @@ export function SstCliente(p: Props) {
   )
 
   return (
-    <>
+    /* En escritorio la pantalla se reparte en tres zonas de desplazamiento
+       independientes: la cabecera queda quieta, y el menú y el contenido tienen
+       cada uno el suyo, así que la rueda mueve solo aquello sobre lo que está el
+       puntero. La altura descuenta la barra superior de la app (3.5rem) y el
+       relleno del contenedor (3rem). En móvil no aplica: ahí la página se
+       desplaza entera, que es lo natural en pantalla pequeña. */
+    <div className="lg:flex lg:h-[calc(100dvh-6.5rem)] lg:flex-col lg:overflow-hidden">
       {/* Cabecera: la flecha devuelve al tablero (o sale del módulo si ya estás
           en él) y la ruta, en pequeño, dice dónde estás. El título grande vive
           dentro del panel, que es donde da jerarquía. */}
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex shrink-0 items-center gap-2">
         <Button
           size="icon"
           variant="ghost"
@@ -312,10 +323,13 @@ export function SstCliente(p: Props) {
         </nav>
       </div>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[236px_minmax(0,1fr)]">
+      <div className="grid items-start gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-stretch">
       {riel}
 
-      <div className="space-y-4">
+      {/* El contenido también tiene su propio desplazamiento. `min-h-0` es
+          imprescindible: sin él, un hijo de grid no encoge y el overflow se
+          escapa al documento. */}
+      <div className="space-y-4 lg:min-h-0 lg:overflow-y-auto lg:pb-6 lg:pr-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-bold tracking-tight">{TITULO_TAB[tab] ?? 'Tablero'}</h1>
           {p.puedeCrear && !['tablero', 'emergencias', 'estructura', 'indicadores', 'autoeval'].includes(tab) && <Button size="sm" onClick={() => setDialogo(tab)}><Plus className="size-4" /> Nuevo</Button>}
@@ -635,7 +649,7 @@ export function SstCliente(p: Props) {
       {indicadorAbierto && <DialogIndicadorSst onClose={() => setIndicadorAbierto(false)} />}
       </div>
       </div>
-    </>
+    </div>
   )
 }
 

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Gavel, CircleCheck } from 'lucide-react'
+import { Gavel, CircleCheck, MessageSquareWarning } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatFechaLarga } from '@/lib/fechas'
 import { Descargos, Apelacion } from './descargos'
@@ -39,6 +39,11 @@ export default async function MisDisciplinariosPage() {
     return <NoAplica titulo="Mis disciplinarios" motivo="El proceso disciplinario aplica a la relación laboral. En un contrato de prestación de servicios, los incumplimientos se manejan por las cláusulas del contrato." />
   }
 
+  const llamados = await prisma.llamadoAtencion.findMany({
+    where: { colaboradorId: usuario.colaboradorId },
+    orderBy: { fecha: 'desc' },
+  })
+
   const procesos = await prisma.procesoDisciplinario.findMany({
     where: { colaboradorId: usuario.colaboradorId },
     include: { etapas: { orderBy: { fecha: 'asc' } } },
@@ -64,6 +69,31 @@ export default async function MisDisciplinariosPage() {
   return (
     <div className="max-w-5xl">
       <Encabezado titulo="Mis procesos disciplinarios" descripcion="Aquí puedes ver los procesos en tu contra y presentar tus descargos (derecho de defensa)." />
+
+      {/* Los llamados de atención van aparte: no son sanciones y no hay nada que
+          responder, pero el colaborador tiene derecho a saber qué le registraron. */}
+      {llamados.length > 0 && (
+        <Card className="mb-4"><CardContent className="py-4">
+          <h3 className="mb-1 text-sm font-medium">Llamados de atención ({llamados.length})</h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            No son sanciones y no tienes que presentar descargos. Quedan registrados en tu historial.
+          </p>
+          <ul className="divide-y">
+            {llamados.map((l) => (
+              <li key={l.id} className="flex items-start gap-2 py-2.5 text-sm">
+                <MessageSquareWarning className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{l.motivo}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {formatFechaLarga(l.fecha)} · Llamado {l.tipo === 'VERBAL' ? 'verbal' : 'escrito'}
+                  </p>
+                  {l.detalle && <p className="mt-1 text-xs text-muted-foreground">{l.detalle}</p>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </CardContent></Card>
+      )}
       {procesos.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground"><Gavel className="size-8" /><p>No tienes procesos disciplinarios.</p></CardContent></Card>
       ) : (
