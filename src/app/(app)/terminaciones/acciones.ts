@@ -3,13 +3,13 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
-import { dbAuditado } from '@/lib/auditoria'
+import { dbAuditado, auditar } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { parseFechaISO } from '@/lib/fechas'
+import { parseFechaISO, formatFechaISO } from '@/lib/fechas'
 import { cargarParametros } from '@/server/nomina/parametros'
 import { liquidacionDefinitiva } from '@/server/nomina/liquidacion-definitiva'
 import { saldoVacaciones } from '@/server/vacaciones'
-import { restringirAccesoSiSinVinculo } from '@/server/rol-consulta'
+import { restringirAccesoSiSinVinculo, devolverAccesoNormal } from '@/server/rol-consulta'
 
 const ITEMS_PAZ_SALVO = [
   { area: 'Activos', concepto: 'Equipos y activos asignados devueltos' },
@@ -202,5 +202,124 @@ export const cerrarTerminacion = accion(
     }
     await dbAuditado.terminacion.update({ where: { id }, data: { estado: 'CERRADA' } })
     revalidatePath('/terminaciones')
+  },
+)
+
+/**
+ * Rehace el cálculo de la liquidación con los datos que hay HOY.
+ *
+ * Las cifras se calculan al registrar la terminación y quedan congeladas. Si
+ * después se corrige el salario del contrato, la fecha de retiro o aparece una
+ * novedad del último periodo, esas cifras se vuelven falsas y no había forma de
+ * arreglarlas: tocaba registrar otra terminación y dejar la mala en la base.
+ *
+ * Solo mientras la terminación NO esté cerrada: una vez cerrada ya se pagó y se
+ * firmó el paz y salvo, y corregir eso es una nota contable, no un botón.
+ */
+export const recalcularLiquidacion = accion(
+  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ id: z.uuid(), fechaRetiro: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }) },
+  async (d) => {
+    const t = await prisma.terminacion.findUniqueOrThrow({ where: { id: d.id } })
+    if (t.estado === 'CERRADA') {
+      throw new ErrorNegocio('La terminación ya está cerrada: sus cifras no se pueden rehacer. Si hay un error, corrígelo por nota contable.')
+    }
+
+    const contrato = await prisma.contrato.findFirst({
+      where: { colaboradorId: t.colaboradorId },
+      orderBy: [{ estado: 'asc' }, { fechaInicio: 'desc' }],
+    })
+    if (!contrato) throw new ErrorNegocio('El colaborador no tiene contrato: no hay con qué calcular la liquidación.')
+
+    // La fecha de retiro puede corregirse aquí mismo: es el dato que más se
+    // digita mal y el que más mueve las cifras (días de cesantías, prima y
+    // vacaciones salen de él).
+    const fechaRetiro = d.fechaRetiro ? parseFechaISO(d.fechaRetiro)! : t.fechaRetiro
+    const calculo = await calcularLiq(t.colaboradorId, contrato, fechaRetiro, t.tipo)
+
+    await dbAuditado.terminacion.update({
+      where: { id: d.id },
+      data: { fechaRetiro, indemnizacion: calculo.indemnizacion, estado: 'LIQUIDADA' },
+    })
+
+    const datos = {
+      diasLiquidados: calculo.diasLiquidados,
+      salarioBase: contrato.salarioBase,
+      cesantias: calculo.cesantias,
+      interesesCesantias: calculo.interesesCesantias,
+      prima: calculo.prima,
+      vacaciones: calculo.vacaciones,
+      indemnizacion: calculo.indemnizacion,
+      deducciones: calculo.deducciones,
+      total: calculo.total,
+      detalle: calculo as object,
+    }
+    // Puede no existir: si al registrar la terminación no había contrato activo,
+    // la terminación quedó EN_PROCESO y sin liquidación.
+    const previa = await prisma.liquidacionDefinitiva.findFirst({ where: { terminacionId: d.id } })
+    if (previa) {
+      await dbAuditado.liquidacionDefinitiva.update({ where: { id: previa.id }, data: datos })
+    } else {
+      await dbAuditado.liquidacionDefinitiva.create({ data: { terminacionId: d.id, ...datos } })
+    }
+
+    revalidatePath('/terminaciones')
+    revalidatePath(`/terminaciones/${d.id}`)
+    return { total: Number(calculo.total) }
+  },
+)
+
+/**
+ * Anula una terminación registrada por error y devuelve al colaborador a activo.
+ *
+ * Registrar una terminación equivocada era irreversible: bloqueaba registrar la
+ * correcta —solo se admite una abierta por persona— y dejaba a la persona
+ * inactiva. Se borra en cascada con su liquidación y su paz y salvo, porque son
+ * datos de un hecho que no ocurrió, no historial que valga la pena conservar.
+ */
+export const anularTerminacion = accion(
+  { modulo: 'terminaciones', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: z.string().trim().min(5, 'Explica por qué se anula').max(300) }) },
+  async ({ id, motivo }) => {
+    const t = await prisma.terminacion.findUniqueOrThrow({ where: { id } })
+    if (t.estado === 'CERRADA') {
+      throw new ErrorNegocio('Una terminación cerrada no se anula: ya se liquidó y se firmó el paz y salvo.')
+    }
+
+    // Queda en auditoría con el motivo antes de borrar: el registro desaparece,
+    // pero la constancia de que existió y por qué se anuló, no.
+    await auditar('ELIMINAR', 'Terminacion', {
+      registroId: id,
+      descripcion: `Terminación anulada (${t.tipo}, retiro ${formatFechaISO(t.fechaRetiro)}). Motivo: ${motivo}`,
+    })
+
+    await prisma.liquidacionDefinitiva.deleteMany({ where: { terminacionId: id } })
+    const pyS = await prisma.pazYSalvo.findFirst({ where: { terminacionId: id }, select: { id: true } })
+    if (pyS) {
+      await prisma.pazYSalvoItem.deleteMany({ where: { pazYSalvoId: pyS.id } })
+      await prisma.pazYSalvo.delete({ where: { id: pyS.id } })
+    }
+    await dbAuditado.terminacion.delete({ where: { id } })
+
+    // Registrar la terminación hace tres cosas más, y anularla tiene que
+    // deshacerlas todas: si no, la persona queda a medio restaurar —sin contrato
+    // vigente y con el usuario atrapado en solo consulta—, que es peor que el
+    // error original.
+    await dbAuditado.colaborador.update({
+      where: { id: t.colaboradorId },
+      data: { estado: 'ACTIVO', fechaRetiro: null },
+    })
+    // El contrato que se dio por terminado es el último: era el vigente cuando
+    // se registró. Solo se reactiva si sigue marcado TERMINADO.
+    const contratoTerminado = await prisma.contrato.findFirst({
+      where: { colaboradorId: t.colaboradorId, estado: 'TERMINADO' },
+      orderBy: { fechaInicio: 'desc' },
+      select: { id: true },
+    })
+    if (contratoTerminado) {
+      await dbAuditado.contrato.update({ where: { id: contratoTerminado.id }, data: { estado: 'ACTIVO' } })
+    }
+    await devolverAccesoNormal(t.colaboradorId)
+
+    revalidatePath('/terminaciones')
+    revalidatePath(`/colaboradores/${t.colaboradorId}`)
   },
 )

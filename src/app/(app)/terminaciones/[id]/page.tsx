@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { AccionesLiquidacion } from './acciones-liquidacion'
 import Link from 'next/link'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
@@ -23,6 +24,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   const usuario = await requerirPermiso('terminaciones', 'VER')
   const puedeEditar = tienePermiso(usuario, 'terminaciones', 'EDITAR')
   const puedeAprobar = tienePermiso(usuario, 'terminaciones', 'APROBAR')
+  const puedeEliminar = tienePermiso(usuario, 'terminaciones', 'ELIMINAR')
 
   const t = await prisma.terminacion.findUnique({
     where: { id },
@@ -54,9 +56,19 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
         acciones={<Badge variant={t.estado === 'CERRADA' ? 'default' : 'outline'}>{t.estado}</Badge>}
       />
 
-      <p className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <Link href={`/colaboradores/${t.colaborador.id}`} className="text-sm text-primary hover:underline">Ver ficha del colaborador →</Link>
-      </p>
+        {/* Rehacer y anular solo mientras no esté cerrada: después ya se pagó. */}
+        {t.estado !== 'CERRADA' && (
+          <AccionesLiquidacion
+            terminacionId={t.id}
+            colaborador={`${t.colaborador.nombres} ${t.colaborador.apellidos}`}
+            fechaRetiro={formatFechaISO(t.fechaRetiro)}
+            puedeEditar={puedeEditar}
+            puedeEliminar={puedeEliminar}
+          />
+        )}
+      </div>
 
       {/* Justa causa: proceso disciplinario que la sustenta (debido proceso) */}
       {t.tipo === 'CON_JUSTA_CAUSA' && (
