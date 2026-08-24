@@ -108,6 +108,29 @@ export function FormColaborador({ catalogos, valores, puedeEditarSalud }: Props)
     ? catalogos.cargos.filter((c) => c.areaId === areaSeleccionada)
     : catalogos.cargos
 
+  /**
+   * Cambiar el área puede invalidar el cargo elegido, porque cada cargo
+   * pertenece a un área. Antes se borraba SIEMPRE y en silencio: quien elegía
+   * primero el cargo y después el área guardaba la ficha sin cargo sin
+   * enterarse. Ahora solo se borra si de verdad dejó de corresponder, y se dice.
+   */
+  function cambiarArea(nuevaAreaId: string) {
+    setValue('areaId', nuevaAreaId)
+    const cargoActual = watch('cargoId')
+    if (!cargoActual) return
+    const sigueValido = catalogos.cargos.some((c) => c.id === cargoActual && c.areaId === nuevaAreaId)
+    if (sigueValido) return
+    setValue('cargoId', '')
+    const area = catalogos.areas.find((a) => a.id === nuevaAreaId)
+    toast.warning(`Se quitó el cargo: no pertenece al área ${area?.nombre ?? 'seleccionada'}. Elige uno de esa área.`)
+  }
+
+  // Un área sin cargos deja el desplegable vacío y sin explicación: quien llena
+  // la ficha cree que el campo no sirve, y el colaborador termina sin cargo.
+  const notaCargo = areaSeleccionada && cargosFiltrados.length === 0
+    ? `El área ${catalogos.areas.find((a) => a.id === areaSeleccionada)?.nombre ?? 'seleccionada'} todavía no tiene cargos. Créalos en Ajustes → Cargos y vuelve, o deja el área en blanco para ver todos.`
+    : undefined
+
   // Índice lateral: secciones visibles según permiso, con lo que lleva cada una.
   const todos = watch()
   const seccionesVisibles = SECCIONES.filter((s) => !('soloSalud' in s && s.soloSalud) || puedeEditarSalud)
@@ -275,8 +298,8 @@ export function FormColaborador({ catalogos, valores, puedeEditarSalud }: Props)
         titulo="Asignación en la empresa"
         ayuda="Opcional, pero esto no lo puede llenar el colaborador desde su autoservicio: si lo dejas en blanco, queda pendiente para Talento Humano."
       >
-        <CampoSelect label="Área" valor={watch('areaId') ?? ''} opciones={catalogos.areas.map((a) => ({ valor: a.id, etiqueta: a.nombre }))} onChange={(v) => { setValue('areaId', v); setValue('cargoId', '') }} opcional />
-        <CampoSelect label="Cargo" valor={watch('cargoId') ?? ''} opciones={cargosFiltrados.map((c) => ({ valor: c.id, etiqueta: c.nombre }))} onChange={(v) => setValue('cargoId', v)} opcional />
+        <CampoSelect label="Área" valor={watch('areaId') ?? ''} opciones={catalogos.areas.map((a) => ({ valor: a.id, etiqueta: a.nombre }))} onChange={cambiarArea} opcional />
+        <CampoSelect label="Cargo" valor={watch('cargoId') ?? ''} opciones={cargosFiltrados.map((c) => ({ valor: c.id, etiqueta: c.nombre }))} onChange={(v) => setValue('cargoId', v)} opcional nota={notaCargo} />
         <CampoSelect label="Jefe inmediato" valor={watch('jefeInmediatoId') ?? ''} opciones={catalogos.jefes.filter((j) => j.id !== valores?.id).map((j) => ({ valor: j.id, etiqueta: j.nombre }))} onChange={(v) => setValue('jefeInmediatoId', v)} opcional />
         <CampoSelect label="Estado" valor={watch('estado')} opciones={opcionesDe(ESTADO_COLABORADOR)} onChange={(v) => setValue('estado', v as ColaboradorInput['estado'])} />
         {puedeEditarSalud && (
@@ -444,10 +467,12 @@ function CampoFecha({
 }
 
 function CampoSelect({
-  label, valor, opciones, onChange, err, opcional, obligatorio,
+  label, valor, opciones, onChange, err, opcional, obligatorio, nota,
 }: {
   label: string; valor: string; opciones: { valor: string; etiqueta: string }[]
   onChange: (v: string) => void; err?: string; opcional?: boolean; obligatorio?: boolean
+  /** Aclaración bajo el campo: por qué está vacío, qué hacer. */
+  nota?: string
 }) {
   return (
     <div className="space-y-1.5">
@@ -459,6 +484,7 @@ function CampoSelect({
         </SelectContent>
       </Select>
       {err && <p className="text-xs text-destructive">{err}</p>}
+      {!err && nota && <p className="text-xs text-muted-foreground">{nota}</p>}
     </div>
   )
 }
