@@ -172,7 +172,10 @@ function DialogMatriz({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+      {/* Ancho fijado a mano y no con max-w-*: la tabla son ocho columnas y con
+          768px la de Módulo y la de Ver quedaban fuera, obligando a desplazarse
+          de lado para marcar casillas sin ver de qué módulo eran. */}
+      <DialogContent className="flex max-h-[88vh] w-[min(96vw,1080px)] max-w-none flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Permisos · {rol.nombre}</DialogTitle>
           <DialogDescription>
@@ -181,12 +184,12 @@ function DialogMatriz({
         </DialogHeader>
         <div className="-mx-6 flex-1 overflow-y-auto px-6">
           {/* Escritorio: la tabla es lo más legible, ocho columnas caben de sobra. */}
-          <table className="hidden w-full text-sm md:table">
+          <table className="hidden w-full text-sm lg:table">
             <thead className="sticky top-0 bg-background">
               <tr className="border-b text-left">
-                <th className="py-2 font-medium">Módulo</th>
+                <th className="w-[38%] py-2 font-medium">Módulo</th>
                 {ACCIONES.map((a) => (
-                  <th key={a} className="py-2 px-1 text-center font-medium text-xs">{ACCION_ETIQUETA[a]}</th>
+                  <th key={a} className="w-[7.5%] px-1 py-2 text-center text-xs font-medium">{ACCION_ETIQUETA[a]}</th>
                 ))}
                 <th className="py-2 pl-2 font-medium">Alcance</th>
               </tr>
@@ -204,13 +207,13 @@ function DialogMatriz({
                       />
                     </td>
                   ))}
-                  <td className="py-2 pl-2">
+                  <td className="w-[17%] py-2 pl-2">
                     <Select
                       disabled={!puedeEditar || estado[m.clave].acciones.size === 0}
                       value={estado[m.clave].alcance}
                       onValueChange={(v) => cambiarAlcance(m.clave, v as Alcance)}
                     >
-                      <SelectTrigger size="sm" className="w-[150px]"><SelectValue /></SelectTrigger>
+                      <SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {ALCANCES.map((al) => <SelectItem key={al.valor} value={al.valor}>{al.etiqueta}</SelectItem>)}
                       </SelectContent>
@@ -224,7 +227,7 @@ function DialogMatriz({
           {/* Móvil: la misma tabla obligaba a desplazarse a los lados, y la
               columna de Exportar quedaba fuera de la pantalla — se marcaban
               permisos sin ver cuáles. Una tarjeta por módulo cabe entera. */}
-          <div className="space-y-3 md:hidden">
+          <div className="space-y-3 lg:hidden">
             {modulos.map((m) => {
               const marcadas = estado[m.clave].acciones
               return (
