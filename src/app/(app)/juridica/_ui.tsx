@@ -88,7 +88,7 @@ export function VisorDocumento({ documentoId, titulo, onClose }: { documentoId: 
   const url = `/api/documentos/${documentoId}`
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-5xl w-[95vw] max-h-[92vh] overflow-hidden p-4 gap-3 flex flex-col">
+      <DialogContent className="w-[95vw] sm:max-w-5xl max-h-[92vh] overflow-hidden p-4 gap-3 flex flex-col">
         <DialogHeader className="shrink-0"><DialogTitle className="truncate pr-6">{titulo}</DialogTitle></DialogHeader>
         <iframe src={url} title={titulo} className="w-full flex-1 min-h-[55vh] rounded-md border bg-muted" />
         <DialogFooter className="shrink-0">

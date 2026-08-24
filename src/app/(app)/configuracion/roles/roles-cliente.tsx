@@ -175,7 +175,7 @@ function DialogMatriz({
       {/* Ancho fijado a mano y no con max-w-*: la tabla son ocho columnas y con
           768px la de Módulo y la de Ver quedaban fuera, obligando a desplazarse
           de lado para marcar casillas sin ver de qué módulo eran. */}
-      <DialogContent className="flex max-h-[88vh] w-[min(96vw,1080px)] max-w-none flex-col overflow-hidden">
+      <DialogContent className="flex max-h-[88vh] w-[min(96vw,1080px)] flex-col overflow-hidden sm:max-w-[1080px]">
         <DialogHeader>
           <DialogTitle>Permisos · {rol.nombre}</DialogTitle>
           <DialogDescription>
