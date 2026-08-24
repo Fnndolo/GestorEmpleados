@@ -7,12 +7,13 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
-import { FileText } from 'lucide-react'
+import { FileText, TriangleAlert } from 'lucide-react'
 import { formatFechaLarga, formatFechaCorta, formatFechaISO, duracionContrato } from '@/lib/fechas'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { fmtCOP } from '@/lib/moneda'
 import { TIPO_VINCULO, MODALIDAD_TRABAJO } from '@/lib/etiquetas'
 import { AccionesContrato } from './acciones-cliente'
+import { discrepanciaVinculo, type TipoContratoLaboral, type TipoVinculo } from '@/lib/vinculo-contrato'
 import { FirmasLaboral } from './firmas-laboral'
 
 export const metadata = { title: 'Contrato · Smart Gadgets RH' }
@@ -66,9 +67,36 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
   const docContrato = documentos.find((d) => !d.nombre.startsWith('Autorización'))
   const docAutorizacion = documentos.find((d) => d.nombre.startsWith('Autorización'))
 
+  // Si el contrato y la ficha se contradicen hay que decirlo aquí: las acciones
+  // disponibles salen del tipo del contrato y los trámites del autoservicio del
+  // vínculo de la ficha, así que la contradicción se nota como cosas que
+  // "faltan" sin explicación (p. ej. un fijo sin botón de prórroga).
+  const discrepancia = discrepanciaVinculo(
+    c.tipo as TipoContratoLaboral,
+    c.colaborador.tipoVinculo as TipoVinculo,
+  )
+
   return (
     <div className="max-w-6xl">
       <Encabezado titulo={`Contrato ${c.numero}`} descripcion={`${c.colaborador.nombres} ${c.colaborador.apellidos}`} />
+
+      {discrepancia && (
+        <Card className="mb-4 border-amber-500/40 bg-amber-500/5">
+          <CardContent className="flex items-start gap-2 py-3">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="min-w-0 text-xs text-amber-800 dark:text-amber-300">
+              <p className="font-medium">El tipo del contrato no coincide con la ficha</p>
+              <p className="mt-0.5">{discrepancia}</p>
+              <Link
+                href={`/colaboradores/${c.colaboradorId}/editar`}
+                className="mt-1 inline-block font-medium underline underline-offset-2"
+              >
+                Abrir la ficha del colaborador
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mb-4"><CardContent className="py-4">
         <div className="flex items-center gap-2 mb-3">
@@ -221,6 +249,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
       {puedeEditar && (
         <AccionesContrato
           contratoId={c.id}
+          colaboradorId={c.colaboradorId}
           tipo={c.tipo}
           estado={c.estado}
           cargos={cargos.map((x) => ({ id: x.id, nombre: x.nombre }))}

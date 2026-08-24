@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CalendarPlus, FilePen, CirclePause, CirclePlay } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { CalendarPlus, FilePen, CirclePause, CirclePlay, UserMinus } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -18,8 +19,8 @@ import { agregarProrroga, agregarOtrosi, registrarSuspension, reactivarContrato 
 type Cat = { cargos: { id: string; nombre: string }[]; sedes: { id: string; nombre: string; ciudad: string }[] }
 
 export function AccionesContrato({
-  contratoId, tipo, estado, cargos, sedes,
-}: { contratoId: string; tipo: string; estado: string } & Cat) {
+  contratoId, colaboradorId, tipo, estado, cargos, sedes,
+}: { contratoId: string; colaboradorId: string; tipo: string; estado: string } & Cat) {
   const router = useRouter()
   const [dialogo, setDialogo] = useState<'prorroga' | 'otrosi' | 'suspension' | null>(null)
   const [cargando, setCargando] = useState(false)
@@ -46,6 +47,17 @@ export function AccionesContrato({
           <Button size="sm" variant="outline" onClick={reactivar} disabled={cargando}>
             {cargando ? <Spinner /> : <CirclePlay className="size-4" />} Reactivar
           </Button>
+        )}
+        {/* Terminar vive en su propio módulo (liquidación y paz y salvo), pero
+            se llega desde aquí: quien está viendo un contrato vencido no tiene
+            por qué saber que la acción está en otra pantalla. */}
+        {estado === 'ACTIVO' && (
+          <Link
+            href={`/terminaciones?colaborador=${colaboradorId}`}
+            className={buttonVariants({ size: 'sm', variant: 'outline' })}
+          >
+            <UserMinus className="size-4" /> Terminar contrato
+          </Link>
         )}
       </div>
 

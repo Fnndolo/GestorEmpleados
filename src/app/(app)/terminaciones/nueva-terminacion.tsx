@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
@@ -25,10 +25,15 @@ const TIPOS = [
   { v: 'FIN_OPS', l: 'Fin contrato OPS' },
 ]
 
-export function NuevaTerminacion() {
+/**
+ * @param colaboradorInicial - llega desde el detalle del contrato, por el
+ *   parámetro `?colaborador=` de la URL: abre el diálogo con esa persona ya
+ *   elegida, para no obligar a buscarla de nuevo en la lista.
+ */
+export function NuevaTerminacion({ colaboradorInicial }: { colaboradorInicial?: string }) {
   const router = useRouter()
-  const [abierto, setAbierto] = useState(false)
-  const [colaboradorId, setColaboradorId] = useState('')
+  const [abierto, setAbierto] = useState(Boolean(colaboradorInicial))
+  const [colaboradorId, setColaboradorId] = useState(colaboradorInicial ?? '')
   const [tipo, setTipo] = useState('RENUNCIA_VOLUNTARIA')
   const [fechaRetiro, setFechaRetiro] = useState(new Date().toISOString().slice(0, 10))
   const [preavisoDias, setPreavisoDias] = useState('')
@@ -44,6 +49,20 @@ export function NuevaTerminacion() {
     const res = await listarProcesosCerrados({ colaboradorId: colabId })
     if (res.ok) setProcesos((res.datos as { procesos: typeof procesos }).procesos ?? [])
   }
+
+  // Al llegar con el colaborador ya puesto nadie disparó el selector, así que
+  // sus procesos disciplinarios hay que cargarlos aquí o la justa causa no
+  // tendría de dónde escoger.
+  useEffect(() => {
+    if (!colaboradorInicial) return
+    let vigente = true
+    void (async () => {
+      const res = await listarProcesosCerrados({ colaboradorId: colaboradorInicial })
+      if (vigente && res.ok) setProcesos((res.datos as { procesos: typeof procesos }).procesos ?? [])
+    })()
+    return () => { vigente = false }
+    // Solo al montar: de ahí en adelante lo maneja el selector.
+  }, [colaboradorInicial])
 
   async function crear() {
     if (!colaboradorId) { toast.error('Selecciona un colaborador.'); return }

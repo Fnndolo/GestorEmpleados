@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Ayuda } from '@/components/ui-kit/ayuda'
 import { fmtCOP } from '@/lib/moneda'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { avisoVinculoAjustado, type AjusteVinculo } from '@/lib/vinculo-contrato'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -134,6 +135,8 @@ export function SubirContratoExistente({
     setGuardando(false)
     if (res.ok) {
       toast.success('Contrato cargado y registrado (firmado en físico).')
+      const aviso = avisoVinculoAjustado((res.datos as { vinculoAjustado?: AjusteVinculo }).vinculoAjustado)
+      if (aviso) toast.info(aviso, { duration: 8000 })
       setAbierto(false)
       limpiar()
       router.refresh()

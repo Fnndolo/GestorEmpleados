@@ -17,6 +17,7 @@ import { construirDatosAutorizacion } from '@/server/contratos-ops-pdf'
 import { aplicarFirmaContratoLaboral } from '@/server/contratos-laboral-firma'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import type { FuncionesCargo } from '@/lib/contrato-variables'
+import { vinculoDeContrato, vinculoCoincide, type TipoContratoLaboral, type TipoVinculo } from '@/lib/vinculo-contrato'
 
 async function siguienteNumero(prefijo: string): Promise<string> {
   const anio = new Date().getUTCFullYear()
@@ -134,10 +135,39 @@ export const crearContrato = accion(
       }
     }
 
+    const vinculoAjustado = await alinearVinculoFicha(d.colaboradorId, d.tipo)
+
     revalidatePath('/contratos')
-    return { id: contrato.id }
+    return { id: contrato.id, vinculoAjustado }
   },
 )
+
+/**
+ * Pone el `tipoVinculo` de la ficha de acuerdo con el contrato que se acaba de
+ * firmar, y devuelve qué cambió (o null si ya coincidían).
+ *
+ * Manda el contrato, no la ficha: el contrato es el documento legal, mientras
+ * que el campo de la ficha es un resumen que suele quedarse con el valor por
+ * defecto del formulario. Se avisa a quien lo creó en vez de cambiarlo en
+ * silencio, porque pasar a alguien de prestación de servicios a laboral (o al
+ * revés) cambia qué trámites puede hacer en su autoservicio.
+ */
+async function alinearVinculoFicha(
+  colaboradorId: string,
+  tipoContrato: TipoContratoLaboral,
+): Promise<{ antes: TipoVinculo; ahora: TipoVinculo } | null> {
+  const colab = await prisma.colaborador.findUnique({
+    where: { id: colaboradorId },
+    select: { tipoVinculo: true },
+  })
+  if (!colab) return null
+  const antes = colab.tipoVinculo as TipoVinculo
+  if (vinculoCoincide(tipoContrato, antes)) return null
+  const ahora = vinculoDeContrato(tipoContrato)
+  await dbAuditado.colaborador.update({ where: { id: colaboradorId }, data: { tipoVinculo: ahora } })
+  revalidatePath(`/colaboradores/${colaboradorId}`)
+  return { antes, ahora }
+}
 
 /**
  * Sube un contrato laboral YA EXISTENTE (firmado en físico / hecho fuera del sistema).
@@ -222,8 +252,9 @@ export const subirContratoExistente = accion(
     })
 
     await publicarVencimientosContrato(contrato.id)
+    const vinculoAjustado = await alinearVinculoFicha(d.colaboradorId, d.tipo)
     revalidatePath('/contratos')
-    return { id: contrato.id }
+    return { id: contrato.id, vinculoAjustado }
   },
 )
 

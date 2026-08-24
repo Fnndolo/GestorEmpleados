@@ -17,7 +17,12 @@ const TIPO: Record<string, string> = {
 }
 const ESTADO: Record<string, string> = { EN_PROCESO: 'En proceso', LIQUIDADA: 'Liquidada', CERRADA: 'Cerrada' }
 
-export default async function TerminacionesPage() {
+export default async function TerminacionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ colaborador?: string }>
+}) {
+  const { colaborador } = await searchParams
   const usuario = await requerirPermiso('terminaciones', 'VER')
   const puedeCrear = tienePermiso(usuario, 'terminaciones', 'CREAR')
 
@@ -32,7 +37,7 @@ export default async function TerminacionesPage() {
       <Encabezado
         titulo="Terminaciones y desvinculaciones"
         descripcion="Registro de retiros, liquidación definitiva y paz y salvo por área."
-        acciones={puedeCrear && <NuevaTerminacion />}
+        acciones={puedeCrear && <NuevaTerminacion colaboradorInicial={colaborador} />}
       />
       {terminaciones.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
