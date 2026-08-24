@@ -154,53 +154,50 @@ export function SstCliente(p: Props) {
   const [normaAbierta, setNormaAbierta] = useState<Props['normas'][number] | null>(null)
   const [examenAbierto, setExamenAbierto] = useState<Props['examenes'][number] | null>(null)
   const [indicadorAbierto, setIndicadorAbierto] = useState(false)
-  const recomendacion = p.headcount < 10 ? 'Vigía SST' : 'COPASST'
   const MES: Record<number, string> = { 1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic' }
 
-  // Pendientes por módulo para las pills del hub
-  const e = p.estructura
-  const pendEstructura = [e.politica?.firmadaEn, e.responsable?.cartaDocId, e.plan?.documentoId].filter((x) => !x).length
-  const normasSinCumplir = p.normas.filter((n) => n.cumplimiento !== 'CUMPLE').length
-  const accionesMejora = p.autoeval?.acciones ?? []
+  // Cifras del tablero. El resto de contadores por módulo se fue con el mosaico
+  // de secciones: el estado detallado se ve al entrar a cada una.
   const examenesVencidos = p.examenes.filter((x) => x.vencido).length
   const furatPendientes = p.accidentes.filter((a) => !a.furat && !a.esIncidente).length
-  const ipevrCriticos = p.peligros.filter((x) => x.nivel === 'CRITICO' || x.nivel === 'ALTO').length
-  const planVigente = p.planesEmergencia.some((x) => !x.vencido)
-  const inspAbiertas = p.inspecciones.filter((i) => i.estado !== 'CERRADA').length
   const eppSinFirma = p.entregasEpp.filter((x) => !x.firmado).length
-  const semComites = p.semaforo.find((s) => s.tab === 'comites')
 
-  const SECCIONES: { titulo: string; tiles: { tab: string; titulo: string; desc: string; icono: typeof Landmark; color: 'sky' | 'violet' | 'emerald' | 'amber' | 'rose' | 'indigo' | 'teal' | 'ink'; pill: React.ReactNode }[] }[] = [
+  /**
+   * Secciones del módulo, agrupadas como se navegan. Solo alimentan el menú
+   * lateral: el mosaico que antes las repetía en el tablero se quitó, porque
+   * decía lo mismo que el menú que ya está siempre a la vista.
+   */
+  const SECCIONES: { titulo: string; tiles: { tab: string; titulo: string; icono: typeof Landmark }[] }[] = [
     {
       titulo: 'Sistema de gestión',
       tiles: [
-        { tab: 'estructura', titulo: 'Estructura', desc: 'Política, responsable, plan anual', icono: Landmark, color: 'sky', pill: pendEstructura > 0 ? <Pill tone="warn">{pendEstructura} pend.</Pill> : <Pill tone="ok">Al día</Pill> },
-        { tab: 'matriz', titulo: 'Matriz legal', desc: `${p.normas.length} normas del normograma`, icono: Scale, color: 'violet', pill: normasSinCumplir > 0 ? <Pill tone="bad">{normasSinCumplir} sin cumplir</Pill> : <Pill tone="ok">Al día</Pill> },
-        { tab: 'autoeval', titulo: 'Autoevaluación', desc: p.autoeval ? `${p.autoeval.anio} · ${p.autoeval.puntaje}% · plan de mejora` : 'Estándares mínimos', icono: CircleCheck, color: 'emerald', pill: !p.autoeval ? <Pill tone="bad">Falta</Pill> : accionesMejora.length ? <Pill tone={accionesMejora.some((a) => a.vencida) ? 'warn' : 'ok'}>{accionesMejora.filter((a) => a.cumplida).length}/{accionesMejora.length}</Pill> : <Pill tone="muted">Sin acciones</Pill> },
+        { tab: 'estructura', titulo: 'Estructura', icono: Landmark },
+        { tab: 'matriz', titulo: 'Matriz legal', icono: Scale },
+        { tab: 'autoeval', titulo: 'Autoevaluación', icono: CircleCheck },
       ],
     },
     {
       titulo: 'Salud ocupacional',
       tiles: [
-        { tab: 'examenes', titulo: 'Exámenes médicos', desc: 'Ingreso, periódicos, egreso', icono: Stethoscope, color: 'rose', pill: examenesVencidos > 0 ? <Pill tone="bad">{examenesVencidos} vencido{examenesVencidos === 1 ? '' : 's'}</Pill> : <Pill tone="muted">{p.examenes.length}</Pill> },
-        { tab: 'arl', titulo: 'Novedades ARL', desc: 'Afiliaciones, traslados, clase de riesgo', icono: ShieldAlert, color: 'emerald', pill: <Pill tone="muted">{p.novedadesArl.length}</Pill> },
-        { tab: 'accidentes', titulo: 'Accidentes e incidentes', desc: 'FURAT, investigación, seguimiento', icono: TriangleAlert, color: 'amber', pill: furatPendientes > 0 ? <Pill tone="bad">{furatPendientes} FURAT</Pill> : <Pill tone="muted">{p.accidentes.length}</Pill> },
+        { tab: 'examenes', titulo: 'Exámenes médicos', icono: Stethoscope },
+        { tab: 'arl', titulo: 'Novedades ARL', icono: ShieldAlert },
+        { tab: 'accidentes', titulo: 'Accidentes e incidentes', icono: TriangleAlert },
       ],
     },
     {
       titulo: 'Riesgos y emergencias',
       tiles: [
-        { tab: 'ipevr', titulo: 'Matriz IPEVR', desc: 'Peligros por sede (GTC 45)', icono: ShieldAlert, color: 'rose', pill: ipevrCriticos > 0 ? <Pill tone="warn">{ipevrCriticos} alto/crítico</Pill> : <Pill tone="muted">{p.peligros.length}</Pill> },
-        { tab: 'profesiograma', titulo: 'Profesiograma', desc: 'Perfiles de riesgo por cargo', icono: IdCard, color: 'indigo', pill: <Pill tone="muted">{p.profesiogramas.length} cargo{p.profesiogramas.length === 1 ? '' : 's'}</Pill> },
-        { tab: 'emergencias', titulo: 'Emergencias', desc: 'Plan, brigadistas, simulacros', icono: Flame, color: 'amber', pill: planVigente ? <Pill tone="ok">Vigente</Pill> : <Pill tone="bad">Sin plan</Pill> },
+        { tab: 'ipevr', titulo: 'Matriz IPEVR', icono: ShieldAlert },
+        { tab: 'profesiograma', titulo: 'Profesiograma', icono: IdCard },
+        { tab: 'emergencias', titulo: 'Emergencias', icono: Flame },
       ],
     },
     {
       titulo: 'Operación',
       tiles: [
-        { tab: 'inspecciones', titulo: 'Inspecciones', desc: 'Locativas, extintores, ergonómicas', icono: ClipboardCheck, color: 'teal', pill: inspAbiertas > 0 ? <Pill tone="warn">{inspAbiertas} abierta{inspAbiertas === 1 ? '' : 's'}</Pill> : <Pill tone="ok">Al día</Pill> },
-        { tab: 'comites', titulo: 'Comités', desc: `Recomendado: ${recomendacion} + Convivencia`, icono: Users, color: 'teal', pill: semComites ? <Pill tone={semComites.estado === 'ok' ? 'ok' : semComites.estado === 'warn' ? 'warn' : 'bad'}>{semComites.detalle}</Pill> : null },
-        { tab: 'epp', titulo: 'EPP', desc: 'Entregas con recibido firmado', icono: HardHat, color: 'indigo', pill: eppSinFirma > 0 ? <Pill tone="warn">{eppSinFirma} sin firma</Pill> : <Pill tone="ok">Al día</Pill> },
+        { tab: 'inspecciones', titulo: 'Inspecciones', icono: ClipboardCheck },
+        { tab: 'comites', titulo: 'Comités', icono: Users },
+        { tab: 'epp', titulo: 'EPP', icono: HardHat },
       ],
     },
   ]
@@ -381,27 +378,6 @@ export function SstCliente(p: Props) {
               </button>
             </div>
           </div>
-
-          {/* Navegación por secciones */}
-          {SECCIONES.map((sec) => (
-            <div key={sec.titulo}>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{sec.titulo}</p>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {sec.tiles.map((t) => (
-                  <button key={t.tab} type="button" onClick={() => irA(t.tab)} className="text-left">
-                    <Card className="h-full transition-colors hover:bg-accent/40"><CardContent className="flex items-center gap-3 py-3">
-                      <Chip icono={t.icono} color={t.color} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{t.titulo}</p>
-                        <p className="truncate text-xs text-muted-foreground">{t.desc}</p>
-                      </div>
-                      {t.pill}
-                    </CardContent></Card>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
         </div>
       )}
 
