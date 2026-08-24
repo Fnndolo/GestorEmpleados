@@ -1,6 +1,7 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
 import { formatFechaISO } from '@/lib/fechas'
+import { ErrorNegocio } from '@/server/accion'
 
 export type ParametrosNomina = Record<string, number>
 
@@ -22,7 +23,14 @@ export async function cargarParametros(fecha: Date): Promise<ParametrosNomina> {
     // El primero (más reciente) gana por clave
     if (!(p.clave in mapa)) mapa[p.clave] = Number(p.valor)
   }
-  if (!mapa.SMMLV) throw new Error(`No hay SMMLV vigente para ${fechaISO}. Configura los parámetros legales.`)
+  // ErrorNegocio y no Error: esto es configuración que falta, no una falla del
+  // sistema. Como Error genérico llegaba a la pantalla como 'Ocurrió un error
+  // inesperado' y quien liquidaba no tenía forma de saber que le faltaba el SMMLV.
+  if (!mapa.SMMLV) {
+    throw new ErrorNegocio(
+      `No hay SMMLV vigente para ${fechaISO}. Cárgalo en Ajustes → Parámetros de nómina; sin él no se puede liquidar ni calcular una terminación.`,
+    )
+  }
   return mapa
 }
 
