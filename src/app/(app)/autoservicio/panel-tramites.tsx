@@ -89,7 +89,11 @@ function TileCompacto({ item, onSolicitar }: { item: Item; onSolicitar: (t: Tipo
           <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
         ) : null}
       </span>
-      <span className="mt-1.5 block w-[72px] text-center text-[11px] font-medium leading-tight">{corto}</span>
+      {/* Alto fijo de dos líneas: sin esto los nombres de una sola línea suben y
+          los de dos bajan, y la fila queda con los íconos a distinta altura. */}
+      <span className="mt-1.5 line-clamp-2 block h-[26px] w-[72px] text-center text-[11px] font-medium leading-[13px]">
+        {corto}
+      </span>
     </>
   )
   const clases = 'group/t flex shrink-0 flex-col items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-2xl'
@@ -100,16 +104,14 @@ function TileCompacto({ item, onSolicitar }: { item: Item; onSolicitar: (t: Tipo
 
 /**
  * Una sección con sus dos caras: cuadrícula con descripciones en escritorio y,
- * en móvil, íconos pequeños. Los de solicitar van en carrusel horizontal para
- * que no empujen hacia abajo lo que viene después.
+ * en móvil, íconos pequeños en carrusel horizontal, para que ninguna sección
+ * empuje hacia abajo la que viene después.
  */
 function Seccion({
-  titulo, items, carrusel, onSolicitar,
+  titulo, items, onSolicitar,
 }: {
   titulo: string
   items: Item[]
-  /** Móvil: en fila deslizable en vez de cuadrícula. */
-  carrusel?: boolean
   onSolicitar: (t: TipoSol) => void
 }) {
   if (items.length === 0) return null
@@ -126,15 +128,18 @@ function Seccion({
       <div
         className={cn(
           'sm:hidden',
-          carrusel
-            // Se sale del margen del contenido para que el carrusel llegue al
-            // borde de la pantalla y se note que hay más hacia la derecha.
-            ? '-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
-            : 'grid grid-cols-4 justify-items-center gap-x-2 gap-y-3',
+          // Se sale del margen del contenido para que el carrusel llegue al
+          // borde de la pantalla y se note que hay más hacia la derecha.
+          '-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1',
+          // El desplazamiento horizontal recorta lo que se salga por arriba, y
+          // la insignia de pendientes sobresale del ícono: sin este respiro
+          // aparecía cortada por la mitad.
+          'pt-2',
+          '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         )}
       >
         {items.map((i) => (
-          <div key={i.clave} className={cn(carrusel && 'snap-start')}>
+          <div key={i.clave} className="snap-start">
             <TileCompacto item={i} onSolicitar={onSolicitar} />
           </div>
         ))}
@@ -274,7 +279,7 @@ export function PanelTramites({
         </div>
       )}
 
-      <Seccion titulo="¿Qué necesitas solicitar?" items={solicitudes} carrusel onSolicitar={setSolicitar} />
+      <Seccion titulo="¿Qué necesitas solicitar?" items={solicitudes} onSolicitar={setSolicitar} />
       <Seccion titulo="Contratos y canales" items={canales} onSolicitar={setSolicitar} />
 
       {/* Se monta al abrir para que el formulario arranque limpio en cada trámite. */}
