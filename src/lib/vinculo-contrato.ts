@@ -86,3 +86,18 @@ export function avisoVinculoAjustado(
 
 /** Lo que devuelven las acciones de contrato cuando alinearon la ficha. */
 export type AjusteVinculo = { antes: TipoVinculo; ahora: TipoVinculo }
+
+/** Lo que devuelven las acciones de contrato cuando reactivaron una ficha retirada. */
+export type Reactivacion = { accesoDevuelto: boolean }
+
+/**
+ * Aviso cuando el contrato nuevo revivió a alguien que estaba retirado. Se dice
+ * en voz alta porque son cambios en la ficha y en los permisos de la persona,
+ * no solo en el contrato que se estaba creando.
+ */
+export function avisoReactivacion(r: Reactivacion | null | undefined): string | null {
+  if (!r) return null
+  return r.accesoDevuelto
+    ? 'El colaborador estaba retirado: se reactivó su ficha y se le devolvió el acceso a su autoservicio.'
+    : 'El colaborador estaba retirado: se reactivó su ficha. Revisa su rol en Ajustes → Usuarios.'
+}

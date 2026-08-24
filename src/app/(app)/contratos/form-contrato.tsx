@@ -27,7 +27,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { duracionContrato } from '@/lib/fechas'
-import { avisoVinculoAjustado, type AjusteVinculo } from '@/lib/vinculo-contrato'
+import { avisoVinculoAjustado, avisoReactivacion, type AjusteVinculo, type Reactivacion } from '@/lib/vinculo-contrato'
 
 type ClausulaEdit = { key: number; titulo: string; cuerpo: string; esFunciones: boolean }
 
@@ -229,8 +229,10 @@ export function FormContrato({
     setGuardando(false)
     if (res.ok) {
       toast.success(editando ? 'Contrato actualizado y documento regenerado.' : 'Contrato creado.')
-      const aviso = avisoVinculoAjustado((res.datos as { vinculoAjustado?: AjusteVinculo }).vinculoAjustado)
-      if (aviso) toast.info(aviso, { duration: 8000 })
+      const datos = res.datos as { vinculoAjustado?: AjusteVinculo; reactivado?: Reactivacion | null }
+      for (const aviso of [avisoReactivacion(datos.reactivado), avisoVinculoAjustado(datos.vinculoAjustado)]) {
+        if (aviso) toast.info(aviso, { duration: 8000 })
+      }
       router.push(`/contratos/${editando ? inicial!.contratoId : (res.datos as { id: string }).id}`)
       router.refresh()
     } else toast.error(res.error)

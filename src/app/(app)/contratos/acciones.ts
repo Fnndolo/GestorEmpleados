@@ -18,6 +18,7 @@ import { aplicarFirmaContratoLaboral } from '@/server/contratos-laboral-firma'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import type { FuncionesCargo } from '@/lib/contrato-variables'
 import { vinculoDeContrato, vinculoCoincide, type TipoContratoLaboral, type TipoVinculo } from '@/lib/vinculo-contrato'
+import { devolverAccesoNormal } from '@/server/rol-consulta'
 
 async function siguienteNumero(prefijo: string): Promise<string> {
   const anio = new Date().getUTCFullYear()
@@ -136,9 +137,10 @@ export const crearContrato = accion(
     }
 
     const vinculoAjustado = await alinearVinculoFicha(d.colaboradorId, d.tipo)
+    const reactivado = await reactivarSiEstabaRetirado(d.colaboradorId)
 
     revalidatePath('/contratos')
-    return { id: contrato.id, vinculoAjustado }
+    return { id: contrato.id, vinculoAjustado, reactivado }
   },
 )
 
@@ -167,6 +169,38 @@ async function alinearVinculoFicha(
   await dbAuditado.colaborador.update({ where: { id: colaboradorId }, data: { tipoVinculo: ahora } })
   revalidatePath(`/colaboradores/${colaboradorId}`)
   return { antes, ahora }
+}
+
+/**
+ * Devuelve a la vida la ficha de quien se está recontratando.
+ *
+ * Terminar hace tres cosas —marca la ficha como retirada, cierra el contrato y
+ * baja el acceso a solo consulta— y crear el contrato nuevo solo deshacía la
+ * segunda. La persona quedaba con contrato vigente pero marcada como retirada,
+ * viendo en su autoservicio «tu vínculo laboral no está activo» y sin poder
+ * pedir vacaciones ni firmar el contrato que se le acababa de hacer.
+ *
+ * Devuelve qué se reactivó, o null si la ficha ya estaba activa.
+ */
+async function reactivarSiEstabaRetirado(
+  colaboradorId: string,
+): Promise<{ accesoDevuelto: boolean } | null> {
+  const colab = await prisma.colaborador.findUnique({
+    where: { id: colaboradorId },
+    select: { estado: true },
+  })
+  if (!colab || colab.estado === 'ACTIVO') return null
+
+  await dbAuditado.colaborador.update({
+    where: { id: colaboradorId },
+    // La fecha de retiro se limpia: dejarla haría que la antigüedad y las
+    // liquidaciones siguieran contando contra un retiro que ya no existe.
+    data: { estado: 'ACTIVO', fechaRetiro: null },
+  })
+  const accesoDevuelto = await devolverAccesoNormal(colaboradorId)
+  revalidatePath(`/colaboradores/${colaboradorId}`)
+  revalidatePath('/autoservicio')
+  return { accesoDevuelto }
 }
 
 /**
@@ -253,8 +287,9 @@ export const subirContratoExistente = accion(
 
     await publicarVencimientosContrato(contrato.id)
     const vinculoAjustado = await alinearVinculoFicha(d.colaboradorId, d.tipo)
+    const reactivado = await reactivarSiEstabaRetirado(d.colaboradorId)
     revalidatePath('/contratos')
-    return { id: contrato.id, vinculoAjustado }
+    return { id: contrato.id, vinculoAjustado, reactivado }
   },
 )
 
