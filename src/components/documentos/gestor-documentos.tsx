@@ -5,14 +5,15 @@ import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import { toast } from 'sonner'
 import {
-  Upload, FileText, Image as ImageIcon, Trash2, ExternalLink, CircleCheck, TriangleAlert, Clock,
+  Upload, FileText, Image as ImageIcon, Trash2, Eye, CircleCheck, TriangleAlert, Clock,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
+import { VisorPdf } from './visor-pdf'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -137,9 +138,18 @@ export function GestorDocumentos({
                       {d.fechaVencimiento && ` · vence ${formatFechaCorta(new Date(d.fechaVencimiento))}`}
                     </p>
                   </div>
-                  <Button variant="ghost" size="icon" asChild aria-label="Ver">
-                    <a href={`/api/documentos/${d.id}`} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /></a>
-                  </Button>
+                  {/* Se abre aquí mismo: sacar al usuario a otra pestaña para
+                      mirar un anexo le hacía perder el contrato que estaba
+                      revisando. El visor conserva descargar y abrir aparte. */}
+                  <VisorPdf
+                    documentoId={d.id}
+                    titulo={d.nombre}
+                    mimeType={d.mimeType}
+                    className={buttonVariants({ variant: 'ghost', size: 'icon' })}
+                  >
+                    <Eye className="size-4" />
+                    <span className="sr-only">Ver {d.nombre}</span>
+                  </VisorPdf>
                   {puedeEditar && (
                     <Button variant="ghost" size="icon" onClick={() => setEliminar(d)} aria-label="Eliminar">
                       <Trash2 className="size-4 text-destructive" />

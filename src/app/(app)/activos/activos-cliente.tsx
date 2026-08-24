@@ -16,6 +16,7 @@ import { SelectorColaborador } from '@/components/colaboradores/selector-colabor
 import { cn } from '@/lib/utils'
 import { Chip, Pill, type PillTone } from '@/components/ui-kit'
 import { Ayuda } from '@/components/ui-kit/ayuda'
+import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { Checkbox } from '@/components/ui/checkbox'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
@@ -85,6 +86,15 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
                 {a.asignacion?.actaEntregaDocId && (
                   <Button variant="ghost" size="icon" asChild aria-label="Acta"><a href={`/api/documentos/${a.asignacion.actaEntregaDocId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a></Button>
                 )}
+                {/* El acta generada se puede reemplazar por una propia: a veces
+                    la firmada en papel es la que vale. */}
+                {puedeEditar && a.asignacion && (
+                  <AdjuntarDocumento
+                    destino="actaEntregaActivo" id={a.asignacion.id} tamano="icon" variante="ghost"
+                    tieneDocumento={Boolean(a.asignacion.actaEntregaDocId)}
+                    etiqueta={a.asignacion.actaEntregaDocId ? 'Rehacer o reemplazar el acta' : 'Generar o subir el acta'}
+                  />
+                )}
                 {puedeEditar && a.estado === 'DISPONIBLE' && (
                   <Button variant="outline" size="sm" onClick={() => { setAsignarActivoId(a.id); setDialogo('asignar') }}><UserPlus className="size-4" /> Entregar</Button>
                 )}
@@ -109,6 +119,13 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
                   <Button variant="ghost" size="icon" asChild aria-label="Recibido PDF">
                     <a href={`/api/documentos/${d.recibidoDocId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a>
                   </Button>
+                )}
+                {puedeEditar && (
+                  <AdjuntarDocumento
+                    destino="recibidoDotacion" id={d.id} tamano="icon" variante="ghost"
+                    tieneDocumento={Boolean(d.recibidoDocId)}
+                    etiqueta={d.recibidoDocId ? 'Rehacer o reemplazar el recibido' : 'Generar o subir el recibido'}
+                  />
                 )}
                 <Pill tone={d.firmado ? 'ok' : 'warn'}>{d.firmado ? 'Firmado' : 'Pendiente de firma'}</Pill>
               </div>

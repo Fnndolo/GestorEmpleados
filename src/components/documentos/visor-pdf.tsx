@@ -20,11 +20,18 @@ export function VisorPdf({
   titulo,
   className,
   children,
+  mimeType,
 }: {
   documentoId: string
   titulo: string
   className?: string
   children: ReactNode
+  /**
+   * Tipo del archivo. Las listas de documentos mezclan PDF con fotos de cédulas
+   * y soportes escaneados: una imagen se muestra tal cual, porque pdf.js no
+   * sabría abrirla y el iframe la dejaría a tamaño original.
+   */
+  mimeType?: string
 }) {
   const [abierto, setAbierto] = useState(false)
   const [amplio, setAmplio] = useState(false)
@@ -61,7 +68,12 @@ export function VisorPdf({
               <a href={url} target="_blank" rel="noopener noreferrer"><ExternalLink className="size-4" /></a>
             </Button>
           </DialogHeader>
-          {movil ? (
+          {mimeType?.startsWith('image/') ? (
+            <div className="min-h-0 flex-1 overflow-auto rounded-md bg-muted/40 p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt={titulo} className="mx-auto max-w-full rounded-md bg-white shadow-sm" />
+            </div>
+          ) : movil ? (
             abierto && <PdfPaginas url={url} />
           ) : (
             <iframe src={url} title={titulo} className="min-h-0 w-full flex-1 rounded-md border bg-white" />

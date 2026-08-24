@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -24,7 +25,12 @@ const ESTADO: Record<string, string> = {
   APROBADA: 'Aprobada', PAGADA: 'Pagada', RECHAZADA: 'Rechazada',
 }
 
-export function CuentasRevision({ puedeAprobar, cuentas }: { puedeAprobar: boolean; cuentas: Cuenta[] }) {
+export function CuentasRevision({ puedeAprobar, cuentas, plantillas }: {
+  puedeAprobar: boolean
+  cuentas: Cuenta[]
+  /** Para elegir con cuál rehacer el PDF de una cuenta. */
+  plantillas?: { id: string; nombre: string }[]
+}) {
   const router = useRouter()
   const [proc, setProc] = useState<string | null>(null)
 
@@ -48,6 +54,14 @@ export function CuentasRevision({ puedeAprobar, cuentas }: { puedeAprobar: boole
               <span className="text-sm font-medium hidden sm:block">{fmtCOP(c.valor)}</span>
               {c.documentoId && (
                 <Button variant="ghost" size="icon" asChild aria-label="PDF"><a href={`/api/documentos/${c.documentoId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a></Button>
+              )}
+              {puedeAprobar && (
+                <AdjuntarDocumento
+                  destino="cuentaCobro" id={c.id} tamano="icon" variante="ghost"
+                  tieneDocumento={Boolean(c.documentoId)}
+                  etiqueta={c.documentoId ? 'Rehacer o reemplazar la cuenta' : 'Generar o subir la cuenta'}
+                  plantillas={plantillas}
+                />
               )}
               <Badge variant={c.estado === 'PAGADA' || c.estado === 'APROBADA' ? 'default' : c.estado === 'RECHAZADA' || c.estado === 'BLOQUEADA_SS' ? 'destructive' : 'secondary'}>{ESTADO[c.estado]}</Badge>
             </div>

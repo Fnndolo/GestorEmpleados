@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import Link from 'next/link'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
@@ -279,11 +280,21 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
                         : <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Sin cuenta registrada</span>}
                     </td>
                     <td className="p-3">
-                      {l.documentoId && (
-                        <Button variant="ghost" size="icon" asChild aria-label="Desprendible">
-                          <a href={`/api/documentos/${l.documentoId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a>
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {l.documentoId && (
+                          <Button variant="ghost" size="icon" asChild aria-label="Desprendible">
+                            <a href={`/api/documentos/${l.documentoId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a>
+                          </Button>
+                        )}
+                        {/* Si el desprendible generado no sirve, se sube el correcto. */}
+                        {puedeOperar && (
+                          <AdjuntarDocumento
+                            destino="desprendible" id={l.id} tamano="icon" variante="ghost"
+                            tieneDocumento={Boolean(l.documentoId)}
+                            etiqueta={l.documentoId ? 'Rehacer o reemplazar el desprendible' : 'Generar o subir el desprendible'}
+                          />
+                        )}
+                      </div>
                     </td>
                   </tr>
                   )

@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import Link from 'next/link'
 import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Paperclip, OctagonAlert, Flame, ClipboardCheck, IdCard, Landmark, Scale, CircleCheck, CircleAlert, CircleX, FileWarning, LayoutGrid, ChartLine, ChevronLeft } from 'lucide-react'
 import { Chip, Pill, Stat, type PillTone } from '@/components/ui-kit'
+import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -292,10 +293,13 @@ export function SstCliente(p: Props) {
     /* En escritorio la pantalla se reparte en tres zonas de desplazamiento
        independientes: la cabecera queda quieta, y el menú y el contenido tienen
        cada uno el suyo, así que la rueda mueve solo aquello sobre lo que está el
-       puntero. La altura descuenta la barra superior de la app (3.5rem) y el
-       relleno del contenedor (3rem). En móvil no aplica: ahí la página se
-       desplaza entera, que es lo natural en pantalla pequeña. */
-    <div className="lg:flex lg:h-[calc(100dvh-6.5rem)] lg:flex-col lg:overflow-hidden">
+       puntero. Es altura MÁXIMA, no fija: con contenido corto el bloque mide lo
+       que mide y no deja una franja vacía debajo; solo al pasarse del alto
+       disponible aparecen los desplazamientos internos. El tope descuenta la
+       barra superior de la app (3.5rem) y el relleno del contenedor (3rem). En
+       móvil no aplica: ahí la página se desplaza entera, que es lo natural en
+       pantalla pequeña. */
+    <div className="lg:flex lg:max-h-[calc(100dvh-6.5rem)] lg:flex-col lg:overflow-hidden">
       {/* Cabecera: la flecha devuelve al tablero (o sale del módulo si ya estás
           en él) y la ruta, en pequeño, dice dónde estás. El título grande vive
           dentro del panel, que es donde da jerarquía. */}
@@ -539,6 +543,13 @@ export function SstCliente(p: Props) {
                 <div className="min-w-0 flex-1"><p className="text-sm font-medium">{e.colaborador}</p><p className="text-xs text-muted-foreground">{e.cantidad}× {e.elemento} · {formatFechaCorta(new Date(e.fecha))}</p></div>
                 {e.soporteDocId && (
                   <a href={`/api/documentos/${e.soporteDocId}`} target="_blank" rel="noreferrer" className="whitespace-nowrap text-xs text-primary hover:underline">Recibido</a>
+                )}
+                {p.puedeEditar && (
+                  <AdjuntarDocumento
+                    destino="soporteEpp" id={e.id} tamano="icon" variante="ghost"
+                    tieneDocumento={Boolean(e.soporteDocId)}
+                    etiqueta={e.soporteDocId ? 'Rehacer o reemplazar el recibido' : 'Generar o subir el recibido'}
+                  />
                 )}
                 <Pill tone={e.firmado ? 'ok' : 'warn'}>{e.firmado ? 'Firmado' : 'Pendiente de firma'}</Pill>
               </div>

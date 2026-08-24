@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FirmaCaptura } from '@/components/firma/firma-captura'
@@ -171,9 +172,17 @@ export function BandejaAprobaciones({ solicitudes }: { solicitudes: Solicitud[] 
                           />
                         </button>
                       ) : (
-                        <a key={d.id} href={`/api/documentos/${d.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                        // El soporte se abre aquí mismo: quien está aprobando no
+                        // debería perder la bandeja para mirar un adjunto. Las
+                        // imágenes ya se ampliaban en la página; faltaban los PDF.
+                        <VisorPdf
+                          key={d.id}
+                          documentoId={d.id}
+                          titulo={d.nombre}
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        >
                           <Paperclip className="size-3.5" /> {d.nombre}
-                        </a>
+                        </VisorPdf>
                       ),
                     )}
                   </div>

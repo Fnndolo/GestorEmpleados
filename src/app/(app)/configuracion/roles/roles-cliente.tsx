@@ -179,8 +179,9 @@ function DialogMatriz({
             Marca las acciones por módulo y define el alcance de datos. {!puedeEditar && '(Solo lectura)'}
           </DialogDescription>
         </DialogHeader>
-        <div className="overflow-y-auto -mx-6 px-6 flex-1">
-          <table className="w-full text-sm">
+        <div className="-mx-6 flex-1 overflow-y-auto px-6">
+          {/* Escritorio: la tabla es lo más legible, ocho columnas caben de sobra. */}
+          <table className="hidden w-full text-sm md:table">
             <thead className="sticky top-0 bg-background">
               <tr className="border-b text-left">
                 <th className="py-2 font-medium">Módulo</th>
@@ -219,6 +220,52 @@ function DialogMatriz({
               ))}
             </tbody>
           </table>
+
+          {/* Móvil: la misma tabla obligaba a desplazarse a los lados, y la
+              columna de Exportar quedaba fuera de la pantalla — se marcaban
+              permisos sin ver cuáles. Una tarjeta por módulo cabe entera. */}
+          <div className="space-y-3 md:hidden">
+            {modulos.map((m) => {
+              const marcadas = estado[m.clave].acciones
+              return (
+                <div key={m.clave} className="rounded-lg border p-3">
+                  <div className="mb-2 flex items-baseline justify-between gap-2">
+                    <p className="text-sm font-medium">{m.etiqueta}</p>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {marcadas.size === 0 ? 'Sin acceso' : `${marcadas.size} de ${ACCIONES.length}`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                    {ACCIONES.map((a) => (
+                      <label key={a} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          disabled={!puedeEditar}
+                          checked={marcadas.has(a)}
+                          onCheckedChange={(v) => alternarAccion(m.clave, a, Boolean(v))}
+                        />
+                        {ACCION_ETIQUETA[a]}
+                      </label>
+                    ))}
+                  </div>
+                  {marcadas.size > 0 && (
+                    <div className="mt-3">
+                      <p className="mb-1 text-xs text-muted-foreground">Alcance de datos</p>
+                      <Select
+                        disabled={!puedeEditar}
+                        value={estado[m.clave].alcance}
+                        onValueChange={(v) => cambiarAlcance(m.clave, v as Alcance)}
+                      >
+                        <SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {ALCANCES.map((al) => <SelectItem key={al.valor} value={al.valor}>{al.etiqueta}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cerrar</Button>

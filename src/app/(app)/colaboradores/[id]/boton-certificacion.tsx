@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { FileBadge, Download } from 'lucide-react'
@@ -19,6 +20,9 @@ export function BotonCertificacion({ colaboradorId }: { colaboradorId: string })
   const [dirigidaA, setDirigidaA] = useState('')
   const [g, setG] = useState(false)
   const [docId, setDocId] = useState<string | null>(null)
+  // Id de la certificación (no del documento): es lo que necesita el adjunto
+  // para reemplazar el PDF por uno propio.
+  const [certId, setCertId] = useState<string | null>(null)
 
   async function generar() {
     setG(true)
@@ -26,14 +30,16 @@ export function BotonCertificacion({ colaboradorId }: { colaboradorId: string })
     setG(false)
     if (res.ok) {
       toast.success('Certificación generada.')
-      setDocId((res.datos as { documentoId: string }).documentoId)
+      const datos = res.datos as { documentoId: string; certificacionId: string }
+      setDocId(datos.documentoId)
+      setCertId(datos.certificacionId)
       router.refresh()
     } else toast.error(res.error)
   }
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={() => { setAbierto(true); setDocId(null) }}>
+      <Button size="sm" variant="outline" onClick={() => { setAbierto(true); setDocId(null); setCertId(null) }}>
         <FileBadge className="size-4" /> Certificación
       </Button>
       <Dialog open={abierto} onOpenChange={setAbierto}>
@@ -57,9 +63,19 @@ export function BotonCertificacion({ colaboradorId }: { colaboradorId: string })
             </div>
             <div className="space-y-1.5"><Label>Dirigida a (opcional)</Label><Input value={dirigidaA} onChange={(e) => setDirigidaA(e.target.value)} /></div>
             {docId && (
-              <Button variant="outline" className="w-full" asChild>
-                <a href={`/api/documentos/${docId}`} target="_blank" rel="noreferrer"><Download className="size-4" /> Descargar PDF</a>
-              </Button>
+              <div className="space-y-2">
+                <Button variant="outline" className="w-full" asChild>
+                  <a href={`/api/documentos/${docId}`} target="_blank" rel="noreferrer"><Download className="size-4" /> Descargar PDF</a>
+                </Button>
+                {/* Si la plantilla no dice lo que este caso necesita, se sustituye
+                    por el PDF propio sin esperar a que se programe la variante. */}
+                {certId && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-2.5">
+                    <p className="text-xs text-muted-foreground">¿La certificación necesita otro texto?</p>
+                    <AdjuntarDocumento destino="certificacion" id={certId} tieneDocumento etiqueta="Subir la mía" variante="ghost" />
+                  </div>
+                )}
+              </div>
             )}
           </div>
           <DialogFooter>

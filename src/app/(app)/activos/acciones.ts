@@ -66,7 +66,7 @@ export const crearActivos = accion(
  * acto. `activoIds` conserva el orden en que se eligieron, que es el que se ve
  * en la tabla del PDF.
  */
-async function generarActa(
+export async function generarActa(
   tipo: 'entrega' | 'devolucion',
   activoIds: string[],
   colaboradorId: string,

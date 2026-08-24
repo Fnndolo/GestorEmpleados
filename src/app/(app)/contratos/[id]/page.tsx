@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
+import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { FileText, TriangleAlert } from 'lucide-react'
 import { formatFechaLarga, formatFechaCorta, formatFechaISO, duracionContrato } from '@/lib/fechas'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
@@ -204,9 +205,19 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
           <h3 className="text-sm font-medium mb-2">Prórrogas</h3>
           <ul className="space-y-1.5">
             {c.prorrogas.map((p) => (
-              <li key={p.id} className="text-sm flex justify-between">
+              <li key={p.id} className="flex flex-wrap items-center gap-2 text-sm">
                 <span>Prórroga {p.numero}</span>
-                <span className="text-muted-foreground">{formatFechaCorta(p.fechaInicio)} — {formatFechaCorta(p.fechaFin)}</span>
+                <span className="flex-1 text-muted-foreground">{formatFechaCorta(p.fechaInicio)} — {formatFechaCorta(p.fechaFin)}</span>
+                {/* El sistema no genera el PDF de la prórroga: se redacta fuera,
+                    se firma y se adjunta aquí. */}
+                {p.documentoId && (
+                  <VisorPdf documentoId={p.documentoId} titulo={`Prórroga ${p.numero}`} className="text-xs text-primary hover:underline">
+                    Ver PDF
+                  </VisorPdf>
+                )}
+                {puedeEditar && (
+                  <AdjuntarDocumento destino="prorroga" id={p.id} tieneDocumento={Boolean(p.documentoId)} etiqueta={p.documentoId ? 'Reemplazar' : 'Adjuntar PDF'} variante="ghost" />
+                )}
               </li>
             ))}
           </ul>
@@ -220,9 +231,17 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
           <ul className="space-y-2">
             {c.otrosis.map((o) => (
               <li key={o.id} className="text-sm">
-                <div className="flex justify-between">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">Otrosí {o.numero}</span>
-                  <span className="text-muted-foreground">{formatFechaCorta(o.fecha)}</span>
+                  <span className="flex-1 text-muted-foreground">{formatFechaCorta(o.fecha)}</span>
+                  {o.documentoId && (
+                    <VisorPdf documentoId={o.documentoId} titulo={`Otrosí ${o.numero}`} className="text-xs text-primary hover:underline">
+                      Ver PDF
+                    </VisorPdf>
+                  )}
+                  {puedeEditar && (
+                    <AdjuntarDocumento destino="otrosi" id={o.id} tieneDocumento={Boolean(o.documentoId)} etiqueta={o.documentoId ? 'Reemplazar' : 'Adjuntar PDF'} variante="ghost" />
+                  )}
                 </div>
                 <p className="text-muted-foreground">{o.descripcion}</p>
               </li>

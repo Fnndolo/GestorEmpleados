@@ -1108,6 +1108,8 @@ model ProrrogaContrato {
   fechaInicio DateTime  @map("fecha_inicio") @db.Date
   fechaFin    DateTime  @map("fecha_fin") @db.Date
   fechaFirma  DateTime? @map("fecha_firma") @db.Date
+  // PDF de la prórroga: el sistema no lo genera, se adjunta el firmado.
+  documentoId String?   @map("documento_id") @db.Uuid
 
   @@unique([contratoId, numero])
   @@map("prorroga_contrato")
@@ -1136,6 +1138,8 @@ model OtrosiContrato {
   descripcion       String
   valoresAnteriores Json?    @map("valores_anteriores")
   valoresNuevos     Json?    @map("valores_nuevos")
+  // PDF del otrosí firmado, adjuntado por quien lo registra.
+  documentoId       String?  @map("documento_id") @db.Uuid
 
   @@unique([contratoId, numero])
   @@map("otrosi_contrato")

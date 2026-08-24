@@ -1,7 +1,7 @@
 import { requerirSesion, tienePermiso } from '@/server/sesion'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
-import { Encabezado } from '@/components/shell/encabezado'
+import { CabeceraAjustes } from './cabecera'
 import { RielConfiguracion } from './riel'
 import { GRUPOS, type Contadores } from './secciones'
 
@@ -45,14 +45,20 @@ export default async function ConfiguracionLayout({ children }: { children: Reac
   }
 
   return (
-    <div className="max-w-6xl">
-      <Encabezado
-        titulo="Ajustes"
-        descripcion="Los parámetros y catálogos de la plataforma. Empieza por los datos de tu empresa: encabezan todo lo que ella firma."
-      />
-      <div className="grid items-start gap-4 lg:grid-cols-[232px_minmax(0,1fr)]">
+    /* Tres zonas de desplazamiento independientes, igual que en SST: la
+       cabecera queda quieta, y el menú y el contenido tienen cada uno el suyo.
+       Es altura MÁXIMA, no fija: con contenido corto el bloque mide lo que mide
+       y no deja una franja vacía debajo; solo al pasarse del alto disponible
+       aparecen los desplazamientos internos. El tope descuenta la barra superior
+       de la app (3.5rem) y el relleno del contenedor (3rem). En móvil la página
+       se desplaza entera. */
+    <div className="max-w-6xl lg:flex lg:max-h-[calc(100dvh-6.5rem)] lg:flex-col lg:overflow-hidden">
+      <CabeceraAjustes />
+      <div className="grid items-start gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-stretch">
         <RielConfiguracion hrefsVisibles={hrefsVisibles} contadores={contadores} />
-        <div className="min-w-0">{children}</div>
+        {/* `min-h-0` es imprescindible: sin él un hijo de grid no encoge y el
+            desbordamiento se escapa al documento. */}
+        <div className="min-w-0 lg:min-h-0 lg:overflow-y-auto lg:pb-6 lg:pr-1">{children}</div>
       </div>
     </div>
   )

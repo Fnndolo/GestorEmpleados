@@ -24,14 +24,19 @@ export function RielConfiguracion({ hrefsVisibles, contadores }: {
   return (
     <nav
       aria-label="Secciones de configuración"
-      className="flex gap-1.5 overflow-x-auto rounded-xl border bg-card p-2 lg:sticky lg:top-4 lg:flex-col lg:gap-0.5 lg:overflow-visible"
+      className={cn(
+        '-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1',
+        // En escritorio el menú tiene su propio desplazamiento: la rueda mueve
+        // solo aquello sobre lo que está el puntero.
+        'lg:mx-0 lg:min-h-0 lg:flex-col lg:gap-px lg:overflow-y-auto lg:overflow-x-visible lg:px-0 lg:pb-4 lg:pr-2',
+      )}
     >
       {GRUPOS.map((g) => {
         const secciones = g.secciones.filter((s) => visible.has(s.href))
         if (secciones.length === 0) return null
         return (
           <div key={g.titulo} className="contents lg:block">
-            <p className="hidden px-2 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground first:pt-1 lg:block">
+            <p className="hidden px-3 pt-3.5 pb-1 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground first:pt-0 lg:block">
               {g.titulo}
             </p>
             {secciones.map((s) => {
@@ -47,19 +52,27 @@ export function RielConfiguracion({ hrefsVisibles, contadores }: {
                   href={s.href}
                   aria-current={activo ? 'page' : undefined}
                   className={cn(
-                    'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-2.5 py-2 text-[13px] transition-colors lg:w-full',
+                    'relative flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-[13.5px] transition-colors lg:w-full',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-                    activo ? 'bg-primary/10 font-semibold text-primary' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                    // En móvil son pastillas sueltas; en escritorio, filas de menú.
+                    'border bg-card lg:border-0 lg:bg-transparent',
+                    activo
+                      ? 'border-primary font-semibold text-foreground lg:bg-card lg:shadow-sm'
+                      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
                   )}
                 >
-                  <s.icono className="hidden size-4 shrink-0 lg:block" />
+                  {activo && (
+                    <span aria-hidden className="absolute left-0 top-1/2 hidden h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary lg:block" />
+                  )}
+                  <s.icono className={cn('hidden size-[18px] shrink-0 lg:block', activo ? 'text-primary' : 'text-muted-foreground')} />
                   <span className="min-w-0 flex-1 truncate text-left">{s.titulo}</span>
-                  {/* Punto ámbar: catálogo vacío que hace falta para operar. */}
-                  {vacio ? (
-                    <span className="hidden size-1.5 shrink-0 rounded-full bg-amber-500 lg:block" title="Sin configurar" />
-                  ) : cuenta != null && cuenta > 0 ? (
-                    <span className="hidden text-[11px] tabular-nums text-muted-foreground/70 lg:block">{cuenta}</span>
-                  ) : null}
+                  {/* Sin puntos de color: el número basta. Un catálogo
+                      imprescindible en cero se marca resaltando ese cero. */}
+                  {cuenta != null && (
+                    <span className={cn('hidden text-[11px] tabular-nums lg:block', vacio ? 'font-semibold text-amber-600 dark:text-amber-400' : 'text-muted-foreground/70')}>
+                      {cuenta}
+                    </span>
+                  )}
                 </Link>
               )
             })}

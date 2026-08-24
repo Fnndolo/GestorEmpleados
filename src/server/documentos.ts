@@ -96,10 +96,82 @@ export async function guardarDocumento(
   return doc
 }
 
+/**
+ * Todo campo del esquema que apunta a un Documento.
+ *
+ * Al borrar un documento hay que limpiarlos: si no, el registro que lo señala
+ * —una liquidación, un acta, una norma— queda apuntando a algo que ya no
+ * existe, y su botón de descarga falla sin explicación. La lista se saca del
+ * esquema; si mañana aparece un campo nuevo, hay que añadirlo aquí.
+ */
+const CAMPOS_QUE_APUNTAN: { modelo: string; campo: string }[] = [
+  { modelo: 'accionMejoraSst', campo: 'evidenciaDocId' },
+  { modelo: 'asignacionActivo', campo: 'actaDevolucionDocId' },
+  { modelo: 'asignacionActivo', campo: 'actaEntregaDocId' },
+  { modelo: 'autoevaluacionSst', campo: 'documentoId' },
+  { modelo: 'autorizacionDatos', campo: 'documentoId' },
+  { modelo: 'certificacionLaboral', campo: 'documentoId' },
+  { modelo: 'cuentaCobroOps', campo: 'documentoId' },
+  { modelo: 'documentoLegal', campo: 'documentoId' },
+  { modelo: 'entregaDotacion', campo: 'recibidoDocId' },
+  { modelo: 'entregaEpp', campo: 'soporteDocId' },
+  { modelo: 'etapaProceso', campo: 'documentoId' },
+  { modelo: 'examenMedico', campo: 'documentoId' },
+  { modelo: 'inspeccionSst', campo: 'documentoId' },
+  { modelo: 'liquidacionDefinitiva', campo: 'documentoId' },
+  { modelo: 'liquidacionNomina', campo: 'documentoId' },
+  { modelo: 'normaMatrizLegal', campo: 'evidenciaDocId' },
+  { modelo: 'novedadArl', campo: 'soporteDocId' },
+  { modelo: 'ocurrenciaObligacion', campo: 'evidenciaDocId' },
+  { modelo: 'otrosiContrato', campo: 'documentoId' },
+  { modelo: 'pazYSalvo', campo: 'documentoId' },
+  { modelo: 'planEmergencia', campo: 'documentoId' },
+  { modelo: 'planTrabajoSst', campo: 'documentoId' },
+  { modelo: 'planillaPila', campo: 'documentoId' },
+  { modelo: 'prorrogaContrato', campo: 'documentoId' },
+  { modelo: 'responsableSgsst', campo: 'cartaDocId' },
+  { modelo: 'reunionComite', campo: 'actaDocId' },
+  { modelo: 'simulacro', campo: 'documentoId' },
+  { modelo: 'versionDocumentoLegal', campo: 'archivoDocId' },
+]
+
+/** Ids de documentos que ya "pertenecen" a otro módulo del sistema. */
+export async function documentosDeOtroModulo(colaboradorId: string): Promise<Set<string>> {
+  const [liq, asig, dot, epp, cert, exam] = await Promise.all([
+    prisma.liquidacionNomina.findMany({ where: { colaboradorId }, select: { documentoId: true } }),
+    prisma.asignacionActivo.findMany({ where: { colaboradorId }, select: { actaEntregaDocId: true, actaDevolucionDocId: true } }),
+    prisma.entregaDotacion.findMany({ where: { colaboradorId }, select: { recibidoDocId: true } }),
+    prisma.entregaEpp.findMany({ where: { colaboradorId }, select: { soporteDocId: true } }),
+    prisma.certificacionLaboral.findMany({ where: { colaboradorId }, select: { documentoId: true } }),
+    prisma.examenMedico.findMany({ where: { colaboradorId }, select: { documentoId: true } }),
+  ])
+  const ids = [
+    ...liq.map((x) => x.documentoId),
+    ...asig.flatMap((x) => [x.actaEntregaDocId, x.actaDevolucionDocId]),
+    ...dot.map((x) => x.recibidoDocId),
+    ...epp.map((x) => x.soporteDocId),
+    ...cert.map((x) => x.documentoId),
+    ...exam.map((x) => x.documentoId),
+  ]
+  return new Set(ids.filter((x): x is string => Boolean(x)))
+}
+
 export async function eliminarDocumento(id: string) {
   const doc = await prisma.documento.findUnique({ where: { id } })
   if (!doc) return
   await cancelarVencimiento('Documento', doc.id, 'DOCUMENTO')
+
+  // Antes de borrarlo, se sueltan las referencias. `updateMany` no falla cuando
+  // ninguna fila coincide, así que recorrer los 28 campos es barato y evita
+  // tener que adivinar de quién era el documento.
+  /* eslint-disable @typescript-eslint/no-explicit-any -- delegado elegido por nombre */
+  for (const { modelo, campo } of CAMPOS_QUE_APUNTAN) {
+    const delegado = (prisma as any)[modelo]
+    if (!delegado?.updateMany) continue
+    await delegado.updateMany({ where: { [campo]: id }, data: { [campo]: null } })
+  }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+
   await eliminarArchivo(doc.storagePath)
   await dbAuditado.documento.delete({ where: { id } })
 }

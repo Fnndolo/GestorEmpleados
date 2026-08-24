@@ -4,11 +4,29 @@ import { subirArchivo } from '@/server/storage'
 import { renderDesprendible } from '@/server/pdf/desprendible'
 
 /** Genera los desprendibles PDF de un periodo en lotes y los guarda como Documento. */
-export async function generarDesprendibles(periodoId: string, usuarioId: string): Promise<{ generados: number }> {
+/**
+ * Regenera el desprendible de UNA liquidación. Existe para poder rehacer uno
+ * solo desde la fila —cuando alguien subió el suyo y quiere volver al de la
+ * plantilla— sin tener que regenerar el periodo completo.
+ */
+export async function generarDesprendibleDeLiquidacion(liquidacionId: string, usuarioId: string): Promise<string> {
+  const liq = await prisma.liquidacionNomina.findUniqueOrThrow({ where: { id: liquidacionId }, select: { periodoId: true } })
+  const { documentos } = await generarDesprendibles(liq.periodoId, usuarioId, liquidacionId)
+  const doc = documentos[liquidacionId]
+  if (!doc) throw new Error('No se pudo generar el desprendible de esa liquidación.')
+  return doc
+}
+
+export async function generarDesprendibles(
+  periodoId: string,
+  usuarioId: string,
+  /** Si se indica, se rehace solo esa liquidación en vez de todo el periodo. */
+  soloLiquidacionId?: string,
+): Promise<{ generados: number; documentos: Record<string, string> }> {
   const periodo = await prisma.periodoNomina.findUniqueOrThrow({ where: { id: periodoId } })
   const empresa = await prisma.configuracionEmpresa.findFirstOrThrow()
   const liquidaciones = await prisma.liquidacionNomina.findMany({
-    where: { periodoId },
+    where: { periodoId, ...(soloLiquidacionId ? { id: soloLiquidacionId } : {}) },
     include: {
       detalles: true,
       colaborador: { include: { cargo: true, sede: true } },
@@ -21,6 +39,7 @@ export async function generarDesprendibles(periodoId: string, usuarioId: string)
   }
 
   let generados = 0
+  const documentos: Record<string, string> = {}
   // Lotes de 25 para no exceder límites de tiempo en serverless
   for (let i = 0; i < liquidaciones.length; i += 25) {
     const lote = liquidaciones.slice(i, i + 25)
@@ -51,8 +70,9 @@ export async function generarDesprendibles(periodoId: string, usuarioId: string)
         },
       })
       await prisma.liquidacionNomina.update({ where: { id: liq.id }, data: { documentoId: doc.id } })
+      documentos[liq.id] = doc.id
       generados++
     }
   }
-  return { generados }
+  return { generados, documentos }
 }

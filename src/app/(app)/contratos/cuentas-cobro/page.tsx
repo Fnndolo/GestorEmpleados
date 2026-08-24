@@ -13,7 +13,9 @@ export default async function CuentasCobroPage() {
   const puedeAprobar = tienePermiso(usuario, 'contratos', 'APROBAR')
   const puedeCrear = tienePermiso(usuario, 'contratos', 'CREAR')
 
-  const plantillas = puedeCrear
+  // Se cargan también para quien solo aprueba: al rehacer una cuenta puede
+  // elegir con qué plantilla armarla.
+  const plantillas = puedeCrear || puedeAprobar
     ? await prisma.plantillaCuentaCobro.findMany({ where: { activa: true }, orderBy: [{ esDefecto: 'desc' }, { nombre: 'asc' }] })
     : []
 
@@ -39,6 +41,7 @@ export default async function CuentasCobroPage() {
       ) : (
         <CuentasRevision
           puedeAprobar={puedeAprobar}
+          plantillas={plantillas.map((pl) => ({ id: pl.id, nombre: pl.nombre }))}
           cuentas={cuentas.map((c) => ({
             id: c.id,
             numero: c.numero,

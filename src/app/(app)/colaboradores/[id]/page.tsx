@@ -5,13 +5,14 @@ import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { whereColaboradores } from '@/server/consultas/colaboradores'
 import { Encabezado } from '@/components/shell/encabezado'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { TabsContent } from '@/components/ui/tabs'
 import { TabsResponsive } from '@/components/shell/tabs-responsive'
 import {
-  Pencil, Phone, ShieldAlert, CalendarDays, FileText, Download, Receipt,
+  Pencil, Phone, ShieldAlert, CalendarDays, FileText, Eye, Receipt,
   IdCard, HeartPulse, BriefcaseBusiness, Landmark, Shirt, TreePalm, Banknote, CalendarClock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -19,6 +20,7 @@ import { Stat, BloqueDatos } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
+import { documentosDeOtroModulo } from '@/server/documentos'
 import { valorParametroVigente } from '@/server/nomina/parametros'
 import { SubirContratoExistente } from './subir-contrato-existente'
 import { FotoUploader } from './foto-uploader'
@@ -123,8 +125,6 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
 
   // Se mezclan y ordenan por fecha: la secuencia es justamente lo que se lee
   // (dos llamados y luego un proceso no es lo mismo que al revés).
-  // Se mezclan y ordenan por fecha: la secuencia es justamente lo que se lee
-  // (dos llamados y luego un proceso no es lo mismo que al revés).
   const historial: ItemHistorial[] = [
     ...llamados.map((l) => ({
       orden: l.fecha.getTime(),
@@ -147,9 +147,15 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   const certDocPorEdu = new Map<string, string>()
   for (const d of eduDocs) if (!certDocPorEdu.has(d.entidadId)) certDocPorEdu.set(d.entidadId, d.id)
 
-  // Documentos visibles según nivel de acceso del usuario
+  // Documentos visibles: por nivel de acceso, y sin los que pertenecen a otro
+  // módulo. Los desprendibles viven en la pestaña Pagos, las actas en Activos y
+  // los exámenes en SST: repetirlos aquí llena la hoja de vida —24 desprendibles
+  // al año por persona— y esconde lo que de verdad falta del expediente.
+  const deOtroModulo = await documentosDeOtroModulo(id)
   const documentosVisibles = documentos.filter(
-    (d) => d.nivelAcceso === 'GENERAL' || verSalud || d.nivelAcceso === 'RRHH' && puedeEditar,
+    (d) =>
+      !deOtroModulo.has(d.id) &&
+      (d.nivelAcceso === 'GENERAL' || verSalud || (d.nivelAcceso === 'RRHH' && puedeEditar)),
   )
 
   // Semáforo documental
@@ -611,9 +617,13 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
                     <p className="text-xs text-muted-foreground">Neto {fmtCOP(Number(l.neto))}</p>
                   </div>
                   {l.documentoId && (
-                    <Button size="sm" variant="outline" asChild>
-                      <a href={`/api/documentos/${l.documentoId}`} target="_blank" rel="noreferrer"><Download className="size-4" /> Desprendible</a>
-                    </Button>
+                    <VisorPdf
+                      documentoId={l.documentoId}
+                      titulo={`Desprendible ${l.periodo.nombre}`}
+                      className={buttonVariants({ size: 'sm', variant: 'outline' })}
+                    >
+                      <Eye className="size-4" /> Desprendible
+                    </VisorPdf>
                   )}
                 </div>
               ))}
