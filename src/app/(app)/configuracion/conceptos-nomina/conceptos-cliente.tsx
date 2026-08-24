@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Lock, Pencil, Plus, Save } from 'lucide-react'
+import { Landmark, Lock, Pencil, Plus, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,7 +14,8 @@ import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { guardarConceptoNomina, alternarConceptoNomina } from './acciones'
+import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
+import { guardarConceptoNomina, alternarConceptoNomina, actualizarCuentaContable, eliminarConceptoNomina } from './acciones'
 
 export type ConceptoItem = {
   id: string; codigo: string; nombre: string; tipo: string; esSistema: boolean; activo: boolean
@@ -28,6 +29,13 @@ export function ConceptosCliente({ puedeEditar, conceptos }: { puedeEditar: bool
   const router = useRouter()
   const [editando, setEditando] = useState<ConceptoItem | null>(null)
   const [creando, setCreando] = useState(false)
+  const [cuentaDe, setCuentaDe] = useState<ConceptoItem | null>(null)
+
+  async function borrar(c: ConceptoItem) {
+    const res = await eliminarConceptoNomina({ id: c.id })
+    if (res.ok) { toast.success(`«${c.nombre}» eliminado.`); router.refresh() }
+    else toast.error(res.error, { duration: 8000 })
+  }
 
   async function alternar(c: ConceptoItem, activo: boolean) {
     const res = await alternarConceptoNomina({ id: c.id, activo })
@@ -84,13 +92,22 @@ export function ConceptosCliente({ puedeEditar, conceptos }: { puedeEditar: bool
                     </p>
                   </div>
                   {c.esSistema ? (
-                    <Lock className="size-4 shrink-0 text-muted-foreground" />
+                    puedeEditar ? (
+                      // Lo único suyo que sí se puede cambiar: la cuenta contable
+                      // no entra en ningún cálculo y cada empresa tiene su plan.
+                      <Button size="icon" variant="ghost" className="size-8" onClick={() => setCuentaDe(c)} title="Cambiar la cuenta contable">
+                        <Landmark className="size-4" />
+                      </Button>
+                    ) : (
+                      <Lock className="size-4 shrink-0 text-muted-foreground" />
+                    )
                   ) : puedeEditar ? (
                     <>
                       <Switch checked={c.activo} onCheckedChange={(v) => alternar(c, v)} />
                       <Button size="icon" variant="ghost" className="size-8" onClick={() => setEditando(c)} title="Editar">
                         <Pencil className="size-4" />
                       </Button>
+                      <BotonEliminar onEliminar={() => borrar(c)} />
                     </>
                   ) : null}
                 </div>
@@ -107,7 +124,57 @@ export function ConceptosCliente({ puedeEditar, conceptos }: { puedeEditar: bool
           onDone={() => { setCreando(false); setEditando(null); router.refresh() }}
         />
       )}
+      {cuentaDe && (
+        <DialogCuentaContable
+          concepto={cuentaDe}
+          onClose={() => setCuentaDe(null)}
+          onDone={() => { setCuentaDe(null); router.refresh() }}
+        />
+      )}
     </div>
+  )
+}
+
+/**
+ * Cambia solo la cuenta contable de un concepto del sistema.
+ *
+ * Se separa del diálogo de edición porque de un concepto de ley esto es lo
+ * único que se toca: el resto de sus banderas las aplica el motor de nómina y
+ * cambiarlas dejaría la pantalla diciendo algo distinto de lo que se calcula.
+ */
+function DialogCuentaContable({ concepto, onClose, onDone }: { concepto: ConceptoItem; onClose: () => void; onDone: () => void }) {
+  const [cuenta, setCuenta] = useState(concepto.cuentaContable ?? '')
+  const [g, setG] = useState(false)
+
+  async function guardar() {
+    setG(true)
+    const res = await actualizarCuentaContable({ id: concepto.id, cuentaContable: cuenta.trim() })
+    setG(false)
+    if (res.ok) { toast.success('Cuenta contable actualizada.'); onDone() }
+    else toast.error(res.error)
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Cuenta contable — {concepto.nombre}</DialogTitle>
+          <DialogDescription>
+            Es el único dato editable de un concepto del sistema: no interviene en el cálculo, solo
+            en el asiento contable, y cada empresa tiene su propio plan de cuentas.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <Label>Cuenta</Label>
+          <Input value={cuenta} onChange={(e) => setCuenta(e.target.value)} placeholder="510506" />
+          <p className="text-xs text-muted-foreground">Déjala vacía para quitarla.</p>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button onClick={guardar} disabled={g}>{g ? <Spinner /> : <Save className="size-4" />} Guardar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

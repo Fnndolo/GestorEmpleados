@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { parseFechaISO } from '@/lib/fechas'
+import { esClaveDelMotor } from '@/lib/nomina/claves-motor'
 
 /** Actualiza el valor vigente de un parámetro legal de nómina (SMMLV o auxilio de transporte). */
 export const actualizarParametroNomina = accion(
@@ -129,5 +130,96 @@ export const actualizarInterruptoresNomina = accion(
     })
     revalidatePath('/configuracion/parametros-nomina')
     return { ok: true }
+  },
+)
+
+const RUTA_PARAMETROS = '/configuracion/parametros-nomina'
+
+/**
+ * Crea un parámetro legal que no existía: una clave propia de la empresa, o una
+ * de las de ley si se perdió.
+ *
+ * La pantalla solo sabía registrar nuevas vigencias de lo que ya estaba, así que
+ * sobre una base vacía no había forma de arrancar sin correr el seed a mano.
+ */
+export const crearParametro = accion(
+  {
+    modulo: 'configuracion',
+    accion: 'CREAR',
+    schema: z.object({
+      clave: z.string().trim().min(2).max(40).regex(/^[A-Z0-9_]+$/, 'La clave va en MAYÚSCULAS_CON_GUION_BAJO'),
+      valor: z.coerce.number().min(0),
+      vigenciaDesde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      fuenteLegal: z.string().trim().max(200).optional(),
+      descripcion: z.string().trim().max(200).optional(),
+    }),
+  },
+  async (d) => {
+    const clave = d.clave.trim().toUpperCase()
+    const existe = await prisma.parametroLegal.findFirst({ where: { clave } })
+    if (existe) {
+      throw new ErrorNegocio(`El parámetro ${clave} ya existe. Usa «Nueva vigencia» para cambiarle el valor.`)
+    }
+    const creado = await dbAuditado.parametroLegal.create({
+      data: {
+        clave,
+        valor: d.valor,
+        vigenciaDesde: parseFechaISO(d.vigenciaDesde)!,
+        fuenteLegal: d.fuenteLegal || 'Registro manual',
+        descripcion: d.descripcion || null,
+      },
+    })
+    revalidatePath(RUTA_PARAMETROS)
+    return { id: creado.id }
+  },
+)
+
+/**
+ * Borra UNA vigencia (la fila mal digitada) y reabre la anterior si esta era la
+ * última, para que no quede un hueco sin valor vigente.
+ *
+ * No se permite dejar sin ninguna vigencia a una clave que el motor lee: la
+ * nómina dejaría de calcular y el fallo saldría lejos de esta pantalla.
+ */
+export const eliminarVigenciaParametro = accion(
+  { modulo: 'configuracion', accion: 'ELIMINAR', schema: z.object({ id: z.uuid() }) },
+  async ({ id }) => {
+    const v = await prisma.parametroLegal.findUniqueOrThrow({ where: { id } })
+    const todas = await prisma.parametroLegal.findMany({
+      where: { clave: v.clave },
+      orderBy: { vigenciaDesde: 'desc' },
+    })
+    if (todas.length === 1 && esClaveDelMotor(v.clave)) {
+      throw new ErrorNegocio(
+        `${v.clave} es una de las claves que usa el motor de nómina: no puede quedarse sin ninguna vigencia. Registra el valor correcto y luego borra el equivocado.`,
+      )
+    }
+    await dbAuditado.parametroLegal.delete({ where: { id } })
+
+    // Si era la más reciente, la anterior vuelve a quedar abierta.
+    const anterior = todas.find((p) => p.id !== id && p.vigenciaDesde < v.vigenciaDesde)
+    const eraLaUltima = todas[0]?.id === id
+    if (eraLaUltima && anterior) {
+      await dbAuditado.parametroLegal.update({ where: { id: anterior.id }, data: { vigenciaHasta: null } })
+    }
+    revalidatePath(RUTA_PARAMETROS)
+    return { clave: v.clave }
+  },
+)
+
+/** Borra un parámetro con todo su histórico. Solo los que el motor no lee. */
+export const eliminarParametro = accion(
+  { modulo: 'configuracion', accion: 'ELIMINAR', schema: z.object({ clave: z.string().trim().min(2).max(40) }) },
+  async ({ clave }) => {
+    const c = clave.trim().toUpperCase()
+    if (esClaveDelMotor(c)) {
+      throw new ErrorNegocio(
+        `${c} la usa el motor de nómina para calcular: no se puede eliminar. Si el valor cambió, registra una nueva vigencia.`,
+      )
+    }
+    const { count } = await prisma.parametroLegal.deleteMany({ where: { clave: c } })
+    if (count === 0) throw new ErrorNegocio(`No existe el parámetro ${c}.`)
+    revalidatePath(RUTA_PARAMETROS)
+    return { eliminadas: count }
   },
 )

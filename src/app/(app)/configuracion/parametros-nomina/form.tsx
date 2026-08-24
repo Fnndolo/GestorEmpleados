@@ -3,12 +3,11 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CalendarPlus, Save } from 'lucide-react'
+import { CalendarPlus, Plus, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
@@ -16,15 +15,24 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import {
   registrarVigenciaParametro, registrarVigenciaTipoHora, actualizarInterruptoresNomina,
 } from './acciones'
+import { FilaParametro, DialogNuevoParametro } from './fila-parametro'
+import { fmtValor } from './formato'
 
+export type VigenciaItem = {
+  id: string; valor: number; desde: string; hasta: string | null; fuente: string
+  /** PDF del decreto o resolución que sustenta el valor, si se adjuntó. */
+  soporte: { id: string; nombre: string } | null
+}
 export type ParametroItem = {
-  clave: string; valor: number; desde: string; fuente: string; descripcion: string | null; vigente: boolean
+  clave: string; id: string; valor: number; desde: string; fuente: string
+  descripcion: string | null; vigente: boolean
+  /** Lo lee el motor de nómina: no se puede eliminar. */
+  delMotor: boolean
+  /** Todas sus vigencias, de la más reciente a la más antigua. */
+  historial: VigenciaItem[]
 }
 export type TipoHoraItem = { codigo: string; nombre: string; factor: number; desde: string }
 
-const fmtCOP = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
-/** Valores ≤ 1 son porcentajes/factores; los grandes son pesos. */
-const fmtValor = (n: number) => (n > 100 ? fmtCOP(n) : n <= 1 ? `${Math.round(n * 10000) / 100}%` : String(n))
 
 export function ParametrosForm({ puedeEditar, parametros, tiposHora, aplicaRetefuente, empresaExonerada }: {
   puedeEditar: boolean
@@ -35,6 +43,7 @@ export function ParametrosForm({ puedeEditar, parametros, tiposHora, aplicaRetef
 }) {
   const router = useRouter()
   const [editando, setEditando] = useState<ParametroItem | null>(null)
+  const [creando, setCreando] = useState(false)
   const [editandoHora, setEditandoHora] = useState<TipoHoraItem | null>(null)
 
   async function guardarInterruptores(retefuente: boolean, exonerada: boolean) {
@@ -65,24 +74,28 @@ export function ParametrosForm({ puedeEditar, parametros, tiposHora, aplicaRetef
 
       {/* ── Parámetros legales ── */}
       <section>
-        <h2 className="mb-2 text-[13px] font-bold">Parámetros legales</h2>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="text-[13px] font-bold">Parámetros legales</h2>
+          {puedeEditar && (
+            <Button size="sm" variant="outline" onClick={() => setCreando(true)}>
+              <Plus className="size-4" /> Nuevo parámetro
+            </Button>
+          )}
+        </div>
         <Card><CardContent className="divide-y p-0">
+          {parametros.length === 0 && (
+            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+              No hay parámetros cargados. Sin el SMMLV la nómina no puede liquidar ni calcular una terminación.
+            </p>
+          )}
           {parametros.map((p) => (
-            <div key={p.clave} className="flex items-center gap-3 px-4 py-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">
-                  {p.clave}
-                  {!p.vigente && <Badge variant="secondary" className="ml-2 text-[10px]">Sin vigencia actual</Badge>}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">{p.descripcion ?? p.fuente} · desde {p.desde}</p>
-              </div>
-              <p className="text-sm font-bold tabular-nums">{fmtValor(p.valor)}</p>
-              {puedeEditar && (
-                <Button size="sm" variant="outline" onClick={() => setEditando(p)}>
-                  <CalendarPlus className="size-4" /> Nueva vigencia
-                </Button>
-              )}
-            </div>
+            <FilaParametro
+              key={p.clave}
+              p={p}
+              puedeEditar={puedeEditar}
+              onNuevaVigencia={() => setEditando(p)}
+              onCambio={() => router.refresh()}
+            />
           ))}
         </CardContent></Card>
       </section>
@@ -111,6 +124,7 @@ export function ParametrosForm({ puedeEditar, parametros, tiposHora, aplicaRetef
         </p>
       </section>
 
+      {creando && <DialogNuevoParametro onClose={() => setCreando(false)} onDone={() => { setCreando(false); router.refresh() }} />}
       {editando && <DialogVigenciaParametro parametro={editando} onClose={() => setEditando(null)} onDone={() => { setEditando(null); router.refresh() }} />}
       {editandoHora && <DialogVigenciaHora tipo={editandoHora} onClose={() => setEditandoHora(null)} onDone={() => { setEditandoHora(null); router.refresh() }} />}
     </div>

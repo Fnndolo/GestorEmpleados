@@ -104,7 +104,10 @@ export async function seedNomina() {
     }
   }
   for (const c of CONCEPTOS) {
-    await prisma.conceptoNomina.upsert({ where: { codigo: c.codigo }, create: c, update: { nombre: c.nombre, cuentaContable: c.cuentaContable } })
+    // La cuenta contable NO se actualiza: se puede cambiar desde Ajustes porque
+    // cada empresa tiene su plan de cuentas, y volver a sembrar pisaría ese
+    // ajuste sin que nadie se entere.
+    await prisma.conceptoNomina.upsert({ where: { codigo: c.codigo }, create: c, update: { nombre: c.nombre } })
   }
   console.log('Nómina: parámetros legales 2025/2026, tipos de hora (Ley 2466) y conceptos listos')
 }

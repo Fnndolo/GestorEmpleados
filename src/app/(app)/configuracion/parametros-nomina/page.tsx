@@ -1,6 +1,7 @@
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { formatFechaISO } from '@/lib/fechas'
+import { esClaveDelMotor } from '@/lib/nomina/claves-motor'
 import { Encabezado } from '@/components/shell/encabezado'
 import { ParametrosForm, type ParametroItem, type TipoHoraItem } from './form'
 
@@ -11,24 +12,44 @@ export default async function ParametrosNominaPage() {
   const puedeEditar = tienePermiso(usuario, 'configuracion', 'EDITAR')
 
   const hoy = new Date()
-  const [parametros, tiposHora, config] = await Promise.all([
+  const [parametros, tiposHora, config, soportes] = await Promise.all([
     prisma.parametroLegal.findMany({ orderBy: [{ clave: 'asc' }, { vigenciaDesde: 'desc' }] }),
     prisma.tipoHora.findMany({ orderBy: [{ codigo: 'asc' }, { vigenteDesde: 'desc' }] }),
     prisma.configuracionEmpresa.findFirst(),
+    // Soporte legal adjunto a cada vigencia (el decreto en PDF): el texto de la
+    // fuente lo escribe una persona; el papel es lo que sostiene la cifra.
+    prisma.documento.findMany({
+      where: { entidadTipo: 'VigenciaParametro' },
+      select: { id: true, nombre: true, entidadId: true },
+    }),
   ])
+  const soportePorVigencia = new Map(soportes.map((d) => [d.entidadId, { id: d.id, nombre: d.nombre }]))
 
   // Vigente por clave = el más reciente cuya vigencia cubre hoy (o el último si ninguna).
+  // Las demás filas de esa clave son su histórico: existían desde el principio
+  // pero no había dónde consultarlas, aunque el sistema prometiera guardarlas.
   const porClave = new Map<string, ParametroItem>()
   for (const p of parametros) {
-    if (porClave.has(p.clave)) continue
-    const vigente = p.vigenciaDesde <= hoy && (!p.vigenciaHasta || p.vigenciaHasta >= hoy)
-    porClave.set(p.clave, {
-      clave: p.clave,
+    const fila = {
+      id: p.id,
       valor: Number(p.valor),
       desde: formatFechaISO(p.vigenciaDesde) ?? '',
+      hasta: p.vigenciaHasta ? formatFechaISO(p.vigenciaHasta) : null,
+      fuente: p.fuenteLegal,
+      soporte: soportePorVigencia.get(p.id) ?? null,
+    }
+    const ya = porClave.get(p.clave)
+    if (ya) { ya.historial.push(fila); continue }
+    porClave.set(p.clave, {
+      clave: p.clave,
+      id: p.id,
+      valor: fila.valor,
+      desde: fila.desde,
       fuente: p.fuenteLegal,
       descripcion: p.descripcion,
-      vigente,
+      vigente: p.vigenciaDesde <= hoy && (!p.vigenciaHasta || p.vigenciaHasta >= hoy),
+      delMotor: esClaveDelMotor(p.clave),
+      historial: [fila],
     })
   }
 

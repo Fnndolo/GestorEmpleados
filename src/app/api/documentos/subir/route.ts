@@ -33,6 +33,11 @@ export async function POST(req: NextRequest) {
   // (proceso o una de sus etapas: descargos, apelación), el soporte de SU solicitud de
   // autoservicio, la planilla PILA de SU cuenta de cobro o un documento a SU propia ficha.
   let permitido = tienePermiso(usuario, 'documentos', 'CREAR') || tienePermiso(usuario, 'colaboradores', 'EDITAR')
+  // El decreto que sustenta un parámetro de nómina lo adjunta quien configura,
+  // que no tiene por qué tener permiso sobre los documentos del personal.
+  if (!permitido && entidadTipo === 'VigenciaParametro') {
+    permitido = tienePermiso(usuario, 'configuracion', 'EDITAR')
+  }
   let esAporteDelColaborador = false
   // Las excepciones "de dueño" exigen poder ACTUAR en autoservicio: un usuario
   // en solo consulta (rol "Consulta (retirado)") no puede subir nada.

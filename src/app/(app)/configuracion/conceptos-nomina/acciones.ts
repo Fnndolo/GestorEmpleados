@@ -68,3 +68,55 @@ export const alternarConceptoNomina = accion(
     return { ok: true }
   },
 )
+
+const RUTA_CONCEPTOS = '/configuracion/conceptos-nomina'
+
+/**
+ * Cambia la cuenta contable de un concepto del sistema.
+ *
+ * Es el único campo suyo que se puede tocar: no entra en ningún cálculo, solo
+ * en el asiento contable, y cada empresa tiene su propio plan de cuentas. Las
+ * demás banderas siguen bloqueadas porque su comportamiento está programado en
+ * el motor: cambiarlas haría que la pantalla dijera una cosa y el cálculo otra.
+ */
+export const actualizarCuentaContable = accion(
+  {
+    modulo: 'configuracion',
+    accion: 'EDITAR',
+    schema: z.object({ id: z.uuid(), cuentaContable: z.string().trim().max(30) }),
+  },
+  async (d) => {
+    await dbAuditado.conceptoNomina.update({
+      where: { id: d.id },
+      data: { cuentaContable: d.cuentaContable || null },
+    })
+    revalidatePath(RUTA_CONCEPTOS)
+    return { ok: true }
+  },
+)
+
+/**
+ * Borra un concepto propio de la empresa que nunca se usó.
+ *
+ * Si ya se aplicó en alguna liquidación no se borra: el desprendible dejaría de
+ * poder explicar de dónde salió esa línea. Para esos casos está desactivarlo,
+ * que impide usarlo de nuevo sin tocar lo ya liquidado.
+ */
+export const eliminarConceptoNomina = accion(
+  { modulo: 'configuracion', accion: 'ELIMINAR', schema: z.object({ id: z.uuid() }) },
+  async ({ id }) => {
+    const c = await prisma.conceptoNomina.findUniqueOrThrow({ where: { id } })
+    if (c.esSistema) {
+      throw new ErrorNegocio('Los conceptos del sistema son el tratamiento de ley: no se eliminan.')
+    }
+    const usos = await prisma.novedadConcepto.count({ where: { conceptoId: id } })
+    if (usos > 0) {
+      throw new ErrorNegocio(
+        `«${c.nombre}» ya se aplicó a ${usos} colaborador(es) en nómina y no se puede eliminar: los desprendibles dejarían de cuadrar. Desactívalo para que no vuelva a usarse.`,
+      )
+    }
+    await dbAuditado.conceptoNomina.delete({ where: { id } })
+    revalidatePath(RUTA_CONCEPTOS)
+    return { ok: true }
+  },
+)
