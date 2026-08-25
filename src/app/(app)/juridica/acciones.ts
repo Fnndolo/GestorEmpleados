@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { parseFechaISO, hoyBogota } from '@/lib/fechas'
+import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { publicarVencimiento } from '@/server/vencimientos/servicio'
 import { avisar, avisarPorRol, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { sumarDiasHabiles, festivosDeRango } from '@/lib/dias-habiles'
@@ -414,5 +414,98 @@ export const eliminarLlamadoAtencion = accion(
     await dbAuditado.llamadoAtencion.delete({ where: { id: d.id } })
     revalidatePath(`/colaboradores/${ll.colaboradorId}`)
     revalidatePath('/juridica')
+  },
+)
+
+/**
+ * Escala un llamado de atención a proceso disciplinario: la conducta se repitió
+ * y la medida correctiva no bastó.
+ *
+ * El proceso nace citando el llamado —y los demás que haya por lo mismo— porque
+ * ahí está su fuerza: una falta aislada se discute, una reiterada con
+ * antecedentes escritos se sostiene. El enlace queda en la base, así que el
+ * antecedente no depende de que alguien lo recuerde y lo escriba a mano.
+ *
+ * Los llamados escalados quedan atados al proceso y ya no se pueden volver a
+ * escalar; abrir un segundo proceso por lo mismo sería juzgar dos veces.
+ */
+export const escalarLlamadoAProceso = accion(
+  {
+    modulo: 'juridica',
+    accion: 'CREAR',
+    schema: z.object({
+      llamadoId: z.uuid(),
+      asunto: z.string().trim().min(3).max(200),
+      descripcion: z.string().max(1000).optional(),
+      fechaApertura: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      /** Otros llamados del mismo colaborador que también sustentan el proceso. */
+      llamadosAdicionales: z.array(z.uuid()).max(20).optional(),
+    }),
+  },
+  async (d) => {
+    const llamado = await prisma.llamadoAtencion.findUniqueOrThrow({
+      where: { id: d.llamadoId },
+      include: { colaborador: { select: { id: true, nombres: true, tipoVinculo: true } } },
+    })
+    if (llamado.procesoId) {
+      throw new ErrorNegocio('Este llamado ya se escaló a un proceso disciplinario. Ábrelo desde el historial en vez de crear otro.')
+    }
+    if (llamado.colaborador.tipoVinculo === 'OPS') {
+      throw new ErrorNegocio('En prestación de servicios no se abren procesos disciplinarios: los incumplimientos se manejan por las cláusulas del contrato.')
+    }
+
+    // Todos los llamados que van a sustentar el proceso, sin repetir y sin
+    // tocar los que ya pertenecen a otro.
+    const ids = [...new Set([d.llamadoId, ...(d.llamadosAdicionales ?? [])])]
+    const antecedentes = await prisma.llamadoAtencion.findMany({
+      where: { id: { in: ids }, colaboradorId: llamado.colaborador.id, procesoId: null },
+      orderBy: { fecha: 'asc' },
+    })
+
+    const listado = antecedentes
+      .map((a) => `· ${formatFechaISO(a.fecha)} — llamado ${a.tipo === 'VERBAL' ? 'verbal' : 'escrito'}: ${a.motivo}`)
+      .join('\n')
+    const descripcion = [
+      d.descripcion?.trim(),
+      `Antecedentes que sustentan la apertura (${antecedentes.length}):`,
+      listado,
+    ].filter(Boolean).join('\n')
+
+    const proceso = await dbAuditado.procesoDisciplinario.create({
+      data: {
+        colaboradorId: llamado.colaborador.id,
+        asunto: d.asunto,
+        descripcion,
+        fechaApertura: parseFechaISO(d.fechaApertura)!,
+        etapa: 'CITACION_DESCARGOS',
+        fechaLimite: limite5DiasHabiles(),
+      },
+    })
+    const etapaCitacion = await dbAuditado.etapaProceso.create({
+      data: {
+        procesoId: proceso.id,
+        etapa: 'CITACION_DESCARGOS',
+        fecha: parseFechaISO(d.fechaApertura)!,
+        detalle: `Apertura por reiteración, tras ${antecedentes.length} llamado(s) de atención previo(s). Citación a descargos.`,
+      },
+    })
+    await prisma.llamadoAtencion.updateMany({
+      where: { id: { in: antecedentes.map((a) => a.id) } },
+      data: { procesoId: proceso.id },
+    })
+
+    const userId = await usuarioDeColaborador(llamado.colaborador.id)
+    if (userId) {
+      await avisar(userId, {
+        evento: 'disciplinario_citacion',
+        titulo: 'Citación a descargos — proceso disciplinario',
+        mensaje: `${llamado.colaborador.nombres}, se abrió un proceso disciplinario por: "${d.asunto}", tras ${antecedentes.length} llamado(s) de atención previo(s). Tienes derecho a presentar tus descargos dentro de los 5 días hábiles siguientes.`,
+        enlace: '/autoservicio/disciplinarios',
+        llamadoAccion: 'Presentar mis descargos',
+      })
+    }
+    revalidatePath(`/colaboradores/${llamado.colaborador.id}`)
+    revalidatePath('/juridica')
+    return { id: proceso.id, etapaId: etapaCitacion.id, antecedentes: antecedentes.length }
   },
 )

@@ -311,18 +311,31 @@ export default async function AutoservicioPage() {
         <span className="capitalize">{formatFechaLarga(hoyBogota())}</span> · {pendiente}
       </p>
 
+      {/* Etiquetas de una palabra: con "Días de vacaciones disponibles" el texto
+          se partía en tres renglones y estiraba los recuadros de más. La cifra
+          grande y el ícono ya dicen de qué se trata. */}
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {/* El OPS no causa vacaciones: mostrarle "0 días disponibles" confunde más que omitirlo. */}
         {!esOps(colab.tipoVinculo) && (
-          <Stat icono={TreePalm} color="bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" valor={String(saldo.saldo)} label="Días de vacaciones disponibles" />
+          <Stat icono={TreePalm} color="bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" valor={String(saldo.saldo)} label="Vacaciones" />
         )}
-        <Stat icono={Clock} color="bg-amber-500/12 text-amber-600 dark:text-amber-400" valor={String(enTramite)} label="Solicitudes en trámite" />
-        <Stat
-          icono={CreditCard} color="bg-foreground/8 text-foreground"
-          valor={ultimoPago ? fmtCOP(Number(ultimoPago.neto)) : '—'}
-          label={ultimoPago ? `Último pago · ${formatFechaCorta(ultimoPago.periodo.fechaFin)}` : 'Aún sin pagos liquidados'}
-          className="col-span-2 sm:col-span-1"
-        />
+        <Stat icono={Clock} color="bg-amber-500/12 text-amber-600 dark:text-amber-400" valor={String(enTramite)} label="En trámite" />
+        {/* El último pago solo merece recuadro cuando hay algo que mostrar. Sin
+            pagos, un recuadro vacío con una raya pesa más de lo que informa: se
+            deja como una línea centrada. */}
+        {ultimoPago ? (
+          <Stat
+            icono={CreditCard} color="bg-foreground/8 text-foreground"
+            valor={fmtCOP(Number(ultimoPago.neto))}
+            label={`Último pago · ${formatFechaCorta(ultimoPago.periodo.fechaFin)}`}
+            className="col-span-2 sm:col-span-1"
+          />
+        ) : (
+          <p className="col-span-2 flex items-center justify-center gap-2 py-2 text-[13px] text-muted-foreground sm:col-span-1">
+            <CreditCard className="size-4 shrink-0" />
+            Aún sin pagos liquidados
+          </p>
+        )}
       </div>
 
       <PanelTramites
