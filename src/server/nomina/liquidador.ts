@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { cargarParametros } from './parametros'
 import { liquidar } from './motor'
-import { diasSuperpuestos, pagoIncapacidad } from './ausencias'
+import { diasFueraDelVinculo, diasSuperpuestos, pagoIncapacidad } from './ausencias'
 import { horasMesJornada } from './horas'
 import { regenerarNovedadesAsistencia } from '@/server/asistencia/horas-asistencia'
 
@@ -44,7 +44,7 @@ export async function revertirEfectosPeriodo(periodoId: string): Promise<void> {
   })
 }
 
-export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: number }> {
+export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: number; horasSinRefrescar: number }> {
   const periodo = await prisma.periodoNomina.findUniqueOrThrow({ where: { id: periodoId } })
   if (periodo.estado === 'CERRADA' || periodo.estado === 'PAGADA') {
     throw new Error('El periodo está cerrado. Crea un periodo de ajuste para corregir.')
@@ -56,15 +56,25 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
   const aplicaRetefuente = config?.aplicaRetefuente ?? false
   const parametros = await cargarParametros(periodo.fechaFin)
 
-  // Colaboradores con contrato laboral activo en el periodo
-  const contratos = await prisma.contrato.findMany({
+  // Colaboradores con contrato laboral activo en el periodo.
+  //
+  // Quien se retira NO entra: los días que alcanzó a trabajar se le pagan en su
+  // liquidación definitiva junto con las prestaciones, como en la colilla que
+  // emite el software contable. Incluirlo aquí le pagaría el mes dos veces.
+  const contratosCrudos = await prisma.contrato.findMany({
     where: {
       estado: 'ACTIVO',
       tipo: { in: ['TERMINO_FIJO', 'TERMINO_INDEFINIDO', 'OBRA_LABOR'] },
       fechaInicio: { lte: periodo.fechaFin },
     },
     include: { colaborador: true },
+    orderBy: { fechaInicio: 'desc' },
   })
+
+  // Una liquidación por persona (la tabla lo exige). Si alguien tiene dos
+  // contratos vigentes por un traslape de renovación, manda el más reciente:
+  // es el que fija el salario con que se le paga.
+  const contratos = [...new Map(contratosCrudos.map((c) => [c.colaboradorId, c])).values()]
 
   // Lock por periodo para evitar liquidaciones concurrentes
   await prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${periodoId}))`
@@ -73,7 +83,7 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
   // (esquema `asistencia`, misma base) en cada liquidación/recalculo. Editar
   // una marcación en ArriveControl y recalcular aquí siempre cuadra — no hay
   // envíos ni copias que se desactualicen.
-  await regenerarNovedadesAsistencia(periodo)
+  const asistencia = await regenerarNovedadesAsistencia(periodo)
 
   await revertirEfectosPeriodo(periodoId)
 
@@ -116,9 +126,40 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
       (t, v) => t + diasSuperpuestos(v.fechaInicio, v.fechaFin, periodo.fechaInicio, periodo.fechaFin), 0,
     )
 
-    const diasAusencia = Math.min(diasPeriodo, diasIncapacidad + diasNoRemunerados + diasVacacionesAnticipadas)
+    // Días sin vínculo: los previos al ingreso y los posteriores al retiro. Se
+    // cuentan como ausencia para que el salario y el auxilio salgan proporcionales
+    // (el motor ya prorratea por diasTrabajados).
+    const diasSinVinculo = diasFueraDelVinculo(contrato.fechaInicio, contrato.colaborador.fechaRetiro, periodo)
+
+    const diasAusencia = Math.min(
+      diasPeriodo,
+      diasSinVinculo + diasIncapacidad + diasNoRemunerados + diasVacacionesAnticipadas,
+    )
     const diasTrabajados = Math.max(0, diasPeriodo - diasAusencia)
-    const valorIncapacidad = pagoIncapacidad(Math.min(diasIncapacidad, diasPeriodo), salarioEfectivo, Number(parametros.SMMLV))
+    // Cada incapacidad se paga por su cuenta: el porcentaje depende del origen
+    // (una laboral va al 100%) y de en qué día del episodio va (la enfermedad
+    // general baja al 50% desde el día 91). Sumarlas y aplicar un solo
+    // porcentaje, como se hacía antes, le pagaba de menos a quien se accidentó
+    // trabajando y de más a quien lleva meses enfermo.
+    const valorIncapacidad = incapacidades.reduce((total, i) => {
+      const diasEnPeriodo = diasSuperpuestos(i.fechaInicio, i.fechaFin, periodo.fechaInicio, periodo.fechaFin)
+      if (diasEnPeriodo === 0) return total
+      // Días del episodio ya transcurridos antes de este periodo: es lo que
+      // decide si ya se pasó del día 90.
+      const previos = diasSuperpuestos(
+        i.fechaInicio,
+        i.fechaFin,
+        i.fechaInicio,
+        new Date(periodo.fechaInicio.getTime() - 86_400_000),
+      )
+      return total + pagoIncapacidad(
+        Math.min(diasEnPeriodo, diasPeriodo),
+        salarioEfectivo,
+        Number(parametros.SMMLV),
+        i.tipo,
+        previos + 1,
+      )
+    }, 0)
 
     // ── Pago anticipado de vacaciones (Flujo 2A: "nómina procesa el pago antes de
     // la fecha de salida"). Vacaciones aprobadas que inician DESPUÉS de este periodo
@@ -269,5 +310,7 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
     data: { estado: 'CALCULADA', parametrosSnapshot: parametros },
   })
 
-  return { liquidados }
+  // Se devuelve para poder advertirlo en pantalla: la nómina se liquidó, pero
+  // con horas de asistencia que no se pudieron actualizar.
+  return { liquidados, horasSinRefrescar: asistencia.omitido ? (asistencia.sinRefrescar ?? 0) : 0 }
 }

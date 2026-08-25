@@ -27,7 +27,19 @@ export function AccionesPeriodo({
     setCargando(clave)
     const res = await fn()
     setCargando(null)
-    if (res.ok) { toast.success(exito); router.refresh() } else toast.error(res.error)
+    if (!res.ok) { toast.error(res.error); return }
+    toast.success(exito)
+    // La nómina se liquidó, pero con horas de asistencia que no se pudieron
+    // actualizar: se dice, porque si alguien corrigió una marcación en el otro
+    // sistema, esas correcciones no entraron en este cálculo.
+    const sinRefrescar = (res.datos as { horasSinRefrescar?: number } | undefined)?.horasSinRefrescar ?? 0
+    if (sinRefrescar > 0) {
+      toast.warning(
+        `Se liquidó con ${sinRefrescar} registro(s) de horas del sistema de asistencia sin actualizar: no está configurado. Si hubo cambios en las marcaciones, no entraron en este cálculo.`,
+        { duration: 10000 },
+      )
+    }
+    router.refresh()
   }
 
   const editable = estado === 'BORRADOR' || estado === 'CALCULADA'

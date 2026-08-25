@@ -94,21 +94,28 @@ export async function regenerarNovedadesAsistencia(periodo: {
   id: string
   fechaInicio: Date
   fechaFin: Date
-}): Promise<{ generadas: number; sinColaborador: string[]; omitido?: boolean }> {
+}): Promise<{
+  generadas: number
+  sinColaborador: string[]
+  /** No se consultó el sistema de asistencia (no está configurado). */
+  omitido?: boolean
+  /** Horas ya registradas que se liquidan sin refrescar, al estar omitido. */
+  sinRefrescar?: number
+}> {
   if (!asistenciaConfigurada()) {
-    // Red de seguridad: si el periodo YA tiene horas de asistencia, este
-    // cliente sí usa el módulo y falta configuración. Liquidar así borraría
-    // sus horas extra en silencio, así que se detiene con un aviso claro.
-    const yaTiene = await prisma.novedadHoras.count({
+    // Sin el sistema de asistencia no se refrescan las horas, pero tampoco se
+    // pierden: el borrado ocurre más abajo, después de traerlas, y aquí se sale
+    // antes. Las que ya estén registradas se liquidan tal como están.
+    //
+    // Antes esto lanzaba un error y dejaba la nómina sin poder liquidar, con el
+    // argumento de que se perderían las horas extra. No se perdían; lo que pasa
+    // es que quedan sin actualizar, y eso se avisa en vez de bloquear: obligar a
+    // levantar otro sistema para poder pagar la nómina es peor que liquidar con
+    // las horas que ya se registraron.
+    const sinRefrescar = await prisma.novedadHoras.count({
       where: { periodoId: periodo.id, referenciaExterna: { startsWith: 'arrive-' } },
     })
-    if (yaTiene > 0) {
-      throw new Error(
-        'Este periodo tiene horas provenientes del sistema de asistencia, pero ARRIVECONTROL_URL no está configurada. ' +
-          'Configúrala antes de liquidar para no perder las horas extra.',
-      )
-    }
-    return { generadas: 0, sinColaborador: [], omitido: true }
+    return { generadas: 0, sinColaborador: [], omitido: true, sinRefrescar }
   }
 
   // Se piden ANTES de tocar la base: si falla, no se borró nada todavía.
