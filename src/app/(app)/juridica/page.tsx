@@ -25,7 +25,7 @@ export default async function JuridicaPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="max-w-6xl">
-      <Encabezado titulo="Jurídica" descripcion="Repositorio de documentos legales, procesos disciplinarios, canal anti-acoso y habeas data." />
+      <Encabezado titulo="Jurídica" descripcion="Repositorio de documentos legales, procesos disciplinarios, línea ética y habeas data." />
       <JuridicaCliente
         tab={tab}
         puedeCrear={puedeCrear}
@@ -40,7 +40,7 @@ export default async function JuridicaPage({ searchParams }: { searchParams: Pro
           })),
         }))}
         disciplinarios={disciplinarios.map((p) => ({ id: p.id, colaborador: `${p.colaborador.nombres} ${p.colaborador.apellidos}`, asunto: p.asunto, etapa: p.etapa, cerrado: p.cerrado }))}
-        denuncias={denuncias.map((d) => ({ id: d.id, codigo: d.codigo, anonima: d.anonima, estado: d.estado, fecha: formatFechaISO(d.creadoEn) }))}
+        denuncias={denuncias.map((d) => ({ id: d.id, codigo: d.codigo, tipo: d.tipo, anonima: d.anonima, estado: d.estado, fecha: formatFechaISO(d.creadoEn) }))}
         consultas={consultas.map((c) => ({ id: c.id, tipo: c.tipo, titular: c.titular, estado: c.estado, fechaLimite: c.fechaLimite ? formatFechaISO(c.fechaLimite) : null }))}
       />
     </div>

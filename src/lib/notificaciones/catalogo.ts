@@ -99,7 +99,7 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
   { clave: 'capacitacion_convocatoria', etiqueta: 'Convocatoria a capacitación', descripcion: 'Se cita a los colaboradores a una capacitación.', modulo: 'Capacitaciones' },
 
   // Jurídica
-  { clave: 'denuncia_acoso', etiqueta: 'Denuncia anti-acoso', descripcion: 'Se recibe una nueva denuncia por el canal anti-acoso.', modulo: 'Jurídica', correoPorDefecto: true },
+  { clave: 'denuncia_acoso', etiqueta: 'Reporte de la línea ética', descripcion: 'Llega un reporte por la línea ética (acoso, irregularidad o sugerencia).', modulo: 'Jurídica', correoPorDefecto: true },
   { clave: 'habeas_data', etiqueta: 'Consulta / reclamo de habeas data', descripcion: 'Un colaborador presenta una consulta o reclamo (Ley 1581): corre plazo de 10 o 15 días hábiles.', modulo: 'Jurídica', correoPorDefecto: true },
   { clave: 'llamado_atencion', etiqueta: 'Llamado de atención', descripcion: 'Se registra un llamado de atención.', modulo: 'Jurídica' },
   { clave: 'disciplinario_citacion', etiqueta: 'Citación a descargos', descripcion: 'Se cita al colaborador a descargos: corre el plazo de 5 días hábiles de su derecho de defensa.', modulo: 'Jurídica', correoPorDefecto: true },

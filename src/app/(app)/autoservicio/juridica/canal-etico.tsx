@@ -16,6 +16,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { crearMiDenuncia, crearMiConsultaReclamo, consultarMiDenuncia } from '../juridica-acciones'
+import { TIPOS_REPORTE, type TipoReporte } from '@/lib/linea-etica'
+import { cn } from '@/lib/utils'
 
 const ESTADO_DENUNCIA: Record<string, { label: string; tone: PillTone; nota: string }> = {
   RECIBIDA: { label: 'Recibida', tone: 'warn', nota: 'Tu denuncia fue recibida y está pendiente de revisión por el Comité de Convivencia / Jurídica.' },
@@ -41,10 +43,10 @@ export function CanalEtico({ mostrar = 'ambos' }: { mostrar?: 'anti-acoso' | 'ha
           <Card className="transition-colors hover:border-primary/40">
             <CardContent className="flex flex-col gap-2 py-5">
               <ShieldAlert className="size-7 text-amber-600" />
-              <h3 className="font-medium">Canal anti-acoso</h3>
-              <p className="flex-1 text-sm text-muted-foreground">Reporta acoso laboral o sexual. Puede ser anónima y se maneja con estricta confidencialidad (Ley 2466 de 2025).</p>
+              <h3 className="font-medium">Línea ética</h3>
+              <p className="flex-1 text-sm text-muted-foreground">Reporta acoso laboral o sexual, conductas indebidas, irregularidades o sugerencias. Puede ser anónimo y se maneja con estricta confidencialidad (Ley 2466 de 2025).</p>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" className="w-fit" onClick={() => setDialogo('denuncia')}>Poner una denuncia</Button>
+                <Button size="sm" className="w-fit" onClick={() => setDialogo('denuncia')}>Hacer un reporte</Button>
                 <Button size="sm" variant="outline" className="w-fit" onClick={() => setDialogo('seguimiento')}>
                   <Search className="size-4" /> Consultar con mi código
                 </Button>
@@ -164,6 +166,7 @@ function DialogSeguimiento({ onClose }: { onClose: () => void }) {
 function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: (codigo: string) => void }) {
   const router = useRouter()
   const [anonima, setAnonima] = useState(true)
+  const [tipo, setTipo] = useState<TipoReporte>('ACOSO_LABORAL')
   const [nombre, setNombre] = useState('')
   const [hechos, setHechos] = useState('')
   const [fechaHechos, setFechaHechos] = useState('')
@@ -172,7 +175,7 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
   async function enviar() {
     if (hechos.trim().length < 10) { toast.error('Describe los hechos (mínimo 10 caracteres).'); return }
     setG(true)
-    const res = await crearMiDenuncia({ anonima, denuncianteNombre: anonima ? undefined : nombre, hechos, fechaHechos: fechaHechos || undefined })
+    const res = await crearMiDenuncia({ tipo, anonima, denuncianteNombre: anonima ? undefined : nombre, hechos, fechaHechos: fechaHechos || undefined })
     setG(false)
     if (res.ok) {
       // El código se muestra en un diálogo persistente (con copiar), no en un toast efímero.
@@ -187,16 +190,36 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Canal de denuncia anti-acoso</DialogTitle>
-          <DialogDescription>Ley 2466 de 2025. Solo el Comité de Convivencia / Jurídica accede al contenido.</DialogDescription>
+          <DialogTitle>Línea ética</DialogTitle>
+          <DialogDescription>Solo el Comité de Convivencia y Jurídica acceden al contenido.</DialogDescription>
         </DialogHeader>
 
         <div className="flex items-start gap-2 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
           <Lock className="mt-0.5 size-4 shrink-0" />
-          <span>Tu denuncia es confidencial: <strong>no se registra quién la envía</strong>. Si la marcas anónima, tampoco se guarda tu nombre. Anota el código que verás al enviarla para dar seguimiento.</span>
+          <span>Tu reporte es confidencial: <strong>no se registra quién lo envía</strong>. Si lo marcas anónimo, tampoco se guarda tu nombre. Anota el código que verás al enviarlo para dar seguimiento.</span>
         </div>
 
         <div className="space-y-4">
+          {/* El tipo decide el camino: los dos de acoso van al Comité de
+              Convivencia con el procedimiento de la Ley 1010; los demás no. */}
+          <Campo label="¿Qué quieres reportar?">
+            <div className="grid gap-2">
+              {TIPOS_REPORTE.map((t) => (
+                <button
+                  key={t.valor}
+                  type="button"
+                  onClick={() => setTipo(t.valor)}
+                  className={cn(
+                    'rounded-lg border p-2.5 text-left transition',
+                    tipo === t.valor ? 'border-primary bg-accent' : 'hover:border-foreground/20',
+                  )}
+                >
+                  <p className="text-sm font-medium">{t.etiqueta}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t.ayuda}</p>
+                </button>
+              ))}
+            </div>
+          </Campo>
           <label className="flex items-center gap-2 text-sm"><Checkbox checked={anonima} onCheckedChange={(v) => setAnonima(Boolean(v))} /> Enviar de forma anónima</label>
           {!anonima && <Campo label="Tu nombre (opcional)"><Input value={nombre} onChange={(e) => setNombre(e.target.value)} /></Campo>}
           <Campo label="¿Qué ocurrió?"><Textarea rows={5} value={hechos} onChange={(e) => setHechos(e.target.value)} placeholder="Describe los hechos, personas involucradas, lugar y contexto." /></Campo>
@@ -204,7 +227,7 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={enviar} disabled={g}>{g && <Spinner />}Enviar denuncia</Button>
+          <Button onClick={enviar} disabled={g}>{g && <Spinner />}Enviar reporte</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

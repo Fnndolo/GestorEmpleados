@@ -9,6 +9,7 @@ import { accion, ErrorNegocio } from '@/server/accion'
 import { parseFechaISO, hoyBogota } from '@/lib/fechas'
 import { avisarPorRol } from '@/server/notificaciones/avisar'
 import { sumarDiasHabiles, festivosDeRango } from '@/lib/dias-habiles'
+import { etiquetaReporte } from '@/lib/linea-etica'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
 
@@ -26,6 +27,7 @@ export const crearMiDenuncia = accion(
     modulo: 'autoservicio',
     accion: 'CREAR',
     schema: z.object({
+      tipo: z.enum(['ACOSO_LABORAL', 'ACOSO_SEXUAL', 'CONDUCTA_IRREGULAR', 'SUGERENCIA']),
       anonima: z.boolean(),
       denuncianteNombre: z.string().max(150).optional(),
       hechos: z.string().trim().min(10, 'Describe los hechos (mínimo 10 caracteres).').max(2000),
@@ -38,6 +40,7 @@ export const crearMiDenuncia = accion(
     await prisma.denunciaAcoso.create({
       data: {
         codigo,
+        tipo: d.tipo,
         anonima: d.anonima,
         denuncianteNombre: d.anonima ? null : v(d.denuncianteNombre),
         hechos: d.hechos,
@@ -46,13 +49,16 @@ export const crearMiDenuncia = accion(
       },
     })
 
-    // Avisar al Comité de Convivencia / Jurídica SIN revelar identidad (solo el código).
+    // Avisar al Comité de Convivencia / Jurídica SIN revelar identidad (solo el
+    // código). Se dice de qué tipo es porque de eso depende el procedimiento:
+    // los de acoso llevan el trámite y los plazos de la Ley 1010.
+    const etiqueta = etiquetaReporte(d.tipo).toLowerCase()
     await avisarPorRol(['Jurídica', 'Administrador', 'Subgerencia'], {
       evento: 'denuncia_acoso',
-      titulo: 'Nueva denuncia anti-acoso recibida',
-      mensaje: `Se recibió una denuncia por el canal de convivencia (código ${codigo}). Revísala de forma confidencial.`,
+      titulo: `Nuevo reporte en la línea ética: ${etiqueta}`,
+      mensaje: `Se recibió un reporte de ${etiqueta} (código ${codigo}). Revísalo de forma confidencial.`,
       enlace: '/juridica?tab=denuncias',
-      llamadoAccion: 'Revisar el canal anti-acoso',
+      llamadoAccion: 'Revisar la línea ética',
     })
 
     revalidatePath('/autoservicio/juridica')

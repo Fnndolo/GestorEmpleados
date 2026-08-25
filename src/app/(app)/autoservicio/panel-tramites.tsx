@@ -255,7 +255,7 @@ export function PanelTramites({
     },
     {
       clave: 'acoso', icono: ShieldAlert, color: 'rose' as const,
-      titulo: 'Canal anti-acoso', corto: 'Anti-acoso', desc: 'Denuncia confidencial o anónima',
+      titulo: 'Línea ética', corto: 'Línea ética', desc: 'Reporta algo, de forma confidencial o anónima',
       href: '/autoservicio/juridica?vista=anti-acoso',
     },
     {

@@ -7,10 +7,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatFechaLarga } from '@/lib/fechas'
+import { etiquetaReporte, esAcoso } from '@/lib/linea-etica'
 import { SoportesEntidad } from '../../_ui'
 import { AccionesDenuncia } from './acciones-denuncia'
 
-export const metadata = { title: 'Denuncia anti-acoso · Smart Gadgets RH' }
+export const metadata = { title: 'Reporte de la línea ética · Smart Gadgets RH' }
 
 const ESTADO: Record<string, string> = { RECIBIDA: 'Recibida', EN_INVESTIGACION: 'En investigación', RESUELTA: 'Resuelta', ARCHIVADA: 'Archivada' }
 
@@ -34,7 +35,7 @@ export default async function DenunciaPage({ params }: { params: Promise<{ id: s
     <div className="max-w-5xl">
       <Encabezado
         titulo={`Denuncia ${d.codigo}`}
-        descripcion={d.anonima ? 'Denuncia anónima · canal anti-acoso (Ley 2466 de 2025)' : `Denunciante: ${d.denuncianteNombre ?? '—'}`}
+        descripcion={`${etiquetaReporte(d.tipo)} · ${d.anonima ? 'reporte anónimo' : `reportado por ${d.denuncianteNombre ?? '—'}`}${esAcoso(d.tipo) ? ' · Comité de Convivencia (Ley 1010 / Ley 2466 de 2025)' : ''}`}
         acciones={<Badge variant={d.estado === 'RESUELTA' ? 'default' : 'secondary'}>{ESTADO[d.estado]}</Badge>}
       />
 
