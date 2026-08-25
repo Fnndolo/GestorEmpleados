@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { parseFechaISO, hoyBogota } from '@/lib/fechas'
+import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { publicarVencimiento } from '@/server/vencimientos/servicio'
 import { avisar, avisarPorRol, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { sumarDiasHabiles, festivosDeRango } from '@/lib/dias-habiles'
@@ -414,5 +414,70 @@ export const eliminarLlamadoAtencion = accion(
     await dbAuditado.llamadoAtencion.delete({ where: { id: d.id } })
     revalidatePath(`/colaboradores/${ll.colaboradorId}`)
     revalidatePath('/juridica')
+  },
+)
+
+/**
+ * Deja constancia de que venció el plazo de descargos sin que el colaborador
+ * respondiera, y con eso habilita la decisión.
+ *
+ * Sin esto el proceso quedaba trabado para siempre: registrar la decisión exige
+ * que conste la etapa de descargos, y si la persona guarda silencio esa etapa
+ * nunca llegaba. Legalmente es al revés — citado en debida forma y no
+ * compareció, se deja constancia de la inasistencia y se continúa.
+ *
+ * Solo se permite DESPUÉS de que el plazo haya vencido de verdad. Cerrarlo
+ * antes sería recortarle el derecho de defensa, que es justamente lo que hace
+ * defendible la sanción.
+ */
+export const registrarVencimientoDescargos = accion(
+  { modulo: 'juridica', accion: 'EDITAR', schema: z.object({ procesoId: z.uuid() }) },
+  async ({ procesoId }) => {
+    const proceso = await prisma.procesoDisciplinario.findUniqueOrThrow({
+      where: { id: procesoId },
+      include: { etapas: true, colaborador: { select: { usuarioId: true } } },
+    })
+    if (proceso.cerrado) throw new ErrorNegocio('El proceso ya está cerrado.')
+    if (proceso.etapa !== 'CITACION_DESCARGOS') {
+      throw new ErrorNegocio('El proceso ya avanzó: esta constancia solo aplica mientras se esperan los descargos.')
+    }
+    if (proceso.etapas.some((e) => e.etapa === 'DESCARGOS')) {
+      throw new ErrorNegocio('El colaborador ya presentó descargos.')
+    }
+    if (!proceso.fechaLimite) throw new ErrorNegocio('El proceso no tiene plazo registrado.')
+    const hoy = hoyBogota()
+    if (proceso.fechaLimite >= hoy) {
+      throw new ErrorNegocio(
+        `El plazo vence el ${formatFechaISO(proceso.fechaLimite)}. Hasta entonces el colaborador conserva su derecho a presentar descargos.`,
+      )
+    }
+
+    // Se registra como etapa DESCARGOS porque eso es lo que ocupa ese lugar en
+    // el expediente: el momento de defensa, ejercido o no. El detalle dice cuál
+    // de los dos fue.
+    const etapa = await dbAuditado.etapaProceso.create({
+      data: {
+        procesoId,
+        etapa: 'DESCARGOS',
+        fecha: hoy,
+        detalle: `Venció el plazo de 5 días hábiles (${formatFechaISO(proceso.fechaLimite)}) sin que el colaborador presentara descargos. Se deja constancia y el proceso continúa.`,
+      },
+    })
+    await dbAuditado.procesoDisciplinario.update({
+      where: { id: procesoId },
+      data: { etapa: 'DESCARGOS', fechaLimite: null },
+    })
+    if (proceso.colaborador.usuarioId) {
+      await avisar(proceso.colaborador.usuarioId, {
+        evento: 'disciplinario_avance',
+        titulo: 'Venció el plazo para presentar descargos',
+        mensaje: `Se cumplieron los 5 días hábiles del proceso "${proceso.asunto}" sin que presentaras descargos. El proceso continúa y se te notificará la decisión.`,
+        enlace: '/autoservicio/disciplinarios',
+        llamadoAccion: 'Ver el proceso',
+      })
+    }
+    revalidatePath(`/juridica/disciplinarios/${procesoId}`)
+    revalidatePath('/autoservicio/disciplinarios')
+    return { etapaId: etapa.id }
   },
 )

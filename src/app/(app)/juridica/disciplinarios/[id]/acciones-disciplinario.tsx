@@ -3,22 +3,36 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Gavel, Lock } from 'lucide-react'
+import { Gavel, Lock, CalendarX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { registrarDecisionDisciplinario, cerrarDisciplinario, vincularActaDisciplinario } from '../../acciones'
+import { registrarDecisionDisciplinario, cerrarDisciplinario, vincularActaDisciplinario, registrarVencimientoDescargos } from '../../acciones'
 import { subirArchivoEntidad, ZonaArchivos } from '../../_ui'
 
-export function AccionesDisciplinario({ procesoId, etapa }: { procesoId: string; etapa: string }) {
+export function AccionesDisciplinario({ procesoId, etapa, plazoVencido, fechaLimite }: {
+  procesoId: string
+  etapa: string
+  /** El plazo de descargos ya pasó y el colaborador no respondió. */
+  plazoVencido: boolean
+  fechaLimite: string | null
+}) {
   const router = useRouter()
   const [decision, setDecision] = useState('')
   const [archivos, setArchivos] = useState<File[]>([])
   const [g, setG] = useState(false)
   const [cerrar, setCerrar] = useState(false)
+
+  async function constanciaVencimiento() {
+    setG(true)
+    const res = await registrarVencimientoDescargos({ procesoId })
+    setG(false)
+    if (res.ok) { toast.success('Constancia registrada. Ya puedes registrar la decisión.'); router.refresh() }
+    else toast.error(res.error, { duration: 8000 })
+  }
 
   async function guardarDecision() {
     if (decision.trim().length < 5) { toast.error('Escribe la decisión.'); return }
@@ -35,8 +49,27 @@ export function AccionesDisciplinario({ procesoId, etapa }: { procesoId: string;
   return (
     <Card><CardContent className="py-4 space-y-3">
       <h3 className="text-sm font-medium">Actuación (RR.HH.)</h3>
-      {etapa === 'CITACION_DESCARGOS' && (
-        <p className="text-sm text-muted-foreground">Esperando los descargos del colaborador (tiene 5 días hábiles). Podrás registrar la decisión cuando los presente.</p>
+      {etapa === 'CITACION_DESCARGOS' && !plazoVencido && (
+        <p className="text-sm text-muted-foreground">
+          Esperando los descargos del colaborador{fechaLimite ? `, hasta el ${fechaLimite}` : ' (5 días hábiles)'}.
+          Podrás registrar la decisión cuando los presente.
+        </p>
+      )}
+      {/* Si guarda silencio, el proceso no puede quedarse trabado: citado en
+          debida forma y sin comparecer, se deja constancia y se continúa. */}
+      {etapa === 'CITACION_DESCARGOS' && plazoVencido && (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Venció el plazo{fechaLimite ? ` el ${fechaLimite}` : ''} y el colaborador no presentó descargos.
+            Deja la constancia para poder registrar la decisión; queda escrito en el expediente que
+            no compareció, no que renunció a defenderse.
+          </p>
+          <div className="flex justify-end">
+            <Button size="sm" variant="outline" onClick={constanciaVencimiento} disabled={g}>
+              {g ? <Spinner /> : <CalendarX className="size-4" />} Dejar constancia y continuar
+            </Button>
+          </div>
+        </div>
       )}
       {etapa === 'DESCARGOS' && (
         <div className="space-y-2">

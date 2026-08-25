@@ -7,7 +7,7 @@ import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { formatFechaLarga } from '@/lib/fechas'
+import { formatFechaLarga, hoyBogota } from '@/lib/fechas'
 import { SoportesLista, type SoporteDoc } from '../../_ui'
 import { AccionesDisciplinario } from './acciones-disciplinario'
 
@@ -85,7 +85,16 @@ export default async function DisciplinarioPage({ params }: { params: Promise<{ 
         </CardContent></Card>
       )}
 
-      {puedeEditar && !p.cerrado && <AccionesDisciplinario procesoId={p.id} etapa={p.etapa} />}
+      {puedeEditar && !p.cerrado && (
+        <AccionesDisciplinario
+          procesoId={p.id}
+          etapa={p.etapa}
+          // El plazo se compara aquí, en el servidor: el reloj del navegador lo
+          // pone el usuario y no puede decidir cuándo se agota un término legal.
+          plazoVencido={Boolean(p.fechaLimite && p.fechaLimite < hoyBogota())}
+          fechaLimite={p.fechaLimite ? formatFechaLarga(p.fechaLimite) : null}
+        />
+      )}
     </div>
   )
 }
