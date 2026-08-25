@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
 import { FiltroTabs } from '@/components/shell/filtro-tabs'
+import { etiquetaReporte } from '@/lib/linea-etica'
 import { formatFechaCorta } from '@/lib/fechas'
 import { crearDocumentoLegal, vincularVersionDocumentoLegal, crearProcesoDisciplinario, crearConsultaReclamo } from './acciones'
 import { ZonaArchivos } from './_ui'
@@ -38,7 +39,7 @@ const inputArchivoCls = 'block w-full text-sm file:mr-3 file:rounded-md file:bor
 const TABS = [
   { v: 'documentos', l: 'Documentos', i: FileText },
   { v: 'disciplinarios', l: 'Disciplinarios', i: Gavel },
-  { v: 'denuncias', l: 'Anti-acoso', i: ShieldAlert },
+  { v: 'denuncias', l: 'Línea ética', i: ShieldAlert },
   { v: 'habeas', l: 'Habeas data', i: FileLock },
 ]
 const CAT_DOC: Record<string, string> = {
@@ -56,7 +57,7 @@ type Props = {
   tab: string; puedeCrear: boolean; puedeEditar: boolean
   documentos: DocLegal[]
   disciplinarios: { id: string; colaborador: string; asunto: string; etapa: string; cerrado: boolean }[]
-  denuncias: { id: string; codigo: string; anonima: boolean; estado: string; fecha: string }[]
+  denuncias: { id: string; codigo: string; tipo: string; anonima: boolean; estado: string; fecha: string }[]
   consultas: { id: string; tipo: string; titular: string; estado: string; fechaLimite: string | null }[]
 }
 
@@ -69,7 +70,7 @@ export function JuridicaCliente(p: Props) {
         <div className="min-w-0 flex-1">
           <FiltroTabs tabs={TABS.map((t) => ({ valor: t.v, label: t.l }))} activo={p.tab} basePath="/juridica" />
         </div>
-        {/* Anti-acoso ya no se crea desde el admin: llega por el autoservicio del colaborador (confidencial). */}
+        {/* Los reportes no se crean desde el admin: llegan por el autoservicio del colaborador (confidencial). */}
         {p.puedeCrear && p.tab !== 'denuncias' && <Button size="sm" onClick={() => setDialogo(p.tab)}><Plus className="size-4" /> Nuevo</Button>}
       </div>
 
@@ -85,12 +86,21 @@ export function JuridicaCliente(p: Props) {
         <>
           <div className="mb-3 flex items-start gap-2 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
             <Lock className="mt-0.5 size-4 shrink-0" />
-            <span>Las denuncias llegan por el <strong>canal de autoservicio</strong> del colaborador y son confidenciales: no se registra quién las envía. Aquí solo se gestionan (investigar, resolver, archivar).</span>
+            <span>Los reportes llegan por la <strong>línea ética</strong> del autoservicio y son confidenciales: no se registra quién los envía. Aquí solo se gestionan (investigar, resolver, archivar). Los de acoso siguen el procedimiento del Comité de Convivencia (Ley 1010).</span>
           </div>
           <ListaLink
-            vacio="Sin denuncias."
+            vacio="Sin reportes."
             chip={{ icono: ShieldAlert, color: 'rose' }}
-            items={p.denuncias.map((d) => ({ id: d.id, href: `/juridica/denuncias/${d.id}`, titulo: `${d.codigo}${d.anonima ? ' (anónima)' : ''}`, sub: formatFechaCorta(new Date(d.fecha)), badge: EST_DEN[d.estado] ?? d.estado, tone: d.estado === 'RESUELTA' ? 'ok' : d.estado === 'ARCHIVADA' ? 'muted' : 'warn' }))}
+            items={p.denuncias.map((d) => ({
+              id: d.id,
+              href: `/juridica/denuncias/${d.id}`,
+              // El tipo va en el título porque decide el procedimiento: no es lo
+              // mismo atender un acoso que una sugerencia.
+              titulo: `${etiquetaReporte(d.tipo)} · ${d.codigo}${d.anonima ? ' (anónima)' : ''}`,
+              sub: formatFechaCorta(new Date(d.fecha)),
+              badge: EST_DEN[d.estado] ?? d.estado,
+              tone: d.estado === 'RESUELTA' ? 'ok' : d.estado === 'ARCHIVADA' ? 'muted' : 'warn',
+            }))}
           />
         </>
       )}
@@ -294,7 +304,9 @@ function DialogDisciplinario({ onClose }: { onClose: () => void }) {
     if (!f.asunto || f.asunto.trim().length < 3) { toast.error('Escribe el asunto.'); return }
     setG(true)
     try {
-      const res = await crearProcesoDisciplinario({ colaboradorId, asunto: f.asunto, descripcion: f.descripcion, fechaApertura: f.fechaApertura })
+      // Desde Jurídica se abre el proceso completo: los llamados de atención
+      // se registran desde la ficha del colaborador, donde está su historial.
+      const res = await crearProcesoDisciplinario({ colaboradorId, clase: 'PROCESO', asunto: f.asunto, descripcion: f.descripcion, fechaApertura: f.fechaApertura })
       if (!res.ok) throw new Error(res.error)
       const { id, etapaId } = res.datos as { id: string; etapaId: string }
       // Los soportes iniciales quedan anclados a la etapa de apertura (no editables después)

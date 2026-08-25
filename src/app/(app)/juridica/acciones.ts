@@ -103,26 +103,43 @@ export const crearProcesoDisciplinario = accion(
   {
     modulo: 'juridica',
     accion: 'CREAR',
-    schema: z.object({ colaboradorId: z.uuid(), asunto: z.string().trim().min(3).max(200), descripcion: z.string().max(1000).optional(), fechaApertura: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
+    schema: z.object({
+      colaboradorId: z.uuid(),
+      /** LLAMADO_ATENCION se detiene tras los descargos; PROCESO sigue hasta el acta. */
+      clase: z.enum(['LLAMADO_ATENCION', 'PROCESO']).default('PROCESO'),
+      asunto: z.string().trim().min(3).max(200),
+      descripcion: z.string().max(1000).optional(),
+      fechaApertura: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }),
   },
   async (d) => {
     const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: d.colaboradorId }, select: { nombres: true } })
+    const esLlamado = d.clase === 'LLAMADO_ATENCION'
     const p = await dbAuditado.procesoDisciplinario.create({
-      data: { colaboradorId: d.colaboradorId, asunto: d.asunto, descripcion: v(d.descripcion), fechaApertura: parseFechaISO(d.fechaApertura)!, etapa: 'CITACION_DESCARGOS', fechaLimite: limite5DiasHabiles() },
+      data: { colaboradorId: d.colaboradorId, clase: d.clase, asunto: d.asunto, descripcion: v(d.descripcion), fechaApertura: parseFechaISO(d.fechaApertura)!, etapa: 'CITACION_DESCARGOS', fechaLimite: limite5DiasHabiles() },
     })
     // Etapa de apertura/citación: los soportes de prueba iniciales se anclan a esta etapa.
     const etapaCitacion = await dbAuditado.etapaProceso.create({
-      data: { procesoId: p.id, etapa: 'CITACION_DESCARGOS', fecha: parseFechaISO(d.fechaApertura)!, detalle: 'Apertura del proceso y citación a descargos' },
+      data: {
+        procesoId: p.id,
+        etapa: 'CITACION_DESCARGOS',
+        fecha: parseFechaISO(d.fechaApertura)!,
+        detalle: esLlamado
+          ? 'Llamado de atención: se comunica al colaborador y se le da la oportunidad de explicarse'
+          : 'Apertura del proceso y citación a descargos',
+      },
     })
     // Citación a descargos: avisar al colaborador (app + correo) para que entre y presente descargos
     const userId = await usuarioDeColaborador(d.colaboradorId)
     if (userId) {
       await avisar(userId, {
         evento: 'disciplinario_citacion',
-        titulo: 'Citación a descargos — proceso disciplinario',
-        mensaje: `${colab.nombres}, se abrió un proceso disciplinario por: "${d.asunto}". Tienes derecho a presentar tus descargos dentro de los 5 días hábiles siguientes. Ingresa a Autoservicio para hacerlo.`,
+        titulo: esLlamado ? 'Llamado de atención' : 'Citación a descargos — proceso disciplinario',
+        mensaje: esLlamado
+          ? `${colab.nombres}, se te hizo un llamado de atención por: "${d.asunto}". No es una sanción, pero si quieres explicar lo ocurrido tienes 5 días hábiles para hacerlo desde tu autoservicio.`
+          : `${colab.nombres}, se abrió un proceso disciplinario por: "${d.asunto}". Tienes derecho a presentar tus descargos dentro de los 5 días hábiles siguientes. Ingresa a Autoservicio para hacerlo.`,
         enlace: '/autoservicio/disciplinarios',
-        llamadoAccion: 'Presentar mis descargos',
+        llamadoAccion: esLlamado ? 'Ver el llamado' : 'Presentar mis descargos',
       })
     }
     revalidatePath('/juridica')
@@ -196,6 +213,9 @@ export const registrarDecisionDisciplinario = accion(
       include: { etapas: true, colaborador: { select: { usuarioId: true } } },
     })
     if (proceso.cerrado) throw new ErrorNegocio('El proceso ya está cerrado.')
+    if (proceso.clase === 'LLAMADO_ATENCION') {
+      throw new ErrorNegocio('Un llamado de atención no lleva decisión sancionatoria: ciérralo, o escálalo a proceso disciplinario si la falta lo amerita.')
+    }
     if (!proceso.etapas.some((e) => e.etapa === 'DESCARGOS')) throw new ErrorNegocio('No se puede registrar la decisión sin que consten los descargos (debido proceso).')
     if (proceso.etapa === 'DECISION' || proceso.etapa === 'RECURSO') throw new ErrorNegocio('La decisión ya fue registrada.')
     const etapaDecision = await dbAuditado.etapaProceso.create({ data: { procesoId: d.procesoId, etapa: 'DECISION', fecha: hoyBogota(), detalle: d.decision } })
@@ -246,7 +266,18 @@ export const cerrarDisciplinario = accion(
   async (d) => {
     const proceso = await prisma.procesoDisciplinario.findUniqueOrThrow({ where: { id: d.procesoId }, include: { colaborador: { select: { usuarioId: true } } } })
     if (proceso.cerrado) throw new ErrorNegocio('El proceso ya está cerrado.')
-    if (proceso.etapa !== 'DECISION' && proceso.etapa !== 'RECURSO') throw new ErrorNegocio('Solo se puede cerrar después de registrar la decisión.')
+    // Un llamado se agota con la explicación del colaborador: no hay decisión
+    // que registrar, así que se cierra desde ahí.
+    const cierreValido = proceso.clase === 'LLAMADO_ATENCION'
+      ? ['CITACION_DESCARGOS', 'DESCARGOS'].includes(proceso.etapa)
+      : ['DECISION', 'RECURSO'].includes(proceso.etapa)
+    if (!cierreValido) {
+      throw new ErrorNegocio(
+        proceso.clase === 'LLAMADO_ATENCION'
+          ? 'El llamado ya avanzó a proceso disciplinario: ciérralo por la vía del proceso.'
+          : 'Solo se puede cerrar después de registrar la decisión.',
+      )
+    }
     await dbAuditado.etapaProceso.create({ data: { procesoId: d.procesoId, etapa: 'CERRADO', fecha: hoyBogota(), detalle: v(d.detalle) } })
     await dbAuditado.procesoDisciplinario.update({ where: { id: d.procesoId }, data: { etapa: 'CERRADO', cerrado: true, fechaLimite: null } })
     if (proceso.colaborador.usuarioId) {
@@ -478,6 +509,62 @@ export const registrarVencimientoDescargos = accion(
     }
     revalidatePath(`/juridica/disciplinarios/${procesoId}`)
     revalidatePath('/autoservicio/disciplinarios')
+    return { etapaId: etapa.id }
+  },
+)
+
+/**
+ * Convierte un llamado de atención en proceso disciplinario.
+ *
+ * Es el mismo expediente: conserva la fecha de apertura, los soportes y los
+ * descargos que ya se dieron, y a partir de aquí habilita decisión, recurso y
+ * acta. Reabrir el caso desde cero perdería esa historia, que es justamente lo
+ * que sustenta que la falta fue reiterada o más grave de lo que parecía.
+ *
+ * No se pide volver a citar a descargos: el colaborador ya tuvo su oportunidad
+ * de explicarse sobre estos mismos hechos. Si aparecen hechos nuevos, lo que
+ * corresponde es abrir otro proceso, no escalar este.
+ */
+export const escalarAProcesoDisciplinario = accion(
+  {
+    modulo: 'juridica',
+    accion: 'EDITAR',
+    schema: z.object({ procesoId: z.uuid(), motivo: z.string().trim().min(5).max(1000) }),
+  },
+  async (d) => {
+    const proceso = await prisma.procesoDisciplinario.findUniqueOrThrow({
+      where: { id: d.procesoId },
+      include: { etapas: true, colaborador: { select: { usuarioId: true, nombres: true } } },
+    })
+    if (proceso.clase !== 'LLAMADO_ATENCION') throw new ErrorNegocio('Esto ya es un proceso disciplinario.')
+    if (proceso.cerrado) throw new ErrorNegocio('El llamado ya está cerrado: si la conducta se repitió, abre un proceso nuevo.')
+
+    await dbAuditado.procesoDisciplinario.update({
+      where: { id: d.procesoId },
+      data: { clase: 'PROCESO' },
+    })
+    // Queda como actuación propia para que en el expediente se lea cuándo dejó
+    // de ser un llamado y por qué.
+    const etapa = await dbAuditado.etapaProceso.create({
+      data: {
+        procesoId: d.procesoId,
+        etapa: proceso.etapa,
+        fecha: hoyBogota(),
+        detalle: `Escalado a proceso disciplinario: ${d.motivo}`,
+      },
+    })
+    if (proceso.colaborador.usuarioId) {
+      await avisar(proceso.colaborador.usuarioId, {
+        evento: 'disciplinario_avance',
+        titulo: 'El llamado de atención pasó a proceso disciplinario',
+        mensaje: `${proceso.colaborador.nombres}, el llamado por "${proceso.asunto}" se escaló a proceso disciplinario. ${d.motivo}`,
+        enlace: '/autoservicio/disciplinarios',
+        llamadoAccion: 'Ver el proceso',
+      })
+    }
+    revalidatePath(`/juridica/disciplinarios/${d.procesoId}`)
+    revalidatePath('/autoservicio/disciplinarios')
+    revalidatePath(`/colaboradores/${proceso.colaboradorId}`)
     return { etapaId: etapa.id }
   },
 )

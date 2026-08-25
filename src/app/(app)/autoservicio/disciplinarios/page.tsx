@@ -68,7 +68,7 @@ export default async function MisDisciplinariosPage() {
 
   return (
     <div className="max-w-5xl">
-      <Encabezado titulo="Mis procesos disciplinarios" descripcion="Aquí puedes ver los procesos en tu contra y presentar tus descargos (derecho de defensa)." />
+      <Encabezado titulo="Mis procesos disciplinarios" descripcion="Aquí puedes ver los llamados de atención y los procesos en tu contra, y presentar tus descargos (derecho de defensa)." />
 
       {/* Los llamados de atención van aparte: no son sanciones y no hay nada que
           responder, pero el colaborador tiene derecho a saber qué le registraron. */}
@@ -105,9 +105,16 @@ export default async function MisDisciplinariosPage() {
             return (
               <Card key={p.id}>
                 <CardContent className="py-4">
-                  <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <p className="font-medium">{p.asunto}</p>
-                    <Badge variant={p.cerrado ? 'secondary' : 'default'}>{ETAPA[p.etapa]}</Badge>
+                    <div className="flex items-center gap-2">
+                      {/* Que el colaborador vea de entrada si es una corrección o
+                          algo que puede terminar en sanción. */}
+                      <Badge variant="outline">
+                        {p.clase === 'LLAMADO_ATENCION' ? 'Llamado de atención' : 'Proceso disciplinario'}
+                      </Badge>
+                      <Badge variant={p.cerrado ? 'secondary' : 'default'}>{ETAPA[p.etapa]}</Badge>
+                    </div>
                   </div>
                   {p.descripcion && <p className="text-sm text-muted-foreground mb-3">{p.descripcion}</p>}
                   {p.etapas.length > 0 && (
@@ -144,7 +151,11 @@ export default async function MisDisciplinariosPage() {
                   ) : p.cerrado ? (
                     <p className="text-xs text-muted-foreground">Proceso cerrado.</p>
                   ) : (
-                    <p className="text-xs text-emerald-600">Ya presentaste tus descargos. El área encargada continuará con el proceso.</p>
+                    <p className="text-xs text-emerald-600">
+                      {p.clase === 'LLAMADO_ATENCION'
+                        ? 'Ya diste tu explicación. Un llamado de atención no lleva sanción: queda en tu historial y el área encargada lo cerrará.'
+                        : 'Ya presentaste tus descargos. El área encargada continuará con el proceso.'}
+                    </p>
                   )}
                 </CardContent>
               </Card>

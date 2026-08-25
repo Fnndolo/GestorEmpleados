@@ -89,6 +89,51 @@ async function main() {
     console.log(`· ${juan.nombres} ${juan.apellidos}: proceso en DESCARGOS, listo para registrar la decisión.`)
   }
 
+  // ── 1b. LLAMADO DE ATENCIÓN ya explicado por el colaborador ──────────────
+  // Es el caso que muestra los dos botones del final: cerrarlo o escalarlo.
+  if (!juan) {
+    console.log('· No se encontró a Juan Sebastián; se omite el llamado de atención.')
+  } else if (await prisma.procesoDisciplinario.findFirst({ where: { colaboradorId: juan.id, clase: 'LLAMADO_ATENCION' } })) {
+    console.log('· Juan Sebastián ya tiene un llamado de atención; se omite.')
+  } else {
+    const apertura = haceDias(4)
+    const llamado = await prisma.procesoDisciplinario.create({
+      data: {
+        colaboradorId: juan.id,
+        clase: 'LLAMADO_ATENCION',
+        asunto: 'Uso del celular en atención al cliente',
+        descripcion: 'Se le observó atendiendo el celular mientras había clientes esperando en el mostrador.',
+        etapa: 'DESCARGOS',
+        fechaApertura: apertura,
+        // Ya se explicó, así que no queda reloj corriendo.
+        fechaLimite: null,
+      },
+    })
+    await prisma.etapaProceso.createMany({
+      data: [
+        {
+          procesoId: llamado.id,
+          etapa: 'CITACION_DESCARGOS',
+          fecha: apertura,
+          detalle: 'Llamado de atención: se comunica al colaborador y se le da la oportunidad de explicarse',
+        },
+        {
+          procesoId: llamado.id,
+          etapa: 'DESCARGOS',
+          fecha: haceDias(1),
+          detalle: 'Descargos del colaborador: Era una llamada de la guardería de mi hija, que estaba enferma. Reconozco que debí avisarle a mi jefe y salir del mostrador; no volverá a pasar.',
+        },
+      ],
+    })
+    await notificar(
+      juan.usuarioId,
+      'Llamado de atención',
+      `${juan.nombres}, se te hizo un llamado de atención por: "Uso del celular en atención al cliente". No es una sanción, pero si quieres explicar lo ocurrido tienes 5 días hábiles para hacerlo desde tu autoservicio.`,
+      `demo:llamado:citacion:${llamado.id}`,
+    )
+    console.log(`· ${juan.nombres} ${juan.apellidos}: LLAMADO DE ATENCIÓN ya explicado, listo para cerrar o escalar.`)
+  }
+
   // ── 2. Proceso con el plazo VENCIDO y sin descargos ──────────────────────
   const otro = await buscar('Mateo', 'Ramírez')
   if (!otro) {

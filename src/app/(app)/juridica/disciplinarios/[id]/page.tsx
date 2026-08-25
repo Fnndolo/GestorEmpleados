@@ -46,7 +46,14 @@ export default async function DisciplinarioPage({ params }: { params: Promise<{ 
       <Encabezado
         titulo={p.asunto}
         descripcion={`${p.colaborador.nombres} ${p.colaborador.apellidos} · abierto ${formatFechaLarga(p.fechaApertura)}`}
-        acciones={<Badge variant={p.cerrado ? 'secondary' : 'default'}>{ETAPA[p.etapa]}</Badge>}
+        acciones={
+          <div className="flex items-center gap-2">
+            <Badge variant={p.clase === 'LLAMADO_ATENCION' ? 'outline' : 'secondary'}>
+              {p.clase === 'LLAMADO_ATENCION' ? 'Llamado de atención' : 'Proceso disciplinario'}
+            </Badge>
+            <Badge variant={p.cerrado ? 'secondary' : 'default'}>{ETAPA[p.etapa]}</Badge>
+          </div>
+        }
       />
       <p className="mb-4"><Link href={`/colaboradores/${p.colaborador.id}`} className="text-sm text-primary hover:underline">Ver ficha →</Link></p>
 
@@ -89,6 +96,7 @@ export default async function DisciplinarioPage({ params }: { params: Promise<{ 
         <AccionesDisciplinario
           procesoId={p.id}
           etapa={p.etapa}
+          clase={p.clase}
           // El plazo se compara aquí, en el servidor: el reloj del navegador lo
           // pone el usuario y no puede decidir cuándo se agota un término legal.
           plazoVencido={Boolean(p.fechaLimite && p.fechaLimite < hoyBogota())}

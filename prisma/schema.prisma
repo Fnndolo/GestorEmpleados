@@ -2314,6 +2314,13 @@ model VersionDocumentoLegal {
   @@map("version_documento_legal")
 }
 
+enum ClaseMedida {
+  LLAMADO_ATENCION
+  PROCESO
+
+  @@map("clase_medida")
+}
+
 enum EtapaDisciplinaria {
   CITACION_DESCARGOS
   DESCARGOS
@@ -2355,6 +2362,10 @@ model ProcesoDisciplinario {
   id            String             @id @default(uuid(7)) @db.Uuid
   colaboradorId String             @map("colaborador_id") @db.Uuid
   colaborador   Colaborador        @relation(fields: [colaboradorId], references: [id])
+  // Un llamado de atención usa el mismo expediente pero se detiene después de
+  // los descargos: no lleva decisión sancionatoria ni plazo de apelación. Si la
+  // conducta lo amerita, se escala y pasa a PROCESO.
+  clase         ClaseMedida        @default(PROCESO)
   asunto        String
   descripcion   String?
   etapa         EtapaDisciplinaria @default(CITACION_DESCARGOS)
@@ -2387,6 +2398,15 @@ model EtapaProceso {
   @@map("etapa_proceso")
 }
 
+enum TipoReporte {
+  ACOSO_LABORAL
+  ACOSO_SEXUAL
+  CONDUCTA_IRREGULAR
+  SUGERENCIA
+
+  @@map("tipo_reporte")
+}
+
 enum EstadoDenuncia {
   RECIBIDA
   EN_INVESTIGACION
@@ -2400,6 +2420,10 @@ enum EstadoDenuncia {
 model DenunciaAcoso {
   id          String         @id @default(uuid(7)) @db.Uuid
   codigo      String         @unique // código anónimo para seguimiento
+  // Qué se está reportando. Los de acoso van al Comité de Convivencia con los
+  // plazos de la Ley 1010; los demás son del canal ético y no llevan ese
+  // procedimiento. Sin esto una sugerencia entraba como caso de acoso.
+  tipo        TipoReporte    @default(ACOSO_LABORAL)
   anonima     Boolean        @default(true)
   denuncianteNombre String?  @map("denunciante_nombre")
   hechos      String
