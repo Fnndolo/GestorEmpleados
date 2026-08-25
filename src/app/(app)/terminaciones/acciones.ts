@@ -8,6 +8,7 @@ import { accion, ErrorNegocio } from '@/server/accion'
 import { parseFechaISO, formatFechaISO } from '@/lib/fechas'
 import { cargarParametros } from '@/server/nomina/parametros'
 import { liquidacionDefinitiva } from '@/server/nomina/liquidacion-definitiva'
+import { basesDesdeHistorial, type AjustesBases } from '@/server/nomina/bases-liquidacion'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { restringirAccesoSiSinVinculo, devolverAccesoNormal } from '@/server/rol-consulta'
 
@@ -52,39 +53,27 @@ export const crearTerminacion = accion(
       }
     }
 
-    const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: d.colaboradorId } })
     const contrato = await prisma.contrato.findFirst({ where: { colaboradorId: d.colaboradorId, estado: 'ACTIVO' }, orderBy: { fechaInicio: 'desc' } })
     const fechaRetiro = parseFechaISO(d.fechaRetiro)!
 
     // Cálculo de la liquidación definitiva (borrador para revisión del área contable)
     let liquidacionData: Awaited<ReturnType<typeof calcularLiq>> | null = null
     if (contrato) liquidacionData = await calcularLiq(d.colaboradorId, contrato, fechaRetiro, d.tipo)
+    const liq = liquidacionData?.resultado ?? null
 
     const terminacion = await dbAuditado.terminacion.create({
       data: {
         colaboradorId: d.colaboradorId, tipo: d.tipo, fechaRetiro,
         preavisoDias: d.preavisoDias ?? null,
         procesoDisciplinarioId: d.tipo === 'CON_JUSTA_CAUSA' ? d.procesoDisciplinarioId : null,
-        indemnizacion: liquidacionData?.indemnizacion ?? null,
-        motivo: d.motivo, estado: liquidacionData ? 'LIQUIDADA' : 'EN_PROCESO',
+        indemnizacion: liq?.indemnizacion ?? null,
+        motivo: d.motivo, estado: liq ? 'LIQUIDADA' : 'EN_PROCESO',
       },
     })
 
     if (liquidacionData && contrato) {
       await prisma.liquidacionDefinitiva.create({
-        data: {
-          terminacionId: terminacion.id,
-          diasLiquidados: liquidacionData.diasLiquidados,
-          salarioBase: contrato.salarioBase,
-          cesantias: liquidacionData.cesantias,
-          interesesCesantias: liquidacionData.interesesCesantias,
-          prima: liquidacionData.prima,
-          vacaciones: liquidacionData.vacaciones,
-          indemnizacion: liquidacionData.indemnizacion,
-          deducciones: liquidacionData.deducciones,
-          total: liquidacionData.total,
-          detalle: liquidacionData as object,
-        },
+        data: { terminacionId: terminacion.id, ...datosLiquidacion(liquidacionData, contrato.salarioBase) },
       })
     }
 
@@ -114,28 +103,50 @@ export const crearTerminacion = accion(
   },
 )
 
-async function calcularLiq(colaboradorId: string, contrato: { salarioBase: unknown; tipo: string; fechaFin: Date | null }, fechaRetiro: Date, tipo: string) {
+type ContratoLiq = {
+  salarioBase: unknown
+  tipo: string
+  fechaFin: Date | null
+  tieneAuxTransporte: boolean
+  tipoSalario: string
+}
+
+async function calcularLiq(
+  colaboradorId: string,
+  contrato: ContratoLiq,
+  fechaRetiro: Date,
+  tipo: string,
+  ajustes: AjustesBases = {},
+) {
   const parametros = await cargarParametros(fechaRetiro)
   const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: colaboradorId } })
-  const saldoVac = await saldoVacaciones(colaboradorId)
+  // Corte en la fecha de retiro: después de esa fecha ya no se causan vacaciones.
+  const saldoVac = await saldoVacaciones(colaboradorId, fechaRetiro)
   const saldoPrestamo = await prisma.prestamo.aggregate({ where: { colaboradorId, estado: 'ACTIVO' }, _sum: { saldo: true } })
-  // Promedio de comisiones de los últimos periodos
-  const comisiones = await prisma.comision.aggregate({ where: { colaboradorId }, _avg: { valor: true } })
+
+  const bases = await basesDesdeHistorial(colaboradorId, contrato, colab.fechaIngreso, fechaRetiro, ajustes)
 
   // Saldo negativo = tomó vacaciones anticipadas y se retira antes de causarlas.
   // Solo se descuenta si el colaborador lo autorizó por escrito al solicitarlas
   // (RIT art. 69 num. 4: ninguna deducción sin autorización previa y escrita).
-  let diasVacaciones = Math.max(0, saldoVac.saldo)
+  let diasVacaciones = Math.max(0, saldoVac.saldoExacto)
   if (saldoVac.saldo < 0) {
     const autorizacion = await prisma.vacaciones.findFirst({
       where: { colaboradorId, estado: { in: ['APROBADA', 'EN_DISFRUTE', 'DISFRUTADA'] }, observaciones: { contains: 'autorizó por escrito' } },
     })
-    if (autorizacion) diasVacaciones = saldoVac.saldo
+    if (autorizacion) diasVacaciones = saldoVac.saldoExacto
   }
 
-  return liquidacionDefinitiva({
+  const resultado = liquidacionDefinitiva({
     salarioBase: Number(contrato.salarioBase),
-    promedioVariable: Number(comisiones._avg.valor ?? 0),
+    auxilioTransporte: bases.auxilioTransporte,
+    promedioVariableAnual: bases.promedioVariableAnual,
+    promedioVariableSemestre: bases.promedioVariableSemestre,
+    otroConceptoSalarial: bases.otroConceptoSalarial,
+    diasSalarioPendiente: bases.diasSalarioPendiente,
+    // El variable no entra a la base de vacaciones (criterio del liquidador
+    // contable de la empresa). Se deja aquí, visible, para poder cambiarlo.
+    variableEnVacaciones: false,
     fechaIngreso: colab.fechaIngreso,
     fechaRetiro,
     tipo,
@@ -144,7 +155,52 @@ async function calcularLiq(colaboradorId: string, contrato: { salarioBase: unkno
     diasVacacionesPendientes: diasVacaciones,
     saldoPrestamo: Number(saldoPrestamo._sum.saldo ?? 0),
     smmlv: parametros.SMMLV,
+    porcentajeSalud: parametros.SALUD_EMPLEADO,
+    porcentajePension: parametros.PENSION_EMPLEADO,
+    porcentajeInteresesCesantias: parametros.INTERESES_CESANTIAS,
   })
+
+  // Los ajustes viajan con el resultado para que un recálculo posterior no los
+  // pierda: si el histórico no está en el sistema, son el único dato que hay.
+  return { resultado, bases, ajustes }
+}
+
+/**
+ * Aplana el cálculo a las columnas de LiquidacionDefinitiva. Las líneas del
+ * último tramo —salario, auxilio y variable— van juntas en `otros`, y el desglose
+ * completo queda en `detalle` para que la pantalla lo muestre línea por línea.
+ */
+function datosLiquidacion(calculo: Awaited<ReturnType<typeof calcularLiq>>, salarioBase: unknown) {
+  const r = calculo.resultado
+  return {
+    diasLiquidados: r.diasLiquidados,
+    salarioBase: salarioBase as number,
+    cesantias: r.cesantias,
+    interesesCesantias: r.interesesCesantias,
+    prima: r.prima,
+    vacaciones: r.vacaciones,
+    indemnizacion: r.indemnizacion,
+    otros: r.salario + r.auxilioTransporte + r.otroConceptoSalarial,
+    deducciones: r.totalDeducciones,
+    total: r.total,
+    detalle: { ...r, bases: calculo.bases, ajustes: calculo.ajustes } as object,
+  }
+}
+
+/** Ajustes manuales guardados en un cálculo anterior, para no perderlos al rehacer. */
+function ajustesGuardados(detalle: unknown): AjustesBases {
+  if (!detalle || typeof detalle !== 'object') return {}
+  const a = (detalle as { ajustes?: unknown }).ajustes
+  return a && typeof a === 'object' ? (a as AjustesBases) : {}
+}
+
+/** Descarta los campos que el formulario mandó vacíos: esos no son un ajuste. */
+function limpiarAjustes(d: Record<string, unknown>): AjustesBases {
+  const campos = ['auxilioTransporte', 'otroConceptoSalarial', 'diasSalarioPendiente'] as const
+  const salida: AjustesBases = {}
+  for (const c of campos) if (typeof d[c] === 'number') salida[c] = d[c] as number
+  if (Array.isArray(d.variablePorMes)) salida.variablePorMes = d.variablePorMes as AjustesBases['variablePorMes']
+  return salida
 }
 
 /** Procesos disciplinarios CERRADOS de un colaborador (para sustentar una justa causa). */
@@ -216,8 +272,34 @@ export const cerrarTerminacion = accion(
  * Solo mientras la terminación NO esté cerrada: una vez cerrada ya se pagó y se
  * firmó el paz y salvo, y corregir eso es una nota contable, no un botón.
  */
+/**
+ * Bases que se pueden fijar a mano.
+ *
+ * Cuando la empresa venía liquidando en otro software, el año en curso no está
+ * en el sistema y los promedios salen en cero. Toda migración de nómina resuelve
+ * eso igual: se cargan los acumulados del corte. Cadena vacía = "no lo toques",
+ * y por eso se distingue de un 0 explícito.
+ */
+const AJUSTE = z.number().min(0).optional()
+
 export const recalcularLiquidacion = accion(
-  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ id: z.uuid(), fechaRetiro: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }) },
+  {
+    modulo: 'terminaciones',
+    accion: 'EDITAR',
+    schema: z.object({
+      id: z.uuid(),
+      fechaRetiro: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      auxilioTransporte: AJUSTE,
+      otroConceptoSalarial: AJUSTE,
+      diasSalarioPendiente: AJUSTE,
+      // Lo pagado de variable en cada mes. De aquí salen los dos promedios, sin
+      // que nadie tenga que dividir nada a mano.
+      variablePorMes: z.array(z.object({
+        mes: z.string().regex(/^\d{4}-\d{2}$/),
+        valor: z.number().min(0),
+      })).optional(),
+    }),
+  },
   async (d) => {
     const t = await prisma.terminacion.findUniqueOrThrow({ where: { id: d.id } })
     if (t.estado === 'CERRADA') {
@@ -234,28 +316,23 @@ export const recalcularLiquidacion = accion(
     // digita mal y el que más mueve las cifras (días de cesantías, prima y
     // vacaciones salen de él).
     const fechaRetiro = d.fechaRetiro ? parseFechaISO(d.fechaRetiro)! : t.fechaRetiro
-    const calculo = await calcularLiq(t.colaboradorId, contrato, fechaRetiro, t.tipo)
 
-    await dbAuditado.terminacion.update({
-      where: { id: d.id },
-      data: { fechaRetiro, indemnizacion: calculo.indemnizacion, estado: 'LIQUIDADA' },
-    })
-
-    const datos = {
-      diasLiquidados: calculo.diasLiquidados,
-      salarioBase: contrato.salarioBase,
-      cesantias: calculo.cesantias,
-      interesesCesantias: calculo.interesesCesantias,
-      prima: calculo.prima,
-      vacaciones: calculo.vacaciones,
-      indemnizacion: calculo.indemnizacion,
-      deducciones: calculo.deducciones,
-      total: calculo.total,
-      detalle: calculo as object,
-    }
     // Puede no existir: si al registrar la terminación no había contrato activo,
     // la terminación quedó EN_PROCESO y sin liquidación.
     const previa = await prisma.liquidacionDefinitiva.findFirst({ where: { terminacionId: d.id } })
+
+    // Los ajustes que venga trayendo el formulario pisan a los guardados; los que
+    // no se toquen se conservan, para que rehacer el cálculo no borre en silencio
+    // las cifras que alguien digitó del histórico de otro software.
+    const ajustes: AjustesBases = { ...ajustesGuardados(previa?.detalle), ...limpiarAjustes(d) }
+    const calculo = await calcularLiq(t.colaboradorId, contrato, fechaRetiro, t.tipo, ajustes)
+
+    await dbAuditado.terminacion.update({
+      where: { id: d.id },
+      data: { fechaRetiro, indemnizacion: calculo.resultado.indemnizacion, estado: 'LIQUIDADA' },
+    })
+
+    const datos = datosLiquidacion(calculo, contrato.salarioBase)
     if (previa) {
       await dbAuditado.liquidacionDefinitiva.update({ where: { id: previa.id }, data: datos })
     } else {
@@ -264,7 +341,7 @@ export const recalcularLiquidacion = accion(
 
     revalidatePath('/terminaciones')
     revalidatePath(`/terminaciones/${d.id}`)
-    return { total: Number(calculo.total) }
+    return { total: Number(calculo.resultado.total) }
   },
 )
 

@@ -10,6 +10,7 @@ import { formatFechaLarga, formatFechaISO } from '@/lib/fechas'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { fmtCOP } from '@/lib/moneda'
 import { PazYSalvoChecklist } from './paz-y-salvo'
+import { mesesParaPromedios } from '@/server/nomina/bases-liquidacion'
 
 export const metadata = { title: 'Terminación · Smart Gadgets RH' }
 
@@ -29,7 +30,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   const t = await prisma.terminacion.findUnique({
     where: { id },
     include: {
-      colaborador: { select: { id: true, nombres: true, apellidos: true, numeroDocumento: true } },
+      colaborador: { select: { id: true, nombres: true, apellidos: true, numeroDocumento: true, fechaIngreso: true } },
       liquidacion: true,
       pazYSalvo: { include: { items: true } },
       procesoDisciplinario: { select: { id: true, asunto: true, decision: true, fechaApertura: true } },
@@ -37,6 +38,19 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   })
   if (!t) notFound()
   const liq = t.liquidacion
+  // El desglose línea por línea vive en el JSON del cálculo. Las liquidaciones
+  // hechas antes de separar salario, auxilio y seguridad social no lo traen: en
+  // ese caso se muestran solo las columnas, y rehacer el cálculo lo completa.
+  const detalle = leerDetalle(liq?.detalle)
+
+  // Meses sobre los que se promedia el salario variable. Se piden en pantalla
+  // uno por uno para que nadie tenga que calcular el promedio a mano.
+  const ventana = puedeEditar
+    ? await mesesParaPromedios(t.colaborador.id, t.colaborador.fechaIngreso, t.fechaRetiro)
+    : { meses: [], mesesAnual: 0, mesesSemestre: 0 }
+  const variableGuardado = Object.fromEntries(
+    (detalle?.ajustes?.variablePorMes ?? []).map((m) => [m.mes, m.valor]),
+  )
 
   // Actas y soportes de la terminación (carta, liquidación firmada, acta de entrega…)
   const [documentos, tiposDocumento] = await Promise.all([
@@ -64,6 +78,16 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
             terminacionId={t.id}
             colaborador={`${t.colaborador.nombres} ${t.colaborador.apellidos}`}
             fechaRetiro={formatFechaISO(t.fechaRetiro)}
+            bases={{
+              auxilioTransporte: detalle?.bases?.auxilioTransporte ?? 0,
+              promedioVariableAnual: detalle?.bases?.promedioVariableAnual ?? 0,
+              promedioVariableSemestre: detalle?.bases?.promedioVariableSemestre ?? 0,
+              otroConceptoSalarial: detalle?.bases?.otroConceptoSalarial ?? 0,
+              diasSalarioPendiente: detalle?.bases?.diasSalarioPendiente ?? 0,
+              periodosConsiderados: detalle?.bases?.periodosConsiderados ?? 0,
+            }}
+            ventana={ventana}
+            variableGuardado={variableGuardado}
             puedeEditar={puedeEditar}
             puedeEliminar={puedeEliminar}
           />
@@ -90,25 +114,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
       )}
 
       {/* Liquidación definitiva */}
-      {liq && (
-        <Card className="mb-4"><CardContent className="py-4">
-          <h3 className="text-sm font-medium mb-3">Liquidación definitiva (borrador para revisión contable)</h3>
-          <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2 text-sm">
-            <Row k="Días liquidados" v={`${liq.diasLiquidados}`} />
-            <Row k="Salario base" v={fmtCOP(Number(liq.salarioBase))} />
-            <Row k="Cesantías" v={fmtCOP(Number(liq.cesantias))} />
-            <Row k="Intereses cesantías" v={fmtCOP(Number(liq.interesesCesantias))} />
-            <Row k="Prima" v={fmtCOP(Number(liq.prima))} />
-            <Row k="Vacaciones" v={fmtCOP(Number(liq.vacaciones))} />
-            {Number(liq.indemnizacion) > 0 && <Row k="Indemnización" v={fmtCOP(Number(liq.indemnizacion))} />}
-            {Number(liq.deducciones) > 0 && <Row k="Deducciones (saldo préstamo)" v={`− ${fmtCOP(Number(liq.deducciones))}`} />}
-          </dl>
-          <div className="flex items-center justify-between border-t mt-3 pt-3">
-            <span className="font-medium">Total a pagar</span>
-            <span className="font-semibold text-lg text-emerald-600">{fmtCOP(Number(liq.total))}</span>
-          </div>
-        </CardContent></Card>
-      )}
+      {liq && <ResumenLiquidacion liq={liq} detalle={detalle} />}
 
       {/* Paz y salvo */}
       {t.pazYSalvo && (
@@ -142,6 +148,137 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   )
 }
 
-function Row({ k, v }: { k: string; v: string }) {
-  return <div className="flex justify-between sm:block"><dt className="text-muted-foreground">{k}</dt><dd>{v}</dd></div>
+/** Desglose guardado por el calculador. Puede faltar en liquidaciones antiguas. */
+type Detalle = {
+  salario?: number
+  auxilioTransporte?: number
+  otroConceptoSalarial?: number
+  salud?: number
+  pension?: number
+  saldoPrestamo?: number
+  totalDevengado?: number
+  totalDeducciones?: number
+  diasSalario?: number
+  diasPrima?: number
+  baseCesantias?: number
+  basePrima?: number
+  baseVacaciones?: number
+  baseSeguridadSocial?: number
+  ajustes?: { variablePorMes?: { mes: string; valor: number }[] }
+  bases?: {
+    auxilioTransporte?: number
+    promedioVariableAnual?: number
+    promedioVariableSemestre?: number
+    otroConceptoSalarial?: number
+    diasSalarioPendiente?: number
+    periodosConsiderados?: number
+  }
+}
+
+function leerDetalle(d: unknown): Detalle | null {
+  return d && typeof d === 'object' ? (d as Detalle) : null
+}
+
+type LiqFila = { k: string; sub?: string; v: number }
+
+/**
+ * Resumen de la liquidación con la misma estructura de la colilla que revisa el
+ * contador: ingresos arriba, deducciones al lado y el total abajo. Antes se
+ * mostraba una sola lista de prestaciones sin el salario del último tramo ni la
+ * seguridad social, y no había forma de cuadrarla contra el documento contable.
+ */
+function ResumenLiquidacion({ liq, detalle }: {
+  liq: { diasLiquidados: number; salarioBase: unknown; cesantias: unknown; interesesCesantias: unknown; prima: unknown; vacaciones: unknown; indemnizacion: unknown; deducciones: unknown; total: unknown }
+  detalle: Detalle | null
+}) {
+  const n = (v: unknown) => Number(v ?? 0)
+  const dias = liq.diasLiquidados
+
+  const ingresos: LiqFila[] = [
+    { k: 'Salario', sub: detalle?.diasSalario ? `${detalle.diasSalario} días` : undefined, v: n(detalle?.salario) },
+    { k: 'Auxilio de transporte', v: n(detalle?.auxilioTransporte) },
+    { k: 'Otro concepto salarial', sub: 'comisiones y horas sin pagar', v: n(detalle?.otroConceptoSalarial) },
+    { k: 'Cesantías', sub: `${dias} días`, v: n(liq.cesantias) },
+    { k: 'Intereses cesantías', sub: `12% · ${dias} días`, v: n(liq.interesesCesantias) },
+    { k: 'Prima salarial', sub: detalle?.diasPrima ? `${detalle.diasPrima} días` : undefined, v: n(liq.prima) },
+    { k: 'Vacaciones compensadas', v: n(liq.vacaciones) },
+    { k: 'Indemnización', v: n(liq.indemnizacion) },
+  ].filter((f) => f.v > 0)
+
+  const deducciones: LiqFila[] = [
+    { k: 'Salud', sub: '4%', v: n(detalle?.salud) },
+    { k: 'Fondo de pensión', sub: '4%', v: n(detalle?.pension) },
+    { k: 'Saldo de préstamo', v: n(detalle?.saldoPrestamo) },
+  ].filter((f) => f.v > 0)
+
+  // Liquidaciones viejas no traen el desglose de deducciones; ahí manda la columna.
+  const totalDeducciones = deducciones.length > 0 ? deducciones.reduce((t, f) => t + f.v, 0) : n(liq.deducciones)
+  const totalIngresos = ingresos.reduce((t, f) => t + f.v, 0)
+
+  return (
+    <Card className="mb-4"><CardContent className="py-4">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-medium">Liquidación definitiva (borrador para revisión contable)</h3>
+        <p className="text-xs text-muted-foreground">
+          {dias} días liquidados · salario base {fmtCOP(n(liq.salarioBase))}
+        </p>
+      </div>
+
+      <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+        <Bloque titulo="Ingresos" filas={ingresos} total={totalIngresos} />
+        {(deducciones.length > 0 || totalDeducciones > 0) && (
+          <Bloque titulo="Deducciones" filas={deducciones} total={totalDeducciones} />
+        )}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between border-t pt-3">
+        <span className="font-medium">Total a pagar</span>
+        <span className="text-lg font-semibold text-emerald-600 tabular-nums">{fmtCOP(n(liq.total))}</span>
+      </div>
+
+      {/* Las bases se muestran porque son lo primero que revisa el contador:
+          de ellas salen cesantías y prima, y cada una usa una ventana distinta. */}
+      {detalle?.baseCesantias != null && (
+        <dl className="mt-4 grid gap-x-6 gap-y-1.5 border-t pt-3 text-xs sm:grid-cols-2">
+          <Base k="Base de cesantías" v={detalle.baseCesantias} ayuda="salario + auxilio + promedio del año" />
+          <Base k="Base de prima" v={detalle.basePrima} ayuda="salario + auxilio + promedio del semestre" />
+          <Base k="Base de vacaciones" v={detalle.baseVacaciones} ayuda="salario ordinario, sin auxilio" />
+          <Base k="Base de seguridad social" v={detalle.baseSeguridadSocial} ayuda="solo lo que constituye salario" />
+        </dl>
+      )}
+    </CardContent></Card>
+  )
+}
+
+function Bloque({ titulo, filas, total }: { titulo: string; filas: LiqFila[]; total: number }) {
+  return (
+    <div>
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{titulo}</p>
+      <dl className="divide-y text-sm">
+        {filas.map((f) => (
+          <div key={f.k} className="flex items-baseline justify-between gap-3 py-1.5">
+            <dt className="min-w-0">
+              {f.k}
+              {f.sub && <span className="ml-1.5 text-xs text-muted-foreground">{f.sub}</span>}
+            </dt>
+            <dd className="shrink-0 tabular-nums">{fmtCOP(f.v)}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-1.5 flex justify-between border-t pt-1.5 text-sm font-medium">
+        <span>Total {titulo.toLowerCase()}</span>
+        <span className="tabular-nums">{fmtCOP(total)}</span>
+      </div>
+    </div>
+  )
+}
+
+function Base({ k, v, ayuda }: { k: string; v: number | undefined; ayuda: string }) {
+  if (v == null) return null
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-muted-foreground">{k} <span className="hidden sm:inline">· {ayuda}</span></dt>
+      <dd className="shrink-0 tabular-nums">{fmtCOP(v)}</dd>
+    </div>
+  )
 }

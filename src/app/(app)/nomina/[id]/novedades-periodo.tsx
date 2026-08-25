@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus, Coins, Clock, BadgeDollarSign, Trash2, ExternalLink } from 'lucide-react'
@@ -433,16 +434,33 @@ function DialogConcepto({ periodoId, colaboradores, conceptos, onDone, onClose }
         <div className="space-y-4">
           <Campo label="Colaborador"><SelectColaborador value={colaboradorId} onChange={setColaboradorId} colaboradores={colaboradores} /></Campo>
           <Campo label="Concepto">
-            <Select value={conceptoId} onValueChange={elegirConcepto}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
-              <SelectContent>
-                {conceptos.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.nombre} ({TIPO_CONCEPTO[c.tipo] ?? c.tipo}{c.valorFijo != null ? ` · ${fmtCOP(c.valorFijo)}` : ''})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Catálogo vacío: el select quedaría muerto sin decir por qué. El
+                seed solo trae conceptos que calcula el motor, así que hasta que
+                alguien cree uno propio no hay nada que aplicar aquí. */}
+            {conceptos.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                <p>No hay conceptos configurables todavía.</p>
+                <p className="mt-1">
+                  El salario, las horas extra, las comisiones y las deducciones de ley las calcula
+                  el motor solo. Esto es para lo que se pacta aparte —auxilio de alimentación,
+                  prima extralegal, un descuento autorizado—.
+                </p>
+                <Link href="/configuracion/conceptos-nomina" className="mt-2 inline-block font-medium text-primary hover:underline">
+                  Crear un concepto en Ajustes →
+                </Link>
+              </div>
+            ) : (
+              <Select value={conceptoId} onValueChange={elegirConcepto}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                <SelectContent>
+                  {conceptos.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.nombre} ({TIPO_CONCEPTO[c.tipo] ?? c.tipo}{c.valorFijo != null ? ` · ${fmtCOP(c.valorFijo)}` : ''})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </Campo>
           <Campo label={`Valor ${concepto?.valorFijo != null ? '(precargado del concepto)' : ''}`}>
             <Input type="number" min="0" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Valor en pesos" />
@@ -453,7 +471,7 @@ function DialogConcepto({ periodoId, colaboradores, conceptos, onDone, onClose }
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button>
-          <Button onClick={guardar} disabled={g}>{g && <Spinner />}Aplicar</Button>
+          <Button onClick={guardar} disabled={g || conceptos.length === 0}>{g && <Spinner />}Aplicar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

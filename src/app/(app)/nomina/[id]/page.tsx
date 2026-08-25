@@ -54,12 +54,28 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
           include: { concepto: true, ...nomColab },
           orderBy: { creadoEn: 'desc' },
         }),
+        // Solo los que se aplican a mano. Los de cálculo SISTEMA los liquida el
+        // motor (salario, salud, provisiones…) y aplicarlos aquí los duplicaría;
+        // la acción los rechaza igual, así que ni se ofrecen.
         prisma.conceptoNomina.findMany({
-          where: { activo: true, esSistema: false },
+          where: { activo: true, tipoCalculo: { not: 'SISTEMA' } },
           orderBy: { nombre: 'asc' },
         }),
+        // Mismo criterio que el liquidador: quien se retiró dentro del período
+        // sigue siendo liquidable —trabajó parte del mes— y puede necesitar una
+        // comisión, unas horas o un descuento de última hora.
         prisma.contrato.findMany({
-          where: { estado: 'ACTIVO', tipo: { in: ['TERMINO_FIJO', 'TERMINO_INDEFINIDO', 'OBRA_LABOR'] } },
+          where: {
+            tipo: { in: ['TERMINO_FIJO', 'TERMINO_INDEFINIDO', 'OBRA_LABOR'] },
+            fechaInicio: { lte: periodo.fechaFin },
+            OR: [
+              { estado: 'ACTIVO' },
+              {
+                estado: 'TERMINADO',
+                colaborador: { fechaRetiro: { gte: periodo.fechaInicio, lte: periodo.fechaFin } },
+              },
+            ],
+          },
           select: { colaboradorId: true, colaborador: { select: { nombres: true, apellidos: true } } },
           orderBy: { colaborador: { apellidos: 'asc' } },
         }),

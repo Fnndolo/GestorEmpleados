@@ -168,3 +168,23 @@ describe('conceptos configurables (arts. 127/128 CST)', () => {
     expect(con.totalDevengado).toBe(sin.totalDevengado)
   })
 })
+
+describe('ingreso y retiro a mitad de periodo', () => {
+  // Caso real: colaborador creado con ingreso el 15 de julio. El periodo son 30
+  // días y el vínculo cubre 16, así que salario y auxilio salen proporcionales.
+  // Antes de prorratear, este mismo caso pagaba el mes entero ($2.000.000).
+  it('16 días: salario y auxilio proporcionales, no el mes completo', () => {
+    const r = liquidar({ ...base, diasTrabajados: 16 })
+    expect(linea(r, 'SALARIO')?.valor).toBe(933_816)
+    expect(linea(r, 'AUX_TRANSPORTE')?.valor).toBe(132_851)
+    expect(r.totalDevengado).toBe(1_066_667)
+    expect(r.totalDevengado).toBeLessThan(2_000_000)
+  })
+
+  it('el piso del IBC también es proporcional a los días', () => {
+    const r = liquidar({ ...base, diasTrabajados: 16 })
+    // Piso = 1 SMMLV proporcional a 16 días, no el SMMLV completo.
+    expect(r.ibc).toBeLessThan(1_750_905)
+    expect(r.ibc).toBeGreaterThan(900_000)
+  })
+})
