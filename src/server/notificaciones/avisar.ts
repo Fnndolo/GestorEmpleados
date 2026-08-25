@@ -3,6 +3,7 @@ import { urlApp } from '@/lib/app-url'
 import { prisma } from '@/lib/db'
 import { enviarCorreo } from '@/server/notificaciones/correo'
 import { enviarPush } from '@/server/notificaciones/push'
+import { mandaCorreo } from '@/lib/notificaciones/catalogo'
 
 /** Date.now() de forma segura (en algunos runtimes restringidos se evita). */
 function ahora(): number {
@@ -54,8 +55,24 @@ function plantillaCorreo(nombre: string, titulo: string, mensaje: string, enlace
 }
 
 /**
- * Avisa a un usuario por la app Y por correo. Pensado para flujos interactivos
- * (solicitudes, disciplinarios, cuentas de cobro) donde el aviso debe ser inmediato.
+ * Preferencias de correo por evento, tal como están guardadas. Lo que no tiene
+ * fila lo resuelve el catálogo con su valor por defecto.
+ */
+async function preferenciasCorreo(): Promise<Record<string, boolean>> {
+  const filas = await prisma.preferenciaNotificacion.findMany({ select: { evento: true, correo: true } })
+  return Object.fromEntries(filas.map((f) => [f.evento, f.correo]))
+}
+
+/**
+ * Avisa a un usuario por la app y por push, y por correo SOLO si ese evento lo
+ * tiene habilitado.
+ *
+ * Antes mandaba correo siempre. Con treinta y un eventos avisando por cada
+ * movimiento, la bandeja se llenaba de confirmaciones de cosas que la persona
+ * acababa de hacer y terminaba ignorando también las que sí importaban. Ahora el
+ * correo queda para lo que tiene plazo legal o exige actuar fuera de la app, y
+ * el resto vive en la campana. Se configura en Ajustes → Notificaciones.
+ *
  * El correo se registra en el outbox (idempotente) y se intenta enviar al momento.
  */
 export async function avisar(
@@ -69,6 +86,8 @@ export async function avisar(
 
   // Web Push a los dispositivos suscritos del usuario (best-effort)
   await enviarPush(userId, { titulo: opts.titulo, mensaje: opts.mensaje, enlace: opts.enlace }).catch(() => {})
+
+  if (!mandaCorreo(opts.evento, await preferenciasCorreo())) return
 
   const dedupe = `mail:aviso:${userId}:${opts.titulo}:${ahora()}`
   const cuerpo = plantillaCorreo(usuario.name, opts.titulo, opts.mensaje, opts.enlace, opts.llamadoAccion)

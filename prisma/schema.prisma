@@ -961,6 +961,10 @@ model Notificacion {
 model PreferenciaNotificacion {
   evento        String   @id
   popup         Boolean  @default(true)
+  // Si además del aviso en la app se manda correo. Sin fila, manda el valor por
+  // defecto del catálogo (src/lib/notificaciones/catalogo.ts), que es NO salvo
+  // donde corre un plazo legal.
+  correo        Boolean  @default(false)
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
 
   @@map("preferencia_notificacion")
