@@ -4,19 +4,14 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Gavel, MessageSquareWarning, Trash2, ExternalLink, ArrowUpRight } from 'lucide-react'
+import { Gavel, MessageSquareWarning, Trash2, ExternalLink } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { eliminarLlamadoAtencion, escalarLlamadoAProceso } from '@/app/(app)/juridica/acciones'
+import { eliminarLlamadoAtencion } from '@/app/(app)/juridica/acciones'
 
 export type ItemHistorial =
-  | {
-      clase: 'llamado'; id: string; fecha: string; tipo: 'VERBAL' | 'ESCRITO'; motivo: string
-      detalle: string | null
-      /** Proceso al que ya se escaló, si la conducta se repitió. */
-      procesoId: string | null
-    }
+  | { clase: 'llamado'; id: string; fecha: string; tipo: 'VERBAL' | 'ESCRITO'; motivo: string; detalle: string | null }
   | { clase: 'proceso'; id: string; fecha: string; asunto: string; etapa: string; cerrado: boolean; decision: string | null }
 
 const ETAPA: Record<string, string> = {
@@ -37,16 +32,13 @@ const ETAPA: Record<string, string> = {
  * secuencia se pierde si cada cosa se consulta en una pantalla distinta.
  */
 export function HistorialDisciplinario({
-  items, puedeEliminar, puedeEscalar,
+  items, puedeEliminar,
 }: {
   items: ItemHistorial[]
   puedeEliminar: boolean
-  /** Abrir procesos exige permiso de crear en Jurídica. */
-  puedeEscalar: boolean
 }) {
   const router = useRouter()
   const [borrando, setBorrando] = useState<string | null>(null)
-  const [escalando, setEscalando] = useState<Extract<ItemHistorial, { clase: 'llamado' }> | null>(null)
 
   async function borrar(id: string) {
     if (!confirm('¿Eliminar este llamado de atención? Se pierde como antecedente.')) return
@@ -110,53 +102,23 @@ export function HistorialDisciplinario({
               </div>
             ) : (
               <div className="flex shrink-0 items-center gap-2">
-                {i.procesoId ? (
-                  <>
-                    <Badge variant="secondary">Escalado</Badge>
-                    <Button size="sm" variant="ghost" asChild>
-                      <Link href={`/juridica/disciplinarios/${i.procesoId}`}>
-                        <ExternalLink className="size-4" /> Ver proceso
-                      </Link>
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Badge variant="outline">Antecedente</Badge>
-                    {puedeEscalar && (
-                      <Button size="sm" variant="outline" onClick={() => setEscalando(i)}>
-                        <ArrowUpRight className="size-4" /> Escalar
-                      </Button>
-                    )}
-                    {/* Un llamado ya escalado no se borra: es la prueba de que el
-                        proceso tenía antecedentes. */}
-                    {puedeEliminar && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        disabled={borrando === i.id}
-                        onClick={() => borrar(i.id)}
-                        aria-label="Eliminar llamado"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    )}
-                  </>
+                <Badge variant="outline">Antecedente</Badge>
+                {puedeEliminar && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    disabled={borrando === i.id}
+                    onClick={() => borrar(i.id)}
+                    aria-label="Eliminar llamado"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
                 )}
               </div>
             )}
           </li>
         ))}
       </ul>
-      {escalando && (
-        <DialogEscalar
-          llamado={escalando}
-          otros={items.filter(
-            (x): x is Extract<ItemHistorial, { clase: 'llamado' }> =>
-              x.clase === 'llamado' && x.id !== escalando.id && !x.procesoId,
-          )}
-          onClose={() => setEscalando(null)}
-        />
-      )}
     </CardContent></Card>
   )
 }

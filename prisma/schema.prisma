@@ -2333,16 +2333,10 @@ model LlamadoAtencion {
   detalle       String?
   fecha         DateTime            @db.Date
   creadoPorId   String?             @map("creado_por_id")
-  // Proceso disciplinario al que se escaló este llamado, si la conducta se
-  // repitió. Es lo que convierte una anotación suelta en el antecedente que
-  // sustenta el proceso: sin el enlace, el proceso no puede citarla.
-  procesoId     String?             @map("proceso_id") @db.Uuid
-  proceso       ProcesoDisciplinario? @relation(fields: [procesoId], references: [id], onDelete: SetNull)
   creadoEn      DateTime            @default(now()) @map("creado_en")
   actualizadoEn DateTime            @updatedAt @map("actualizado_en")
 
   @@index([colaboradorId, fecha])
-  @@index([procesoId])
   @@map("llamado_atencion")
 }
 
@@ -2370,7 +2364,6 @@ model ProcesoDisciplinario {
 
   etapas EtapaProceso[]
   terminaciones Terminacion[]
-  llamadosOrigen LlamadoAtencion[]
 
   @@index([colaboradorId])
   @@map("proceso_disciplinario")
