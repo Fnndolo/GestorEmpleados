@@ -13,6 +13,7 @@ import { crearUsuarioColaborador } from '@/server/usuarios'
 import { renderAcuerdoEvaluacion } from '@/server/pdf/acuerdo-evaluacion'
 import { leerFirmaComoDataUri } from '@/server/contratos-ops-pdf'
 import { parseFechaISO, hoyBogota } from '@/lib/fechas'
+import { normalizarTexto } from '@/lib/texto'
 import {
   acuerdoEvaluacionSchema,
   decisionAcuerdoSchema,
@@ -453,6 +454,9 @@ export const convertirEnColaborador = accion(
         apellidos: a.apellidos,
         tipoDocumento: a.tipoDocumento,
         numeroDocumento: a.numeroDocumento,
+        // Sin esto la ficha nace con la clave de búsqueda vacía y queda invisible
+        // para el buscador de colaboradores (contratos OPS, listado, integraciones).
+        busquedaNormalizada: normalizarTexto(`${a.nombres} ${a.apellidos} ${a.numeroDocumento}`),
         lugarExpedicionDoc: a.lugarExpedicionDoc,
         direccion: a.direccion,
         celular: a.celular ?? '',
