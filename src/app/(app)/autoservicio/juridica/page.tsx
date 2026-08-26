@@ -12,16 +12,16 @@ export const metadata = { title: 'Canal ético y habeas data · Smart Gadgets RH
 
 const ENCABEZADO = {
   'anti-acoso': {
-    titulo: 'Canal anti-acoso',
-    descripcion: 'Reporta una situación de acoso laboral o sexual de forma confidencial (Ley 2466 de 2025).',
+    titulo: 'Línea ética',
+    descripcion: 'Reporta acoso laboral o sexual, conductas indebidas, irregularidades o sugerencias. De forma confidencial y, si quieres, anónima.',
   },
   'habeas-data': {
     titulo: 'Habeas data',
     descripcion: 'Ejerce tus derechos sobre tus datos personales: consulta o reclamo (Ley 1581 de 2012).',
   },
   ambos: {
-    titulo: 'Canal ético y habeas data',
-    descripcion: 'Reporta una situación de acoso de forma confidencial, o ejerce tus derechos sobre tus datos personales.',
+    titulo: 'Línea ética y habeas data',
+    descripcion: 'Reporta lo que veas de forma confidencial, o ejerce tus derechos sobre tus datos personales.',
   },
 } as const
 

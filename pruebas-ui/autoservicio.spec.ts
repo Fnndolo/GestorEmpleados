@@ -23,15 +23,21 @@ test.describe('el empleado entra a su autoservicio', () => {
 
   test('los accesos principales están disponibles', async ({ page }) => {
     await page.goto('/autoservicio')
-    // Por el nombre corto, que es el que se ve tanto en móvil como en escritorio.
-    for (const nombre of ['Vacaciones', 'Permiso', 'Certificación', 'Documentos']) {
-      await expect(page.getByText(nombre, { exact: true }).first()).toBeVisible()
+    // Por rol y solo lo visible: en escritorio el titulo es largo ('Pedir
+    // vacaciones') y en movil corto ('Vacaciones'), y la variante que no toca
+    // sigue en el DOM oculta. Buscar por texto suelto agarraria ademas la
+    // tarjeta de 'Dias de vacaciones disponibles', que no es un acceso.
+    for (const nombre of [/vacaciones/i, /permiso/i, /certificaci/i, /documentos/i]) {
+      const acceso = page.getByRole('button', { name: nombre })
+        .or(page.getByRole('link', { name: nombre }))
+        .locator('visible=true')
+      await expect(acceso.first()).toBeVisible()
     }
   })
 
   test('abre el formulario de vacaciones', async ({ page }) => {
     await page.goto('/autoservicio')
-    await page.getByText('Vacaciones', { exact: true }).first().click()
+    await page.getByRole('button', { name: /vacaciones/i }).locator('visible=true').first().click()
     await expect(page.getByRole('dialog')).toBeVisible()
   })
 
