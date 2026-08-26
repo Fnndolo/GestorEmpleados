@@ -15,7 +15,8 @@
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
     "test": "vitest run",
-    "test:integracion": "vitest run --config vitest.integracion.config.ts"
+    "test:integracion": "vitest run --config vitest.integracion.config.ts",
+    "test:ui": "playwright test"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -64,6 +65,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/d3": "^7.4.3",
     "@types/node": "^20",

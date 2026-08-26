@@ -70,3 +70,5 @@ scripts/*-local.ts
 
 .vercel
 .env*
+test-results/
+playwright-report/
