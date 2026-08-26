@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
+import { CONTRATOS_DE_NOMINA } from '@/lib/vinculo-contrato'
 import Link from 'next/link'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
@@ -12,8 +13,6 @@ import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import { TIPO_CUENTA } from '@/lib/etiquetas'
 import { AccionesPeriodo } from './acciones-cliente'
-import { NovedadesPeriodo } from './novedades-periodo'
-import { urlPanelAsistencia } from '@/server/asistencia/horas-asistencia'
 
 export const metadata = { title: 'Periodo de nómina · Smart Gadgets RH' }
 
@@ -44,45 +43,15 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
   })
   if (!periodo) notFound()
 
-  // Novedades del período (comisiones, horas, conceptos): visibles con permiso de
-  // operar; editables solo en BORRADOR/CALCULADA (el componente aplica solo lectura).
-  const nomColab = { colaborador: { select: { nombres: true, apellidos: true } } }
-  const [novedadesConcepto, conceptos, contratosParaNovedad, comisiones, novedadesHoras] = puedeOperar
+  // Novedades que este periodo RECOGIÓ. Registrarlas se hace en /nomina/novedades,
+  // fuera de todo periodo; aquí solo se muestra el resumen de lo que entró.
+  const [novedadesConcepto, comisiones, novedadesHoras] = puedeOperar
     ? await Promise.all([
-        prisma.novedadConcepto.findMany({
-          where: { periodoId: id },
-          include: { concepto: true, ...nomColab },
-          orderBy: { creadoEn: 'desc' },
-        }),
-        // Solo los que se aplican a mano. Los de cálculo SISTEMA los liquida el
-        // motor (salario, salud, provisiones…) y aplicarlos aquí los duplicaría;
-        // la acción los rechaza igual, así que ni se ofrecen.
-        prisma.conceptoNomina.findMany({
-          where: { activo: true, tipoCalculo: { not: 'SISTEMA' } },
-          orderBy: { nombre: 'asc' },
-        }),
-        // Mismo criterio que el liquidador: quien se retiró dentro del período
-        // sigue siendo liquidable —trabajó parte del mes— y puede necesitar una
-        // comisión, unas horas o un descuento de última hora.
-        prisma.contrato.findMany({
-          where: {
-            tipo: { in: ['TERMINO_FIJO', 'TERMINO_INDEFINIDO', 'OBRA_LABOR'] },
-            fechaInicio: { lte: periodo.fechaFin },
-            OR: [
-              { estado: 'ACTIVO' },
-              {
-                estado: 'TERMINADO',
-                colaborador: { fechaRetiro: { gte: periodo.fechaInicio, lte: periodo.fechaFin } },
-              },
-            ],
-          },
-          select: { colaboradorId: true, colaborador: { select: { nombres: true, apellidos: true } } },
-          orderBy: { colaborador: { apellidos: 'asc' } },
-        }),
-        prisma.comision.findMany({ where: { periodoId: id }, include: nomColab, orderBy: { creadoEn: 'desc' } }),
-        prisma.novedadHoras.findMany({ where: { periodoId: id }, include: nomColab, orderBy: [{ fecha: 'desc' }, { creadoEn: 'desc' }] }),
+        prisma.novedadConcepto.count({ where: { periodoId: id } }),
+        prisma.comision.findMany({ where: { periodoId: id }, select: { valor: true } }),
+        prisma.novedadHoras.findMany({ where: { periodoId: id }, select: { horas: true } }),
       ])
-    : [[], [], [], [], []]
+    : [0, [], []]
 
   const totales = periodo.liquidaciones.reduce(
     (acc, l) => ({
@@ -106,7 +75,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
   if (periodo.liquidaciones.length === 0) {
     // Mismos filtros que usa el liquidador
     const contratos = await prisma.contrato.findMany({
-      where: { estado: 'ACTIVO', tipo: { in: ['TERMINO_FIJO', 'TERMINO_INDEFINIDO', 'OBRA_LABOR'] }, fechaInicio: { lte: periodo.fechaFin } },
+      where: { estado: 'ACTIVO', tipo: { in: [...CONTRATOS_DE_NOMINA] }, fechaInicio: { lte: periodo.fechaFin } },
       include: { colaborador: { select: { nombres: true, apellidos: true } } },
       orderBy: { colaborador: { apellidos: 'asc' } },
     })
@@ -157,46 +126,11 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
       />
 
       {puedeOperar && (
-        <NovedadesPeriodo
-          periodoId={periodo.id}
-          estado={periodo.estado}
-          colaboradores={[...new Map(contratosParaNovedad.map((c) => [
-            c.colaboradorId,
-            { id: c.colaboradorId, nombre: `${c.colaborador.nombres} ${c.colaborador.apellidos}` },
-          ])).values()]}
-          conceptos={conceptos.map((c) => ({
-            id: c.id,
-            nombre: c.nombre,
-            tipo: c.tipo,
-            valorFijo: c.valorFijo != null ? Number(c.valorFijo) : null,
-          }))}
-          comisiones={comisiones.map((c) => ({
-            id: c.id,
-            colaborador: `${c.colaborador.nombres} ${c.colaborador.apellidos}`,
-            tipo: c.tipo,
-            baseCalculo: Number(c.baseCalculo),
-            valor: Number(c.valor),
-            descripcion: c.descripcion ?? null,
-          }))}
-          horas={novedadesHoras.map((h) => ({
-            id: h.id,
-            colaborador: `${h.colaborador.nombres} ${h.colaborador.apellidos}`,
-            fecha: formatFechaCorta(h.fecha),
-            tipoHora: h.tipoHora,
-            horas: Number(h.horas),
-            horaInicio: h.horaInicio,
-            horaFin: h.horaFin,
-          }))}
-          conceptosNovedades={novedadesConcepto.map((n) => ({
-            id: n.id,
-            colaborador: `${n.colaborador.nombres} ${n.colaborador.apellidos}`,
-            concepto: n.concepto.nombre,
-            tipo: n.concepto.tipo,
-            valor: Number(n.valor),
-          }))}
-          // Panel del sistema de control de asistencia, origen de estas horas.
-          // Si la variable no está configurada, el enlace no se muestra.
-          urlAsistencia={urlPanelAsistencia()}
+        <ResumenNovedades
+          comisiones={comisiones.length}
+          totalComisiones={comisiones.reduce((t, c) => t + Number(c.valor), 0)}
+          horas={novedadesHoras.reduce((t, h) => t + Number(h.horas), 0)}
+          conceptos={novedadesConcepto}
         />
       )}
 
@@ -332,6 +266,52 @@ function ResumenItem({ icono, color, titulo, detalle }: { icono: LucideIcon; col
         <p className="truncate text-sm font-medium">{titulo}</p>
         <p className="truncate text-xs text-muted-foreground">{detalle}</p>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Lo que este periodo recogió de novedades, en solo lectura.
+ *
+ * Registrarlas se hace en /nomina/novedades, fuera de todo periodo: ocurren
+ * cuando ocurren y no cuando alguien abre la nómina del mes. Aquí solo se
+ * responde «¿qué entró en este periodo?», que es la pregunta del cierre.
+ */
+function ResumenNovedades({ comisiones, totalComisiones, horas, conceptos }: {
+  comisiones: number
+  totalComisiones: number
+  horas: number
+  conceptos: number
+}) {
+  const vacio = comisiones === 0 && horas === 0 && conceptos === 0
+  return (
+    <section className="mt-4">
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[13px] font-bold">Novedades recogidas</h2>
+        <Link href="/nomina/novedades" className="text-xs font-medium text-primary hover:underline">
+          Registrar novedades →
+        </Link>
+      </div>
+      {vacio ? (
+        <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">
+          Este periodo no recogió comisiones, horas extra ni conceptos.
+        </CardContent></Card>
+      ) : (
+        <Card><CardContent className="grid gap-3 py-4 sm:grid-cols-3">
+          <Dato k="Comisiones" v={`${comisiones}`} sub={fmtCOP(totalComisiones)} />
+          <Dato k="Horas extra y recargos" v={`${horas} h`} />
+          <Dato k="Otros conceptos" v={`${conceptos}`} />
+        </CardContent></Card>
+      )}
+    </section>
+  )
+}
+
+function Dato({ k, v, sub }: { k: string; v: string; sub?: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{k}</p>
+      <p className="text-sm font-medium">{v}{sub && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{sub}</span>}</p>
     </div>
   )
 }

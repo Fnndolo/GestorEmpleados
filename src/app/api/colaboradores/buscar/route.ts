@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   const base = await whereColaboradores(usuario, {
     busquedaNormalizada: { contains: normalizarTexto(q) },
-  })
+  }, { ignorarSedeActiva: true })
 
   const colaboradores = await prisma.colaborador.findMany({
     where: base,

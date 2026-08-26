@@ -39,6 +39,19 @@ export function vinculoDeContrato(tipo: TipoContratoLaboral): TipoVinculo {
   return VINCULO_DE_CONTRATO[tipo]
 }
 
+/**
+ * Tipos de contrato que entran a la nómina.
+ *
+ * El aprendizaje SENA está en la lista porque en esta empresa el aprendiz es
+ * laboral desde el primer día, y porque la Ley 2466 de 2025 volvió laboral el
+ * contrato de aprendizaje. Se dejó fuera por mucho tiempo —la lista de tipos
+ * estaba copiada a mano en el liquidador, en las pantallas y en dotación— y el
+ * efecto era que un aprendiz no salía en ninguna nómina: no se le pagaba nada.
+ *
+ * Vive aquí, en un módulo puro, justamente para que exista UNA sola lista.
+ */
+export const CONTRATOS_DE_NOMINA = ['TERMINO_FIJO', 'TERMINO_INDEFINIDO', 'OBRA_LABOR', 'APRENDIZAJE_SENA'] as const
+
 /** ¿La ficha y el contrato dicen lo mismo? */
 export function vinculoCoincide(tipoContrato: TipoContratoLaboral, tipoVinculo: TipoVinculo): boolean {
   return VINCULO_DE_CONTRATO[tipoContrato] === tipoVinculo

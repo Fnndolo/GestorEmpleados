@@ -53,7 +53,7 @@ export default async function CuentasCobroPage() {
             documentoId: c.documentoId,
             colaborador: c.colaborador
               ? `${c.colaborador.nombres} ${c.colaborador.apellidos}`
-              : c.contratoOps ? `${c.contratoOps.colaborador.nombres} ${c.contratoOps.colaborador.apellidos}` : '—',
+              : c.contratoOps?.colaborador ? `${c.contratoOps.colaborador.nombres} ${c.contratoOps.colaborador.apellidos}` : '—',
             esOps: !!c.contratoOpsId,
             contratoOpsId: c.contratoOpsId,
             ssValida: c.soporteSs?.estadoVerificacion === 'VALIDA',

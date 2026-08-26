@@ -32,7 +32,10 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
   })
   if (!c) notFound()
 
-  const snap = c.contenidoPdf as { firmaContratanteNombre?: string; firmaContratistaNombre?: string } | null
+  const snap = c.contenidoPdf as { encabezado?: { contratistaNombre?: string }; firmaContratanteNombre?: string; firmaContratistaNombre?: string } | null
+  const nombreContratista = c.colaborador
+    ? `${c.colaborador.nombres} ${c.colaborador.apellidos}`
+    : snap?.encabezado?.contratistaNombre || snap?.firmaContratistaNombre || 'Contratista sin ficha'
 
   const [documentos, anexos] = await Promise.all([
     prisma.documento.findMany({
@@ -67,11 +70,11 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
 
   return (
     <div className="max-w-6xl">
-      <Encabezado titulo={`OPS ${c.numero}`} descripcion={`${c.colaborador.nombres} ${c.colaborador.apellidos}`} />
+      <Encabezado titulo={`OPS ${c.numero}`} descripcion={nombreContratista} />
 
       <Card className="mb-4"><CardContent className="py-4">
         <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
-          <Dato k="Contratista" v={`${c.colaborador.nombres} ${c.colaborador.apellidos}`} />
+          <Dato k="Contratista" v={nombreContratista} />
           <Dato k="Estado" v={<Badge variant={c.estado === 'ACTIVO' ? 'default' : 'secondary'}>{c.estado}</Badge>} />
           <Dato k="Objeto" v={c.objeto} full />
           <Dato k="Valor total" v={fmtCOP(Number(c.valorTotal))} />
@@ -81,9 +84,9 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
           <Dato k="Vigencia" v={`${formatFechaLarga(c.fechaInicio)} — ${formatFechaLarga(c.fechaFin)}`} />
           <Dato k="RUT" v={c.rut ?? '—'} />
         </dl>
-        <p className="mt-3">
+        {c.colaboradorId && <p className="mt-3">
           <Link href={`/colaboradores/${c.colaboradorId}`} className="text-sm text-primary hover:underline">Ver ficha del contratista →</Link>
-        </p>
+        </p>}
       </CardContent></Card>
 
       <Card className="mb-4"><CardContent className="py-4">
@@ -140,7 +143,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
               fecha: c.firmaContratanteFecha ? formatFechaLarga(c.firmaContratanteFecha) : null,
             }}
             contratista={{
-              nombre: snap?.firmaContratistaNombre ?? `${c.colaborador.nombres} ${c.colaborador.apellidos}`,
+              nombre: snap?.firmaContratistaNombre ?? nombreContratista,
               firmado: !!c.firmaContratistaPath,
               fecha: c.firmaContratistaFecha ? formatFechaLarga(c.firmaContratistaFecha) : null,
             }}

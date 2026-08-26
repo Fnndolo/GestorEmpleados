@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Wallet, ChevronRight, HandCoins, Receipt } from 'lucide-react'
+import { Wallet, ChevronRight, HandCoins, Receipt, Coins } from 'lucide-react'
 import { Chip, Pill, type PillTone } from '@/components/ui-kit'
 import { CrearPeriodo } from './crear-periodo'
 
@@ -29,7 +29,14 @@ export default async function NominaPage() {
         titulo="Nómina"
         descripcion="Liquidación de nómina con conceptos, comisiones, horas extra (Ley 2466) y desprendibles."
         acciones={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {/* Antes del periodo: las comisiones y horas se registran cuando
+                ocurren, no cuando alguien abre la nómina del mes. */}
+            {puedeCrear && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/nomina/novedades"><Coins className="size-4" /> Novedades</Link>
+              </Button>
+            )}
             <Button variant="outline" size="sm" asChild>
               <Link href="/nomina/ops"><Receipt className="size-4" /> Pagos OPS</Link>
             </Button>

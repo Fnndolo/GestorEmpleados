@@ -21,9 +21,9 @@ import { registrarComision, registrarHoras, registrarNovedadConcepto, eliminarNo
 
 export type ColaboradorOpcion = { id: string; nombre: string }
 export type ConceptoOpcion = { id: string; nombre: string; tipo: string; valorFijo: number | null }
-export type ComisionItem = { id: string; colaborador: string; tipo: string; baseCalculo: number; valor: number; descripcion: string | null }
-export type HoraItem = { id: string; colaborador: string; fecha: string; tipoHora: string; horas: number; horaInicio: string; horaFin: string }
-export type ConceptoNovedadItem = { id: string; colaborador: string; concepto: string; tipo: string; valor: number }
+export type ComisionItem = { id: string; colaborador: string; fecha: string; tipo: string; baseCalculo: number; valor: number; descripcion: string | null; pagadaEn: string | null }
+export type HoraItem = { id: string; colaborador: string; fecha: string; tipoHora: string; horas: number; horaInicio: string; horaFin: string; pagadaEn: string | null }
+export type ConceptoNovedadItem = { id: string; colaborador: string; fecha: string; concepto: string; tipo: string; valor: number; pagadaEn: string | null }
 
 const TIPO_CONCEPTO: Record<string, string> = { DEVENGADO: 'Devengado', DEDUCCION: 'Deducción' }
 const TIPO_COMISION: Record<string, string> = { VENTA: 'Venta', RECAUDO: 'Recaudo' }
@@ -40,8 +40,8 @@ const TIPO_HORA: Record<string, string> = {
 }
 
 type Props = {
-  periodoId: string
-  estado: string
+  /** Fecha de hoy en yyyy-mm-dd, para precargar los formularios. */
+  hoy: string
   colaboradores: ColaboradorOpcion[]
   conceptos: ConceptoOpcion[]
   comisiones: ComisionItem[]
@@ -63,20 +63,28 @@ const GRUPOS = [
 type Grupo = (typeof GRUPOS)[number]['v']
 
 /**
- * Novedades del período de nómina: comisiones, horas extra/recargos y conceptos
- * configurables. Editable en BORRADOR/CALCULADA; solo lectura después.
+ * Novedades de nómina: comisiones, horas extra/recargos y conceptos aplicados.
+ *
+ * Viven aquí y no dentro de un periodo porque ocurren cuando ocurren: una
+ * comisión de julio se registra el día que se causa, sin esperar a que alguien
+ * abra la nómina de julio. El periodo las recoge después por rango de fechas y
+ * las marca como pagadas; lo que quede suelto cuando alguien se retira lo recoge
+ * su liquidación definitiva.
  */
-export function NovedadesPeriodo(p: Props) {
+export function NovedadesNomina(p: Props) {
   const router = useRouter()
   const [grupo, setGrupo] = useState<Grupo>('comisiones')
   const [dialogo, setDialogo] = useState<Grupo | null>(null)
   const [eliminando, setEliminando] = useState<string | null>(null)
 
-  const editable = p.estado === 'BORRADOR' || p.estado === 'CALCULADA'
+  const pendientes =
+    p.comisiones.filter((c) => !c.pagadaEn).length +
+    p.horas.filter((h) => !h.pagadaEn).length +
+    p.conceptosNovedades.filter((n) => !n.pagadaEn).length
 
-  /** En CALCULADA la liquidación existente queda desactualizada al tocar novedades. */
+  /** Lo ya liquidado no cambia solo: hay que rehacer el periodo que lo pagó. */
   function recordarRecalculo() {
-    if (p.estado === 'CALCULADA') toast.info('Recalcula el período para que se refleje.')
+    router.refresh()
   }
 
   async function eliminarConcepto(id: string) {
@@ -85,19 +93,20 @@ export function NovedadesPeriodo(p: Props) {
     setEliminando(null)
     if (!res.ok) { toast.error(res.error); return }
     toast.success('Novedad eliminada.')
-    recordarRecalculo()
     router.refresh()
   }
 
   return (
-    <section className="mt-4">
+    <section>
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[13px] font-bold">Novedades del período</h2>
-        {editable && (
-          <Button size="sm" variant="outline" onClick={() => setDialogo(grupo)}>
-            <Plus className="size-4" /> Agregar
-          </Button>
-        )}
+        <p className="text-xs text-muted-foreground">
+          {pendientes === 0
+            ? 'Todo lo registrado ya se pagó en algún periodo.'
+            : `${pendientes} sin pagar · las recogerá el próximo periodo que cubra su fecha.`}
+        </p>
+        <Button size="sm" variant="outline" onClick={() => setDialogo(grupo)}>
+          <Plus className="size-4" /> Agregar
+        </Button>
       </div>
 
       <div className="mb-3 flex gap-1.5">
@@ -116,12 +125,8 @@ export function NovedadesPeriodo(p: Props) {
         ))}
       </div>
 
-      {!editable && (
-        <p className="mb-2 text-xs text-muted-foreground">Período {p.estado === 'APROBADA' ? 'aprobado' : 'cerrado'}: las novedades son de solo lectura.</p>
-      )}
-
       {grupo === 'comisiones' && (
-        p.comisiones.length === 0 ? <Vacia texto="Sin comisiones en este período." /> : (
+        p.comisiones.length === 0 ? <Vacia texto="Aún no hay comisiones registradas." /> : (
           <Card><CardContent className="divide-y p-0">
             {p.comisiones.map((c) => (
               <div key={c.id} className="flex items-center gap-3 p-3">
@@ -129,11 +134,12 @@ export function NovedadesPeriodo(p: Props) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{c.colaborador}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    Base {fmtCOP(c.baseCalculo)}{c.descripcion ? ` · ${c.descripcion}` : ''}
+                    {c.fecha} · base {fmtCOP(c.baseCalculo)}{c.descripcion ? ` · ${c.descripcion}` : ''}
                   </p>
                 </div>
                 <span className="text-sm font-medium tabular-nums">{fmtCOP(c.valor)}</span>
                 <Pill tone="ok">{TIPO_COMISION[c.tipo] ?? c.tipo}</Pill>
+                <EstadoPago pagadaEn={c.pagadaEn} />
               </div>
             ))}
           </CardContent></Card>
@@ -142,7 +148,7 @@ export function NovedadesPeriodo(p: Props) {
 
       {grupo === 'horas' && (
         <>
-          {p.horas.length === 0 ? <Vacia texto="Sin horas extra ni recargos en este período." /> : (
+          {p.horas.length === 0 ? <Vacia texto="Aún no hay horas extra ni recargos registrados." /> : (
             <Card><CardContent className="divide-y p-0">
               {p.horas.map((h) => (
                 <div key={h.id} className="flex items-center gap-3 p-3">
@@ -155,6 +161,7 @@ export function NovedadesPeriodo(p: Props) {
                   </div>
                   <span className="text-sm font-medium tabular-nums">{h.horas} h</span>
                   <Pill tone="info">{TIPO_HORA[h.tipoHora] ?? h.tipoHora}</Pill>
+                  <EstadoPago pagadaEn={h.pagadaEn} />
                 </div>
               ))}
             </CardContent></Card>
@@ -181,17 +188,20 @@ export function NovedadesPeriodo(p: Props) {
       )}
 
       {grupo === 'conceptos' && (
-        p.conceptosNovedades.length === 0 ? <Vacia texto="Sin conceptos aplicados en este período." /> : (
+        p.conceptosNovedades.length === 0 ? <Vacia texto="Aún no hay conceptos aplicados." /> : (
           <Card><CardContent className="divide-y p-0">
             {p.conceptosNovedades.map((n) => (
               <div key={n.id} className="flex items-center gap-3 p-3">
                 <Chip icono={Coins} color={n.tipo === 'DEVENGADO' ? 'emerald' : 'rose'} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{n.colaborador}</p>
-                  <p className="truncate text-xs text-muted-foreground">{n.concepto} · {fmtCOP(n.valor)}</p>
+                  <p className="truncate text-xs text-muted-foreground">{n.fecha} · {n.concepto} · {fmtCOP(n.valor)}</p>
                 </div>
                 <Pill tone={n.tipo === 'DEVENGADO' ? 'ok' : 'bad'}>{TIPO_CONCEPTO[n.tipo] ?? n.tipo}</Pill>
-                {editable && (
+                <EstadoPago pagadaEn={n.pagadaEn} />
+                {/* Lo ya pagado en un periodo cerrado no se borra: se corrige
+                    con un periodo de ajuste, y la acción lo rechaza igual. */}
+                {!n.pagadaEn && (
                   <Button variant="ghost" size="icon" aria-label="Eliminar novedad" onClick={() => eliminarConcepto(n.id)} disabled={eliminando !== null}>
                     {eliminando === n.id ? <Spinner /> : <Trash2 className="size-4 text-muted-foreground" />}
                   </Button>
@@ -203,13 +213,13 @@ export function NovedadesPeriodo(p: Props) {
       )}
 
       {dialogo === 'comisiones' && (
-        <DialogComision periodoId={p.periodoId} colaboradores={p.colaboradores} onDone={recordarRecalculo} onClose={() => setDialogo(null)} />
+        <DialogComision hoy={p.hoy} colaboradores={p.colaboradores} onDone={recordarRecalculo} onClose={() => setDialogo(null)} />
       )}
       {dialogo === 'horas' && (
-        <DialogHoras periodoId={p.periodoId} colaboradores={p.colaboradores} onDone={recordarRecalculo} onClose={() => setDialogo(null)} />
+        <DialogHoras hoy={p.hoy} colaboradores={p.colaboradores} onDone={recordarRecalculo} onClose={() => setDialogo(null)} />
       )}
       {dialogo === 'conceptos' && (
-        <DialogConcepto periodoId={p.periodoId} colaboradores={p.colaboradores} conceptos={p.conceptos} onDone={recordarRecalculo} onClose={() => setDialogo(null)} />
+        <DialogConcepto hoy={p.hoy} colaboradores={p.colaboradores} conceptos={p.conceptos} onDone={recordarRecalculo} onClose={() => setDialogo(null)} />
       )}
     </section>
   )
@@ -236,11 +246,12 @@ function SelectColaborador({ value, onChange, colaboradores }: {
   )
 }
 
-function DialogComision({ periodoId, colaboradores, onDone, onClose }: {
-  periodoId: string; colaboradores: ColaboradorOpcion[]; onDone: () => void; onClose: () => void
+function DialogComision({ hoy, colaboradores, onDone, onClose }: {
+  hoy: string; colaboradores: ColaboradorOpcion[]; onDone: () => void; onClose: () => void
 }) {
   const router = useRouter()
   const [colaboradorId, setColaboradorId] = useState('')
+  const [fecha, setFecha] = useState(hoy)
   const [tipo, setTipo] = useState<'VENTA' | 'RECAUDO'>('VENTA')
   const [base, setBase] = useState('')
   const [porcentaje, setPorcentaje] = useState('')
@@ -263,7 +274,7 @@ function DialogComision({ periodoId, colaboradores, onDone, onClose }: {
     // El % no se persiste como campo; queda documentado en la descripción para trazabilidad.
     const desc = descripcion.trim() || (porcentaje ? `Comisión del ${porcentaje}% sobre la base` : '')
     const res = await registrarComision({
-      colaboradorId, periodoId, tipo,
+      colaboradorId, fecha, tipo,
       baseCalculo: Number(base || 0), valor: Number(valor || 0),
       descripcion: desc || undefined,
     })
@@ -279,6 +290,9 @@ function DialogComision({ periodoId, colaboradores, onDone, onClose }: {
         <DialogHeader><DialogTitle>Registrar comisión</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <Campo label="Colaborador"><SelectColaborador value={colaboradorId} onChange={setColaboradorId} colaboradores={colaboradores} /></Campo>
+          <Campo label="Fecha de causación">
+            <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+          </Campo>
           <Campo label="Tipo">
             <Select value={tipo} onValueChange={(v) => setTipo(v as 'VENTA')}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
@@ -310,12 +324,12 @@ function DialogComision({ periodoId, colaboradores, onDone, onClose }: {
   )
 }
 
-function DialogHoras({ periodoId, colaboradores, onDone, onClose }: {
-  periodoId: string; colaboradores: ColaboradorOpcion[]; onDone: () => void; onClose: () => void
+function DialogHoras({ hoy, colaboradores, onDone, onClose }: {
+  hoy: string; colaboradores: ColaboradorOpcion[]; onDone: () => void; onClose: () => void
 }) {
   const router = useRouter()
   const [colaboradorId, setColaboradorId] = useState('')
-  const [fecha, setFecha] = useState('')
+  const [fecha, setFecha] = useState(hoy)
   const [tipoHora, setTipoHora] = useState('HED')
   const [modo, setModo] = useState<'RANGO' | 'MANUAL'>('RANGO')
   const [horaInicio, setHoraInicio] = useState('18:00')
@@ -329,7 +343,7 @@ function DialogHoras({ periodoId, colaboradores, onDone, onClose }: {
     if (modo === 'MANUAL' && !horas) { toast.error('Indica la cantidad de horas.'); return }
     setG(true)
     const res = await registrarHoras({
-      colaboradorId, periodoId, fecha, tipoHora: tipoHora as 'HED',
+      colaboradorId, fecha, tipoHora: tipoHora as 'HED',
       // En modo rango el backend clasifica por franja; las horas se ignoran, pero el schema pide ≥ 0.5.
       horas: modo === 'MANUAL' ? Number(horas) : 1,
       horaInicio: modo === 'RANGO' ? horaInicio : '',
@@ -390,11 +404,12 @@ function DialogHoras({ periodoId, colaboradores, onDone, onClose }: {
   )
 }
 
-function DialogConcepto({ periodoId, colaboradores, conceptos, onDone, onClose }: {
-  periodoId: string; colaboradores: ColaboradorOpcion[]; conceptos: ConceptoOpcion[]; onDone: () => void; onClose: () => void
+function DialogConcepto({ hoy, colaboradores, conceptos, onDone, onClose }: {
+  hoy: string; colaboradores: ColaboradorOpcion[]; conceptos: ConceptoOpcion[]; onDone: () => void; onClose: () => void
 }) {
   const router = useRouter()
   const [colaboradorId, setColaboradorId] = useState('')
+  const [fecha, setFecha] = useState(hoy)
   const [conceptoId, setConceptoId] = useState('')
   const [valor, setValor] = useState('')
   const [observaciones, setObservaciones] = useState('')
@@ -414,7 +429,7 @@ function DialogConcepto({ periodoId, colaboradores, conceptos, onDone, onClose }
     if (!conceptoId) { toast.error('Selecciona un concepto.'); return }
     setG(true)
     const res = await registrarNovedadConcepto({
-      colaboradorId, periodoId, conceptoId,
+      colaboradorId, fecha, conceptoId,
       valor: valor ? Number(valor) : undefined,
       observaciones: observaciones.trim() || undefined,
     })
@@ -429,10 +444,13 @@ function DialogConcepto({ periodoId, colaboradores, conceptos, onDone, onClose }
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Aplicar concepto</DialogTitle>
-          <DialogDescription>Suma un devengado o deducción configurable a un colaborador en este período.</DialogDescription>
+          <DialogDescription>Suma un devengado o deducción configurable a un colaborador. Lo recoge el periodo que cubra su fecha.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <Campo label="Colaborador"><SelectColaborador value={colaboradorId} onChange={setColaboradorId} colaboradores={colaboradores} /></Campo>
+          <Campo label="Fecha de causación">
+            <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+          </Campo>
           <Campo label="Concepto">
             {/* Catálogo vacío: el select quedaría muerto sin decir por qué. El
                 seed solo trae conceptos que calcula el motor, así que hasta que
@@ -476,4 +494,17 @@ function DialogConcepto({ periodoId, colaboradores, conceptos, onDone, onClose }
       </DialogContent>
     </Dialog>
   )
+}
+
+/**
+ * Si la novedad ya entró a un desprendible o sigue esperando.
+ *
+ * Es la señal que faltaba cuando esto vivía dentro del periodo: allá todo lo que
+ * se veía era, por definición, de ese periodo. Aquí conviven las de varios meses
+ * y hay que poder distinguir lo pagado de lo que aún se va a pagar.
+ */
+function EstadoPago({ pagadaEn }: { pagadaEn: string | null }) {
+  return pagadaEn
+    ? <Pill tone="muted">{pagadaEn}</Pill>
+    : <Pill tone="warn">Sin pagar</Pill>
 }

@@ -1286,8 +1286,8 @@ model AcuerdoEvaluacion {
 model ContratoOps {
   id            String            @id @default(uuid(7)) @db.Uuid
   numero        String            @unique
-  colaboradorId String            @map("colaborador_id") @db.Uuid
-  colaborador   Colaborador       @relation(fields: [colaboradorId], references: [id])
+  colaboradorId String?           @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador?      @relation(fields: [colaboradorId], references: [id])
   objeto        String
   valorTotal    Decimal           @map("valor_total") @db.Decimal(14, 2)
   valorMensual  Decimal?          @map("valor_mensual") @db.Decimal(14, 2)
@@ -1870,8 +1870,11 @@ model NovedadConcepto {
   id            String         @id @default(uuid(7)) @db.Uuid
   colaboradorId String         @map("colaborador_id") @db.Uuid
   colaborador   Colaborador    @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
-  periodoId     String         @map("periodo_id") @db.Uuid
-  periodo       PeriodoNomina  @relation(fields: [periodoId], references: [id], onDelete: Cascade)
+  // Fecha en que se CAUSA. La novedad existe por sí sola; el periodo la recoge
+  // por rango de fechas y le estampa su id al pagarla (null = sin pagar).
+  fecha         DateTime       @db.Date
+  periodoId     String?        @map("periodo_id") @db.Uuid
+  periodo       PeriodoNomina? @relation(fields: [periodoId], references: [id])
   conceptoId    String         @map("concepto_id") @db.Uuid
   concepto      ConceptoNomina @relation(fields: [conceptoId], references: [id])
   valor         Decimal        @db.Decimal(14, 2)
@@ -1880,6 +1883,7 @@ model NovedadConcepto {
 
   @@index([colaboradorId, periodoId])
   @@index([periodoId])
+  @@index([fecha])
   @@map("novedad_concepto")
 }
 
@@ -1958,6 +1962,9 @@ model Comision {
   id            String        @id @default(uuid(7)) @db.Uuid
   colaboradorId String        @map("colaborador_id") @db.Uuid
   colaborador   Colaborador   @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  // Fecha en que se causa la comisión, no en que se digitó: de ella depende a
+  // qué periodo entra y en qué ventana promedia para la liquidación.
+  fecha         DateTime      @db.Date
   periodoId     String?       @map("periodo_id") @db.Uuid
   periodo       PeriodoNomina? @relation(fields: [periodoId], references: [id])
   tipo          TipoComision
@@ -1967,6 +1974,7 @@ model Comision {
   creadoEn      DateTime      @default(now()) @map("creado_en")
 
   @@index([colaboradorId, periodoId])
+  @@index([fecha])
   @@map("comision")
 }
 

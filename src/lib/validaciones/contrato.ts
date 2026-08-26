@@ -90,7 +90,7 @@ export const suspensionSchema = z.object({
 export type SuspensionInput = z.infer<typeof suspensionSchema>
 
 export const contratoOpsSchema = z.object({
-  colaboradorId: z.uuid('Selecciona el contratista'),
+  colaboradorId: uuidOpc,
   objeto: z.string().trim().min(5, 'Describe el objeto del contrato').max(1000),
   valorTotal: z.coerce.number().min(0),
   valorMensual: z.coerce.number().min(0).optional(),

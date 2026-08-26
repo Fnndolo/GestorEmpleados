@@ -1,6 +1,7 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
-import { cargarParametros } from './parametros'
+import { cargarParametros, cargarTiposHora } from './parametros'
+import { horasMesJornada } from './horas'
 import { dias360 } from './liquidacion-definitiva'
 
 /**
@@ -139,7 +140,7 @@ export async function basesDesdeHistorial(
   // Variable ya registrado en ese tramo pero todavía sin desprendible: se paga
   // en la liquidación, porque la persona sale del ciclo mensual al terminarse
   // el contrato y nadie más se lo va a pagar.
-  const otroConceptoSalarial = await variableSinPagar(colaboradorId, inicioTramo, fechaRetiro)
+  const otroConceptoSalarial = await variableSinPagar(colaboradorId, fechaRetiro, salarioBase)
 
   return aplicarAjustes(
     {
@@ -269,20 +270,54 @@ export async function mesesParaPromedios(
   }
 }
 
-/** Comisiones y bonificaciones registradas en el tramo final y aún sin pagar. */
-async function variableSinPagar(colaboradorId: string, desde: Date, hasta: Date): Promise<number> {
-  if (desde > hasta) return 0
-  const [comisiones, bonificaciones] = await Promise.all([
+/**
+ * Variable ya causado que ninguna nómina alcanzó a pagar: lo que se le queda
+ * debiendo a quien se retira antes del cierre del mes.
+ *
+ * Se busca por `periodoId: null` —la marca de «sin pagar»— y no por rango de
+ * periodos: justamente lo que se persigue es lo que quedó suelto. Las horas
+ * extra se valoran con el mismo criterio del motor mensual.
+ */
+async function variableSinPagar(
+  colaboradorId: string,
+  hasta: Date,
+  salarioMensual: number,
+): Promise<number> {
+  const [comisiones, bonificaciones, horas, conceptos] = await Promise.all([
     prisma.comision.aggregate({
-      where: { colaboradorId, periodo: { fechaFin: { gte: desde, lte: hasta } } },
+      where: { colaboradorId, periodoId: null, fecha: { lte: hasta } },
       _sum: { valor: true },
     }),
     prisma.bonificacion.aggregate({
       where: { colaboradorId, estadoPago: 'PENDIENTE', constitutivoSalario: true },
       _sum: { valor: true },
     }),
+    prisma.novedadHoras.findMany({
+      where: { colaboradorId, periodoId: null, fecha: { lte: hasta } },
+      select: { tipoHora: true, horas: true },
+    }),
+    prisma.novedadConcepto.findMany({
+      where: { colaboradorId, periodoId: null, fecha: { lte: hasta } },
+      include: { concepto: { select: { tipo: true, constitutivoSalario: true, activo: true } } },
+    }),
   ])
-  return Number(comisiones._sum.valor ?? 0) + Number(bonificaciones._sum.valor ?? 0)
+
+  let valorHoras = 0
+  if (horas.length > 0) {
+    const tipos = await cargarTiposHora(hasta)
+    const valorHora = salarioMensual / horasMesJornada(hasta)
+    for (const h of horas) valorHoras += valorHora * (tipos[h.tipoHora] ?? 0) * Number(h.horas)
+  }
+
+  const valorConceptos = conceptos
+    .filter((n) => n.concepto.activo && n.concepto.tipo === 'DEVENGADO' && n.concepto.constitutivoSalario)
+    .reduce((t, n) => t + Number(n.valor), 0)
+
+  return Math.round(
+    Number(comisiones._sum.valor ?? 0) +
+    Number(bonificaciones._sum.valor ?? 0) +
+    valorHoras + valorConceptos,
+  )
 }
 
 /**

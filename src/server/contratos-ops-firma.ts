@@ -112,10 +112,12 @@ export async function aplicarFirmaContratoOps(opts: {
   })
 
   // Avisar a la contraparte: firmar no sirve de nada si el otro no se entera.
-  const contratista = await prisma.colaborador.findUnique({
-    where: { id: c.colaboradorId },
-    select: { usuarioId: true, nombres: true, apellidos: true },
-  })
+  const contratista = c.colaboradorId
+    ? await prisma.colaborador.findUnique({
+        where: { id: c.colaboradorId },
+        select: { usuarioId: true, nombres: true, apellidos: true },
+      })
+    : null
   if (firmado) {
     // Ambas partes firmaron: contrato perfeccionado, avisar a ambos lados.
     if (contratista?.usuarioId) {

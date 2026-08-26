@@ -113,7 +113,7 @@ export function ContratoOpsSplit({
   const contratistaListo = Boolean(w.colaboradorId)
   const estadoContratista: EstadoSeccion = contratistaListo
     ? { tono: 'muted', texto: 'Autocompletado', auto: true }
-    : { tono: 'warn', texto: 'Elige el colaborador' }
+    : { tono: 'muted', texto: 'Datos manuales' }
   const faltaCondiciones = !w.sedeId ? 'Falta la sede'
     : !Number(w.valorTotal) ? 'Falta el valor'
     : !w.fechaInicio ? 'Falta la fecha de inicio'
@@ -268,14 +268,14 @@ export function ContratoOpsSplit({
         {/* ── Contratista: prellenado al elegir el colaborador ── */}
         <Seccion
           icono={User} color="violet" titulo="Contratista"
-          resumen={w.contratistaNombre ? `${w.contratistaNombre}${w.contratistaCc ? ` · ${w.contratistaCc}` : ''}` : 'Elige el colaborador para autocompletar sus datos'}
+          resumen={w.contratistaNombre ? `${w.contratistaNombre}${w.contratistaCc ? ` · ${w.contratistaCc}` : ''}` : 'Opcional: autocompleta los datos desde una ficha'}
           estado={estadoContratista} prellenada={contratistaListo}
           open={panel.has('contratista')} onToggle={() => togglePanel('contratista')}
         >
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
-              <Label>Buscar colaborador</Label>
-              <SelectorColaborador value={w.colaboradorId} onChange={onSelectContratista} />
+              <Label>Buscar colaborador (opcional)</Label>
+              <SelectorColaborador value={w.colaboradorId ?? ''} onChange={onSelectContratista} placeholder="Selecciona para autocompletar…" />
               {errors.colaboradorId && <p className="text-xs text-destructive">{errors.colaboradorId.message}</p>}
             </div>
             <div className="space-y-1.5"><Label>Nombre</Label><Input spellCheck lang="es" {...register('contratistaNombre')} /></div>

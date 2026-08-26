@@ -115,18 +115,17 @@ export const eliminarPeriodo = accion(
       throw new ErrorNegocio('No se puede eliminar un periodo cerrado o pagado. Reábrelo primero si necesitas corregirlo.')
     }
 
+    // Las novedades que este periodo había recogido quedan sueltas, no se borran:
+    // de eso ya se encarga revertirEfectosPeriodo. La comisión existió aunque el
+    // periodo se elimine, y la recoge el siguiente que cubra su fecha.
+    const sueltas = await prisma.comision.count({ where: { periodoId } })
+      + await prisma.novedadHoras.count({ where: { periodoId } })
+      + await prisma.novedadConcepto.count({ where: { periodoId } })
     await revertirEfectosPeriodo(periodoId)
-    // Comisiones y horas se DESLIGAN (no se borran): las digitó el usuario y se pueden
-    // reasignar al periodo correcto. Las novedades de concepto sí desaparecen con el
-    // periodo (la relación es onDelete: Cascade y su periodoId es obligatorio).
-    const conceptosBorrados = await prisma.novedadConcepto.count({ where: { periodoId } })
-    await prisma.$transaction([
-      prisma.comision.updateMany({ where: { periodoId }, data: { periodoId: null } }),
-      prisma.novedadHoras.updateMany({ where: { periodoId }, data: { periodoId: null } }),
-    ])
     await dbAuditado.periodoNomina.delete({ where: { id: periodoId } })
     revalidatePath('/nomina')
-    return { nombre: p.nombre, conceptosBorrados }
+    revalidatePath('/nomina/novedades')
+    return { nombre: p.nombre, sueltas }
   },
 )
 
@@ -185,13 +184,20 @@ export const generarPazSalvoDePrestamo = accion(
   },
 )
 
+/**
+ * Registra una comisión con su fecha de causación, sin amarrarla a un periodo.
+ *
+ * El periodo la recoge después por rango de fechas. Así se puede registrar el
+ * día que ocurre —sin esperar a que alguien abra la nómina del mes— y lo que
+ * quede sin pagar cuando alguien se retira lo recoge su liquidación.
+ */
 export const registrarComision = accion(
   {
     modulo: 'nomina',
     accion: 'CREAR',
     schema: z.object({
       colaboradorId: z.uuid(),
-      periodoId: z.uuid(),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       tipo: z.enum(['VENTA', 'RECAUDO']),
       baseCalculo: z.coerce.number().min(0),
       valor: z.coerce.number().min(0),
@@ -200,9 +206,26 @@ export const registrarComision = accion(
   },
   async (d) => {
     await dbAuditado.comision.create({
-      data: { colaboradorId: d.colaboradorId, periodoId: d.periodoId, tipo: d.tipo, baseCalculo: d.baseCalculo, valor: d.valor, descripcion: d.descripcion },
+      data: {
+        colaboradorId: d.colaboradorId, fecha: parseFechaISO(d.fecha)!, tipo: d.tipo,
+        baseCalculo: d.baseCalculo, valor: d.valor, descripcion: d.descripcion,
+      },
     })
-    revalidatePath(`/nomina/${d.periodoId}`)
+    revalidatePath('/nomina/novedades')
+  },
+)
+
+/** Solo se puede borrar mientras nadie la haya pagado. */
+export const eliminarComision = accion(
+  { modulo: 'nomina', accion: 'CREAR', schema: z.object({ id: z.uuid() }) },
+  async ({ id }) => {
+    const c = await prisma.comision.findUniqueOrThrow({ where: { id }, include: { periodo: true } })
+    if (c.periodo && (c.periodo.estado === 'CERRADA' || c.periodo.estado === 'PAGADA')) {
+      throw new ErrorNegocio('Ya se pagó en un periodo cerrado. Corrígelo con un periodo de ajuste.')
+    }
+    await dbAuditado.comision.delete({ where: { id } })
+    revalidatePath('/nomina/novedades')
+    return { ok: true }
   },
 )
 
@@ -217,27 +240,26 @@ export const registrarNovedadConcepto = accion(
     accion: 'CREAR',
     schema: z.object({
       colaboradorId: z.uuid(),
-      periodoId: z.uuid(),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       conceptoId: z.uuid(),
       valor: z.coerce.number().min(0).optional(),
       observaciones: z.string().max(300).optional(),
     }),
   },
   async (d) => {
-    const [periodo, concepto] = await Promise.all([
-      prisma.periodoNomina.findUniqueOrThrow({ where: { id: d.periodoId } }),
-      prisma.conceptoNomina.findUniqueOrThrow({ where: { id: d.conceptoId } }),
-    ])
-    if (periodo.estado === 'CERRADA' || periodo.estado === 'PAGADA') throw new ErrorNegocio('El periodo está cerrado.')
+    const concepto = await prisma.conceptoNomina.findUniqueOrThrow({ where: { id: d.conceptoId } })
     if (!concepto.activo) throw new ErrorNegocio('El concepto está inactivo.')
     if (concepto.tipoCalculo === 'SISTEMA') throw new ErrorNegocio('Este concepto lo calcula el motor automáticamente; no se aplica a mano.')
     const valor = d.valor ?? Number(concepto.valorFijo ?? 0)
     if (valor <= 0) throw new ErrorNegocio('Indica el valor (el concepto no tiene valor fijo configurado).')
 
     await dbAuditado.novedadConcepto.create({
-      data: { colaboradorId: d.colaboradorId, periodoId: d.periodoId, conceptoId: d.conceptoId, valor, observaciones: d.observaciones || null },
+      data: {
+        colaboradorId: d.colaboradorId, fecha: parseFechaISO(d.fecha)!, conceptoId: d.conceptoId,
+        valor, observaciones: d.observaciones || null,
+      },
     })
-    revalidatePath(`/nomina/${d.periodoId}`)
+    revalidatePath('/nomina/novedades')
     return { ok: true }
   },
 )
@@ -246,9 +268,11 @@ export const eliminarNovedadConcepto = accion(
   { modulo: 'nomina', accion: 'CREAR', schema: z.object({ id: z.uuid() }) },
   async ({ id }) => {
     const n = await prisma.novedadConcepto.findUniqueOrThrow({ where: { id }, include: { periodo: true } })
-    if (n.periodo.estado === 'CERRADA' || n.periodo.estado === 'PAGADA') throw new ErrorNegocio('El periodo está cerrado.')
+    if (n.periodo && (n.periodo.estado === 'CERRADA' || n.periodo.estado === 'PAGADA')) {
+      throw new ErrorNegocio('Ya se pagó en un periodo cerrado. Corrígelo con un periodo de ajuste.')
+    }
     await dbAuditado.novedadConcepto.delete({ where: { id } })
-    revalidatePath(`/nomina/${n.periodoId}`)
+    revalidatePath('/nomina/novedades')
     return { ok: true }
   },
 )
@@ -259,7 +283,6 @@ export const registrarHoras = accion(
     accion: 'CREAR',
     schema: z.object({
       colaboradorId: z.uuid(),
-      periodoId: z.uuid(),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       tipoHora: z.enum(['HED', 'HEN', 'RN', 'RD', 'RND', 'HEDD', 'HEND']),
       horas: z.coerce.number().min(0.5).max(12),
@@ -283,19 +306,19 @@ export const registrarHoras = accion(
       for (const t of tramos) {
         await dbAuditado.novedadHoras.create({
           data: {
-            colaboradorId: d.colaboradorId, periodoId: d.periodoId, fecha: parseFechaISO(d.fecha)!,
+            colaboradorId: d.colaboradorId, fecha: parseFechaISO(d.fecha)!,
             tipoHora: t.tipoHora, horas: t.horas, horaInicio: d.horaInicio, horaFin: d.horaFin,
             observaciones: tramos.length > 1 ? 'Clasificada automáticamente por franja horaria (Ley 2466).' : null,
           },
         })
       }
-      revalidatePath(`/nomina/${d.periodoId}`)
+      revalidatePath('/nomina/novedades')
       return { tramos }
     }
     await dbAuditado.novedadHoras.create({
-      data: { colaboradorId: d.colaboradorId, periodoId: d.periodoId, fecha: parseFechaISO(d.fecha)!, tipoHora: d.tipoHora, horas: d.horas, horaInicio: d.horaInicio || '00:00', horaFin: d.horaFin || '00:00' },
+      data: { colaboradorId: d.colaboradorId, fecha: parseFechaISO(d.fecha)!, tipoHora: d.tipoHora, horas: d.horas, horaInicio: d.horaInicio || '00:00', horaFin: d.horaFin || '00:00' },
     })
-    revalidatePath(`/nomina/${d.periodoId}`)
+    revalidatePath('/nomina/novedades')
     return { tramos: [{ tipoHora: d.tipoHora, horas: d.horas }] }
   },
 )

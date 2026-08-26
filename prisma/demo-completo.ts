@@ -146,8 +146,8 @@ async function sembrar() {
   // ── Comisiones y horas extra en ese periodo ──
   await prisma.comision.createMany({
     data: [
-      { colaboradorId: id(4), periodoId: periodo.id, tipo: 'VENTA', baseCalculo: 10_000_000, valor: 500_000, descripcion: 'Comisión de ventas' },
-      { colaboradorId: id(6), periodoId: periodo.id, tipo: 'RECAUDO', baseCalculo: 5_000_000, valor: 150_000, descripcion: 'Comisión de recaudo' },
+      { colaboradorId: id(4), periodoId: periodo.id, fecha: periodo.fechaFin, tipo: 'VENTA', baseCalculo: 10_000_000, valor: 500_000, descripcion: 'Comisión de ventas' },
+      { colaboradorId: id(6), periodoId: periodo.id, fecha: periodo.fechaFin, tipo: 'RECAUDO', baseCalculo: 5_000_000, valor: 150_000, descripcion: 'Comisión de recaudo' },
     ],
   })
   await prisma.novedadHoras.createMany({

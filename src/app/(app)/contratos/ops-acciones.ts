@@ -39,7 +39,7 @@ export const crearContratoOps = accion(
     const c = await dbAuditado.contratoOps.create({
       data: {
         numero,
-        colaboradorId: d.colaboradorId,
+        ...(d.colaboradorId ? { colaboradorId: d.colaboradorId } : {}),
         objeto: d.objeto,
         valorTotal: d.valorTotal,
         valorMensual: d.valorMensual ?? null,
@@ -159,7 +159,7 @@ export const crearContratoOps = accion(
     }
 
     // Avisar al contratista (si tiene usuario) que su contrato quedó pendiente de firma.
-    if (documentoId) {
+    if (documentoId && d.colaboradorId) {
       const uid = await usuarioDeColaborador(d.colaboradorId)
       if (uid) {
         await avisar(uid, {
@@ -284,6 +284,7 @@ export const generarAutorizacionDatos = accion(
     }
     const col = c.colaborador
     const snapshot = (c.contenidoPdf ?? {}) as Record<string, unknown>
+    if (!col) throw new ErrorNegocio('Este contrato usa datos manuales; la autorización ya se generó con el contrato.')
 
     const autorizacion = await construirDatosAutorizacion({
       datos: {

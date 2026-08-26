@@ -122,9 +122,9 @@ export default async function ContratosPage({
             {contratosOps.map((c) => (
               <Link key={c.id} href={`/contratos/ops/${c.id}`} className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/40">
                 <Chip icono={Receipt} color="teal" />
-                <AvatarColab c={c.colaborador} />
+                {c.colaborador ? <AvatarColab c={c.colaborador} /> : <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">?</div>}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{c.colaborador.nombres} {c.colaborador.apellidos}</p>
+                  <p className="truncate text-sm font-medium">{c.colaborador ? `${c.colaborador.nombres} ${c.colaborador.apellidos}` : 'Contratista sin ficha'}</p>
                   <p className="truncate text-xs text-muted-foreground">{c.numero} · {c.objeto}</p>
                 </div>
                 <div className="hidden text-right sm:block">

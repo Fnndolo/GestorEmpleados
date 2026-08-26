@@ -5,6 +5,7 @@ import { cargarParametros } from './parametros'
 import { liquidar } from './motor'
 import { diasFueraDelVinculo, diasSuperpuestos, pagoIncapacidad } from './ausencias'
 import { horasMesJornada } from './horas'
+import { CONTRATOS_DE_NOMINA } from '@/lib/vinculo-contrato'
 import { regenerarNovedadesAsistencia } from '@/server/asistencia/horas-asistencia'
 
 /**
@@ -42,6 +43,14 @@ export async function revertirEfectosPeriodo(periodoId: string): Promise<void> {
     where: { pagoAnticipadoPeriodoId: periodoId },
     data: { pagoAnticipadoPeriodoId: null },
   })
+
+  // Novedades que este periodo había recogido: se SUELTAN, no se borran. La
+  // comisión existió aunque el periodo se rehaga o se elimine; queda pendiente
+  // y la recoge el siguiente. Borrarlas perdería trabajo que alguien registró.
+  const soltar = { where: { periodoId }, data: { periodoId: null } }
+  await prisma.novedadHoras.updateMany(soltar)
+  await prisma.comision.updateMany(soltar)
+  await prisma.novedadConcepto.updateMany(soltar)
 }
 
 export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: number; horasSinRefrescar: number }> {
@@ -56,16 +65,22 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
   const aplicaRetefuente = config?.aplicaRetefuente ?? false
   const parametros = await cargarParametros(periodo.fechaFin)
 
-  // Colaboradores con contrato laboral activo en el periodo.
+  // Colaboradores con vínculo laboral vigente al cierre de este periodo.
   //
-  // Quien se retira NO entra: los días que alcanzó a trabajar se le pagan en su
-  // liquidación definitiva junto con las prestaciones, como en la colilla que
-  // emite el software contable. Incluirlo aquí le pagaría el mes dos veces.
+  // El corte es la FECHA DE RETIRO contra el cierre, no el estado del contrato.
+  // Filtrar por contrato ACTIVO parecía equivalente, pero no lo es: al registrar
+  // una terminación el contrato queda TERMINADO para siempre, así que rehacer un
+  // periodo ANTERIOR al retiro borraba de la nómina a alguien que sí lo trabajó.
+  //
+  // Del periodo en que cae el retiro sí queda por fuera: esos días se le pagan en
+  // su liquidación definitiva junto con las prestaciones, como en la colilla que
+  // emite el software contable. Incluirlo en ambos le pagaría el mes dos veces.
   const contratosCrudos = await prisma.contrato.findMany({
     where: {
-      estado: 'ACTIVO',
-      tipo: { in: ['TERMINO_FIJO', 'TERMINO_INDEFINIDO', 'OBRA_LABOR'] },
+      estado: { in: ['ACTIVO', 'TERMINADO'] },
+      tipo: { in: [...CONTRATOS_DE_NOMINA] },
       fechaInicio: { lte: periodo.fechaFin },
+      colaborador: { OR: [{ fechaRetiro: null }, { fechaRetiro: { gt: periodo.fechaFin } }] },
     },
     include: { colaborador: true },
     orderBy: { fechaInicio: 'desc' },
@@ -86,6 +101,23 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
   const asistencia = await regenerarNovedadesAsistencia(periodo)
 
   await revertirEfectosPeriodo(periodoId)
+
+  /**
+   * Novedades que le tocan a este periodo: las causadas hasta su cierre que
+   * nadie ha pagado todavía, más las que este mismo periodo ya recogió (para
+   * que recalcular sea idempotente y no las duplique ni las suelte).
+   *
+   * Se filtra por FECHA y no por periodo, que es lo que permite registrarlas
+   * cuando ocurren sin esperar a que alguien abra la nómina. Una novedad
+   * atrasada —de un mes que nunca se liquidó, o digitada tarde— entra en el
+   * siguiente periodo en vez de perderse.
+   */
+  const porRecoger = {
+    OR: [
+      { periodoId: null, fecha: { lte: periodo.fechaFin } },
+      { periodoId },
+    ],
+  }
 
   let liquidados = 0
   for (const contrato of contratos) {
@@ -130,6 +162,11 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
     // cuentan como ausencia para que el salario y el auxilio salgan proporcionales
     // (el motor ya prorratea por diasTrabajados).
     const diasSinVinculo = diasFueraDelVinculo(contrato.fechaInicio, contrato.colaborador.fechaRetiro, periodo)
+
+    // Ni un día de vínculo en todo el periodo: no le corresponde nada y no debe
+    // salir en la nómina. Pasa con un contrato que empieza después del cierre, o
+    // en el hueco entre dos vínculos de alguien que fue recontratado.
+    if (diasSinVinculo >= diasPeriodo) continue
 
     const diasAusencia = Math.min(
       diasPeriodo,
@@ -185,7 +222,7 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
 
     // Horas extra del periodo. El divisor de la hora ordinaria sigue la jornada
     // máxima vigente (Ley 2101, RIT art. 18): 220 (44h) hasta 14-jul-2026, 210 (42h) después.
-    const horas = await prisma.novedadHoras.findMany({ where: { colaboradorId, periodoId } })
+    const horas = await prisma.novedadHoras.findMany({ where: { colaboradorId, ...porRecoger } })
     const tiposHora = await import('./parametros').then((m) => m.cargarTiposHora(periodo.fechaFin))
     const valorHora = salarioEfectivo / horasMesJornada(periodo.fechaFin)
     let valorHorasExtra = 0
@@ -194,8 +231,9 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
       valorHorasExtra += valorHora * factor * Number(h.horas)
     }
 
-    // Comisiones del periodo
-    const comisiones = await prisma.comision.aggregate({ where: { colaboradorId, periodoId }, _sum: { valor: true } })
+    // Comisiones que le corresponden a este periodo
+    const comisiones = await prisma.comision.findMany({ where: { colaboradorId, ...porRecoger } })
+    const totalComisiones = comisiones.reduce((t, c) => t + Number(c.valor), 0)
 
     // Bonificaciones a pagar en este periodo: las pendientes sin periodo asignado,
     // más las que YA se asignaron a este periodo (para que el recálculo sea idempotente
@@ -233,7 +271,7 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
     // Conceptos configurables aplicados a este colaborador en el periodo:
     // el motor los liquida según las banderas del catálogo (art. 127/128 CST).
     const novedadesConcepto = await prisma.novedadConcepto.findMany({
-      where: { colaboradorId, periodoId },
+      where: { colaboradorId, ...porRecoger },
       include: { concepto: true },
     })
     const otrosConceptos = novedadesConcepto
@@ -256,7 +294,7 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
       diasTrabajados,
       diasPeriodo,
       valorHorasExtra: Math.round(valorHorasExtra),
-      comisiones: Number(comisiones._sum.valor ?? 0),
+      comisiones: totalComisiones,
       bonificacionConstitutiva,
       bonificacionNoConstitutiva,
       valorIncapacidad,
@@ -301,6 +339,15 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
         where: { id: { in: bonos.map((b) => b.id) } },
         data: { estadoPago: 'PAGADO', periodoId, fechaPago: periodo.fechaFin },
       })
+    }
+
+    // Igual con las demás novedades: quedan estampadas con este periodo, que es
+    // lo que las marca como pagadas y evita que el siguiente las vuelva a tomar.
+    const marcar = { data: { periodoId } }
+    if (horas.length > 0) await prisma.novedadHoras.updateMany({ where: { id: { in: horas.map((h) => h.id) } }, ...marcar })
+    if (comisiones.length > 0) await prisma.comision.updateMany({ where: { id: { in: comisiones.map((c) => c.id) } }, ...marcar })
+    if (novedadesConcepto.length > 0) {
+      await prisma.novedadConcepto.updateMany({ where: { id: { in: novedadesConcepto.map((n) => n.id) } }, ...marcar })
     }
     liquidados++
   }

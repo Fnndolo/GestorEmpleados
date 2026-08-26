@@ -44,7 +44,7 @@ export async function alertarContratosVencidosSinCierre(): Promise<{ vencidos: n
 
   for (const c of pendientes) {
     const dias = Math.floor((hoy.getTime() - c.fechaFin!.getTime()) / 86_400_000)
-    const persona = `${c.colaborador.nombres} ${c.colaborador.apellidos}`
+    const persona = c.colaborador ? `${c.colaborador.nombres} ${c.colaborador.apellidos}` : 'contratista sin ficha'
     for (const u of destinatarios) {
       await notificarUsuario(
         u.id,

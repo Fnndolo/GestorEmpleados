@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  vinculoDeContrato, vinculoCoincide, discrepanciaVinculo,
+  vinculoDeContrato, vinculoCoincide, discrepanciaVinculo, CONTRATOS_DE_NOMINA,
   type TipoContratoLaboral, type TipoVinculo,
 } from './vinculo-contrato'
 
@@ -60,5 +60,28 @@ describe('discrepanciaVinculo', () => {
         else expect(msg).toBeTruthy()
       }
     }
+  })
+})
+
+describe('CONTRATOS_DE_NOMINA', () => {
+  it('incluye el aprendizaje SENA', () => {
+    // Estuvo fuera de la lista del liquidador y el efecto era que un aprendiz no
+    // aparecía en ninguna nómina: no se le pagaba nada. En esta empresa el
+    // aprendiz es laboral desde el primer día.
+    expect(CONTRATOS_DE_NOMINA).toContain('APRENDIZAJE_SENA')
+  })
+
+  it('incluye los tres tipos laborales corrientes', () => {
+    for (const t of ['TERMINO_FIJO', 'TERMINO_INDEFINIDO', 'OBRA_LABOR']) {
+      expect(CONTRATOS_DE_NOMINA).toContain(t)
+    }
+  })
+
+  it('deja por fuera la práctica, que no genera salario', () => {
+    expect(CONTRATOS_DE_NOMINA).not.toContain('PRACTICA')
+  })
+
+  it('todo tipo de nómina tiene su vínculo equivalente en la ficha', () => {
+    for (const t of CONTRATOS_DE_NOMINA) expect(vinculoDeContrato(t)).toBeTruthy()
   })
 })
