@@ -140,8 +140,14 @@ export function liquidar(e: EntradaLiquidacion): ResultadoLiquidacion {
   const pension = ibcDec.times(p.PENSION_EMPLEADO)
   agregar(lineas, ded, 'PENSION_EMP', 'Pensión empleado (4%)', 'DEDUCCION', peso(pension), { base: ibcRedondeado, factor: p.PENSION_EMPLEADO })
 
-  // FSP: si el IBC mensualizado ≥ 4 SMMLV
-  const ibcMensual = e.diasTrabajados > 0 ? ibcDec.times(30).dividedBy(e.diasTrabajados) : ibcDec
+  // FSP: si el IBC mensualizado ≥ 4 SMMLV.
+  //
+  // El umbral se mide sobre el IBC REAL, no sobre el redondeado a centenas: ese
+  // redondeo es una convención para reportar (PILA), y a ciertos salarios baja
+  // la cifra unos pesos. Quien gana exactamente 4 SMMLV tiene un IBC de
+  // 7.003.620 que redondeado queda en 7.003.600, y por 20 pesos se libraba de un
+  // aporte que la ley sí le exige (Ley 797 de 2003).
+  const ibcMensual = e.diasTrabajados > 0 ? ibc.times(30).dividedBy(e.diasTrabajados) : ibc
   if (ibcMensual.greaterThanOrEqualTo(SMMLV.times(4))) {
     const fsp = ibcDec.times(p.FSP)
     agregar(lineas, ded, 'FSP_EMP', 'Fondo de solidaridad pensional', 'DEDUCCION', peso(fsp), { base: ibcRedondeado, factor: p.FSP })
