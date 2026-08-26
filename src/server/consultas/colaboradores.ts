@@ -2,6 +2,7 @@ import 'server-only'
 import type { Prisma } from '@/generated/prisma/client'
 import { alcanceDe, type UsuarioSesion } from '@/server/sesion'
 import { sedeActualId } from '@/server/sede-actual'
+import { normalizarTexto } from '@/lib/texto'
 
 /**
  * Construye el `where` de Prisma para Colaborador según el alcance del usuario
@@ -49,4 +50,34 @@ export async function whereColaboradores(
     cond.sedeId = sedeActiva
   }
   return cond
+}
+
+/**
+ * Filtro de búsqueda libre de colaboradores (nombre o documento).
+ *
+ * `busquedaNormalizada` es una columna cache: se recalcula en cada escritura y
+ * por eso puede quedar desalineada si algún camino de creación se olvida de
+ * llenarla (ya pasó con las fichas nacidas de un acuerdo de evaluación, que
+ * quedaban con la cadena vacía e invisibles para todo buscador). Por eso además
+ * de la columna se consultan los campos reales: la cache acelera y cubre la
+ * búsqueda por nombre completo, los campos reales garantizan que nadie
+ * desaparezca aunque la cache esté vacía o vieja.
+ *
+ * Va envuelto en `AND` a propósito: el `where` de alcance usa `OR` en el caso
+ * EQUIPO, y un `OR` en el nivel raíz lo pisaría — dejando ver a todo el equipo
+ * sin filtrar por el texto buscado.
+ */
+export function filtroBusquedaColaborador(q: string): Prisma.ColaboradorWhereInput {
+  const texto = q.trim()
+  if (!texto) return {}
+  return {
+    AND: [{
+      OR: [
+        { busquedaNormalizada: { contains: normalizarTexto(texto) } },
+        { nombres: { contains: texto, mode: 'insensitive' } },
+        { apellidos: { contains: texto, mode: 'insensitive' } },
+        { numeroDocumento: { contains: texto } },
+      ],
+    }],
+  }
 }

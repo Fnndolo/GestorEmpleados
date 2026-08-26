@@ -1,12 +1,11 @@
 import Link from 'next/link'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { whereColaboradores } from '@/server/consultas/colaboradores'
+import { whereColaboradores, filtroBusquedaColaborador } from '@/server/consultas/colaboradores'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Button } from '@/components/ui/button'
 import { Plus, Network, Upload } from 'lucide-react'
 import { ListaColaboradores } from './lista-cliente'
-import { normalizarTexto } from '@/lib/texto'
 import type { Prisma } from '@/generated/prisma/client'
 
 export const metadata = { title: 'Colaboradores · Smart Gadgets RH' }
@@ -26,7 +25,7 @@ export default async function ColaboradoresPage({
   const filtros: Prisma.ColaboradorWhereInput = { ...baseWhere }
   if (tab !== 'TODOS') filtros.tipoVinculo = tab as Prisma.ColaboradorWhereInput['tipoVinculo']
   if (q.trim()) {
-    filtros.busquedaNormalizada = { contains: normalizarTexto(q) }
+    Object.assign(filtros, filtroBusquedaColaborador(q))
   }
 
   const [colaboradores, conteos] = await Promise.all([

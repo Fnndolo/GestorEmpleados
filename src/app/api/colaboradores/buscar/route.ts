@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { obtenerSesion, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { whereColaboradores } from '@/server/consultas/colaboradores'
-import { normalizarTexto } from '@/lib/texto'
+import { whereColaboradores, filtroBusquedaColaborador } from '@/server/consultas/colaboradores'
 
 export const runtime = 'nodejs'
 
@@ -14,9 +13,7 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? ''
   if (q.length < 2) return NextResponse.json({ resultados: [] })
 
-  const base = await whereColaboradores(usuario, {
-    busquedaNormalizada: { contains: normalizarTexto(q) },
-  }, { ignorarSedeActiva: true })
+  const base = await whereColaboradores(usuario, filtroBusquedaColaborador(q), { ignorarSedeActiva: true })
 
   const colaboradores = await prisma.colaborador.findMany({
     where: base,
