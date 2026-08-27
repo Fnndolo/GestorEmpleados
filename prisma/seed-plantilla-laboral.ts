@@ -53,7 +53,7 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
       'limitaciones legales.',
   },
   {
-    titulo: 'TERCERA. – FUNCIONES DE EL EMPLEADO:',
+    titulo: 'TERCERA. – FUNCIONES DEL EMPLEADO:',
     cuerpo:
       'En desarrollo del objeto contractual, EL EMPLEADO ejecutará, durante el plazo fijo pactado, las siguientes funciones ' +
       'de actividades comerciales para {{empresa_razon_social}}, orientadas al cumplimiento de metas mensuales verificables:',
@@ -69,7 +69,7 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
       'en todo momento la facultad de supervisión, control y orientación contratada.',
   },
   {
-    titulo: 'CUARTA. – OBLIGACONES GENERALES Y COMPLEMENTARIAS DE EL EMPLEADO:',
+    titulo: 'CUARTA. – OBLIGACONES GENERALES Y COMPLEMENTARIAS DEL EMPLEADO:',
     cuerpo:
       '- Ejecutar profesionalmente las actividades de promoción y venta de los productos de {{empresa_marca}}, contribuyendo al posicionamiento y fortalecimiento de la marca.\n' +
       '- Impulsar el crecimiento cualitativo y cuantitativo del negocio en la zona asignada, manteniéndose activo, motivado e informado para conquistar, fomentar y conservar el mercado.\n' +
@@ -90,7 +90,7 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
       '- EL EMPLEADO cumplirá con todas las demás obligaciones necesarias para la adecuada ejecución del objeto contractual, conforme a las instrucciones legales y comerciales impartidas en el marco del presente contrato.',
   },
   {
-    titulo: 'QUINTA. - OBLIGACIONES DE EL EMPLEADOR:',
+    titulo: 'QUINTA. - OBLIGACIONES DEL EMPLEADOR:',
     cuerpo:
       'De conformidad con lo dispuesto en el artículo 57 del Código Sustantivo del Trabajo, EL EMPLEADOR se obliga a:\n' +
       'Afiliar a EL EMPLEADO al Sistema de Seguridad Social Integral y efectuar los aportes correspondientes; pagar ' +
@@ -312,7 +312,7 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
       '3. Por la ocurrencia de fuerza mayor o caso fortuito debidamente acreditado, que imposibilite de manera definitiva el ' +
       'cumplimiento del objeto contractual.\n' +
       '4. Por decisión unilateral de {{empresa_razon_social}}, cuando existan motivos comerciales, estratégicos u operativos que, ' +
-      'a juicio DE EL EMPLEADOR, hagan inviable la continuidad del contrato. En tal caso, se notificará a EL EMPLEADO, la ' +
+      'a juicio DEL EMPLEADOR, hagan inviable la continuidad del contrato. En tal caso, se notificará a EL EMPLEADO, la ' +
       'terminación de forma inmediata.\n' +
       'Liquidación: En todos los casos de terminación anticipada, las partes realizarán la liquidación contractual en un plazo ' +
       'máximo de quince (15) días calendario contados desde la fecha de terminación efectiva del contrato.',
@@ -353,7 +353,7 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
       'Las notificaciones válidas del contrato se harán a las direcciones físicas o electrónicas indicadas por ambas partes.',
   },
   {
-    titulo: 'VIGÉSIMA CUARTA. – DECLARACIONES DE EL EMPLEADO:',
+    titulo: 'VIGÉSIMA CUARTA. – DECLARACIONES DEL EMPLEADO:',
     cuerpo:
       'EL EMPLEADO hace las siguientes declaraciones:\n' +
       '- He revisado y conozco en su totalidad los documentos que integran el proceso contractual, incluidos términos, condiciones y alcances del presente contrato.\n' +
