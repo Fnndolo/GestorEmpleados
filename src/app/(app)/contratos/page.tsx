@@ -90,7 +90,7 @@ export default async function ContratosPage({
                   <Link href="/contratos/ops/nuevo"><Plus className="size-4" /> OPS</Link>
                 </Button>
                 <Button size="sm" asChild>
-                  <Link href="/contratos/nuevo"><Plus className="size-4" /> Contrato</Link>
+                  <Link href="/contratos/nuevo"><Plus className="size-4" /> Laboral</Link>
                 </Button>
               </>
             )}

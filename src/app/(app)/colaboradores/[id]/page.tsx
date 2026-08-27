@@ -294,6 +294,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
           <BloqueDatos titulo="Identificación" icono={IdCard} color="bg-sky-500/12 text-sky-600 dark:text-sky-400" datos={[
             ['Documento', `${TIPO_DOCUMENTO_IDENTIDAD[c.tipoDocumento]} ${c.numeroDocumento}`],
             ['Lugar de expedición', c.lugarExpedicionDoc ?? '—'],
+            ['Fecha de expedición', c.fechaExpedicionDoc ? formatFechaLarga(c.fechaExpedicionDoc) : '—'],
             ['Fecha de nacimiento', c.fechaNacimiento ? `${formatFechaLarga(c.fechaNacimiento)}${edad !== null ? ` (${edad} años)` : ''}` : '—'],
             ['Género', c.genero ? GENERO[c.genero] : '—'],
             ['Estado civil', c.estadoCivil ? ESTADO_CIVIL[c.estadoCivil] : '—'],
