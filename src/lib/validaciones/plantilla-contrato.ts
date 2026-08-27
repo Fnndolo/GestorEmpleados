@@ -41,6 +41,10 @@ export const plantillaContratoSchema = z.object({
       z.object({
         titulo: z.string().trim().min(3, 'Cada cláusula necesita título').max(200),
         cuerpo: z.string().trim().min(5, 'La cláusula no puede ir vacía').max(8000),
+        // Marca la cláusula donde se insertan las funciones del cargo. Si no viaja
+        // en el editor, guardar la plantilla la borraba y las funciones dejaban de
+        // imprimirse en todos los contratos nuevos.
+        esFunciones: z.boolean().optional(),
       }),
     )
     .min(1, 'Un contrato necesita al menos una cláusula')

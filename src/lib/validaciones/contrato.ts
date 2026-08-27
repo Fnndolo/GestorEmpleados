@@ -91,7 +91,10 @@ export type SuspensionInput = z.infer<typeof suspensionSchema>
 
 export const contratoOpsSchema = z.object({
   colaboradorId: uuidOpc,
-  objeto: z.string().trim().min(5, 'Describe el objeto del contrato').max(1000),
+  // Ya no se teclea al crear: el objeto lo define el rol pactado (`cargoObjeto`),
+  // que es lo que redacta la cláusula de OBJETO. Se conserva opcional porque el
+  // alta de un contrato firmado en físico sí lo pide (no hay plantilla que lo dé).
+  objeto: z.string().trim().max(1000).optional().or(z.literal('')),
   valorTotal: z.coerce.number().min(0),
   valorMensual: z.coerce.number().min(0).optional(),
   supervisorId: uuidOpc,
@@ -152,6 +155,9 @@ export const subirContratoOpsSchema = contratoOpsSchema
     sedeId: true, fechaInicio: true, fechaFin: true, rut: true, numero: true,
   })
   .extend({
+    // Aquí el objeto SÍ es obligatorio: el contrato viene redactado de fuera, no
+    // hay plantilla ni rol pactado de los cuales derivarlo.
+    objeto: z.string().trim().min(5, 'Describe el objeto del contrato').max(1000),
     pdfBase64: z.string().min(1, 'Adjunta el PDF del contrato').startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
     // Autorización de tratamiento de datos (Ley 1581) firmada en físico: opcional,
     // porque no todo contrato antiguo la tiene digitalizada.

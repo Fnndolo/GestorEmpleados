@@ -32,6 +32,21 @@ async function siguienteNumeroOps(): Promise<string> {
   return `KC-${String(mayor + 1).padStart(3, '0')}`
 }
 
+/**
+ * El objeto ya no se teclea aparte al crear: lo dice la cláusula de OBJETO, que
+ * se redacta con el rol pactado (`cargoObjeto`). Aquí se deriva el resumen que
+ * guardamos en la columna, porque listados, detalle y autoservicio lo muestran.
+ */
+async function objetoDerivado(d: { objeto?: string; cargoObjeto?: string; cargoId?: string }): Promise<string> {
+  const explicito = d.objeto?.trim()
+  if (explicito) return explicito
+  const rol = d.cargoObjeto?.trim()
+    || (d.cargoId
+      ? (await prisma.cargo.findUnique({ where: { id: d.cargoId }, select: { nombre: true } }))?.nombre
+      : null)
+  return rol ? `Prestación de servicios como ${rol}` : 'Prestación de servicios'
+}
+
 export const crearContratoOps = accion(
   { modulo: 'contratos', accion: 'CREAR', schema: contratoOpsSchema },
   async (d, usuario) => {
@@ -40,7 +55,7 @@ export const crearContratoOps = accion(
       data: {
         numero,
         ...(d.colaboradorId ? { colaboradorId: d.colaboradorId } : {}),
-        objeto: d.objeto,
+        objeto: await objetoDerivado(d),
         valorTotal: d.valorTotal,
         valorMensual: d.valorMensual ?? null,
         supervisorId: v(d.supervisorId),

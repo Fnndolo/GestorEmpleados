@@ -40,7 +40,7 @@ export default async function EditarPlantillaPage({ params }: { params: Promise<
                 intro: plantilla.intro,
                 cierre: plantilla.cierre,
                 activa: plantilla.activa,
-                clausulas: plantilla.clausulas.map((c) => ({ titulo: c.titulo, cuerpo: c.cuerpo })),
+                clausulas: plantilla.clausulas.map((c) => ({ titulo: c.titulo, cuerpo: c.cuerpo, esFunciones: c.esFunciones })),
               }
             : null
         }

@@ -28,7 +28,7 @@ export const crearPlantilla = accion(
         cierre: d.cierre || '',
         activa: d.activa,
         clausulas: {
-          create: d.clausulas.map((c, i) => ({ orden: i + 1, titulo: c.titulo, cuerpo: c.cuerpo })),
+          create: d.clausulas.map((c, i) => ({ orden: i + 1, titulo: c.titulo, cuerpo: c.cuerpo, esFunciones: c.esFunciones ?? false })),
         },
       },
     })
@@ -55,7 +55,7 @@ export const editarPlantilla = accion(
     })
     await prisma.clausulaPlantilla.deleteMany({ where: { plantillaId: id } })
     await prisma.clausulaPlantilla.createMany({
-      data: d.clausulas.map((c, i) => ({ plantillaId: id, orden: i + 1, titulo: c.titulo, cuerpo: c.cuerpo })),
+      data: d.clausulas.map((c, i) => ({ plantillaId: id, orden: i + 1, titulo: c.titulo, cuerpo: c.cuerpo, esFunciones: c.esFunciones ?? false })),
     })
     revalidar(id)
     return { ok: true }
@@ -102,7 +102,7 @@ export const duplicarPlantilla = accion(
         cierre: p.cierre,
         // La copia nace inactiva: se activa cuando esté revisada.
         activa: false,
-        clausulas: { create: p.clausulas.map((c) => ({ orden: c.orden, titulo: c.titulo, cuerpo: c.cuerpo })) },
+        clausulas: { create: p.clausulas.map((c) => ({ orden: c.orden, titulo: c.titulo, cuerpo: c.cuerpo, esFunciones: c.esFunciones })) },
       },
     })
     revalidar(copia.id)

@@ -95,7 +95,7 @@ export function ContratoOpsSplit({
   const { register, handleSubmit, setValue, getValues, watch, formState: { errors } } = useForm<OpsFormValues, unknown, ContratoOpsInput>({
     resolver: zodResolver(contratoOpsSchema),
     defaultValues: {
-      colaboradorId: '', numero: '', objeto: '', valorTotal: 0, valorMensual: 0, supervisorId: '', cargoId: '', cargoObjeto: '', sedeId: '',
+      colaboradorId: '', numero: '', valorTotal: 0, valorMensual: 0, supervisorId: '', cargoId: '', cargoObjeto: '', sedeId: '',
       fechaInicio: '', fechaFin: '', fechaSuscripcion: '', ciudad: '', plazoMeses: 0, rut: '',
       contratistaNombre: '', contratistaCc: '', contratistaCcLugar: '', contratistaDireccion: '', contratistaEmail: '', contratistaTelefono: '', contratistaGenero: '',
       empresaRazonSocial: empresa.razonSocial, empresaMarca: empresa.marca, empresaNit: empresa.nit,
@@ -117,7 +117,6 @@ export function ContratoOpsSplit({
   const faltaCondiciones = !w.sedeId ? 'Falta la sede'
     : !Number(w.valorTotal) ? 'Falta el valor'
     : !w.fechaInicio ? 'Falta la fecha de inicio'
-    : !w.objeto || String(w.objeto).trim().length < 5 ? 'Falta el objeto'
     : null
   const estadoCondiciones: EstadoSeccion = faltaCondiciones
     ? { tono: 'warn', texto: faltaCondiciones }
@@ -307,7 +306,9 @@ export function ContratoOpsSplit({
                 <SelectContent>{cargos.map((c) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5"><Label>Rol en el contrato (cargo_objeto)</Label><Input spellCheck lang="es" {...register('cargoObjeto')} placeholder="p. ej. operador de call center" /></div>
+            {/* Este campo define el objeto: alimenta {{cargo_objeto}} en la cláusula
+                de OBJETO, y de él se deriva el resumen que se ve en los listados. */}
+            <div className="space-y-1.5"><Label>Rol en el contrato</Label><Input spellCheck lang="es" {...register('cargoObjeto')} placeholder="p. ej. operador de call center" /><p className="text-[11px] text-muted-foreground">Es el encargo que redacta la cláusula de objeto.</p></div>
             <div className="space-y-1.5"><Label>Valor total</Label><Input type="number" {...register('valorTotal')} />{errors.valorTotal && <p className="text-xs text-destructive">{errors.valorTotal.message}</p>}</div>
             <div className="space-y-1.5"><Label>Honorario mensual</Label><Input type="number" {...register('valorMensual')} /></div>
             <div className="space-y-1.5"><Label>Plazo (meses)</Label><Input type="number" {...register('plazoMeses', { onChange: recalcularFin })} /></div>
@@ -323,7 +324,6 @@ export function ContratoOpsSplit({
             </div>
             <div className="space-y-1.5"><Label>Fecha de inicio</Label><Input type="date" {...register('fechaInicio', { onChange: () => { inicioManual.current = true; recalcularFin() } })} />{errors.fechaInicio && <p className="text-xs text-destructive">{errors.fechaInicio.message}</p>}</div>
             <div className="space-y-1.5"><Label>Fecha de fin</Label><Input type="date" {...register('fechaFin', { onChange: () => { finManual.current = true } })} /><p className="text-[11px] text-muted-foreground">Se calcula con inicio + plazo; edítala si necesitas otra.</p>{errors.fechaFin && <p className="text-xs text-destructive">{errors.fechaFin.message}</p>}</div>
-            <div className="space-y-1.5 sm:col-span-2"><Label>Objeto del contrato</Label><Textarea rows={2} spellCheck lang="es" {...register('objeto')} />{errors.objeto && <p className="text-xs text-destructive">{errors.objeto.message}</p>}</div>
             <div className="space-y-1.5"><Label>RUT (opcional)</Label><Input {...register('rut')} /></div>
             <div className="space-y-1.5">
               <Label>Supervisor (opcional)</Label>

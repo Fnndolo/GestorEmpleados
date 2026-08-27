@@ -12,8 +12,8 @@ const INTRO =
   'En la ciudad de {{ciudad}}, el día {{fecha_suscripcion_larga}}, entre los suscritos, por una parte: ' +
   '{{empresa_razon_social}} y su marca comercial {{empresa_marca}}, en calidad de CONTRATANTE, representada ' +
   'legalmente por {{representante_legal}}, mayor de edad, identificado con cédula de ciudadanía No. {{representante_legal_cc}}, ' +
-  'y por la otra, {{contratista_nombre}}, mayor de edad, identificada con cédula de ciudadanía No. {{contratista_cc}} ' +
-  'de {{contratista_cc_lugar}}, obrando en nombre propio, quien en adelante se denominará LA CONTRATISTA. ' +
+  'y por la otra, {{contratista_nombre}}, mayor de edad, identificado con cédula de ciudadanía No. {{contratista_cc}} ' +
+  'de {{contratista_cc_lugar}}, obrando en nombre propio, quien en adelante se denominará EL CONTRATISTA. ' +
   'Ambas partes manifiestan tener la capacidad legal para contratar y acuerdan celebrar el presente Contrato de ' +
   'Prestación de Servicios Personales, regido por las cláusulas que a continuación se enuncian y por las disposiciones ' +
   'legales civiles aplicables.'
@@ -27,7 +27,7 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
   {
     titulo: 'PRIMERA. – OBJETO:',
     cuerpo:
-      'LA CONTRATISTA, por cuenta propia y bajo su exclusiva responsabilidad, asume el encargo de {{cargo_objeto}}, ' +
+      'EL CONTRATISTA, por cuenta propia y bajo su exclusiva responsabilidad, asume el encargo de {{cargo_objeto}}, ' +
       'ejecutando actividades comerciales autónomas de prestación de servicios personales para {{empresa_razon_social}} y ' +
       'su marca comercial {{empresa_marca}}.\n' +
       'Dichas actividades se desarrollarán con plena autonomía técnica, financiera, administrativa y organizativa, sin ' +
@@ -45,7 +45,7 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
     titulo: 'TERCERA. - HONORARIOS:',
     cuerpo:
       'El valor total del presente contrato asciende a {{valor_total_mcte_letras}}, que {{empresa_razon_social}} reconocerá a ' +
-      'LA CONTRATISTA en calidad de honorarios profesionales. Dicho valor será causado mensualmente en montos equivalentes a ' +
+      'EL CONTRATISTA en calidad de honorarios profesionales. Dicho valor será causado mensualmente en montos equivalentes a ' +
       '{{honorario_mensual_letras}}, durante la vigencia del contrato.\n' +
       'Las partes declaran que estos honorarios no constituyen salario ni dan lugar a prestaciones sociales, afiliaciones a ' +
       'riesgos laborales, subsidios, horas extras ni concepto alguno derivado de una relación laboral o de subordinación.',
@@ -53,22 +53,22 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
   {
     titulo: 'CUARTA. – FORMA DE PAGO:',
     cuerpo:
-      'Cada desembolso estará condicionado a la evaluación objetiva de los resultados entregados por LA CONTRATISTA, sin que ' +
+      'Cada desembolso estará condicionado a la evaluación objetiva de los resultados entregados por EL CONTRATISTA, sin que ' +
       'ello implique subordinación ni dependencia técnica directa. Los desembolsos se realizarán mediante transferencia ' +
-      'electrónica a la cuenta que LA CONTRATISTA indique y certifique mediante anexo a este contrato. Para el pago, ' +
+      'electrónica a la cuenta que EL CONTRATISTA indique y certifique mediante anexo a este contrato. Para el pago, ' +
       '{{empresa_razon_social}} verificará el cumplimiento de las actividades y el certificado de pago de seguridad social.',
   },
   {
     titulo: 'QUINTA. – ENTORNO OPERATIVO DE EJECUCIÓN CONTRACTUAL:',
     cuerpo:
-      'Las actividades objeto del presente contrato serán desarrolladas por LA CONTRATISTA principalmente en las ' +
+      'Las actividades objeto del presente contrato serán desarrolladas por EL CONTRATISTA principalmente en las ' +
       'instalaciones del establecimiento de comercio de {{empresa_marca}}, ubicado en la ciudad de {{ciudad}}, o en cualquier ' +
       'otro lugar que las partes acuerden, sin que ello implique relación de subordinación ni vínculo laboral.',
   },
   {
     titulo: 'SEXTA. - FRANJA HORARIA FUNCIONAL PARA LA PRESTACIÓN DEL SERVICIO:',
     cuerpo:
-      'Las actividades serán ejecutadas por LA CONTRATISTA con plena autonomía técnica y organizativa, sin sujeción a jornada ' +
+      'Las actividades serán ejecutadas por EL CONTRATISTA con plena autonomía técnica y organizativa, sin sujeción a jornada ' +
       'laboral ni régimen de subordinación. No obstante, para efectos operativos, las gestiones se desarrollarán ' +
       'preferentemente dentro de la franja horaria de las 8:00 a.m. a 6:00 p.m., de lunes a domingo, sin que ello implique ' +
       'control horario, subordinación ni derecho a prestaciones del régimen laboral.',
@@ -76,14 +76,14 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
   {
     titulo: 'SÉPTIMA. - FUNCIONES:',
     cuerpo:
-      'LA CONTRATISTA, en su calidad de {{cargo_objeto}}, se obliga a ejecutar las siguientes funciones específicas con ' +
+      'EL CONTRATISTA, en su calidad de {{cargo_objeto}}, se obliga a ejecutar las siguientes funciones específicas con ' +
       'independencia técnica, administrativa y organizativa:',
     esFunciones: true,
   },
   {
     titulo: 'OCTAVA. - OBLIGACIONES:',
     cuerpo:
-      'LA CONTRATISTA se compromete a: ejecutar profesional y autónomamente las actividades de promoción y venta de los ' +
+      'EL CONTRATISTA se compromete a: ejecutar profesional y autónomamente las actividades de promoción y venta de los ' +
       'productos de {{empresa_marca}}; mantener indemne a {{empresa_marca}} frente a daños derivados de sus actos; velar por el ' +
       'uso adecuado de los equipos y herramientas suministrados; manejar con estricta confidencialidad la información de ' +
       'clientes conforme a la Ley 1581 de 2012; y cumplir las políticas de prevención de lavado de activos y financiación del ' +
@@ -92,7 +92,7 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
   {
     titulo: 'NOVENA - AFILIACIÓN Y PAGO A SEGURIDAD SOCIAL:',
     cuerpo:
-      'LA CONTRATISTA se obliga a afiliarse y mantener actualizadas sus cotizaciones al sistema de seguridad social en salud y ' +
+      'EL CONTRATISTA se obliga a afiliarse y mantener actualizadas sus cotizaciones al sistema de seguridad social en salud y ' +
       'pensiones (art. 15, num. 2, Ley 100 de 1993), y a presentar a {{empresa_razon_social}} el certificado correspondiente ' +
       'dentro de los ocho (8) días siguientes al inicio. El incumplimiento faculta a {{empresa_razon_social}} para dar por ' +
       'terminado el contrato de manera inmediata, sin indemnización.',
@@ -101,13 +101,13 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
     titulo: 'DÉCIMA - OBLIGACIONES DEL CONTRATANTE:',
     cuerpo:
       '{{empresa_razon_social}} se compromete a: facilitar oportunamente la información, herramientas y recursos necesarios; ' +
-      'exigir la ejecución conforme a los estándares de calidad, respetando la autonomía de LA CONTRATISTA; y realizar ' +
+      'exigir la ejecución conforme a los estándares de calidad, respetando la autonomía del CONTRATISTA; y realizar ' +
       'seguimiento del cumplimiento sin que ello implique subordinación o control laboral.',
   },
   {
     titulo: 'DÉCIMA PRIMERA - CONFIDENCIALIDAD:',
     cuerpo:
-      'LA CONTRATISTA guardará estricta reserva sobre la Información Confidencial de {{empresa_razon_social}}, absteniéndose de ' +
+      'EL CONTRATISTA guardará estricta reserva sobre la Información Confidencial de {{empresa_razon_social}}, absteniéndose de ' +
       'divulgarla o usarla para fines distintos a este contrato, adoptando las medidas necesarias para protegerla. Estas ' +
       'obligaciones subsistirán por dos (2) años contados a partir de la terminación del contrato.',
   },
@@ -121,27 +121,27 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
   {
     titulo: 'DÉCIMA TERCERA - RÉGIMEN DE EXCLUSIVIDAD:',
     cuerpo:
-      'LA CONTRATISTA se obliga a no promover, vender ni asesorar productos o servicios que compitan con los de ' +
+      'EL CONTRATISTA se obliga a no promover, vender ni asesorar productos o servicios que compitan con los de ' +
       '{{empresa_razon_social}} dentro del territorio nacional durante la vigencia del contrato. La asignación de zona o línea ' +
-      'no confiere exclusividad a LA CONTRATISTA. El incumplimiento será causal de terminación unilateral.',
+      'no confiere exclusividad a EL CONTRATISTA. El incumplimiento será causal de terminación unilateral.',
   },
   {
     titulo: 'DÉCIMA CUARTA - SEGUIMIENTO Y COORDINACIÓN:',
     cuerpo:
       '{{empresa_razon_social}}, a través de su representante designado, ejercerá funciones periódicas y razonables de ' +
-      'seguimiento sobre la ejecución de las actividades, respetando la autonomía técnica y financiera de LA CONTRATISTA.',
+      'seguimiento sobre la ejecución de las actividades, respetando la autonomía técnica y financiera del CONTRATISTA.',
   },
   {
     titulo: 'DÉCIMA QUINTA - INDEPENDENCIA Y AUSENCIA DE VÍNCULO LABORAL:',
     cuerpo:
-      'LA CONTRATISTA desarrollará sus actividades con total autonomía técnica, administrativa y financiera, sin que exista ' +
+      'EL CONTRATISTA desarrollará sus actividades con total autonomía técnica, administrativa y financiera, sin que exista ' +
       'relación laboral, subordinación o dependencia con {{empresa_razon_social}}. El vínculo entre las partes es civil y ' +
       'contractual.',
   },
   {
     titulo: 'DÉCIMA SEXTA - PROHIBICIÓN DE CESIÓN:',
     cuerpo:
-      'LA CONTRATISTA no podrá ceder, transferir ni subcontratar, total o parcialmente, las obligaciones de este contrato sin ' +
+      'EL CONTRATISTA no podrá ceder, transferir ni subcontratar, total o parcialmente, las obligaciones de este contrato sin ' +
       'autorización previa, expresa y escrita de {{empresa_razon_social}}.',
   },
   {
@@ -161,22 +161,22 @@ const CLAUSULAS: { titulo: string; cuerpo: string; esFunciones?: boolean }[] = [
   {
     titulo: 'DÉCIMA NOVENA - GARANTÍAS Y SOPORTE DOCUMENTAL:',
     cuerpo:
-      'LA CONTRATISTA declara contar con las facultades legales, técnicas y administrativas para ejecutar el objeto ' +
+      'EL CONTRATISTA declara contar con las facultades legales, técnicas y administrativas para ejecutar el objeto ' +
       'contractual, y se obliga a presentar la documentación soporte requerida (certificaciones, reportes, facturas, pago de ' +
       'seguridad social) dentro de los plazos establecidos.',
   },
   {
     titulo: 'VIGÉSIMA - RESPONSABILIDAD PATRIMONIAL:',
     cuerpo:
-      'LA CONTRATISTA será civilmente responsable por los perjuicios derivados de errores u omisiones atribuibles a su ' +
+      'EL CONTRATISTA será civilmente responsable por los perjuicios derivados de errores u omisiones atribuibles a su ' +
       'negligencia. En caso de pérdida o entrega errada de productos, autoriza a {{empresa_razon_social}} a compensar el valor ' +
       'mediante descuentos proporcionales sobre los honorarios, sin exceder el 50% del valor neto mensual.',
   },
   {
-    titulo: 'VIGÉSIMA PRIMERA – DECLARACIONES DE LA CONTRATISTA:',
+    titulo: 'VIGÉSIMA PRIMERA – DECLARACIONES DEL CONTRATISTA:',
     cuerpo:
-      'LA CONTRATISTA declara: haber revisado los documentos del proceso contractual; contar con capacidad legal y técnica; no ' +
-      'estar incursa en inhabilidades; estar a paz y salvo en seguridad social; y asumir la responsabilidad por sus ' +
+      'EL CONTRATISTA declara: haber revisado los documentos del proceso contractual; contar con capacidad legal y técnica; no ' +
+      'estar incurso en inhabilidades; estar a paz y salvo en seguridad social; y asumir la responsabilidad por sus ' +
       'obligaciones fiscales y tributarias, exonerando a {{empresa_razon_social}}.',
   },
   {

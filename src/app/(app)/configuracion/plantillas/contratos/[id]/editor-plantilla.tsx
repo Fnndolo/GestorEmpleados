@@ -18,7 +18,7 @@ import { crearPlantilla, editarPlantilla } from '../acciones'
 import { TIPOS_PLANTILLA, ETIQUETA_TIPO_PLANTILLA } from '@/lib/validaciones/plantilla-contrato'
 
 type TipoPlantilla = (typeof TIPOS_PLANTILLA)[number]
-type Clausula = { titulo: string; cuerpo: string }
+type Clausula = { titulo: string; cuerpo: string; esFunciones?: boolean }
 type Valores = {
   id: string
   nombre: string
@@ -37,7 +37,7 @@ const NUEVA: Omit<Valores, 'id'> = {
   intro: 'Entre {{empresa_razon_social}}, NIT {{empresa_nit}}, representada por {{representante_legal}}, y {{contratista_tratamiento}} {{contratista_nombre}}, {{contratista_identificada}} con cédula {{contratista_cc}}, se celebra el presente contrato que se regirá por las siguientes cláusulas:',
   cierre: 'Leído el presente contrato, las partes lo firman en {{ciudad}}, el {{fecha_suscripcion_larga}}.',
   activa: false,
-  clausulas: [{ titulo: 'PRIMERA. – OBJETO:', cuerpo: 'El objeto del presente contrato es {{cargo_objeto}}.' }],
+  clausulas: [{ titulo: 'PRIMERA. – OBJETO:', cuerpo: 'El objeto del presente contrato es {{cargo_objeto}}.', esFunciones: false }],
 }
 
 export function EditorPlantilla({ valores, puedeGuardar }: { valores: Valores | null; puedeGuardar: boolean }) {
@@ -53,7 +53,7 @@ export function EditorPlantilla({ valores, puedeGuardar }: { valores: Valores | 
     setF({ ...f, clausulas: f.clausulas.map((c, j) => (j === i ? { ...c, ...cambio } : c)) })
   }
   function agregar() {
-    setF({ ...f, clausulas: [...f.clausulas, { titulo: '', cuerpo: '' }] })
+    setF({ ...f, clausulas: [...f.clausulas, { titulo: '', cuerpo: '', esFunciones: false }] })
   }
   function quitar(i: number) {
     setF({ ...f, clausulas: f.clausulas.filter((_, j) => j !== i) })
@@ -181,6 +181,16 @@ export function EditorPlantilla({ valores, puedeGuardar }: { valores: Valores | 
                     onChange={(e) => setClausula(i, { cuerpo: e.target.value })}
                     placeholder="Texto de la cláusula…"
                   />
+                  {/* Sin este control la marca no viajaba en el editor y guardar la
+                      plantilla la borraba: las funciones del cargo dejaban de
+                      imprimirse en los contratos nuevos, sin aviso. */}
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Switch
+                      checked={c.esFunciones ?? false}
+                      onCheckedChange={(v) => setClausula(i, { esFunciones: v })}
+                    />
+                    Aquí se insertan las funciones del cargo
+                  </label>
                 </div>
                 <div className="flex shrink-0 flex-col gap-1">
                   <Button size="icon" variant="ghost" onClick={() => mover(i, -1)} disabled={i === 0} aria-label="Subir">
