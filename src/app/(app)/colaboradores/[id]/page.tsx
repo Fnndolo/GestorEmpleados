@@ -293,6 +293,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
         <TabsContent value="resumen" className="grid gap-3 sm:grid-cols-2">
           <BloqueDatos titulo="Identificación" icono={IdCard} color="bg-sky-500/12 text-sky-600 dark:text-sky-400" datos={[
             ['Documento', `${TIPO_DOCUMENTO_IDENTIDAD[c.tipoDocumento]} ${c.numeroDocumento}`],
+            ['Lugar de expedición', c.lugarExpedicionDoc ?? '—'],
             ['Fecha de nacimiento', c.fechaNacimiento ? `${formatFechaLarga(c.fechaNacimiento)}${edad !== null ? ` (${edad} años)` : ''}` : '—'],
             ['Género', c.genero ? GENERO[c.genero] : '—'],
             ['Estado civil', c.estadoCivil ? ESTADO_CIVIL[c.estadoCivil] : '—'],
@@ -439,7 +440,9 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
           {contratos.length === 0 && contratosOps.length === 0 ? (
             <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
               Este colaborador no tiene contratos registrados.
-              {puedeEditar && <> <Link href="/contratos/nuevo" className="text-primary hover:underline">Crear contrato nuevo</Link>, o sube uno que ya exista con el botón de arriba.</>}
+              {/* A Contratación, no directo al formulario laboral: desde ahí se elige
+                  la modalidad (laboral u OPS) según el vínculo que corresponda. */}
+              {puedeEditar && <> <Link href="/contratos" className="text-primary hover:underline">Crear contrato nuevo</Link>, o sube uno que ya exista con el botón de arriba.</>}
             </CardContent></Card>
           ) : (
             <>
