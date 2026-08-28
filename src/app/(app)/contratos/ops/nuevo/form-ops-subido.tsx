@@ -26,8 +26,12 @@ import { analizarPdfContratoOps, subirContratoOpsParaFirma } from '../../ops-acc
  * decoración: nómina, alertas de vencimiento y cuentas de cobro los necesitan.
  */
 
-/** Posición por defecto cuando el PDF no permite proponer nada (escaneos). */
-const POR_DEFECTO: Posicion = { pagina: 1, x: 80, y: 150, ancho: 150, alto: 45 }
+/**
+ * Posición de arranque cuando el PDF no permite proponer nada (escaneos).
+ * La página se fija después, al saber cuántas tiene: el bloque de firmas va
+ * casi siempre en la última, así que empezar en la 1 obligaba a pasar hojas.
+ */
+const POR_DEFECTO: Omit<Posicion, 'pagina'> = { x: 80, y: 150, ancho: 150, alto: 45 }
 
 type Props = {
   sedes: { id: string; nombre: string; ciudad: string }[]
@@ -40,12 +44,15 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
   const [analizando, setAnalizando] = useState(false)
 
   const [pdf, setPdf] = useState<string | null>(null)
+  // Cambia con cada PDF elegido: remonta el selector para que vuelva a la página
+  // propuesta en vez de quedarse en la que se estaba mirando del archivo anterior.
+  const [version, setVersion] = useState(0)
   const [nombrePdf, setNombrePdf] = useState('')
   const [paginas, setPaginas] = useState(1)
   const [detectado, setDetectado] = useState<{ contratista: boolean; contratante: boolean } | null>(null)
   const [posiciones, setPosiciones] = useState<Record<'contratista' | 'contratante', Posicion>>({
-    contratista: POR_DEFECTO,
-    contratante: POR_DEFECTO,
+    contratista: { ...POR_DEFECTO, pagina: 1 },
+    contratante: { ...POR_DEFECTO, pagina: 1 },
   })
 
   const [f, setF] = useState({
@@ -74,11 +81,13 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
     if (!res.ok) { toast.error(res.error ?? 'No se pudo leer el PDF.'); return }
     const d = res.datos as { paginas: number; contratista: Posicion | null; contratante: Posicion | null }
     setPaginas(d.paginas)
+    // Sin deteccion, se cae a la ULTIMA pagina: es donde va el bloque de firmas.
     setPosiciones({
-      contratista: d.contratista ?? { ...POR_DEFECTO, pagina: d.paginas },
-      contratante: d.contratante ?? { ...POR_DEFECTO, pagina: d.paginas, x: 330 },
+      contratista: d.contratista ?? { ...POR_DEFECTO, pagina: d.paginas, x: 330 },
+      contratante: d.contratante ?? { ...POR_DEFECTO, pagina: d.paginas },
     })
     setDetectado({ contratista: !!d.contratista, contratante: !!d.contratante })
+    setVersion((v) => v + 1)
   }
 
   function guardar() {
@@ -187,7 +196,7 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
         )}
 
         {pdf && !analizando && (
-          <SelectorFirmasPdf pdfDataUri={pdf} paginas={paginas} valor={posiciones} onChange={setPosiciones} />
+          <SelectorFirmasPdf key={version} pdfDataUri={pdf} paginas={paginas} valor={posiciones} onChange={setPosiciones} />
         )}
       </CardContent></Card>
     </div>
