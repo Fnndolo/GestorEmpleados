@@ -352,6 +352,16 @@ export const regenerarDocumentosContrato = accion(
   { modulo: 'contratos', accion: 'EDITAR', schema: z.object({ contratoId: z.uuid() }) },
   async (d, usuario) => {
     const c = await prisma.contratoOps.findUniqueOrThrow({ where: { id: d.contratoId } })
+    // Solo los contratos de plantilla se pueden regenerar: en uno subido el
+    // snapshot no guarda el texto (el contrato ES el PDF aportado), así que esto
+    // produciría un documento vacío y lo archivaría junto al bueno. La UI ya
+    // esconde el botón, pero una Server Action es una entrada pública y el
+    // resultado sería un contrato en blanco con nombre de contrato real.
+    if (c.origenPdf !== 'GENERADO') {
+      throw new ErrorNegocio(
+        'Este contrato no se redactó desde una plantilla: su documento es el PDF que se subió, así que no hay nada que regenerar.',
+      )
+    }
     if (!c.contenidoPdf) throw new ErrorNegocio('El contrato no tiene datos para regenerar. Debe recrearse.')
     const snapshot = c.contenidoPdf as unknown as SnapshotContratoOps
 
@@ -734,30 +744,41 @@ export const subirContratoOpsParaFirma = accion(
     // armando la app desde su plantilla y la firma solo el contratista.
     if (d.generarAutorizacion !== false) {
       try {
+        // Los datos del titular salen de la ficha, no del formulario: este alta
+        // no los pide (el contrato ya viene redactado) y una autorización sin
+        // nombre ni cédula no identifica a nadie, así que no autoriza nada.
+        // Se deja que el formulario pise el valor por si algún día los pidiera.
+        const col = await prisma.colaborador.findUnique({
+          where: { id: d.colaboradorId },
+          include: { ciudadResidencia: true, cargo: true, sede: { include: { ciudad: true } } },
+        })
+        const genero = v(d.contratistaGenero) ?? col?.genero ?? null
         const datosContrato = {
+          // Vacío a propósito: `construirDatosAutorizacion` completa la empresa
+          // con la configuración, que es la fuente de verdad.
           empresa: { razonSocial: '', marca: null, nit: null, representanteLegal: null, representanteLegalCc: null, correoDevolucion: null },
           contratista: {
-            nombre: v(d.contratistaNombre),
-            cc: v(d.contratistaCc),
-            ccLugar: v(d.contratistaCcLugar),
-            direccion: v(d.contratistaDireccion),
-            email: v(d.contratistaEmail),
-            telefono: v(d.contratistaTelefono),
-            genero: v(d.contratistaGenero),
+            nombre: v(d.contratistaNombre) ?? (col ? `${col.nombres} ${col.apellidos}`.toUpperCase() : null),
+            cc: v(d.contratistaCc) ?? (col ? `${col.tipoDocumento} ${col.numeroDocumento}` : null),
+            ccLugar: v(d.contratistaCcLugar) ?? col?.lugarExpedicionDoc ?? null,
+            direccion: v(d.contratistaDireccion) ?? col?.direccion ?? null,
+            email: v(d.contratistaEmail) ?? col?.emailPersonal ?? null,
+            telefono: v(d.contratistaTelefono) ?? col?.celular ?? null,
+            genero,
           },
           contrato: {
             numero,
-            ciudad: v(d.ciudad),
+            ciudad: v(d.ciudad) ?? col?.ciudadResidencia?.nombre ?? col?.sede?.ciudad?.nombre ?? null,
             fechaSuscripcion: v(d.fechaSuscripcion),
             fechaInicio: d.fechaInicio,
             fechaFin: d.fechaFin,
             plazoMeses: null,
             valorTotal: d.valorTotal,
             honorarioMensual: d.valorMensual ?? null,
-            cargoObjeto: v(d.cargoObjeto),
+            cargoObjeto: v(d.cargoObjeto) ?? col?.cargo?.nombre ?? null,
           },
         }
-        const autorizacion = await construirDatosAutorizacion({ datos: datosContrato, genero: v(d.contratistaGenero) })
+        const autorizacion = await construirDatosAutorizacion({ datos: datosContrato, genero })
         // Se guarda en el snapshot para poder regenerarla firmada cuando el
         // contratista firme; el contrato en sí no va aquí: ese es el PDF subido.
         await dbAuditado.contratoOps.update({ where: { id: c.id }, data: { contenidoPdf: { autorizacion } as object } })

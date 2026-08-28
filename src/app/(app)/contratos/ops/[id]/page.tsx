@@ -107,13 +107,22 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
           <h2 className="text-base font-medium">Documentos del contrato</h2>
           {c.origenPdf === 'SUBIDO' ? (
             <Badge variant="secondary">Subido · firmado en físico</Badge>
-          ) : c.origenPdf === 'SUBIDO_PARA_FIRMA' ? (
-            // Distinto del anterior: este sí recoge firmas, solo que se estampan
-            // sobre el PDF aportado en vez de regenerar el documento.
-            <Badge variant="secondary">Subido · se firma en la app</Badge>
-          ) : puedeEditar && documentos.length > 0 && !documentos.some((d) => d.nombre.startsWith('Autorización')) ? (
-            <GenerarAutorizacion contratoId={c.id} />
-          ) : null}
+          ) : (
+            <div className="flex items-center gap-2">
+              {c.origenPdf === 'SUBIDO_PARA_FIRMA' && (
+                // Distinto del anterior: este sí recoge firmas, solo que se estampan
+                // sobre el PDF aportado en vez de regenerar el documento.
+                <Badge variant="secondary">Subido · se firma en la app</Badge>
+              )}
+              {/* La autorización (Ley 1581) la arma la app en los dos caminos, y su
+                  generación al crear el contrato no aborta el alta si falla. Sin este
+                  botón, un contrato subido al que le falle se queda sin ella y sin
+                  forma de repararla desde la interfaz. */}
+              {puedeEditar && documentos.length > 0 && !documentos.some((d) => d.nombre.startsWith('Autorización')) && (
+                <GenerarAutorizacion contratoId={c.id} />
+              )}
+            </div>
+          )}
         </div>
         {documentos.length === 0 ? (
           <div className="flex flex-col items-start gap-2">
