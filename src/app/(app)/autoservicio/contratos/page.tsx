@@ -106,7 +106,10 @@ export default async function MisContratosPage() {
       documentos: docsPorContrato.get(c.id) ?? [],
       firmadoPorMi: !!c.firmaContratistaPath,
       fechaMiFirma: c.firmaContratistaFecha ? formatFechaLarga(c.firmaContratistaFecha) : null,
-      tieneDocumento: !!c.contenidoPdf,
+      // Un contrato subido para firmar no tiene snapshot de plantilla —el PDF es
+      // el documento—, asi que la sola presencia de contenidoPdf lo dejaba fuera
+      // del flujo de firma sin que nadie lo notara.
+      tieneDocumento: !!c.contenidoPdf || c.origenPdf === 'SUBIDO_PARA_FIRMA',
     })),
   ]
 

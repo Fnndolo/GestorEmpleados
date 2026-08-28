@@ -165,6 +165,50 @@ export const subirContratoOpsSchema = contratoOpsSchema
   })
 export type SubirContratoOpsInput = z.infer<typeof subirContratoOpsSchema>
 
+/** Recuadro de firma dentro del PDF subido: puntos PDF, página en base 1. */
+export const posicionFirmaSchema = z.object({
+  pagina: z.coerce.number().int().min(1).max(500),
+  x: z.coerce.number().min(0).max(5000),
+  y: z.coerce.number().min(0).max(5000),
+  ancho: z.coerce.number().min(20).max(600),
+  alto: z.coerce.number().min(10).max(400),
+})
+export type PosicionFirmaInput = z.infer<typeof posicionFirmaSchema>
+
+/**
+ * Subir el PDF de un contrato OPS que se firmará DENTRO de la app.
+ *
+ * Distinto de `subirContratoOpsSchema`: aquel da de alta un contrato que ya
+ * venía firmado en físico y por eso omite la firma digital. Este entra al mismo
+ * flujo de firma que un contrato generado desde plantilla —el contratista firma
+ * desde su autoservicio—, solo que las firmas se estampan sobre el PDF aportado
+ * en vez de regenerar el documento.
+ *
+ * Se piden los mismos datos estructurados que el alta normal (nómina, alertas y
+ * cuentas de cobro los necesitan) más dónde va cada firma dentro del PDF.
+ */
+export const subirContratoOpsParaFirmaSchema = contratoOpsSchema
+  .pick({
+    colaboradorId: true, valorTotal: true, valorMensual: true, supervisorId: true,
+    sedeId: true, fechaInicio: true, fechaFin: true, rut: true, numero: true,
+    cargoId: true, cargoObjeto: true, ciudad: true, fechaSuscripcion: true,
+    contratistaNombre: true, contratistaCc: true, contratistaCcLugar: true,
+    contratistaDireccion: true, contratistaEmail: true, contratistaTelefono: true,
+    contratistaGenero: true, entregables: true,
+  })
+  .extend({
+    pdfBase64: z.string().min(1, 'Adjunta el PDF del contrato').startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
+    // El contratista es quien firma en su autoservicio: sin ficha no hay a quién
+    // pedirle la firma, así que aquí el colaborador SÍ es obligatorio.
+    colaboradorId: z.uuid('Selecciona al contratista que va a firmar'),
+    posicionContratista: posicionFirmaSchema,
+    posicionContratante: posicionFirmaSchema,
+    // La autorización de datos (Ley 1581) la sigue generando la app desde su
+    // plantilla: no depende del PDF subido y solo la firma el contratista.
+    generarAutorizacion: z.boolean().optional(),
+  })
+export type SubirContratoOpsParaFirmaInput = z.infer<typeof subirContratoOpsParaFirmaSchema>
+
 export const entregableOpsSchema = z.object({
   contratoOpsId: z.uuid(),
   descripcion: z.string().trim().min(3, 'Describe el entregable').max(500),

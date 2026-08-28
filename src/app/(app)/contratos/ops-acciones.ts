@@ -8,7 +8,7 @@ import { dbAuditado } from '@/lib/auditoria'
 import { subirArchivo } from '@/server/storage'
 import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subida'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { contratoOpsSchema, subirContratoOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema } from '@/lib/validaciones/contrato'
+import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, hoyBogota } from '@/lib/fechas'
 import { construirDatosPdfContratoOps, construirDatosAutorizacion, generarPdfContratoOps, generarPdfAutorizacionDatos, leerFirmaComoDataUri, type SnapshotContratoOps } from '@/server/contratos-ops-pdf'
 import { fechaLarga } from '@/lib/numero-letras'
@@ -16,6 +16,7 @@ import { aplicarFirmaContratoOps } from '@/server/contratos-ops-firma'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { generarPdfCuentaCobro } from '@/server/cuentas-cobro'
 import { parseFuncionesTexto, type FuncionesCargo, type ClausulaPlantilla } from '@/lib/contrato-variables'
+import { ubicarFirmasEnPdf, contarPaginas } from '@/server/pdf/firma-en-pdf'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
 
@@ -638,5 +639,170 @@ export const cambiarEstadoCuenta = accion(
     revalidatePath('/contratos/ops')
     revalidatePath('/contratos/cuentas-cobro')
     return { ok: true }
+  },
+)
+
+/**
+ * Sube el PDF de un contrato OPS que se firmará DENTRO de la app.
+ *
+ * Es el punto medio entre los dos caminos que ya existían: como el alta normal,
+ * el contrato entra al flujo de firma y el contratista lo firma desde su
+ * autoservicio; como la carga de un contrato existente, el documento lo aporta
+ * quien lo crea en vez de armarlo la plantilla. Sirve cuando el contrato se
+ * redactó por fuera y forzar la plantilla saldría peor.
+ *
+ * Diferencia clave con `subirContratoOpsExistente`: aquel da por firmado el
+ * documento (venía firmado en físico) y por eso omite la firma digital.
+ */
+export const subirContratoOpsParaFirma = accion(
+  { modulo: 'contratos', accion: 'CREAR', schema: subirContratoOpsParaFirmaSchema },
+  async (d, usuario) => {
+    const base64 = d.pdfBase64.split(',')[1] ?? ''
+    const pdf = Buffer.from(base64, 'base64')
+    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+
+    // Sin usuario de acceso el contratista no puede entrar a firmar: se avisa al
+    // crear, no cuando alguien se pregunte por qué nunca llegó la firma.
+    const uid = await usuarioDeColaborador(d.colaboradorId)
+    if (!uid) {
+      throw new ErrorNegocio(
+        'El contratista no tiene usuario de acceso, así que no podría firmar desde el autoservicio. Créale el acceso antes de subir el contrato.',
+      )
+    }
+
+    const numero = v(d.numero) ?? (await siguienteNumeroOps())
+    const c = await dbAuditado.contratoOps.create({
+      data: {
+        numero,
+        colaboradorId: d.colaboradorId,
+        objeto: await objetoDerivado(d),
+        valorTotal: d.valorTotal,
+        valorMensual: d.valorMensual ?? null,
+        supervisorId: v(d.supervisorId),
+        cargoId: v(d.cargoId),
+        sedeId: d.sedeId,
+        fechaInicio: parseFechaISO(d.fechaInicio)!,
+        fechaFin: parseFechaISO(d.fechaFin)!,
+        rut: v(d.rut),
+        estado: 'ACTIVO',
+        origenPdf: 'SUBIDO_PARA_FIRMA',
+      },
+    })
+
+    if (d.entregables && d.entregables.length > 0) {
+      await dbAuditado.entregableOps.createMany({
+        data: d.entregables.map((e) => ({
+          contratoOpsId: c.id,
+          descripcion: e.descripcion,
+          fechaEntrega: e.fechaEntrega ? parseFechaISO(e.fechaEntrega) : null,
+        })),
+      })
+    }
+
+    // El PDF aportado se guarda tal cual: es la base sobre la que se estamparán
+    // las firmas y la referencia para comparar contra el documento firmado.
+    const sha256 = createHash('sha256').update(pdf).digest('hex')
+    const archivo = await subirArchivo(`contratos-ops/${c.id}`, `contrato-${numero}.pdf`, pdf, 'application/pdf')
+    const documentoOriginal = await dbAuditado.documento.create({
+      data: {
+        entidadTipo: 'ContratoOps',
+        entidadId: c.id,
+        nombre: `Contrato OPS ${numero}`,
+        bucket: archivo.bucket,
+        storagePath: archivo.storagePath,
+        mimeType: 'application/pdf',
+        tamanoBytes: archivo.tamanoBytes,
+        sha256,
+        nivelAcceso: 'GENERAL',
+        sedeId: d.sedeId,
+        subidoPorId: usuario.id,
+      },
+    })
+
+    await dbAuditado.contratoOps.update({
+      where: { id: c.id },
+      data: {
+        posicionFirmas: {
+          contratista: d.posicionContratista,
+          contratante: d.posicionContratante,
+          documentoOriginalId: documentoOriginal.id,
+        } as object,
+      },
+    })
+
+    // La autorización de datos (Ley 1581) no depende del PDF subido: la sigue
+    // armando la app desde su plantilla y la firma solo el contratista.
+    if (d.generarAutorizacion !== false) {
+      try {
+        const datosContrato = {
+          empresa: { razonSocial: '', marca: null, nit: null, representanteLegal: null, representanteLegalCc: null, correoDevolucion: null },
+          contratista: {
+            nombre: v(d.contratistaNombre),
+            cc: v(d.contratistaCc),
+            ccLugar: v(d.contratistaCcLugar),
+            direccion: v(d.contratistaDireccion),
+            email: v(d.contratistaEmail),
+            telefono: v(d.contratistaTelefono),
+            genero: v(d.contratistaGenero),
+          },
+          contrato: {
+            numero,
+            ciudad: v(d.ciudad),
+            fechaSuscripcion: v(d.fechaSuscripcion),
+            fechaInicio: d.fechaInicio,
+            fechaFin: d.fechaFin,
+            plazoMeses: null,
+            valorTotal: d.valorTotal,
+            honorarioMensual: d.valorMensual ?? null,
+            cargoObjeto: v(d.cargoObjeto),
+          },
+        }
+        const autorizacion = await construirDatosAutorizacion({ datos: datosContrato, genero: v(d.contratistaGenero) })
+        // Se guarda en el snapshot para poder regenerarla firmada cuando el
+        // contratista firme; el contrato en sí no va aquí: ese es el PDF subido.
+        await dbAuditado.contratoOps.update({ where: { id: c.id }, data: { contenidoPdf: { autorizacion } as object } })
+        await generarPdfAutorizacionDatos({
+          contratoId: c.id, numero, sedeId: d.sedeId, usuarioId: usuario.id, datos: autorizacion,
+        })
+      } catch (e) {
+        // El contrato queda subido aunque falle la autorización; se regenera aparte.
+        console.error('No se pudo generar la autorización de datos del contrato OPS subido:', e)
+      }
+    }
+
+    await avisar(uid, {
+      evento: 'contrato_pendiente_firma',
+      titulo: 'Contrato pendiente de tu firma',
+      mensaje: `Tu contrato de prestación de servicios ${numero} está listo. Revísalo y fírmalo desde tu autoservicio.`,
+      enlace: '/autoservicio/contratos',
+      llamadoAccion: 'Revisar y firmar el contrato',
+    }).catch(() => {})
+
+    revalidatePath('/contratos')
+    revalidatePath(`/contratos/ops/${c.id}`)
+    return { id: c.id, documentoId: documentoOriginal.id }
+  },
+)
+
+/**
+ * Lee un PDF recién elegido en el formulario y propone dónde firma cada parte.
+ *
+ * No guarda nada: es el paso previo a subir el contrato, para que la app
+ * proponga la posición y una persona la confirme. Un PDF escaneado (sin capa de
+ * texto) devuelve las posiciones en null y la posición se marca a mano.
+ */
+export const analizarPdfContratoOps = accion(
+  {
+    modulo: 'contratos',
+    accion: 'CREAR',
+    schema: z.object({
+      pdfBase64: z.string().startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
+    }),
+  },
+  async (d) => {
+    const pdf = Buffer.from(d.pdfBase64.split(',')[1] ?? '', 'base64')
+    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+    const [posiciones, paginas] = await Promise.all([ubicarFirmasEnPdf(pdf), contarPaginas(pdf)])
+    return { paginas, ...posiciones }
   },
 )

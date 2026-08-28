@@ -1,7 +1,7 @@
 import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
-import { ContratoOpsSplit } from './form-ops'
+import { ModoNuevoOps } from './modo-nuevo-ops'
 import type { FuncionesCargo } from '@/lib/contrato-variables'
 
 export const metadata = { title: 'Nuevo contrato OPS · Smart Gadgets RH' }
@@ -38,8 +38,8 @@ export default async function NuevoOpsPage() {
 
   return (
     <div className="max-w-[1600px]">
-      <Encabezado titulo="Nuevo contrato OPS" descripcion="Prestación de servicios. A la izquierda ves el contrato en vivo mientras completas los datos." />
-      <ContratoOpsSplit sedes={sedes} cargos={cargos} empresa={empresaData} plantilla={plantillaData} />
+      <Encabezado titulo="Nuevo contrato OPS" descripcion="Prestación de servicios. Redáctalo desde la plantilla o sube el PDF si ya está hecho; en ambos casos se firma en la app." />
+      <ModoNuevoOps sedes={sedes} cargos={cargos} empresa={empresaData} plantilla={plantillaData} />
     </div>
   )
 }

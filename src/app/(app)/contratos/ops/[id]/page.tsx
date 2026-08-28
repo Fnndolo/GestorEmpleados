@@ -107,6 +107,10 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
           <h2 className="text-base font-medium">Documentos del contrato</h2>
           {c.origenPdf === 'SUBIDO' ? (
             <Badge variant="secondary">Subido · firmado en físico</Badge>
+          ) : c.origenPdf === 'SUBIDO_PARA_FIRMA' ? (
+            // Distinto del anterior: este sí recoge firmas, solo que se estampan
+            // sobre el PDF aportado en vez de regenerar el documento.
+            <Badge variant="secondary">Subido · se firma en la app</Badge>
           ) : puedeEditar && documentos.length > 0 && !documentos.some((d) => d.nombre.startsWith('Autorización')) ? (
             <GenerarAutorizacion contratoId={c.id} />
           ) : null}
@@ -114,7 +118,9 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
         {documentos.length === 0 ? (
           <div className="flex flex-col items-start gap-2">
             <p className="text-sm text-muted-foreground">Aún no se ha generado el PDF del contrato.</p>
-            {puedeEditar && c.contenidoPdf != null && <RegenerarDocumentos contratoId={c.id} />}
+            {/* Solo para contratos de plantilla: en uno subido el snapshot no trae
+                el texto del contrato, así que "regenerar" produciría un PDF vacío. */}
+            {puedeEditar && c.origenPdf === 'GENERADO' && c.contenidoPdf != null && <RegenerarDocumentos contratoId={c.id} />}
           </div>
         ) : (
           <ul className="space-y-1.5">

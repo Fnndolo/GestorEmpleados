@@ -1307,6 +1307,11 @@ model ContratoOps {
   // Origen del PDF: GENERADO (desde plantilla in-app) o SUBIDO (contrato ya existente,
   // normalmente firmado en físico; se adjunta como Documento y se omite la firma digital).
   origenPdf     OrigenPdfContrato @default(GENERADO) @map("origen_pdf")
+  // Dónde va la firma de cada parte cuando el PDF se subió (SUBIDO_PARA_FIRMA):
+  // { contratista: {pagina,x,y,ancho,alto}, contratante: {...} }. La app las
+  // propone leyendo el PDF y un humano las confirma; sin esto no se puede
+  // estampar, porque el archivo no lo diagramó la app y no sabe dónde firmar.
+  posicionFirmas Json?            @map("posicion_firmas")
   // Firma digital de cada parte (imagen PNG en storage) + fecha y usuario que la aplicó.
   firmaContratistaPath  String?   @map("firma_contratista_path")
   firmaContratistaFecha DateTime? @map("firma_contratista_fecha")
@@ -1328,7 +1333,11 @@ model ContratoOps {
 
 enum OrigenPdfContrato {
   GENERADO
+  // Subido ya firmado en fisico: se omite la firma digital.
   SUBIDO
+  // Subido SIN firmar, para firmarse dentro de la app: el PDF es el documento
+  // (no hay plantilla que regenerar) y las firmas se estampan sobre el archivo.
+  SUBIDO_PARA_FIRMA
 }
 
 enum RolFirmaContrato {

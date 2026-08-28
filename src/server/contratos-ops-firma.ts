@@ -6,6 +6,7 @@ import { ErrorNegocio } from '@/server/accion'
 import { contextoActual } from '@/server/contexto'
 import { subirArchivo } from '@/server/storage'
 import { generarPdfContratoOps, generarPdfAutorizacionDatos, leerFirmaComoDataUri, type SnapshotContratoOps } from '@/server/contratos-ops-pdf'
+import { generarPdfContratoOpsEstampado, leerDatosFirmaSubido } from '@/server/contratos-ops-estampar'
 import { fechaLarga } from '@/lib/numero-letras'
 import { avisar, avisarPorRol } from '@/server/notificaciones/avisar'
 
@@ -30,9 +31,15 @@ export async function aplicarFirmaContratoOps(opts: {
   metodoAuth?: string
 }): Promise<{ firmado: boolean; numero: string }> {
   const c = await prisma.contratoOps.findUniqueOrThrow({ where: { id: opts.contratoId } })
-  if (!c.contenidoPdf) {
+  // Dos orígenes con el mismo flujo de firma pero distinto documento final: el
+  // generado se regenera desde su plantilla, el subido se estampa sobre el PDF.
+  const esSubido = c.origenPdf === 'SUBIDO_PARA_FIRMA'
+  if (!esSubido && !c.contenidoPdf) {
     throw new ErrorNegocio('El contrato no tiene un documento generado; regenéralo antes de firmar.')
   }
+  // Se valida ANTES de guardar la firma: si faltan las posiciones, el contratista
+  // quedaría marcado como firmante de un documento que nunca se pudo producir.
+  const datosSubido = esSubido ? leerDatosFirmaSubido(c.posicionFirmas) : null
   const yaFirmada = opts.rol === 'CONTRATISTA' ? c.firmaContratistaPath : c.firmaContratantePath
   if (yaFirmada) throw new ErrorNegocio('Esta parte ya firmó el contrato.')
 
@@ -49,7 +56,9 @@ export async function aplicarFirmaContratoOps(opts: {
       : { firmaContratantePath: archivo.storagePath, firmaContratanteFecha: ahora, firmaContratantePorId: opts.usuarioId }
   const act = await dbAuditado.contratoOps.update({ where: { id: c.id }, data: campos })
 
-  const snapshot = act.contenidoPdf as unknown as SnapshotContratoOps
+  // En un contrato subido el snapshot solo transporta la autorización de datos
+  // (que la app sí genera desde plantilla); el contrato en sí es el PDF aportado.
+  const snapshot = (act.contenidoPdf ?? {}) as unknown as SnapshotContratoOps
   const docs: DocFirmado[] = []
 
   // La autorización de datos queda firmada con la sola firma del contratista.
@@ -74,20 +83,31 @@ export async function aplicarFirmaContratoOps(opts: {
       leerFirmaComoDataUri(act.firmaContratantePath),
       leerFirmaComoDataUri(act.firmaContratistaPath),
     ])
-    const r = await generarPdfContratoOps({
-      contratoId: c.id,
-      numero: c.numero,
-      sedeId: c.sedeId,
-      usuarioId: opts.usuarioId,
-      datos: snapshot,
-      firmas: {
-        contratanteImg: imgContratante,
-        contratistaImg: imgContratista,
-        contratanteFecha: act.firmaContratanteFecha ? fechaLarga(act.firmaContratanteFecha.toISOString().slice(0, 10)) : null,
-        contratistaFecha: act.firmaContratistaFecha ? fechaLarga(act.firmaContratistaFecha.toISOString().slice(0, 10)) : null,
-      },
-      nombreDocumento: `Contrato OPS ${c.numero} (firmado)`,
-    })
+    const r = datosSubido
+      ? await generarPdfContratoOpsEstampado({
+          contratoId: c.id,
+          numero: c.numero,
+          sedeId: c.sedeId,
+          usuarioId: opts.usuarioId,
+          datos: datosSubido,
+          firmaContratistaImg: imgContratista,
+          firmaContratanteImg: imgContratante,
+          nombreDocumento: `Contrato OPS ${c.numero} (firmado)`,
+        })
+      : await generarPdfContratoOps({
+          contratoId: c.id,
+          numero: c.numero,
+          sedeId: c.sedeId,
+          usuarioId: opts.usuarioId,
+          datos: snapshot,
+          firmas: {
+            contratanteImg: imgContratante,
+            contratistaImg: imgContratista,
+            contratanteFecha: act.firmaContratanteFecha ? fechaLarga(act.firmaContratanteFecha.toISOString().slice(0, 10)) : null,
+            contratistaFecha: act.firmaContratistaFecha ? fechaLarga(act.firmaContratistaFecha.toISOString().slice(0, 10)) : null,
+          },
+          nombreDocumento: `Contrato OPS ${c.numero} (firmado)`,
+        })
     docs.push({ tipo: 'CONTRATO', documentoId: r.documentoId, sha256: r.sha256 })
     await dbAuditado.contratoOps.update({ where: { id: c.id }, data: { estado: 'FIRMADO' } })
     firmado = true
