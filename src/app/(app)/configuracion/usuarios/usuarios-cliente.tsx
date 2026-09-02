@@ -297,14 +297,23 @@ function DialogEditar({ usuario, roles, sedes, onClose }: { usuario: Usuario; ro
     const res = await editarUsuario(datos)
     setGuardando(false)
     if (!res.ok) { toast.error(res.error); return }
-    const { correoCambiado, accesoEnviado } = res.datos
-    toast.success(
-      accesoEnviado
-        ? `Guardado. Se envió la contraseña temporal a ${datos.email}.`
-        : correoCambiado
-          ? 'Correo actualizado. No se envió contraseña nueva.'
-          : 'Usuario actualizado.',
-    )
+    const { correoCambiado, accesoEnviado, errorAcceso } = res.datos
+    // Los datos ya quedaron guardados aunque el envío haya fallado: se avisa sin
+    // decir que la operación falló, para que nadie la repita a ciegas.
+    if (errorAcceso) {
+      toast.warning(
+        correoCambiado ? `Correo cambiado a ${datos.email}, pero ${errorAcceso}` : errorAcceso,
+        { duration: 8000 },
+      )
+    } else {
+      toast.success(
+        accesoEnviado
+          ? `Guardado. Se envió la contraseña temporal a ${datos.email}.`
+          : correoCambiado
+            ? 'Correo actualizado. No se envió contraseña nueva.'
+            : 'Usuario actualizado.',
+      )
+    }
     onClose()
   }
 

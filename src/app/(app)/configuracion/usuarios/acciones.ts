@@ -2,6 +2,7 @@
 
 import { urlApp } from '@/lib/app-url'
 import { passwordTemporal } from '@/server/password-temporal'
+import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
@@ -39,7 +40,12 @@ async function nombresRoles(rolIdsExtra: string[], rolPrincipalId: string): Prom
  */
 async function enviarClaveTemporal(userId: string, nombre: string, correo: string) {
   const tmp = passwordTemporal()
-  await auth.api.setUserPassword({ body: { userId, newPassword: tmp } })
+  // `setUserPassword` pasa por adminMiddleware: sin las cabeceras de la petición
+  // no ve la sesión de quien llama y responde UNAUTHORIZED.
+  await auth.api.setUserPassword({
+    body: { userId, newPassword: tmp },
+    headers: await headers(),
+  })
   await prisma.user.update({ where: { id: userId }, data: { debeCambiarPassword: true } })
   await enviarCorreo({
     para: correo,
@@ -56,9 +62,12 @@ async function enviarClaveTemporal(userId: string, nombre: string, correo: strin
  * cambiar la contraseña. No es crítico: si falla, no tumba la operación.
  */
 async function cerrarSesiones(userId: string) {
-  await auth.api.revokeUserSessions({ body: { userId } }).catch((e: unknown) => {
+  try {
+    // Igual que setUserPassword, este endpoint exige la sesión de quien llama.
+    await auth.api.revokeUserSessions({ body: { userId }, headers: await headers() })
+  } catch (e) {
     console.error('No se pudieron cerrar las sesiones del usuario:', e)
-  })
+  }
 }
 
 export const crearUsuario = accion(
@@ -172,16 +181,32 @@ export const editarUsuario = accion(
       await cerrarSesiones(datos.id)
     }
 
+    // A partir de aquí los datos YA quedaron guardados. Si falla el envío de la
+    // clave (Better Auth o el correo), no se puede reportar la acción entera
+    // como fallida: el admin creería que no se cambió nada y lo intentaría otra
+    // vez sobre un correo que ya cambió.
+    let accesoEnviado = false
+    let errorAcceso: string | null = null
     if (datos.reenviarAcceso) {
-      await enviarClaveTemporal(datos.id, datos.nombre, email)
-      await auditar('EDITAR', 'User', {
-        registroId: datos.id,
-        descripcion: `Reenvío de acceso a ${email} (contraseña temporal)`,
-      })
+      try {
+        await enviarClaveTemporal(datos.id, datos.nombre, email)
+        await auditar('EDITAR', 'User', {
+          registroId: datos.id,
+          descripcion: `Reenvío de acceso a ${email} (contraseña temporal)`,
+        })
+        accesoEnviado = true
+      } catch (e) {
+        console.error('No se pudo enviar la contraseña temporal:', e)
+        errorAcceso = 'No se pudo enviar la contraseña temporal. Usa el botón de reenviar acceso.'
+        await auditar('EDITAR', 'User', {
+          registroId: datos.id,
+          descripcion: `Falló el envío de la contraseña temporal a ${email}`,
+        })
+      }
     }
 
     revalidatePath('/configuracion/usuarios')
-    return { correoCambiado: cambioCorreo, accesoEnviado: datos.reenviarAcceso }
+    return { correoCambiado: cambioCorreo, accesoEnviado, errorAcceso }
   },
 )
 
