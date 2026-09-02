@@ -80,7 +80,7 @@ export function PreviewLaboral({
         fontFamily: "'Bookman Preview', 'Bookman Old Style', Georgia, serif",
         fontSize: '10.5pt',
         lineHeight: 1.5,
-        color: '#1e293b',
+        color: '#0f172a',
       }}
     >
       <style>{FUENTE}</style>
@@ -105,12 +105,12 @@ export function PreviewLaboral({
         {/* Tabla de encabezado EMPLEADOR/EMPLEADO (recuadro de la página 1 del formato real) */}
         <div style={{ border: '0.75pt solid #94a3b8', marginBottom: '16pt' }}>
           <div style={{ padding: '8pt 6pt', textAlign: 'center', borderBottom: '0.75pt solid #94a3b8', backgroundColor: '#f8fafc' }}>
-            <div style={{ fontSize: '12.5pt', fontWeight: 'bold', color: '#0f172a' }}>{r.titulo}</div>
-            {r.numero && r.numero !== '__________' ? <div style={{ fontSize: '9.5pt', color: '#334155', marginTop: '2pt' }}>No. {r.numero}</div> : null}
+            <div style={{ fontSize: '12.5pt', fontWeight: 'bold', color: '#020617' }}>{r.titulo}</div>
+            {r.numero && r.numero !== '__________' ? <div style={{ fontSize: '9.5pt', color: '#1e293b', marginTop: '2pt' }}>No. {r.numero}</div> : null}
           </div>
           <div className="grid grid-cols-2" style={{ backgroundColor: '#f1f5f9', borderBottom: '0.5pt solid #94a3b8' }}>
-            <div style={{ padding: '5pt', textAlign: 'center', fontWeight: 'bold', fontSize: '9pt', color: '#0f172a', borderRight: '0.5pt solid #cbd5e1' }}>EMPLEADOR</div>
-            <div style={{ padding: '5pt', textAlign: 'center', fontWeight: 'bold', fontSize: '9pt', color: '#0f172a' }}>EMPLEADO</div>
+            <div style={{ padding: '5pt', textAlign: 'center', fontWeight: 'bold', fontSize: '9pt', color: '#020617', borderRight: '0.5pt solid #cbd5e1' }}>EMPLEADOR</div>
+            <div style={{ padding: '5pt', textAlign: 'center', fontWeight: 'bold', fontSize: '9pt', color: '#020617' }}>EMPLEADO</div>
           </div>
           <div className="grid grid-cols-2">
             <div style={{ padding: '5pt', borderRight: '0.5pt solid #cbd5e1' }}>
@@ -140,7 +140,7 @@ export function PreviewLaboral({
 
         {r.clausulas.map((cl, i) => (
           <div key={i}>
-            <p style={{ fontSize: '10.5pt', fontWeight: 'bold', color: '#0f172a', marginTop: '8pt', marginBottom: '3pt' }}>{cl.titulo}</p>
+            <p style={{ fontSize: '10.5pt', fontWeight: 'bold', color: '#020617', marginTop: '8pt', marginBottom: '3pt' }}>{cl.titulo}</p>
             {cl.parrafos.map((p, j) =>
               p.startsWith('- ') ? (
                 <div key={j} className="flex" style={{ marginBottom: '2pt', paddingLeft: '6pt' }}>
@@ -175,14 +175,14 @@ export function PreviewLaboral({
             <div style={{ borderTop: '1pt solid #1e293b', paddingTop: '4pt', marginTop: '28pt' }}>
               <p style={{ fontWeight: 'bold' }}>EL EMPLEADOR:</p>
               <p>{celda(datos.empresa.razonSocial)}</p>
-              <p style={{ fontSize: '8.5pt', color: '#334155' }}>{celda(datos.empresa.representanteLegal)} — Representante Legal</p>
+              <p style={{ fontSize: '8.5pt', color: '#1e293b' }}>{celda(datos.empresa.representanteLegal)} — Representante Legal</p>
             </div>
           </div>
           <div style={{ width: '45%' }}>
             <div style={{ borderTop: '1pt solid #1e293b', paddingTop: '4pt', marginTop: '28pt' }}>
               <p style={{ fontWeight: 'bold' }}>EL EMPLEADO:</p>
               <p>{celda(datos.contratista.nombre)}</p>
-              <p style={{ fontSize: '8.5pt', color: '#334155' }}>CC. {celda(datos.contratista.cc)}</p>
+              <p style={{ fontSize: '8.5pt', color: '#1e293b' }}>CC. {celda(datos.contratista.cc)}</p>
             </div>
           </div>
         </div>
@@ -195,7 +195,7 @@ export function PreviewLaboral({
 function Campo({ l, v, primero }: { l: string; v?: string | null; primero?: boolean }) {
   return (
     <div style={primero ? undefined : { borderTop: '0.5pt solid #e2e8f0' }}>
-      <div style={{ fontSize: '8pt', color: '#64748b' }}>{l}</div>
+      <div style={{ fontSize: '8pt', color: '#475569' }}>{l}</div>
       <div style={{ fontSize: '9pt', marginBottom: '3pt' }}>{celda(v)}</div>
     </div>
   )

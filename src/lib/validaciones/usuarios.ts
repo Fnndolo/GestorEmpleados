@@ -17,11 +17,17 @@ export type CrearUsuarioInput = z.infer<typeof crearUsuarioSchema>
 export const editarUsuarioSchema = z.object({
   id: z.uuid(),
   nombre: z.string().trim().min(3).max(150),
+  // El correo es la identidad de acceso: si se registró mal, aquí se corrige.
+  // Cambiarlo NO rompe la cuenta de credenciales, que se ata al id del usuario.
+  email: z.email('Correo inválido'),
   rolId: z.uuid('Selecciona un rol'),
   rolIdsExtra,
   estado: z.enum(['ACTIVO', 'INACTIVO', 'BLOQUEADO']),
   telefonoE164: z.string().trim().max(20).optional().or(z.literal('')),
   sedeIds: z.array(z.uuid()),
+  // Al corregir el correo hay que mandar la clave temporal al buzón nuevo: el
+  // anterior quedó en manos de otra persona (o de nadie).
+  reenviarAcceso: z.boolean(),
 })
 export type EditarUsuarioInput = z.infer<typeof editarUsuarioSchema>
 

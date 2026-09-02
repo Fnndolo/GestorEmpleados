@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
@@ -264,18 +264,28 @@ function DialogNuevo({ roles, sedes, onClose }: { roles: Rol[]; sedes: Sede[]; o
 
 function DialogEditar({ usuario, roles, sedes, onClose }: { usuario: Usuario; roles: Rol[]; sedes: Sede[]; onClose: () => void }) {
   const [guardando, setGuardando] = useState(false)
+  // Mientras el admin no toque la casilla, el reenvío sigue al correo: se marca
+  // solo al corregirlo y se desmarca si lo devuelve al original.
+  const [reenvioTocado, setReenvioTocado] = useState(false)
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<EditarUsuarioInput>({
     resolver: zodResolver(editarUsuarioSchema),
     defaultValues: {
-      id: usuario.id, nombre: usuario.nombre, rolId: usuario.rolId,
+      id: usuario.id, nombre: usuario.nombre, email: usuario.email, rolId: usuario.rolId,
       rolIdsExtra: usuario.rolIdsExtra,
       estado: usuario.estado as EditarUsuarioInput['estado'],
       telefonoE164: usuario.telefonoE164 ?? '', sedeIds: usuario.sedeIds,
+      reenviarAcceso: false,
     },
   })
   const sedeIds = watch('sedeIds')
   const rolId = watch('rolId')
   const rolIdsExtra = watch('rolIdsExtra')
+  const reenviar = watch('reenviarAcceso')
+  const correoCambio = (watch('email') ?? '').trim().toLowerCase() !== usuario.email.toLowerCase()
+
+  useEffect(() => {
+    if (!reenvioTocado) setValue('reenviarAcceso', correoCambio)
+  }, [correoCambio, reenvioTocado, setValue])
 
   function cambiarRolPrincipal(v: string) {
     setValue('rolId', v)
@@ -286,8 +296,16 @@ function DialogEditar({ usuario, roles, sedes, onClose }: { usuario: Usuario; ro
     setGuardando(true)
     const res = await editarUsuario(datos)
     setGuardando(false)
-    if (res.ok) { toast.success('Usuario actualizado.'); onClose() }
-    else toast.error(res.error)
+    if (!res.ok) { toast.error(res.error); return }
+    const { correoCambiado, accesoEnviado } = res.datos
+    toast.success(
+      accesoEnviado
+        ? `Guardado. Se envió la contraseña temporal a ${datos.email}.`
+        : correoCambiado
+          ? 'Correo actualizado. No se envió contraseña nueva.'
+          : 'Usuario actualizado.',
+    )
+    onClose()
   }
 
   return (
@@ -295,7 +313,7 @@ function DialogEditar({ usuario, roles, sedes, onClose }: { usuario: Usuario; ro
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Editar usuario</DialogTitle>
-          <DialogDescription>{usuario.email}</DialogDescription>
+          <DialogDescription>Creado con {usuario.email}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
@@ -303,6 +321,35 @@ function DialogEditar({ usuario, roles, sedes, onClose }: { usuario: Usuario; ro
             <Input {...register('nombre')} />
             {errors.nombre && <p className="text-xs text-destructive">{errors.nombre.message}</p>}
           </div>
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5">
+              Correo electrónico
+              <Ayuda
+                texto="Es el correo con el que la persona inicia sesión. Si se registró mal, corrígelo aquí y marca el envío de una contraseña nueva: la anterior viajó al buzón equivocado."
+                etiqueta="Sobre el correo de acceso"
+              />
+            </Label>
+            <Input type="email" {...register('email')} />
+            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+            {correoCambio && (
+              <p className="text-xs text-amber-600">
+                Cambiará el correo de acceso y se cerrarán las sesiones abiertas de este usuario.
+              </p>
+            )}
+          </div>
+          <label className="flex items-start gap-2 rounded-lg border p-3 text-sm cursor-pointer">
+            <Checkbox
+              className="mt-0.5"
+              checked={reenviar}
+              onCheckedChange={(v) => { setReenvioTocado(true); setValue('reenviarAcceso', Boolean(v)) }}
+            />
+            <span>
+              Enviar una contraseña temporal nueva
+              <span className="block text-xs text-muted-foreground">
+                Llega al correo de arriba. La contraseña anterior deja de servir y tendrá que crear una nueva al entrar.
+              </span>
+            </span>
+          </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Rol principal</Label>

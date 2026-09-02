@@ -1,7 +1,7 @@
 'use server'
 
-import { randomBytes } from 'node:crypto'
 import { urlApp } from '@/lib/app-url'
+import { passwordTemporal } from '@/server/password-temporal'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
@@ -31,10 +31,34 @@ async function nombresRoles(rolIdsExtra: string[], rolPrincipalId: string): Prom
   return roles.map((r) => r.nombre).join(', ')
 }
 
-/** Genera una contraseña temporal robusta (cumple política mínima). */
-function passwordTemporal(): string {
-  const base = randomBytes(9).toString('base64').replace(/[+/=]/g, '')
-  return `Sg-${base}9*`
+/**
+ * Genera una contraseña temporal nueva, la deja pendiente de cambio en el primer
+ * ingreso y la envía al buzón indicado. `correo` se pasa aparte del usuario
+ * porque al corregir un correo mal registrado hay que escribirle al nuevo, no al
+ * que quedó guardado.
+ */
+async function enviarClaveTemporal(userId: string, nombre: string, correo: string) {
+  const tmp = passwordTemporal()
+  await auth.api.setUserPassword({ body: { userId, newPassword: tmp } })
+  await prisma.user.update({ where: { id: userId }, data: { debeCambiarPassword: true } })
+  await enviarCorreo({
+    para: correo,
+    asunto: 'Nueva contraseña temporal — Plataforma Smart Gadgets',
+    html: `<p>Hola ${nombre},</p><p>Se generó una nueva contraseña temporal: <b>${tmp}</b></p>
+      <p>Ingresa en <a href="${urlApp('/login')}">${urlApp('/login')}</a> con el correo
+      <b>${correo}</b> y crea tu contraseña definitiva en el primer acceso.</p>`,
+  })
+}
+
+/**
+ * Cierra las sesiones abiertas del usuario. Al corregir un correo equivocado
+ * puede haber alguien más dentro con la clave vieja, así que no basta con
+ * cambiar la contraseña. No es crítico: si falla, no tumba la operación.
+ */
+async function cerrarSesiones(userId: string) {
+  await auth.api.revokeUserSessions({ body: { userId } }).catch((e: unknown) => {
+    console.error('No se pudieron cerrar las sesiones del usuario:', e)
+  })
 }
 
 export const crearUsuario = accion(
@@ -95,10 +119,25 @@ export const editarUsuario = accion(
   { modulo: 'usuarios', accion: 'EDITAR', schema: editarUsuarioSchema },
   async (datos) => {
     const rol = await prisma.rol.findUniqueOrThrow({ where: { id: datos.rolId } })
+    const previo = await prisma.user.findUniqueOrThrow({
+      where: { id: datos.id },
+      select: { email: true, colaborador: { select: { id: true, emailPersonal: true } } },
+    })
+
+    const email = datos.email.trim().toLowerCase()
+    const cambioCorreo = email !== previo.email.toLowerCase()
+    if (cambioCorreo) {
+      const ocupado = await prisma.user.findUnique({ where: { email }, select: { id: true } })
+      if (ocupado && ocupado.id !== datos.id) {
+        throw new ErrorNegocio('Ya hay otro usuario con ese correo.')
+      }
+    }
+
     await dbAuditado.user.update({
       where: { id: datos.id },
       data: {
         name: datos.nombre,
+        email,
         rolId: datos.rolId,
         estado: datos.estado,
         telefonoE164: datos.telefonoE164 || null,
@@ -114,7 +153,35 @@ export const editarUsuario = accion(
       })
     }
     await guardarRolesExtra(datos.id, datos.rolId, datos.rolIdsExtra)
+
+    if (cambioCorreo) {
+      // La ficha del colaborador lleva su propio correo personal. Solo se
+      // arrastra cuando venía igual al de acceso: si el admin lo puso distinto
+      // a propósito, se respeta.
+      const col = previo.colaborador
+      if (col && col.emailPersonal?.toLowerCase() === previo.email.toLowerCase()) {
+        await dbAuditado.colaborador.update({
+          where: { id: col.id },
+          data: { emailPersonal: email },
+        })
+      }
+      await auditar('EDITAR', 'User', {
+        registroId: datos.id,
+        descripcion: `Correo de acceso corregido: ${previo.email} → ${email}`,
+      })
+      await cerrarSesiones(datos.id)
+    }
+
+    if (datos.reenviarAcceso) {
+      await enviarClaveTemporal(datos.id, datos.nombre, email)
+      await auditar('EDITAR', 'User', {
+        registroId: datos.id,
+        descripcion: `Reenvío de acceso a ${email} (contraseña temporal)`,
+      })
+    }
+
     revalidatePath('/configuracion/usuarios')
+    return { correoCambiado: cambioCorreo, accesoEnviado: datos.reenviarAcceso }
   },
 )
 
@@ -122,17 +189,11 @@ export const reenviarAcceso = accion(
   { modulo: 'usuarios', accion: 'EDITAR', schema: editarUsuarioSchema.pick({ id: true }) },
   async ({ id }) => {
     const usuario = await prisma.user.findUniqueOrThrow({ where: { id } })
-    const tmp = passwordTemporal()
-    await auth.api.setUserPassword({ body: { userId: id, newPassword: tmp } })
-    await prisma.user.update({ where: { id }, data: { debeCambiarPassword: true } })
-
-    await enviarCorreo({
-      para: usuario.email,
-      asunto: 'Nueva contraseña temporal — Plataforma Smart Gadgets',
-      html: `<p>Hola ${usuario.name},</p><p>Se generó una nueva contraseña temporal: <b>${tmp}</b></p>
-        <p>Ingresa en <a href="${urlApp('/login')}">${urlApp('/login')}</a> y créala de nuevo en tu primer acceso.</p>`,
+    await enviarClaveTemporal(id, usuario.name, usuario.email)
+    await auditar('EDITAR', 'User', {
+      registroId: id,
+      descripcion: `Reenvío de acceso a ${usuario.email} (contraseña temporal)`,
     })
-    await auditar('EDITAR', 'User', { registroId: id, descripcion: 'Reenvío de acceso (contraseña temporal)' })
     revalidatePath('/configuracion/usuarios')
   },
 )

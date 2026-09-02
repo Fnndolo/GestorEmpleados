@@ -1,16 +1,10 @@
 import 'server-only'
 import { urlApp } from '@/lib/app-url'
-import { randomBytes } from 'node:crypto'
 import { prisma } from '@/lib/db'
 import { auth } from '@/lib/auth'
 import { auditar } from '@/lib/auditoria'
 import { enviarCorreo } from '@/server/notificaciones/correo'
-
-/** Contraseña temporal robusta (cumple la política mínima). */
-export function passwordTemporal(): string {
-  const base = randomBytes(9).toString('base64').replace(/[+/=]/g, '')
-  return `Sg-${base}9*`
-}
+import { passwordTemporal } from '@/server/password-temporal'
 
 /**
  * Crea el usuario de acceso de un colaborador con un rol dado, lo vincula a la ficha

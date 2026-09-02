@@ -85,7 +85,7 @@ export function PreviewContrato({
         fontFamily: "'Bookman Preview', 'Bookman Old Style', Georgia, serif",
         fontSize: '10.5pt',
         lineHeight: 1.5,
-        color: '#1e293b',
+        color: '#0f172a',
       }}
     >
       <style>{FUENTE}</style>
@@ -112,12 +112,12 @@ export function PreviewContrato({
         {/* Tabla encabezado — tablaEnc del PDF: borde 0.75pt #94a3b8 */}
         <div style={{ border: '0.75pt solid #94a3b8', marginBottom: '16pt' }}>
           <div style={{ padding: '8pt 6pt', textAlign: 'center', borderBottom: '0.75pt solid #94a3b8', backgroundColor: '#f8fafc' }}>
-            <div style={{ fontSize: '12.5pt', fontWeight: 'bold', color: '#0f172a' }}>{r.titulo}</div>
-            {r.numero ? <div style={{ fontSize: '9.5pt', color: '#334155', marginTop: '2pt' }}>No. {r.numero}</div> : null}
+            <div style={{ fontSize: '12.5pt', fontWeight: 'bold', color: '#020617' }}>{r.titulo}</div>
+            {r.numero ? <div style={{ fontSize: '9.5pt', color: '#1e293b', marginTop: '2pt' }}>No. {r.numero}</div> : null}
           </div>
           <div className="grid grid-cols-2" style={{ backgroundColor: '#f1f5f9', borderBottom: '0.5pt solid #94a3b8' }}>
-            <div style={{ padding: '5pt', textAlign: 'center', fontWeight: 'bold', fontSize: '9pt', color: '#0f172a', borderRight: '0.5pt solid #cbd5e1' }}>CONTRATANTE</div>
-            <div style={{ padding: '5pt', textAlign: 'center', fontWeight: 'bold', fontSize: '9pt', color: '#0f172a' }}>CONTRATISTA</div>
+            <div style={{ padding: '5pt', textAlign: 'center', fontWeight: 'bold', fontSize: '9pt', color: '#020617', borderRight: '0.5pt solid #cbd5e1' }}>CONTRATANTE</div>
+            <div style={{ padding: '5pt', textAlign: 'center', fontWeight: 'bold', fontSize: '9pt', color: '#020617' }}>CONTRATISTA</div>
           </div>
           <div className="grid grid-cols-2">
             <div style={{ padding: '5pt', borderRight: '0.5pt solid #cbd5e1' }}>
@@ -147,7 +147,7 @@ export function PreviewContrato({
         {r.clausulas.map((cl, i) => (
           <div key={i}>
             {/* clausulaTitulo: 10.5pt bold, mt 8pt mb 3pt */}
-            <p style={{ fontSize: '10.5pt', fontWeight: 'bold', color: '#0f172a', marginTop: '8pt', marginBottom: '3pt' }}>{cl.titulo}</p>
+            <p style={{ fontSize: '10.5pt', fontWeight: 'bold', color: '#020617', marginTop: '8pt', marginBottom: '3pt' }}>{cl.titulo}</p>
             {cl.parrafos.map((p, j) => (
               <p key={j} style={{ marginBottom: '5pt', textAlign: 'justify' }}>{p}</p>
             ))}
@@ -197,7 +197,7 @@ export function PreviewContrato({
 function Campo({ l, v, primero }: { l: string; v?: string | null; primero?: boolean }) {
   return (
     <div style={primero ? undefined : { borderTop: '0.5pt solid #e2e8f0' }}>
-      <div style={{ fontSize: '8pt', color: '#64748b' }}>{l}</div>
+      <div style={{ fontSize: '8pt', color: '#475569' }}>{l}</div>
       <div style={{ fontSize: '9pt', marginBottom: '3pt' }}>{celda(v)}</div>
     </div>
   )
