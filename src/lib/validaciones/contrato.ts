@@ -209,6 +209,20 @@ export const subirContratoOpsParaFirmaSchema = contratoOpsSchema
   })
 export type SubirContratoOpsParaFirmaInput = z.infer<typeof subirContratoOpsParaFirmaSchema>
 
+/**
+ * Pasar al flujo de firma un contrato OPS que se cargó como «ya firmado en
+ * físico» (`origenPdf: SUBIDO`).
+ *
+ * Solo pide dónde firma cada parte: el PDF y los datos del contrato ya están
+ * guardados, así que no hay nada más que volver a capturar.
+ */
+export const habilitarFirmaOpsSchema = z.object({
+  contratoId: z.uuid(),
+  posicionContratista: posicionFirmaSchema,
+  posicionContratante: posicionFirmaSchema,
+})
+export type HabilitarFirmaOpsInput = z.infer<typeof habilitarFirmaOpsSchema>
+
 export const entregableOpsSchema = z.object({
   contratoOpsId: z.uuid(),
   descripcion: z.string().trim().min(3, 'Describe el entregable').max(500),

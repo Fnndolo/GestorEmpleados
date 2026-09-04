@@ -4,11 +4,11 @@ import { createHash } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
-import { dbAuditado } from '@/lib/auditoria'
-import { subirArchivo } from '@/server/storage'
+import { dbAuditado, auditar } from '@/lib/auditoria'
+import { subirArchivo, leerArchivo } from '@/server/storage'
 import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subida'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema } from '@/lib/validaciones/contrato'
+import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, hoyBogota } from '@/lib/fechas'
 import { construirDatosPdfContratoOps, construirDatosAutorizacion, generarPdfContratoOps, generarPdfAutorizacionDatos, leerFirmaComoDataUri, type SnapshotContratoOps } from '@/server/contratos-ops-pdf'
 import { fechaLarga } from '@/lib/numero-letras'
@@ -802,6 +802,131 @@ export const subirContratoOpsParaFirma = accion(
     revalidatePath('/contratos')
     revalidatePath(`/contratos/ops/${c.id}`)
     return { id: c.id, documentoId: documentoOriginal.id }
+  },
+)
+
+/**
+ * El nombre no distingue de forma fiable al contrato de su autorización de
+ * datos: los contratos subidos antes de que se nombraran de forma descriptiva
+ * conservan el nombre del archivo original. Se descarta lo que claramente ES la
+ * autorización y se toma el resto.
+ */
+const esAutorizacion = (nombre: string) =>
+  nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().includes('autoriz')
+
+/** El PDF del contrato en sí (no la autorización) entre los documentos del contrato. */
+async function documentoDelContratoOps(contratoId: string) {
+  const docs = await prisma.documento.findMany({
+    where: { entidadTipo: 'ContratoOps', entidadId: contratoId },
+    orderBy: { creadoEn: 'asc' },
+    select: { id: true, nombre: true, storagePath: true },
+  })
+  const doc = docs.find((d) => !esAutorizacion(d.nombre)) ?? docs[0]
+  if (!doc) throw new ErrorNegocio('El contrato no tiene un PDF adjunto sobre el cual firmar.')
+  return doc
+}
+
+/**
+ * Carga lo necesario para colocar las firmas sobre un contrato ya subido: el PDF
+ * guardado y la posición que propone la app.
+ *
+ * No cambia nada; es el paso previo a `habilitarFirmaContratoOps`, igual que
+ * `analizarPdfContratoOps` lo es al alta. La diferencia es de dónde sale el PDF:
+ * allá lo acaba de elegir el navegador, aquí ya está en el almacenamiento.
+ */
+export const prepararFirmaContratoOps = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: z.object({ contratoId: z.uuid() }) },
+  async (d) => {
+    const c = await prisma.contratoOps.findUniqueOrThrow({
+      where: { id: d.contratoId },
+      select: { id: true, origenPdf: true },
+    })
+    if (c.origenPdf !== 'SUBIDO') {
+      throw new ErrorNegocio('Este contrato ya está en el flujo de firma de la app.')
+    }
+    const doc = await documentoDelContratoOps(c.id)
+    const pdf = await leerArchivo(doc.storagePath)
+    const [posiciones, paginas] = await Promise.all([ubicarFirmasEnPdf(pdf), contarPaginas(pdf)])
+    return {
+      nombre: doc.nombre,
+      paginas,
+      pdfBase64: `data:application/pdf;base64,${pdf.toString('base64')}`,
+      ...posiciones,
+    }
+  },
+)
+
+/**
+ * Pasa al flujo de firma un contrato OPS que se cargó como «ya firmado en físico».
+ *
+ * Repara el error más fácil de cometer: subir el contrato por «Subir contrato
+ * existente» de la ficha del colaborador —pensada para papeles ya firmados— en
+ * vez de «Subir el PDF» del contrato nuevo. Quedaba sin salida, porque el
+ * autoservicio mira `origenPdf` para ofrecer la firma: el contratista veía el
+ * PDF pero sin botón, y no había forma de corregirlo ni de borrar el contrato
+ * para rehacerlo.
+ *
+ * No toca el documento: solo registra dónde firma cada parte y cambia el origen.
+ */
+export const habilitarFirmaContratoOps = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: habilitarFirmaOpsSchema },
+  async (d) => {
+    const c = await prisma.contratoOps.findUniqueOrThrow({
+      where: { id: d.contratoId },
+      select: {
+        id: true, numero: true, colaboradorId: true, origenPdf: true,
+        firmaContratistaPath: true, firmaContratantePath: true,
+      },
+    })
+    if (c.origenPdf !== 'SUBIDO') {
+      throw new ErrorNegocio('Este contrato ya está en el flujo de firma de la app.')
+    }
+    // Un contrato con firmas ya recogidas no se reabre: cambiar el origen haría
+    // que se le estampen encima sobre un PDF que ya circuló.
+    if (c.firmaContratistaPath || c.firmaContratantePath) {
+      throw new ErrorNegocio('El contrato ya tiene firmas registradas.')
+    }
+    if (!c.colaboradorId) {
+      throw new ErrorNegocio('El contrato no tiene contratista asignado, así que nadie podría firmarlo.')
+    }
+    // Sin usuario de acceso no hay autoservicio donde firmar: se avisa ahora, no
+    // cuando alguien se pregunte por qué la firma nunca llegó.
+    const uid = await usuarioDeColaborador(c.colaboradorId)
+    if (!uid) {
+      throw new ErrorNegocio(
+        'El contratista no tiene usuario de acceso, así que no podría firmar desde el autoservicio. Créale el acceso primero.',
+      )
+    }
+    const doc = await documentoDelContratoOps(c.id)
+
+    await dbAuditado.contratoOps.update({
+      where: { id: c.id },
+      data: {
+        origenPdf: 'SUBIDO_PARA_FIRMA',
+        posicionFirmas: {
+          contratista: d.posicionContratista,
+          contratante: d.posicionContratante,
+          documentoOriginalId: doc.id,
+        } as object,
+      },
+    })
+    await auditar('EDITAR', 'ContratoOps', {
+      registroId: c.id,
+      descripcion: `Contrato ${c.numero}: habilitada la firma en la app sobre el PDF ya subido`,
+    })
+
+    await avisar(uid, {
+      evento: 'contrato_pendiente_firma',
+      titulo: 'Contrato pendiente de tu firma',
+      mensaje: `Tu contrato de prestación de servicios ${c.numero} está listo. Revísalo y fírmalo desde tu autoservicio.`,
+      enlace: '/autoservicio/contratos',
+      llamadoAccion: 'Revisar y firmar el contrato',
+    }).catch(() => {})
+
+    revalidatePath('/contratos')
+    revalidatePath(`/contratos/ops/${c.id}`)
+    revalidatePath('/autoservicio/contratos')
+    return { ok: true }
   },
 )
 

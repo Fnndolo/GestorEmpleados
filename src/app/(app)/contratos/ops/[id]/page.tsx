@@ -12,6 +12,7 @@ import { CuentasCobro } from './cuentas-cliente'
 import { Entregables } from './entregables-cliente'
 import { FirmasContrato } from './firmas-contrato'
 import { GenerarAutorizacion, RegenerarDocumentos } from './generar-autorizacion'
+import { HabilitarFirma } from './habilitar-firma'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 
 export const metadata = { title: 'Contrato OPS · Smart Gadgets RH' }
@@ -106,7 +107,18 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="text-base font-medium">Documentos del contrato</h2>
           {c.origenPdf === 'SUBIDO' ? (
-            <Badge variant="secondary">Subido · firmado en físico</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">Subido · firmado en físico</Badge>
+              {/* Este origen lo pone «Subir contrato existente» de la ficha del
+                  colaborador, que da el contrato por firmado en papel. Cuando en
+                  realidad falta la firma del contratista, este es el único camino
+                  de vuelta: el autoservicio mira `origenPdf` para ofrecer la firma,
+                  así que sin esto el contrato queda sin botón allá y tampoco hay
+                  forma de borrarlo para rehacerlo por la pantalla correcta. */}
+              {puedeEditar && documentos.length > 0 && !c.firmaContratistaPath && !c.firmaContratantePath && (
+                <HabilitarFirma contratoId={c.id} />
+              )}
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               {c.origenPdf === 'SUBIDO_PARA_FIRMA' && (
