@@ -2,7 +2,11 @@
 // Estrategia: shell estático en caché; navegación network-first con fallback a
 // /offline; los datos sensibles y documentos NUNCA se cachean (Ley 1581, C19/R17).
 
-const VERSION = 'sg-rh-v5'
+// Subir la versión BORRA la caché anterior en `activate`. Hay que subirla cuando
+// cambie la lógica de cacheo o cuando haya que purgar lo ya guardado en los
+// navegadores: es el único interruptor que llega a los equipos de la gente.
+// v6: purga los 404 que la v5 alcanzó a guardar (ver el handler de fetch).
+const VERSION = 'sg-rh-v6'
 const SHELL = ['/offline', '/icono.svg', '/manifest.webmanifest']
 
 // En desarrollo se registra como /sw.js?dev=1 → NO se cachea nada: la caché de los
@@ -107,17 +111,29 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Recursos estáticos de Next: cache-first
+  // Recursos estáticos de Next: cache-first (llevan hash en el nombre, así que
+  // el contenido de una URL nunca cambia y es seguro servirlo desde la caché).
+  //
+  // Solo se guarda y solo se sirve lo que respondió bien. Antes se guardaba la
+  // respuesta fuera cual fuera, y eso dejaba la app rota de forma permanente:
+  // durante un despliegue, un chunk que todavía no estaba en el CDN devolvía
+  // 404, ese 404 quedaba cacheado, y al ser cache-first se devolvía en cada
+  // visita siguiente sin volver a preguntarle a la red. El `import()` del chunk
+  // fallaba con ChunkLoadError y ni recargar arreglaba nada, porque la caché
+  // tampoco se limpiaba (VERSION no cambia sola entre despliegues).
+  //
+  // La búsqueda va contra la caché de ESTA versión, no contra `caches.match`,
+  // que mira todas: si quedó una caché vieja sin borrar, no debe servir nada.
   if (url.pathname.startsWith('/_next/static/') || SHELL.includes(url.pathname)) {
     event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ??
-          fetch(request).then((resp) => {
-            const copia = resp.clone()
-            caches.open(VERSION).then((cache) => cache.put(request, copia))
+      caches.open(VERSION).then((cache) =>
+        cache.match(request).then((cached) => {
+          if (cached && cached.ok) return cached
+          return fetch(request).then((resp) => {
+            if (resp.ok) cache.put(request, resp.clone()).catch(() => {})
             return resp
-          }),
+          })
+        }),
       ),
     )
   }
