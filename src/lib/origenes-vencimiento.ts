@@ -9,6 +9,7 @@
 export const ETIQUETA_ORIGEN = {
   DOCUMENTO: 'Documentos del expediente',
   CONTRATO_FIJO: 'Contratos a término fijo',
+  CONTRATO_OPS: 'Contratos de prestación de servicios (OPS)',
   PERIODO_PRUEBA: 'Fin del período de prueba',
   EXAMEN_MEDICO: 'Exámenes médicos ocupacionales',
   PLANILLA_SS_OPS: 'Planilla de seguridad social (OPS)',

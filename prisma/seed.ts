@@ -152,6 +152,15 @@ async function seedReglasAlerta() {
       diasPrimeraAlerta: 40, primeraEnHabiles: false,
       diasUltimaAlerta: 30, ultimaEnHabiles: false,
     },
+    {
+      // La prestación de servicios no la rige el preaviso del art. 46 CST, así
+      // que no necesita los 40 días del fijo; 30 alcanzan para decidir si se
+      // renueva y firmar el nuevo contrato antes de que se caiga el servicio.
+      clave: 'CONTRATO_OPS',
+      descripcion: 'Vencimiento de contratos de prestación de servicios (30 y 15 días calendario antes)',
+      diasPrimeraAlerta: 30, primeraEnHabiles: false,
+      diasUltimaAlerta: 15, ultimaEnHabiles: false,
+    },
   ]
   for (const r of reglas) {
     await prisma.reglaAlerta.upsert({

@@ -794,6 +794,10 @@ model AjusteVacaciones {
 enum OrigenVencimiento {
   DOCUMENTO
   CONTRATO_FIJO
+  // Prestación de servicios: vence en su fecha de fin igual que un fijo, pero se
+  // separa porque no lo rige el preaviso del art. 46 CST y su regla de alerta
+  // se configura aparte.
+  CONTRATO_OPS
   PERIODO_PRUEBA
   EXAMEN_MEDICO
   PLANILLA_SS_OPS

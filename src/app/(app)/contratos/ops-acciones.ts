@@ -9,7 +9,8 @@ import { subirArchivo, leerArchivo } from '@/server/storage'
 import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subida'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema } from '@/lib/validaciones/contrato'
-import { parseFechaISO, hoyBogota } from '@/lib/fechas'
+import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
+import { publicarVencimiento, resolverVencimiento } from '@/server/vencimientos/servicio'
 import { construirDatosPdfContratoOps, construirDatosAutorizacion, generarPdfContratoOps, generarPdfAutorizacionDatos, leerFirmaComoDataUri, type SnapshotContratoOps } from '@/server/contratos-ops-pdf'
 import { fechaLarga } from '@/lib/numero-letras'
 import { aplicarFirmaContratoOps } from '@/server/contratos-ops-firma'
@@ -19,6 +20,47 @@ import { parseFuncionesTexto, type FuncionesCargo, type ClausulaPlantilla } from
 import { ubicarFirmasEnPdf, contarPaginas } from '@/server/pdf/firma-en-pdf'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
+
+/**
+ * Publica (o resuelve) el vencimiento de un contrato OPS.
+ *
+ * Un contrato de prestación de servicios vence en su fecha de fin igual que un
+ * laboral a término fijo, pero hasta ahora nadie lo publicaba: los OPS no
+ * generaban ninguna alerta previa, y lo único que avisaba era el recordatorio
+ * semanal de «contrato vencido sin cerrar», que por diseño llega cuando la fecha
+ * ya pasó. Por eso la notificación siempre parecía tardía.
+ *
+ * Se resuelve cuando el contrato deja de estar vigente o se queda sin fecha de
+ * fin, para no seguir alertando por algo que ya se cerró.
+ *
+ * NO se exporta: en un archivo `'use server'` cada export queda expuesto como
+ * endpoint invocable desde el navegador y sin la validación de permisos que da
+ * `accion()`. El relleno de los contratos ya existentes vive en
+ * `@/server/vencimientos/contratos-ops`, que es código server-only normal.
+ */
+async function publicarVencimientoOps(contratoId: string) {
+  const c = await prisma.contratoOps.findUniqueOrThrow({
+    where: { id: contratoId },
+    include: { colaborador: { select: { nombres: true, apellidos: true } } },
+  })
+  const vigente = c.estado === 'ACTIVO' || c.estado === 'FIRMADO'
+  if (!vigente || !c.fechaFin) {
+    await resolverVencimiento('ContratoOps', c.id, 'CONTRATO_OPS')
+    return
+  }
+  const persona = c.colaborador
+    ? `${c.colaborador.nombres} ${c.colaborador.apellidos}`
+    : 'contratista sin ficha'
+  await publicarVencimiento({
+    origen: 'CONTRATO_OPS',
+    entidadTipo: 'ContratoOps',
+    entidadId: c.id,
+    titulo: `Vence contrato OPS ${c.numero} — ${persona}`,
+    detalle: c.objeto,
+    fechaVencimientoISO: formatFechaISO(c.fechaFin),
+    sedeId: c.sedeId,
+  })
+}
 
 /** Serie KC-###: siguiente consecutivo desde el mayor existente (no se repite aunque se borren). */
 async function siguienteNumeroOps(): Promise<string> {
@@ -188,6 +230,7 @@ export const crearContratoOps = accion(
       }
     }
 
+    await publicarVencimientoOps(c.id)
     revalidatePath('/contratos')
     revalidatePath(`/contratos/ops/${c.id}`)
     return { id: c.id, documentoId }
@@ -249,6 +292,7 @@ export const subirContratoOpsExistente = accion(
       entidadTipo: 'ContratoOps', entidadId: c.id, numero, sedeId: c.sedeId, usuarioId: usuario.id,
     })
 
+    await publicarVencimientoOps(c.id)
     revalidatePath('/contratos')
     revalidatePath(`/contratos/ops/${c.id}`)
     return { id: c.id }
@@ -799,6 +843,7 @@ export const subirContratoOpsParaFirma = accion(
       llamadoAccion: 'Revisar y firmar el contrato',
     }).catch(() => {})
 
+    await publicarVencimientoOps(c.id)
     revalidatePath('/contratos')
     revalidatePath(`/contratos/ops/${c.id}`)
     return { id: c.id, documentoId: documentoOriginal.id }
