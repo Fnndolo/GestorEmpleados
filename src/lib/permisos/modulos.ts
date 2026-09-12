@@ -15,6 +15,7 @@ export const MODULOS = {
   activos: 'Activos y dotación',
   capacitaciones: 'Capacitaciones',
   evaluaciones: 'Evaluación de desempeño',
+  bienestar: 'Bienestar (cumpleaños y celebraciones)',
   juridica: 'Jurídica',
   calendario_legal: 'Calendario de obligaciones legales',
   sst: 'Seguridad y Salud en el Trabajo',
@@ -79,7 +80,7 @@ export const ROLES_SEED: Record<
     permisos: [
       ...todos([
         'colaboradores', 'contratos', 'novedades', 'terminaciones', 'activos',
-        'capacitaciones', 'evaluaciones', 'documentos', 'vencimientos',
+        'capacitaciones', 'evaluaciones', 'bienestar', 'documentos', 'vencimientos',
       ]),
       { modulo: 'colaboradores_salud', acciones: ['VER', 'CREAR', 'EDITAR'], alcance: 'TODAS_SEDES' },
       { modulo: 'autoservicio', acciones: ['VER', 'APROBAR'], alcance: 'TODAS_SEDES' },
