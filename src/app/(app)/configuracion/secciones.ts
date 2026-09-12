@@ -2,6 +2,7 @@ import {
   Building2, Users, ShieldCheck, MapPin, Bell, BellRing, FileStack, Layers,
   Receipt, Briefcase, Coins, Landmark, Network, FileImage, FileSignature, type LucideIcon,
 } from 'lucide-react'
+import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 
 /**
  * Catálogo de secciones de Configuración, agrupadas como se navegan.
@@ -70,7 +71,15 @@ export const GRUPOS: { titulo: string; secciones: SeccionConfig[] }[] = [
       // tres grupos, dos de ellas llamadas "Plantillas", y nadie sabía dónde
       // buscar. El contador avisa si no hay ninguna plantilla de contrato
       // activa, que es lo que impide generar contratos.
-      { titulo: 'Plantillas de documentos', desc: 'Papel membretado, texto de los contratos y de las cuentas de cobro.', href: '/configuracion/plantillas', icono: FileSignature, modulo: 'configuracion', contador: 'plantillasContrato' },
+      {
+        titulo: 'Plantillas de documentos',
+        desc: GENERAR_CONTRATOS_DESDE_PLANTILLA
+          ? 'Papel membretado y texto de la autorización de datos, los contratos y las cuentas de cobro.'
+          : 'Papel membretado y texto de la autorización de datos y las cuentas de cobro.',
+        href: '/configuracion/plantillas', icono: FileSignature, modulo: 'configuracion',
+        // El contador de plantillas de contrato solo importa cuando se generan en la app.
+        ...(GENERAR_CONTRATOS_DESDE_PLANTILLA ? { contador: 'plantillasContrato' as const } : {}),
+      },
       { titulo: 'Módulos propios', desc: 'Pestañas a la medida, con campos propios, para lo que no cubre la plataforma.', href: '/configuracion/modulos', icono: Layers, modulo: 'configuracion' },
     ],
   },
@@ -83,7 +92,11 @@ export const GRUPOS: { titulo: string; secciones: SeccionConfig[] }[] = [
  */
 // `plantillasContrato` entra aquí: sin una plantilla activa no se puede generar
 // ningún contrato desde el sistema, que es justo el caso de producción hoy.
-const IMPRESCINDIBLES: ContadorClave[] = ['parametrosNomina', 'reglasAlerta', 'tiposDocumento', 'plantillasCuentaCobro', 'plantillasContrato']
+const IMPRESCINDIBLES: ContadorClave[] = [
+  'parametrosNomina', 'reglasAlerta', 'tiposDocumento', 'plantillasCuentaCobro',
+  // Sin generación desde plantilla, que no haya plantillas de contrato no rompe nada.
+  ...(GENERAR_CONTRATOS_DESDE_PLANTILLA ? (['plantillasContrato'] as ContadorClave[]) : []),
+]
 
 export function estaVacio(clave: ContadorClave | undefined, contadores: Contadores): boolean {
   if (!clave) return false

@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Card, CardContent } from '@/components/ui/card'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Spinner } from '@/components/ui/spinner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Ayuda } from '@/components/ui-kit/ayuda'
@@ -216,14 +217,13 @@ export function EditorPlantilla({ valores, puedeGuardar }: { valores: Valores | 
 
       <div className="sticky bottom-16 flex flex-wrap justify-end gap-2 border-t bg-background/95 p-3 backdrop-blur lg:bottom-0">
         {valores && (
-          <a
-            href={`/api/configuracion/membrete/muestra?tipo=plantilla&plantillaId=${valores.id}`}
-            target="_blank"
-            rel="noreferrer"
+          <VisorPdf
+            url={`/api/configuracion/membrete/muestra?tipo=plantilla&plantillaId=${valores.id}`}
+            titulo={`Muestra · ${valores.nombre}`}
             className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' gap-2'}
           >
             <FileText className="size-4" /> Ver muestra en PDF
-          </a>
+          </VisorPdf>
         )}
         <Button size="sm" variant="ghost" onClick={() => router.push('/configuracion/plantillas/contratos')}>Volver</Button>
         {puedeGuardar && (

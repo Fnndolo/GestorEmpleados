@@ -121,6 +121,8 @@ export async function generarPdfContratoOps(opts: {
 export async function construirDatosAutorizacion(opts: {
   datos: DatosContrato
   genero?: string | null
+  /** OPS (por defecto) o LABORAL: cambia "contratista independiente" por "trabajador" en el texto. */
+  vinculo?: 'OPS' | 'LABORAL'
 }): Promise<DatosAutorizacionPdf> {
   const empresaCfg = await prisma.configuracionEmpresa.findFirst()
   const d = opts.datos
@@ -135,6 +137,7 @@ export async function construirDatosAutorizacion(opts: {
       .replace(/^CC\.?\s*/i, ''), // el PDF antepone "CC." en la firma
     cargo: (d.contrato.cargoObjeto ?? '').toUpperCase(),
     genero: opts.genero ?? null,
+    vinculo: opts.vinculo ?? 'OPS',
     empresa: {
       razonSocial: d.empresa.razonSocial || empresaCfg?.razonSocial || '',
       nombreComercial: d.empresa.marca || empresaCfg?.nombreComercial || '',

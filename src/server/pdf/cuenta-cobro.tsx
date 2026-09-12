@@ -2,6 +2,7 @@ import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@
 import { estilos } from './estilos'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaLarga } from '@/lib/fechas'
+import { aplicarVariablesCuentaCobro } from '@/lib/plantillas-documento/cuenta-cobro'
 
 const s = StyleSheet.create({
   logo: { width: 120, marginBottom: 16, objectFit: 'contain' },
@@ -25,16 +26,12 @@ export type DatosCuentaCobro = {
   firmaDataUri?: string | null
 }
 
+// Las mismas variables que ve la vista previa del editor de plantillas.
 function aplicarVariables(texto: string, d: DatosCuentaCobro): string {
-  return texto
-    .replace(/\{\{\s*contratista\s*\}\}/gi, d.contratista.nombre)
-    .replace(/\{\{\s*documento\s*\}\}/gi, d.contratista.documento)
-    .replace(/\{\{\s*valor\s*\}\}/gi, fmtCOP(d.valor))
-    .replace(/\{\{\s*periodo\s*\}\}/gi, d.periodo)
-    .replace(/\{\{\s*concepto\s*\}\}/gi, d.concepto ?? '')
-    .replace(/\{\{\s*empresa\s*\}\}/gi, d.empresa.razonSocial)
-    .replace(/\{\{\s*nit\s*\}\}/gi, d.empresa.nit)
-    .replace(/\{\{\s*ciudad\s*\}\}/gi, d.ciudad)
+  return aplicarVariablesCuentaCobro(texto, {
+    contratista: d.contratista.nombre, documento: d.contratista.documento, valor: fmtCOP(d.valor),
+    periodo: d.periodo, concepto: d.concepto ?? '', empresa: d.empresa.razonSocial, nit: d.empresa.nit, ciudad: d.ciudad,
+  })
 }
 
 function Doc({ d }: { d: DatosCuentaCobro }) {

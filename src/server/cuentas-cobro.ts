@@ -3,11 +3,12 @@ import { prisma } from '@/lib/db'
 import { subirArchivo, leerArchivo } from '@/server/storage'
 import { renderCuentaCobro } from '@/server/pdf/cuenta-cobro'
 import { hoyBogota } from '@/lib/fechas'
+import { CUERPO_DEFECTO_CUENTA_COBRO } from '@/lib/plantillas-documento/cuenta-cobro'
 
 const TIPO_CUENTA: Record<string, string> = { AHORROS: 'cuenta de ahorros', CORRIENTE: 'cuenta corriente', BILLETERA_DIGITAL: 'billetera digital' }
 
-/** Lee el logo de la plantilla y lo devuelve como data URI (para el PDF). */
-async function logoDataUri(logoPath: string | null): Promise<string | null> {
+/** Lee el logo de la plantilla y lo devuelve como data URI (para el PDF y las muestras). */
+export async function logoDataUri(logoPath: string | null): Promise<string | null> {
   if (!logoPath) return null
   try {
     const buf = await leerArchivo(logoPath)
@@ -33,7 +34,7 @@ export async function generarPdfCuentaCobro(cuentaId: string, plantillaId: strin
     ? await prisma.plantillaCuentaCobro.findUnique({ where: { id: plantillaId } })
     : await prisma.plantillaCuentaCobro.findFirst({ where: { esDefecto: true, activa: true } })
 
-  const cuerpoDefecto = 'Esta cuenta de cobro corresponde a los conceptos descritos. Declaro que la información es veraz.'
+  const cuerpoDefecto = CUERPO_DEFECTO_CUENTA_COBRO
 
   // El dueño de la cuenta es el colaborador (directo) o, para OPS antiguas, el del contrato.
   let c = cuenta.colaborador

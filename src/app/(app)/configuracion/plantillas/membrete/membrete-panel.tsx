@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { Ayuda } from '@/components/ui-kit/ayuda'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { subirMembrete, quitarMembrete } from '../../empresa/acciones'
 
 const MAX_BYTES = 2 * 1024 * 1024
@@ -138,16 +139,16 @@ export function MembretePanel({
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {MUESTRAS.map((m) => (
-                <a
+                // Se abre en el visor embebido, sin salir de Ajustes.
+                <VisorPdf
                   key={m.tipo}
-                  href={`/api/configuracion/membrete/muestra?tipo=${m.tipo}&v=${version}`}
-                  target="_blank"
-                  rel="noreferrer"
+                  url={`/api/configuracion/membrete/muestra?tipo=${m.tipo}&v=${version}`}
+                  titulo={`Muestra · ${m.nombre}`}
                   className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' justify-start gap-2'}
                 >
                   <FileText className="size-4 shrink-0 text-primary" />
                   <span className="truncate">{m.nombre}</span>
-                </a>
+                </VisorPdf>
               ))}
             </div>
           </CardContent>

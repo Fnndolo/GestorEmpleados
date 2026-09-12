@@ -1,4 +1,5 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
+import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
@@ -10,6 +11,7 @@ export const metadata = { title: 'Editar plantilla · Configuración' }
 /** `nueva` es la ruta de creación; cualquier otro valor es el id a editar. */
 export default async function EditarPlantillaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  if (!GENERAR_CONTRATOS_DESDE_PLANTILLA) redirect('/configuracion/plantillas/membrete')
   const usuario = await requerirPermiso('configuracion', 'VER')
   const esNueva = id === 'nueva'
   const puedeGuardar = tienePermiso(usuario, 'configuracion', esNueva ? 'CREAR' : 'EDITAR')

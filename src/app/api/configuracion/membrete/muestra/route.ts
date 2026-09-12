@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { obtenerSesion, tienePermiso } from '@/server/sesion'
-import { renderMuestra, renderMuestraPlantilla, TIPOS_MUESTRA, type TipoMuestra } from '@/server/pdf/muestras'
+import { renderMuestra, renderMuestraPlantilla, renderMuestraCuentaCobro, TIPOS_MUESTRA, type TipoMuestra } from '@/server/pdf/muestras'
+import { respuestaPdf } from '@/server/pdf/respuesta-pdf'
 
 export const runtime = 'nodejs'
 
 /**
  * Documento de muestra con datos ficticios, para revisar cómo queda el membrete
- * en cada formato sin crear un contrato de verdad ni ensuciar la base.
+ * (y el texto de cada plantilla) sin crear un contrato de verdad ni ensuciar la base.
  */
 export async function GET(req: NextRequest) {
   const usuario = await obtenerSesion()
@@ -17,21 +18,25 @@ export async function GET(req: NextRequest) {
 
   const tipo = req.nextUrl.searchParams.get('tipo')
   const plantillaId = req.nextUrl.searchParams.get('plantillaId')
+  const descargar = req.nextUrl.searchParams.get('descargar') === '1'
 
-  // Muestra de UNA plantilla concreta, para revisarla desde su editor.
+  // Muestra de UNA plantilla de contrato concreta, para revisarla desde su editor.
   if (tipo === 'plantilla') {
     if (!plantillaId) return NextResponse.json({ error: 'Falta la plantilla' }, { status: 400 })
     try {
-      const pdf = await renderMuestraPlantilla(plantillaId)
-      return new NextResponse(new Uint8Array(pdf), {
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': 'inline; filename="muestra-plantilla.pdf"',
-          'Cache-Control': 'private, no-store',
-        },
-      })
+      return respuestaPdf(await renderMuestraPlantilla(plantillaId), 'muestra-plantilla.pdf', descargar)
     } catch (e) {
       console.error('No se pudo generar la muestra de la plantilla:', e)
+      return NextResponse.json({ error: 'No se pudo generar la muestra' }, { status: 500 })
+    }
+  }
+
+  // Muestra de una plantilla de cuenta de cobro (o la de defecto), desde su editor.
+  if (tipo === 'cuenta-cobro') {
+    try {
+      return respuestaPdf(await renderMuestraCuentaCobro(plantillaId), 'muestra-cuenta-cobro.pdf', descargar)
+    } catch (e) {
+      console.error('No se pudo generar la muestra de la cuenta de cobro:', e)
       return NextResponse.json({ error: 'No se pudo generar la muestra' }, { status: 500 })
     }
   }
@@ -41,14 +46,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const pdf = await renderMuestra(tipo as TipoMuestra)
-    return new NextResponse(new Uint8Array(pdf), {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="muestra-${tipo}.pdf"`,
-        'Cache-Control': 'private, no-store',
-      },
-    })
+    return respuestaPdf(await renderMuestra(tipo as TipoMuestra), `muestra-${tipo}.pdf`, descargar)
   } catch (e) {
     console.error('No se pudo generar la muestra:', e)
     return NextResponse.json({ error: 'No se pudo generar la muestra' }, { status: 500 })

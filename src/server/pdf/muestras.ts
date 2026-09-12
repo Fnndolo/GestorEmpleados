@@ -5,6 +5,9 @@ import { renderAutorizacionDatos } from './autorizacion-datos'
 import { renderContratoOps } from './contrato-ops'
 import { renderContratoLaboral } from './contrato-laboral'
 import { construirVariables, sustituir, type PlantillaResuelta } from '@/lib/contrato-variables'
+import { renderCuentaCobro } from './cuenta-cobro'
+import { logoDataUri } from '@/server/cuentas-cobro'
+import { CUERPO_DEFECTO_CUENTA_COBRO, MUESTRA_CUENTA_COBRO } from '@/lib/plantillas-documento/cuenta-cobro'
 
 /**
  * Documentos de MUESTRA para ver cómo queda el papel membretado sin tener que
@@ -98,14 +101,20 @@ export async function renderMuestra(tipo: TipoMuestra): Promise<Buffer> {
   }
 
   if (tipo === 'autorizacion') {
-    return renderAutorizacionDatos({
-      ciudadFecha: 'Ciudad de muestra, uno (01) de enero de 2026.',
-      contratistaNombre: ASPIRANTE,
-      contratistaCc: DOCUMENTO,
-      cargo: CARGO,
-      genero: null,
-      empresa,
-    })
+    // Con la línea "Firmado electrónicamente…" para que la muestra ocupe lo mismo
+    // que el documento firmado, que es el que termina en el expediente.
+    return renderAutorizacionDatos(
+      {
+        ciudadFecha: 'Ciudad de muestra, uno (01) de enero de 2026.',
+        contratistaNombre: ASPIRANTE,
+        contratistaCc: DOCUMENTO,
+        cargo: CARGO,
+        genero: null,
+        empresa,
+      },
+      null,
+      '(fecha de la firma)',
+    )
   }
 
   if (tipo === 'contrato-ops') {
@@ -239,5 +248,38 @@ export async function renderMuestraPlantilla(plantillaId: string): Promise<Buffe
       fechaTerminacion: '31 de marzo de 2026',
     },
     firmaContratanteNombre: repLegal, firmaContratistaNombre: ASPIRANTE,
+  })
+}
+
+/**
+ * Muestra de una plantilla de cuenta de cobro (la indicada o, si no, la de
+ * defecto), con datos ficticios: para revisar el texto sin radicar una cuenta.
+ */
+export async function renderMuestraCuentaCobro(plantillaId: string | null): Promise<Buffer> {
+  const empresa = await empresaActual()
+  const plantilla = plantillaId
+    ? await prisma.plantillaCuentaCobro.findUnique({ where: { id: plantillaId } })
+    : (await prisma.plantillaCuentaCobro.findFirst({ where: { esDefecto: true, activa: true } })) ??
+      (await prisma.plantillaCuentaCobro.findFirst({ where: { activa: true }, orderBy: { creadoEn: 'desc' } }))
+  const m = MUESTRA_CUENTA_COBRO
+  return renderCuentaCobro({
+    empresa: { razonSocial: empresa.razonSocial, nombreComercial: empresa.nombreComercial, nit: empresa.nit, direccion: empresa.direccion },
+    contratista: {
+      nombre: m.contratista, documento: m.documento, rut: null,
+      banco: m.banco, tipoCuenta: m.tipoCuenta, numeroCuenta: m.numeroCuenta,
+    },
+    plantilla: {
+      encabezado: plantilla?.encabezado ?? null,
+      cuerpo: plantilla?.cuerpo ?? CUERPO_DEFECTO_CUENTA_COBRO,
+      pieLegal: plantilla?.pieLegal ?? null,
+      logoDataUri: await logoDataUri(plantilla?.logoPath ?? null),
+    },
+    numero: m.numero,
+    periodo: m.periodo,
+    concepto: m.concepto,
+    valor: m.valor,
+    ciudad: m.ciudad,
+    fecha: new Date(),
+    firmaDataUri: null,
   })
 }

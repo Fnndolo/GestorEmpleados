@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -271,17 +272,17 @@ export function AcuerdosCliente({
                   {a.cargoEvaluado} · {a.documento} · {a.fechaInicio} a {a.fechaFin}
                   {a.sedeNombre && ` · ${a.sedeNombre}`}
                 </p>
+                {/* Los PDF se abren en el visor embebido, sin salir de la lista. */}
                 <div className="mt-1 flex flex-wrap gap-2">
                   {a.documentos.map((d) => (
-                    <a
+                    <VisorPdf
                       key={d.id}
-                      href={`/api/documentos/${d.id}`}
-                      target="_blank"
-                      rel="noreferrer"
+                      documentoId={d.id}
+                      titulo={d.nombre}
                       className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                     >
                       <FileText className="size-3.5" /> {d.nombre}
-                    </a>
+                    </VisorPdf>
                   ))}
                 </div>
               </div>

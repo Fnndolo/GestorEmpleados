@@ -9,12 +9,15 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import type { SnapshotContratoLaboral } from '@/server/contratos-laboral-pdf'
 import { FormContrato } from '../../form-contrato'
+import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 
 export const metadata = { title: 'Editar contrato · Smart Gadgets RH' }
 
 export default async function EditarContratoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   await requerirPermiso('contratos', 'EDITAR')
+  // Sin plantillas no hay documento que redactar en la app: el PDF es el contrato.
+  if (!GENERAR_CONTRATOS_DESDE_PLANTILLA) redirect(`/contratos/${id}`)
 
   const c = await prisma.contrato.findUnique({
     where: { id },

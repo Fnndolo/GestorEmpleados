@@ -107,3 +107,14 @@ export function BloqueDatos({ titulo, icono, color, nota, datos, className }: {
     </Card>
   )
 }
+
+/**
+ * Para `DialogContent onOpenAutoFocus`: al abrir, el foco va al propio diálogo
+ * y no a su primer control. Si el primero es un icono con tooltip, el tooltip
+ * se queda con la tecla Escape (cierra el tooltip y no la ventana); si es un
+ * buscador, se despliega solo antes de que la persona haya hecho nada.
+ */
+export function enfocarDialogo(e: Event) {
+  e.preventDefault()
+  ;(e.currentTarget as HTMLElement | null)?.focus()
+}

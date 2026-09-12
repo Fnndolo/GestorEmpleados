@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
@@ -12,6 +14,8 @@ import { ETIQUETA_TIPO_PLANTILLA } from '@/lib/validaciones/plantilla-contrato'
 export const metadata = { title: 'Plantillas de contrato · Configuración' }
 
 export default async function PlantillasPage() {
+  // Sin generación desde plantilla esta pantalla no aplica (queda oculta, no borrada).
+  if (!GENERAR_CONTRATOS_DESDE_PLANTILLA) redirect('/configuracion/plantillas/membrete')
   const usuario = await requerirPermiso('configuracion', 'VER')
   const puedeCrear = tienePermiso(usuario, 'configuracion', 'CREAR')
   const puedeEliminar = tienePermiso(usuario, 'configuracion', 'ELIMINAR')

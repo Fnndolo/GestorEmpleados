@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, FileText, Star, ImagePlus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Plus, Pencil, Trash2, FileText, Star, ImagePlus, Eye } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { PreviewCuentaCobro } from '@/components/plantillas/preview-cuenta-cobro'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
+import { VARIABLES_CUENTA_COBRO } from '@/lib/plantillas-documento/cuenta-cobro'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -20,10 +23,12 @@ import {
 import { crearPlantillaCC, editarPlantillaCC, eliminarPlantillaCC } from './acciones'
 
 type Plantilla = { id: string; nombre: string; encabezado: string | null; cuerpo: string; pieLegal: string | null; esDefecto: boolean; tieneLogo: boolean }
+/** Datos reales de la empresa para la vista previa (el resto es de muestra). */
+type EmpresaMuestra = { razonSocial: string; nit: string }
 
 const CUERPO_EJEMPLO = 'Por concepto de {{concepto}} correspondiente al periodo {{periodo}}, por valor de {{valor}}. Declaro que me encuentro al día en el pago de mis aportes a seguridad social como trabajador independiente.'
 
-export function PlantillasCliente({ plantillas }: { plantillas: Plantilla[] }) {
+export function PlantillasCliente({ plantillas, empresa }: { plantillas: Plantilla[]; empresa: EmpresaMuestra }) {
   const [editar, setEditar] = useState<Plantilla | null>(null)
   const [nueva, setNueva] = useState(false)
   const [eliminar, setEliminar] = useState<Plantilla | null>(null)
@@ -46,6 +51,13 @@ export function PlantillasCliente({ plantillas }: { plantillas: Plantilla[] }) {
                 <p className="font-medium text-sm flex items-center gap-1.5">{p.nombre}{p.esDefecto && <Star className="size-3.5 fill-amber-400 text-amber-400" />}{p.tieneLogo && <Badge variant="outline" className="text-[10px]">Con logo</Badge>}</p>
                 <p className="text-xs text-muted-foreground truncate">{p.cuerpo}</p>
               </div>
+              <VisorPdf
+                url={`/api/configuracion/membrete/muestra?tipo=cuenta-cobro&plantillaId=${p.id}`}
+                titulo={`Muestra · ${p.nombre}`}
+                className={buttonVariants({ variant: 'ghost', size: 'icon' })}
+              >
+                <Eye className="size-4" /><span className="sr-only">Ver muestra en PDF</span>
+              </VisorPdf>
               <Button variant="ghost" size="icon" onClick={() => setEditar(p)} aria-label="Editar"><Pencil className="size-4" /></Button>
               <Button variant="ghost" size="icon" onClick={() => setEliminar(p)} aria-label="Eliminar"><Trash2 className="size-4 text-destructive" /></Button>
             </div>
@@ -53,7 +65,7 @@ export function PlantillasCliente({ plantillas }: { plantillas: Plantilla[] }) {
         </CardContent></Card>
       )}
 
-      {(nueva || editar) && <DialogPlantilla plantilla={editar} onClose={() => { setNueva(false); setEditar(null) }} />}
+      {(nueva || editar) && <DialogPlantilla plantilla={editar} empresa={empresa} onClose={() => { setNueva(false); setEditar(null) }} />}
       {eliminar && (
         <AlertDialog open onOpenChange={(o) => !o && setEliminar(null)}>
           <AlertDialogContent>
@@ -69,7 +81,7 @@ export function PlantillasCliente({ plantillas }: { plantillas: Plantilla[] }) {
   )
 }
 
-function DialogPlantilla({ plantilla, onClose }: { plantilla: Plantilla | null; onClose: () => void }) {
+function DialogPlantilla({ plantilla, empresa, onClose }: { plantilla: Plantilla | null; empresa: EmpresaMuestra; onClose: () => void }) {
   const router = useRouter()
   const inputLogo = useRef<HTMLInputElement>(null)
   const [nombre, setNombre] = useState(plantilla?.nombre ?? '')
@@ -79,6 +91,11 @@ function DialogPlantilla({ plantilla, onClose }: { plantilla: Plantilla | null; 
   const [esDefecto, setEsDefecto] = useState(plantilla?.esDefecto ?? false)
   const [logo, setLogo] = useState<File | null>(null)
   const [g, setG] = useState(false)
+  // Logo para la vista previa: el recién elegido o, si ya tenía, el guardado.
+  const logoUrl = useMemo(
+    () => (logo ? URL.createObjectURL(logo) : plantilla?.tieneLogo ? `/api/plantillas-cuenta-cobro/${plantilla.id}/logo` : null),
+    [logo, plantilla],
+  )
 
   async function guardar() {
     setG(true)
@@ -94,11 +111,14 @@ function DialogPlantilla({ plantilla, onClose }: { plantilla: Plantilla | null; 
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>{plantilla ? 'Editar plantilla' : 'Nueva plantilla'}</DialogTitle>
-          <DialogDescription>Variables disponibles: {'{{contratista}}'}, {'{{documento}}'}, {'{{valor}}'}, {'{{periodo}}'}, {'{{concepto}}'}, {'{{empresa}}'}, {'{{nit}}'}, {'{{ciudad}}'}.</DialogDescription>
+          <DialogDescription>
+            Variables: {VARIABLES_CUENTA_COBRO.map((v) => `{{${v.clave}}}`).join(', ')}. La vista previa cambia mientras escribes.
+          </DialogDescription>
         </DialogHeader>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <div className="space-y-4">
           <div className="space-y-1.5"><Label>Nombre</Label><Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Días laborados / Bonos / Servicios…" /></div>
           <div className="space-y-1.5">
@@ -112,6 +132,12 @@ function DialogPlantilla({ plantilla, onClose }: { plantilla: Plantilla | null; 
           <div className="space-y-1.5"><Label>Cuerpo</Label><Textarea rows={4} value={cuerpo} onChange={(e) => setCuerpo(e.target.value)} /></div>
           <div className="space-y-1.5"><Label>Pie / texto legal (opcional)</Label><Textarea rows={2} value={pieLegal} onChange={(e) => setPieLegal(e.target.value)} /></div>
           <label className="flex items-center gap-2 text-sm"><Checkbox checked={esDefecto} onCheckedChange={(v) => setEsDefecto(Boolean(v))} /> Usar como plantilla por defecto</label>
+        </div>
+        {/* Vista previa rápida, calcada del PDF, con datos de muestra. */}
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Vista previa con datos de muestra</p>
+          <PreviewCuentaCobro encabezado={encabezado} cuerpo={cuerpo} pieLegal={pieLegal} logoUrl={logoUrl} empresa={empresa} />
+        </div>
         </div>
         <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g || nombre.length < 2}>{g && <Spinner />}Guardar</Button></DialogFooter>
       </DialogContent>
