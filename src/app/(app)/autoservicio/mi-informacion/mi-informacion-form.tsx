@@ -29,7 +29,7 @@ const TIPO_CUENTA = { AHORROS: 'Ahorros', CORRIENTE: 'Corriente', BILLETERA_DIGI
 export function MiInformacionForm({ catalogos, valores }: { catalogos: Catalogos; valores: MiFichaInput }) {
   const router = useRouter()
   const [guardando, setGuardando] = useState(false)
-  const { register, handleSubmit, setValue, watch } = useForm<MiFichaInput>({
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<MiFichaInput>({
     resolver: zodResolver(miFichaSchema),
     defaultValues: valores,
   })
@@ -44,6 +44,13 @@ export function MiInformacionForm({ catalogos, valores }: { catalogos: Catalogos
     } else toast.error(res.error)
   }
 
+  // El formulario es largo: si algo obligatorio quedó vacío, se dice cuál en un
+  // aviso además de marcarlo en el campo, para que no parezca que el botón no hace nada.
+  function onInvalido() {
+    const primero = Object.values(errors)[0]
+    toast.error(primero?.message ? String(primero.message) : 'Revisa los campos marcados.')
+  }
+
   const Selector = ({ campo, opciones, placeholder }: { campo: keyof MiFichaInput; opciones: Record<string, string> | Opcion[]; placeholder?: string }) => {
     const items = Array.isArray(opciones) ? opciones.map((o) => [o.id, o.nombre] as const) : Object.entries(opciones)
     return (
@@ -55,13 +62,15 @@ export function MiInformacionForm({ catalogos, valores }: { catalogos: Catalogos
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit, onInvalido)} className="space-y-4">
       <Card>
         <CardHeader><CardTitle className="text-base">Datos personales</CardTitle></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Campo label="Fecha de expedición del documento"><Input type="date" {...register('fechaExpedicionDoc')} /></Campo>
           <Campo label="Lugar de expedición"><Input {...register('lugarExpedicionDoc')} /></Campo>
-          <Campo label="Fecha de nacimiento"><Input type="date" {...register('fechaNacimiento')} /></Campo>
+          <Campo label="Fecha de nacimiento" obligatorio error={errors.fechaNacimiento?.message}>
+            <Input type="date" {...register('fechaNacimiento')} aria-invalid={!!errors.fechaNacimiento} />
+          </Campo>
           <Campo label="Lugar de nacimiento"><Input {...register('lugarNacimiento')} /></Campo>
           <Campo label="Género"><Selector campo="genero" opciones={GENERO} /></Campo>
           <Campo label="Estado civil"><Selector campo="estadoCivil" opciones={ESTADO_CIVIL} /></Campo>
@@ -101,6 +110,9 @@ export function MiInformacionForm({ catalogos, valores }: { catalogos: Catalogos
       <Card>
         <CardHeader><CardTitle className="text-base">Datos bancarios (para el pago de nómina)</CardTitle></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            Los pagos de nómina se hacen únicamente a cuentas de Bancolombia. Adjunta la certificación de la cuenta en Mis documentos.
+          </p>
           <Campo label="Banco"><Selector campo="bancoId" opciones={catalogos.bancos} /></Campo>
           <Campo label="Tipo de cuenta"><Selector campo="tipoCuenta" opciones={TIPO_CUENTA} /></Campo>
           <Campo label="Número de cuenta"><Input {...register('numeroCuenta')} /></Campo>
@@ -123,11 +135,14 @@ export function MiInformacionForm({ catalogos, valores }: { catalogos: Catalogos
   )
 }
 
-function Campo({ label, full, children }: { label: string; full?: boolean; children: React.ReactNode }) {
+function Campo({ label, full, obligatorio, error, children }: {
+  label: string; full?: boolean; obligatorio?: boolean; error?: string; children: React.ReactNode
+}) {
   return (
     <div className={`space-y-1.5 ${full ? 'sm:col-span-2' : ''}`}>
-      <Label>{label}</Label>
+      <Label>{label}{obligatorio && <span className="text-destructive"> *</span>}</Label>
       {children}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   )
 }

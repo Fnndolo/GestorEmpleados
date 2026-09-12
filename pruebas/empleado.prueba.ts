@@ -107,12 +107,18 @@ describe('lo que el empleado SÍ puede hacer', () => {
     expect(res.ok, res.ok ? '' : res.error).toBe(true)
   })
 
-  it('completa sus propios datos', async () => {
+  it('completa sus propios datos; la fecha de nacimiento es obligatoria', async () => {
     actuarComo(empleado)
-    const res = await actualizarMiFicha({ direccion: `Calle ${MARCA}`, lugarNacimiento: 'Pasto' } as never)
+    // Sin fecha de nacimiento no se guarda: de ella sale la lista de cumpleaños
+    // y nadie la sabe mejor que la propia persona.
+    const sinFecha = await actualizarMiFicha({ direccion: `Calle ${MARCA}`, lugarNacimiento: 'Pasto' } as never)
+    expect(sinFecha.ok).toBe(false)
+
+    const res = await actualizarMiFicha({ fechaNacimiento: '1995-03-10', direccion: `Calle ${MARCA}`, lugarNacimiento: 'Pasto' } as never)
     expect(res.ok, res.ok ? '' : res.error).toBe(true)
     const c = await prisma.colaborador.findUniqueOrThrow({ where: { id: empleadoColabId } })
     expect(c.direccion).toContain(MARCA)
+    expect(c.fechaNacimiento?.toISOString().slice(0, 10)).toBe('1995-03-10')
   })
 
   it('NO puede cambiarse el celular desde su autoservicio', async () => {
@@ -121,7 +127,7 @@ describe('lo que el empleado SÍ puede hacer', () => {
     // cambio silencioso ahí desviaría los avisos de acceso a otro teléfono.
     actuarComo(empleado)
     const antes = await prisma.colaborador.findUniqueOrThrow({ where: { id: empleadoColabId } })
-    await actualizarMiFicha({ celular: '3181234567', direccion: 'Otra dirección' } as never)
+    await actualizarMiFicha({ fechaNacimiento: '1995-03-10', celular: '3181234567', direccion: 'Otra dirección' } as never)
     const despues = await prisma.colaborador.findUniqueOrThrow({ where: { id: empleadoColabId } })
     expect(despues.celular).toBe(antes.celular)
   })

@@ -73,8 +73,10 @@ export const miFichaSchema = z.object({
   // Documento (fecha/lugar de expedición)
   fechaExpedicionDoc: fechaOpcional,
   lugarExpedicionDoc: opcional(),
-  // Personales
-  fechaNacimiento: fechaOpcional,
+  // Personales. La fecha de nacimiento es obligatoria aquí (no al crear la ficha,
+  // que la puede dar de alta Talento Humano sin tenerla): de ella sale la lista
+  // de cumpleaños, y es la propia persona quien mejor la sabe.
+  fechaNacimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Indica tu fecha de nacimiento'),
   lugarNacimiento: opcional(),
   genero: z.enum(['MASCULINO', 'FEMENINO', 'OTRO', 'PREFIERE_NO_DECIR']).optional().or(z.literal('')),
   estadoCivil: z.enum(['SOLTERO', 'CASADO', 'UNION_LIBRE', 'SEPARADO', 'DIVORCIADO', 'VIUDO']).optional().or(z.literal('')),
