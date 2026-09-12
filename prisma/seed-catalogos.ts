@@ -41,32 +41,49 @@ const NA = (n: NivelAccesoDocumento) => n
 const TIPOS_DOC: {
   nombre: string; requiereVencimiento?: boolean; nivelAcceso?: NivelAccesoDocumento; descripcion?: string
 }[] = [
-  { nombre: 'Documento de identidad', descripcion: 'Cédula, cédula de extranjería o pasaporte' },
-  { nombre: 'Hoja de vida' },
+  { nombre: 'Documento de identidad', descripcion: 'Fotocopia de la cédula de ciudadanía ampliada al 150 %.' },
+  { nombre: 'Hoja de vida', descripcion: 'Actualizada y firmada.' },
   { nombre: 'Contrato firmado', nivelAcceso: NA('RRHH') },
   { nombre: 'RUT', descripcion: 'Registro Único Tributario (OPS)' },
   { nombre: 'Certificado de afiliación EPS' },
   { nombre: 'Certificado de afiliación AFP / pensión' },
-  { nombre: 'Certificación bancaria', nivelAcceso: NA('RRHH') },
-  { nombre: 'Antecedentes (Procuraduría/Policía/Contraloría)' },
-  { nombre: 'Diploma o acta de grado' },
-  { nombre: 'Foto' },
-  { nombre: 'Examen médico de ingreso', requiereVencimiento: false, nivelAcceso: NA('SST_MEDICO') },
+  { nombre: 'Certificado de afiliación a fondo de cesantías', descripcion: 'Certificado del fondo de cesantías.' },
+  { nombre: 'Certificación bancaria', nivelAcceso: NA('RRHH'), descripcion: 'Certificación de la cuenta para el pago de nómina. Solo Bancolombia.' },
+  { nombre: 'Antecedentes judiciales (Policía Nacional)', descripcion: 'Certificado de antecedentes judiciales.' },
+  { nombre: 'Antecedentes disciplinarios y fiscales (Procuraduría y Contraloría)', descripcion: 'Certificado de antecedentes disciplinarios (Procuraduría) y fiscales (Contraloría).' },
+  { nombre: 'Certificado de medidas correctivas (Policía Nacional)', descripcion: 'Consulta del Registro Nacional de Medidas Correctivas.' },
+  { nombre: 'Certificado de inhabilidades por delitos sexuales', descripcion: 'Consulta de inhabilidades para trabajar con menores (Ley 1918 de 2018).' },
+  { nombre: 'Certificados de estudios y títulos académicos', descripcion: 'Certificados de estudios y títulos académicos.' },
+  { nombre: 'Certificados de experiencia laboral', descripcion: 'Certificaciones de los empleos anteriores.' },
+  { nombre: 'Tarjeta profesional', descripcion: 'Solo si el cargo la exige (se marca en Ajustes → Cargos).' },
+  { nombre: 'Foto', descripcion: 'Fondo blanco, tipo documento, en archivo aparte.' },
+  { nombre: 'Examen médico de ingreso', requiereVencimiento: false, nivelAcceso: NA('SST_MEDICO'), descripcion: 'Examen médico preocupacional; se entrega dentro de los 15 días siguientes al inicio.' },
   { nombre: 'Examen médico periódico', requiereVencimiento: true, nivelAcceso: NA('SST_MEDICO') },
   { nombre: 'Planilla de seguridad social', requiereVencimiento: true, descripcion: 'Pago mensual SS del independiente (OPS)' },
   { nombre: 'Licencia de conducción', requiereVencimiento: true },
   { nombre: 'Curso de alturas / certificaciones SST', requiereVencimiento: true, nivelAcceso: NA('SST_MEDICO') },
 ]
 
-// Documentos obligatorios por tipo de vínculo (semáforo documental)
+// Documentos obligatorios por tipo de vínculo (semáforo documental). Los del
+// contrato de trabajo son la lista que pide la empresa al contratar; la tarjeta
+// profesional no va aquí porque depende del cargo (Cargo.requiereTarjetaProfesional).
+const LABORAL: TipoVinculo[] = ['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR']
 const REQUERIDOS: Record<string, TipoVinculo[]> = {
-  'Documento de identidad': ['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'OPS', 'PRACTICANTE'],
-  'Hoja de vida': ['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'PRACTICANTE'],
-  'Contrato firmado': ['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'OPS', 'PRACTICANTE'],
-  'Certificado de afiliación EPS': ['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA'],
-  'Certificado de afiliación AFP / pensión': ['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR'],
-  'Certificación bancaria': ['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'OPS'],
-  'Examen médico de ingreso': ['TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA'],
+  'Documento de identidad': [...LABORAL, 'APRENDIZ_SENA', 'OPS', 'PRACTICANTE'],
+  'Hoja de vida': [...LABORAL, 'APRENDIZ_SENA', 'PRACTICANTE'],
+  'Contrato firmado': [...LABORAL, 'APRENDIZ_SENA', 'OPS', 'PRACTICANTE'],
+  'Foto': LABORAL,
+  'Certificados de estudios y títulos académicos': LABORAL,
+  'Certificados de experiencia laboral': LABORAL,
+  'Antecedentes judiciales (Policía Nacional)': LABORAL,
+  'Antecedentes disciplinarios y fiscales (Procuraduría y Contraloría)': LABORAL,
+  'Certificado de medidas correctivas (Policía Nacional)': LABORAL,
+  'Certificado de inhabilidades por delitos sexuales': LABORAL,
+  'Certificado de afiliación EPS': [...LABORAL, 'APRENDIZ_SENA'],
+  'Certificado de afiliación AFP / pensión': LABORAL,
+  'Certificado de afiliación a fondo de cesantías': LABORAL,
+  'Certificación bancaria': [...LABORAL, 'OPS'],
+  'Examen médico de ingreso': [...LABORAL, 'APRENDIZ_SENA'],
   'RUT': ['OPS'],
   'Planilla de seguridad social': ['OPS'],
 }

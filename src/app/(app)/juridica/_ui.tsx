@@ -57,7 +57,7 @@ export function ZonaArchivos({
         className="flex w-full shrink-0 flex-col items-center gap-0.5 rounded-md py-2 text-center text-sm hover:bg-accent/40"
       >
         <Upload className="size-5 text-muted-foreground" />
-        <span className="text-muted-foreground">Arrastra archivos aquí o haz clic para elegir</span>
+        <span className="text-muted-foreground">{multiple ? 'Arrastra uno o varios archivos aquí o haz clic para elegirlos' : 'Arrastra el archivo aquí o haz clic para elegirlo'}</span>
       </button>
       <input
         ref={inputRef}

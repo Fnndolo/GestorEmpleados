@@ -1,5 +1,6 @@
 import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
+import { documentosRequeridosDe, TIPO_CONTRATO_FIRMADO } from '@/server/expediente'
 import { formatFechaCorta, formatFechaISO } from '@/lib/fechas'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
@@ -22,7 +23,7 @@ export default async function MisDocumentosPage() {
   }
 
   const [colab, documentos, tipos, contratosOps] = await Promise.all([
-    prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { tipoVinculo: true } }),
+    prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { tipoVinculo: true, cargoId: true } }),
     prisma.documento.findMany({
       where: { entidadTipo: 'Colaborador', entidadId: usuario.colaboradorId },
       include: { tipoDocumento: { select: { id: true, nombre: true } } },
@@ -40,14 +41,14 @@ export default async function MisDocumentosPage() {
       })
     : []
 
-  // Documentos requeridos para su tipo de vínculo que aún no ha entregado.
-  const requeridos = await prisma.documentoRequerido.findMany({
-    where: { tipoVinculo: colab.tipoVinculo, obligatorio: true },
-    include: { tipoDocumento: { select: { id: true, nombre: true } } },
-  })
+  // Documentos requeridos por su vínculo (y su cargo) que aún no ha entregado.
+  // El contrato firmado no lo sube él: sale del módulo de Contratos.
+  const requeridos = await documentosRequeridosDe(colab)
   const tiposRequeridos = new Set(requeridos.map((r) => r.tipoDocumentoId))
   const tiposEntregados = new Set(documentos.map((d) => d.tipoDocumentoId).filter(Boolean))
-  const faltantes = requeridos.filter((r) => !tiposEntregados.has(r.tipoDocumentoId)).map((r) => r.tipoDocumento.nombre)
+  const faltantes = requeridos
+    .filter((r) => r.obligatorio && r.tipoDocumento.nombre !== TIPO_CONTRATO_FIRMADO && !tiposEntregados.has(r.tipoDocumentoId))
+    .map((r) => r.tipoDocumento.nombre)
 
   /** Categoría para filtrar: expediente (requeridos/tipificados), desprendibles, certificaciones, actas, contratos u otros. */
   function categoria(nombre: string, tipoDocumentoId: string | null): string {

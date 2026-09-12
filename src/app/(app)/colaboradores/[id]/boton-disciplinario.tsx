@@ -7,7 +7,6 @@ import { Gavel, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
@@ -43,7 +42,6 @@ export function BotonDisciplinario({ colaboradorId, nombre, esOps }: { colaborad
   const listaId = useId()
   const [abierto, setAbierto] = useState(false)
   const [asunto, setAsunto] = useState('')
-  const [descripcion, setDescripcion] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
   const [clase, setClase] = useState<'LLAMADO_ATENCION' | 'PROCESO'>('LLAMADO_ATENCION')
   const [archivos, setArchivos] = useState<File[]>([])
@@ -51,7 +49,7 @@ export function BotonDisciplinario({ colaboradorId, nombre, esOps }: { colaborad
   const esLlamado = clase === 'LLAMADO_ATENCION'
 
   function abrir() {
-    setAsunto(''); setDescripcion(''); setArchivos([]); setClase('LLAMADO_ATENCION')
+    setAsunto(''); setArchivos([]); setClase('LLAMADO_ATENCION')
     setFecha(new Date().toISOString().slice(0, 10))
     setAbierto(true)
   }
@@ -60,7 +58,7 @@ export function BotonDisciplinario({ colaboradorId, nombre, esOps }: { colaborad
     if (asunto.trim().length < 3) { toast.error('Escribe el asunto.'); return }
     setG(true)
     try {
-      const res = await crearProcesoDisciplinario({ colaboradorId, clase, asunto, descripcion, fechaApertura: fecha })
+      const res = await crearProcesoDisciplinario({ colaboradorId, clase, asunto, fechaApertura: fecha })
       if (!res.ok) throw new Error(res.error)
       const { id, etapaId } = res.datos as { id: string; etapaId: string }
       for (const file of archivos) await subirArchivoEntidad('EtapaProceso', etapaId, file, file.name)
@@ -140,15 +138,11 @@ export function BotonDisciplinario({ colaboradorId, nombre, esOps }: { colaborad
               </datalist>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="desc-disc">Descripción</Label>
-              <Textarea id="desc-disc" rows={3} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
               <Label htmlFor="fecha-disc">Fecha de apertura</Label>
               <Input id="fecha-disc" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Soportes de prueba (opcional — imágenes, PDF, video)</Label>
+              <Label>Soportes de prueba (opcional — puedes adjuntar varios: imágenes, PDF o video)</Label>
               <ZonaArchivos archivos={archivos} onChange={setArchivos} accept="image/*,application/pdf,video/*" />
             </div>
           </div>

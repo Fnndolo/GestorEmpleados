@@ -52,6 +52,8 @@ export const cargoSchema = z.object({
   funcionesContrato: z.array(z.object({ grupo: z.string().trim().min(1).max(160), items: z.array(z.string().trim().min(1).max(600)) })).optional(),
   claseRiesgoDefecto: z.enum(['I', 'II', 'III', 'IV', 'V']).optional().or(z.literal('')),
   rolDefectoId: z.union([z.uuid(), z.literal('')]).optional(),
+  // El cargo exige tarjeta profesional (se pide en el expediente de quien lo tenga).
+  requiereTarjetaProfesional: z.boolean().optional(),
   activo: z.boolean(),
 })
 export type CargoInput = z.infer<typeof cargoSchema>
@@ -85,5 +87,7 @@ export const empresaSchema = z.object({
   direccion: z.string().trim().max(200).optional().or(z.literal('')),
   sitioWeb: z.string().trim().max(120).optional().or(z.literal('')),
   sabadoHabil: z.boolean(),
+  // Días hábiles para subir el comprobante de asistencia de un permiso (ver Permiso.comprobanteEstado).
+  plazoComprobantePermisoDias: z.number('Indica los días de plazo').int('Debe ser un número entero').min(0, 'No puede ser negativo').max(60, 'Máximo 60 días hábiles'),
 })
 export type EmpresaInput = z.infer<typeof empresaSchema>

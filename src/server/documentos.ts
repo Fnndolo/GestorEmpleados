@@ -124,6 +124,7 @@ const CAMPOS_QUE_APUNTAN: { modelo: string; campo: string }[] = [
   { modelo: 'novedadArl', campo: 'soporteDocId' },
   { modelo: 'ocurrenciaObligacion', campo: 'evidenciaDocId' },
   { modelo: 'otrosiContrato', campo: 'documentoId' },
+  { modelo: 'otrosiContrato', campo: 'documentoOriginalId' },
   { modelo: 'pazYSalvo', campo: 'documentoId' },
   { modelo: 'planEmergencia', campo: 'documentoId' },
   { modelo: 'planTrabajoSst', campo: 'documentoId' },

@@ -17,6 +17,7 @@ function datosCargo(d: CargoInput) {
     funcionesContrato: d.funcionesContrato && d.funcionesContrato.length > 0 ? d.funcionesContrato : Prisma.DbNull,
     claseRiesgoDefecto: d.claseRiesgoDefecto || null,
     rolDefectoId: d.rolDefectoId || null,
+    requiereTarjetaProfesional: d.requiereTarjetaProfesional ?? false,
   }
 }
 

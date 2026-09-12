@@ -36,7 +36,8 @@ export default async function CargosPage() {
           nivel: c.nivel ?? '', funciones: c.funciones ?? '',
           funcionesContrato: (c.funcionesContrato as FuncionesCargo | null) ?? [],
           claseRiesgoDefecto: c.claseRiesgoDefecto ?? '',
-          rolDefectoId: c.rolDefectoId ?? '', activo: c.activo, asignados: c._count.colaboradores + c._count.contratos,
+          rolDefectoId: c.rolDefectoId ?? '', requiereTarjetaProfesional: c.requiereTarjetaProfesional,
+          activo: c.activo, asignados: c._count.colaboradores + c._count.contratos,
         }))}
       />
     </div>

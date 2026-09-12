@@ -7,6 +7,7 @@ import { Plus, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,7 +19,7 @@ import { crearCargo, editarCargo, alternarCargo } from './acciones'
 import { EditorFunciones } from '@/components/contratos/editor-funciones'
 import type { FuncionesCargo } from '@/lib/contrato-variables'
 
-type Cargo = { id: string; nombre: string; areaId: string; area: string; nivel: string; funciones: string; funcionesContrato: FuncionesCargo; claseRiesgoDefecto: string; rolDefectoId: string; activo: boolean; asignados: number }
+type Cargo = { id: string; nombre: string; areaId: string; area: string; nivel: string; funciones: string; funcionesContrato: FuncionesCargo; claseRiesgoDefecto: string; rolDefectoId: string; requiereTarjetaProfesional: boolean; activo: boolean; asignados: number }
 type Area = { id: string; nombre: string }
 type Rol = { id: string; nombre: string }
 
@@ -31,16 +32,16 @@ export function CargosCliente({ puedeCrear, puedeEditar, areas, roles, cargos }:
   const [abierto, setAbierto] = useState(false)
   const [editando, setEditando] = useState<Cargo | null>(null)
   const [g, setG] = useState(false)
-  const [f, setF] = useState<{ nombre: string; areaId: string; nivel: string; funciones: string; funcionesContrato: FuncionesCargo; claseRiesgoDefecto: string; rolDefectoId: string; activo: boolean }>({ nombre: '', areaId: '', nivel: '', funciones: '', funcionesContrato: [], claseRiesgoDefecto: '', rolDefectoId: '', activo: true })
+  const [f, setF] = useState<{ nombre: string; areaId: string; nivel: string; funciones: string; funcionesContrato: FuncionesCargo; claseRiesgoDefecto: string; rolDefectoId: string; requiereTarjetaProfesional: boolean; activo: boolean }>({ nombre: '', areaId: '', nivel: '', funciones: '', funcionesContrato: [], claseRiesgoDefecto: '', rolDefectoId: '', requiereTarjetaProfesional: false, activo: true })
 
   function abrirNuevo() {
     setEditando(null)
-    setF({ nombre: '', areaId: areas[0]?.id ?? '', nivel: '', funciones: '', funcionesContrato: [], claseRiesgoDefecto: '', rolDefectoId: '', activo: true })
+    setF({ nombre: '', areaId: areas[0]?.id ?? '', nivel: '', funciones: '', funcionesContrato: [], claseRiesgoDefecto: '', rolDefectoId: '', requiereTarjetaProfesional: false, activo: true })
     setAbierto(true)
   }
   function abrirEditar(c: Cargo) {
     setEditando(c)
-    setF({ nombre: c.nombre, areaId: c.areaId, nivel: c.nivel, funciones: c.funciones, funcionesContrato: c.funcionesContrato, claseRiesgoDefecto: c.claseRiesgoDefecto, rolDefectoId: c.rolDefectoId, activo: c.activo })
+    setF({ nombre: c.nombre, areaId: c.areaId, nivel: c.nivel, funciones: c.funciones, funcionesContrato: c.funcionesContrato, claseRiesgoDefecto: c.claseRiesgoDefecto, rolDefectoId: c.rolDefectoId, requiereTarjetaProfesional: c.requiereTarjetaProfesional, activo: c.activo })
     setAbierto(true)
   }
 
@@ -124,6 +125,13 @@ export function CargosCliente({ puedeCrear, puedeEditar, areas, roles, cargos }:
                 </Select>
               </div>
             </div>
+            <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+              <Checkbox checked={f.requiereTarjetaProfesional} onCheckedChange={(v) => setF({ ...f, requiereTarjetaProfesional: v === true })} className="mt-0.5" />
+              <span>
+                <span className="font-medium">Exige tarjeta profesional</span>
+                <span className="block text-xs text-muted-foreground">Se pide como documento del expediente a quien tenga este cargo.</span>
+              </span>
+            </label>
             <div className="space-y-1.5"><Label>Funciones (opcional)</Label><Textarea rows={3} value={f.funciones} onChange={(e) => setF({ ...f, funciones: e.target.value })} placeholder="Usadas en la certificación laboral con funciones" /></div>
             <div className="space-y-1.5">
               <Label>Funciones para el contrato (opcional)</Label>

@@ -324,7 +324,7 @@ function DialogDisciplinario({ onClose }: { onClose: () => void }) {
         <Campo label="Asunto"><Input onChange={(e) => set('asunto', e.target.value)} /></Campo>
         <Campo label="Descripción"><Textarea rows={2} onChange={(e) => set('descripcion', e.target.value)} /></Campo>
         <Campo label="Fecha de apertura"><Input type="date" value={f.fechaApertura} onChange={(e) => set('fechaApertura', e.target.value)} /></Campo>
-        <Campo label="Soportes de prueba (opcional — imágenes, PDF, video)">
+        <Campo label="Soportes de prueba (opcional — puedes adjuntar varios: imágenes, PDF o video)">
           <ZonaArchivos archivos={archivos} onChange={setArchivos} accept="image/*,application/pdf,video/*" />
         </Campo>
       </div>

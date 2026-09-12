@@ -3,6 +3,7 @@ import { esOps } from '@/lib/tramites-vinculo'
 import { notFound } from 'next/navigation'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
+import { documentosRequeridosDe } from '@/server/expediente'
 import { whereColaboradores } from '@/server/consultas/colaboradores'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -84,10 +85,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
       include: { tipoDocumento: true },
       orderBy: { creadoEn: 'desc' },
     }),
-    prisma.documentoRequerido.findMany({
-      where: { tipoVinculo: c.tipoVinculo },
-      include: { tipoDocumento: true },
-    }),
+    documentosRequeridosDe({ tipoVinculo: c.tipoVinculo, cargoId: c.cargoId }),
     prisma.tipoDocumento.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
   ])
 
@@ -169,7 +167,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   // por ambas partes, o subidos ya firmados en físico) en vez de exigir una copia duplicada.
   const tieneContratoFirmado =
     contratos.some((ct) => ct.origenPdf === 'SUBIDO' || (ct.firmaEmpleadoPath && ct.firmaEmpleadorPath)) ||
-    contratosOps.some((ct) => ct.origenPdf === 'SUBIDO' || (ct.firmaContratistaPath && ct.firmaContratantePath))
+    contratosOps.some((ct) => ct.origenPdf === 'SUBIDO' || (ct.firmaContratistaPath && (ct.firmaContratantePath || ct.firmaContratanteEnPdf)))
   const semaforo = requeridos.map((r) => {
     if (r.tipoDocumento.nombre === TIPO_CONTRATO_FIRMADO) {
       return { nombre: r.tipoDocumento.nombre, obligatorio: r.obligatorio, estado: (tieneContratoFirmado ? 'al_dia' : 'falta') as 'al_dia' | 'falta' }
