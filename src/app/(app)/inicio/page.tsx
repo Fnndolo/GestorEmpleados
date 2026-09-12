@@ -22,6 +22,7 @@ const MODULO: Record<string, { color: ChipColor; desc: string }> = {
   '/activos': { color: 'ink', desc: 'Equipos y dotación entregada' },
   '/capacitaciones': { color: 'violet', desc: 'Cursos y asistencia del personal' },
   '/evaluaciones': { color: 'indigo', desc: 'Desempeño y periodo de prueba' },
+  '/cumpleanos': { color: 'rose', desc: 'Celebraciones y sus facturas' },
   '/terminaciones': { color: 'rose', desc: 'Retiros y liquidación final' },
   '/juridica': { color: 'violet', desc: 'Disciplinarios, anti-acoso y habeas data' },
   '/calendario-legal': { color: 'teal', desc: 'Obligaciones y fechas legales' },
@@ -37,13 +38,18 @@ export default async function InicioPage() {
 
   const verVencimientos = tienePermiso(usuario, 'vencimientos', 'VER')
   const puedeAprobar = tienePermiso(usuario, 'autoservicio', 'APROBAR')
+  // Las cifras de administración (usuarios, roles, sedes) son de quien administra:
+  // a un empleado no le dicen nada y le enseñan de más. Se muestran con el mismo
+  // permiso que abre la pantalla de donde salen.
+  const verUsuarios = tienePermiso(usuario, 'usuarios', 'VER')
+  const verConfiguracion = tienePermiso(usuario, 'configuracion', 'VER')
   const hoy = hoyBogota()
   const en30 = new Date(hoy); en30.setUTCDate(en30.getUTCDate() + 30)
 
   const [sedes, usuarios, roles, vencimientos, solicitudesPendientes] = await Promise.all([
-    prisma.sede.count({ where: { activa: true } }),
-    prisma.user.count({ where: { estado: 'ACTIVO' } }),
-    prisma.rol.count(),
+    verConfiguracion ? prisma.sede.count({ where: { activa: true } }) : Promise.resolve(0),
+    verUsuarios ? prisma.user.count({ where: { estado: 'ACTIVO' } }) : Promise.resolve(0),
+    verConfiguracion && !verVencimientos ? prisma.rol.count() : Promise.resolve(0),
     verVencimientos
       ? prisma.vencimiento.findMany({
           where: { estado: { notIn: ['RESUELTO', 'CANCELADO'] }, fechaVencimiento: { lte: en30 } },
@@ -84,6 +90,16 @@ export default async function InicioPage() {
         ? 'no tienes vencimientos por atender'
         : `sesión activa como ${usuario.rolNombre}`
 
+  // Cada indicador va con su permiso; a quien no le toca ninguno, no ve la fila.
+  const indicadores: { icono: LucideIcon; color: ChipColor; valor: string; label: string }[] = []
+  if (verUsuarios) indicadores.push({ icono: Users, color: 'sky', valor: String(usuarios), label: 'Usuarios activos' })
+  if (verConfiguracion) indicadores.push({ icono: Building2, color: 'ink', valor: String(sedes), label: 'Sedes activas' })
+  if (verVencimientos) {
+    indicadores.push({ icono: Bell, color: vencidos > 0 ? 'rose' : 'amber', valor: String(vencimientos.length), label: 'Vencimientos próximos' })
+  } else if (verConfiguracion) {
+    indicadores.push({ icono: ShieldCheck, color: 'emerald', valor: String(roles), label: 'Roles configurados' })
+  }
+
   return (
     <div className="max-w-7xl">
       <h1 className="text-xl font-bold tracking-tight">{darSaludo()}, {usuario.nombre.split(' ')[0]}</h1>
@@ -95,17 +111,18 @@ export default async function InicioPage() {
           hacia abajo y se llevaba por delante los encabezados fijos. */}
       <BannerPush />
 
-      <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        <Stat icono={Users} color="sky" valor={String(usuarios)} label="Usuarios activos" />
-        <Stat icono={Building2} color="ink" valor={String(sedes)} label="Sedes activas" />
-        {verVencimientos ? (
-          <Stat icono={Bell} color={vencidos > 0 ? 'rose' : 'amber'} valor={String(vencimientos.length)}
-            label="Vencimientos próximos" className="col-span-2 sm:col-span-1" />
-        ) : (
-          <Stat icono={ShieldCheck} color="emerald" valor={String(roles)}
-            label="Roles configurados" className="col-span-2 sm:col-span-1" />
-        )}
-      </div>
+      {indicadores.length > 0 && (
+        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          {indicadores.map((ind, i) => (
+            <Stat
+              key={ind.label}
+              {...ind}
+              // El último de una fila impar ocupa las dos columnas en móvil para no dejar hueco.
+              className={i === indicadores.length - 1 && indicadores.length % 2 === 1 ? 'col-span-2 sm:col-span-1' : undefined}
+            />
+          ))}
+        </div>
+      )}
 
       {secciones.map((seccion) => {
         const items = seccion.items.filter((i) => i.href !== '/inicio')

@@ -117,3 +117,23 @@ test.describe('cada rol entra a lo suyo', () => {
     await expect(page.locator('body')).not.toContainText('No tienes permiso')
   })
 })
+
+test.describe('la portada según el rol', () => {
+  test('el empleado no ve cifras de administración', async ({ page }) => {
+    await entrarComo(page, CUENTAS.empleado)
+    await page.goto('/inicio')
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    // Usuarios, roles y sedes son de quien administra: al empleado no le dicen
+    // nada y le enseñan de más.
+    for (const texto of ['Usuarios activos', 'Roles configurados', 'Sedes activas']) {
+      await expect(page.getByText(texto)).toHaveCount(0)
+    }
+  })
+
+  test('el administrador sí las ve', async ({ page }) => {
+    await entrarComo(page, CUENTAS.admin)
+    await page.goto('/inicio')
+    await expect(page.getByText('Usuarios activos')).toBeVisible()
+    await expect(page.getByText('Sedes activas')).toBeVisible()
+  })
+})
