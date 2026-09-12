@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { FilePenLine } from 'lucide-react'
 import { formatFechaLarga } from '@/lib/fechas'
 import { fmtCOP } from '@/lib/moneda'
+import { resumenOtrosi, type ValoresOtrosi } from '@/lib/otrosi'
 import { MisContratos } from './mis-contratos'
 
 export const metadata = { title: 'Mis contratos · Smart Gadgets RH' }
@@ -31,6 +32,12 @@ export default async function MisContratosPage() {
       include: { cargo: { select: { nombre: true } } },
     }),
   ])
+
+  // Otrosíes que el trabajador firma en la app (los viejos, sin firma, no van aquí).
+  const otrosis = await prisma.otrosiContrato.findMany({
+    where: { contratoId: { in: laborales.map((c) => c.id) }, requiereFirma: true },
+    orderBy: { numero: 'asc' },
+  })
 
   // Último PDF de cada tipo por contrato (el firmado si existe, si no el original):
   // el contrato en sí y la autorización de tratamiento de datos.
@@ -85,14 +92,27 @@ export default async function MisContratosPage() {
       clase: 'LABORAL' as const,
       numero: c.numero,
       objeto: `${TIPO_LABORAL[c.tipo] ?? c.tipo}${c.cargo ? ` — ${c.cargo.nombre}` : ''}`,
-      estado: c.firmaEmpleadoPath && c.firmaEmpleadorPath ? 'FIRMADO' : c.estado,
+      // El empleador puede haber firmado en el PDF aportado en vez de en la app.
+      estado: c.firmaEmpleadoPath && (c.firmaEmpleadorPath || c.firmaEmpleadorEnPdf) ? 'FIRMADO' : c.estado,
       valorTotal: `${fmtCOP(Number(c.salarioBase))}/mes`,
       vigencia: c.fechaFin ? `${formatFechaLarga(c.fechaInicio)} — ${formatFechaLarga(c.fechaFin)}` : `Desde ${formatFechaLarga(c.fechaInicio)}`,
       documentoId: contratoDocId(c.id),
       documentos: docsPorContrato.get(c.id) ?? [],
       firmadoPorMi: !!c.firmaEmpleadoPath,
+      otrosis: otrosis
+        .filter((o) => o.contratoId === c.id)
+        .map((o) => ({
+          id: o.id,
+          numero: o.numero,
+          fecha: formatFechaLarga(o.fecha),
+          resumen: resumenOtrosi(o.tiposCambio, o.valoresNuevos as ValoresOtrosi | null),
+          documentoId: o.documentoId,
+          firmado: !!o.firmaEmpleadoPath,
+          fechaFirma: o.firmaEmpleadoFecha ? formatFechaLarga(o.firmaEmpleadoFecha) : null,
+        })),
       fechaMiFirma: c.firmaEmpleadoFecha ? formatFechaLarga(c.firmaEmpleadoFecha) : null,
-      tieneDocumento: !!c.contenidoPdf,
+      // Igual que en OPS: un contrato subido para firmar no tiene snapshot de plantilla.
+      tieneDocumento: !!c.contenidoPdf || c.origenPdf === 'SUBIDO_PARA_FIRMA',
     })),
     ...contratos.map((c) => ({
       id: c.id,

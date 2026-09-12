@@ -7,6 +7,8 @@ import { prisma } from '@/lib/db'
 import { dbAuditado, auditar } from '@/lib/auditoria'
 import { subirArchivo, leerArchivo } from '@/server/storage'
 import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subida'
+import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
+import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
@@ -231,6 +233,8 @@ export const crearContratoOps = accion(
     }
 
     await publicarVencimientoOps(c.id)
+    // La ficha muestra su propio cargo: se alinea con el del contrato (ver alinearCargoFicha).
+    if (c.colaboradorId) await alinearCargoFicha(c.colaboradorId, c.cargoId)
     revalidatePath('/contratos')
     revalidatePath(`/contratos/ops/${c.id}`)
     return { id: c.id, documentoId }
@@ -293,6 +297,8 @@ export const subirContratoOpsExistente = accion(
     })
 
     await publicarVencimientoOps(c.id)
+    // La ficha muestra su propio cargo: se alinea con el del contrato (ver alinearCargoFicha).
+    if (c.colaboradorId) await alinearCargoFicha(c.colaboradorId, c.cargoId)
     revalidatePath('/contratos')
     revalidatePath(`/contratos/ops/${c.id}`)
     return { id: c.id }
@@ -346,21 +352,16 @@ export const generarAutorizacionDatos = accion(
     const snapshot = (c.contenidoPdf ?? {}) as Record<string, unknown>
     if (!col) throw new ErrorNegocio('Este contrato usa datos manuales; la autorización ya se generó con el contrato.')
 
-    const autorizacion = await construirDatosAutorizacion({
-      datos: {
-        empresa: { razonSocial: '' }, // se completa con la configuración de la empresa
-        contratista: {
-          nombre: `${col.nombres} ${col.apellidos}`.toUpperCase(),
-          cc: `${col.tipoDocumento} ${col.numeroDocumento}`,
-          ccLugar: col.lugarExpedicionDoc ?? '',
-        },
-        contrato: {
-          ciudad: col.ciudadResidencia?.nombre ?? c.sede.ciudad.nombre,
-          fechaSuscripcion: c.creadoEn.toISOString().slice(0, 10),
-          cargoObjeto: c.cargo?.nombre ?? col.cargo?.nombre ?? '',
-        },
+    const autorizacion = await datosAutorizacionDeColaborador({
+      colaboradorId: col.id,
+      vinculo: 'OPS',
+      numero: c.numero,
+      contrato: {
+        // La ciudad de la sede del CONTRATO, no la del colaborador, si él no tiene residencia.
+        ciudad: col.ciudadResidencia?.nombre ?? c.sede.ciudad.nombre,
+        fechaSuscripcion: c.creadoEn.toISOString().slice(0, 10),
+        cargoObjeto: c.cargo?.nombre,
       },
-      genero: col.genero,
     })
 
     await dbAuditado.contratoOps.update({
@@ -413,7 +414,7 @@ export const regenerarDocumentosContrato = accion(
       c.firmaContratantePath ? leerFirmaComoDataUri(c.firmaContratantePath) : Promise.resolve(null),
       c.firmaContratistaPath ? leerFirmaComoDataUri(c.firmaContratistaPath) : Promise.resolve(null),
     ])
-    const firmado = !!(c.firmaContratistaPath && c.firmaContratantePath)
+    const firmado = !!(c.firmaContratistaPath && (c.firmaContratantePath || c.firmaContratanteEnPdf))
 
     await generarPdfContratoOps({
       contratoId: c.id, numero: c.numero, sedeId: c.sedeId, usuarioId: usuario.id,
@@ -723,6 +724,11 @@ export const subirContratoOpsParaFirma = accion(
         'El contratista no tiene usuario de acceso, así que no podría firmar desde el autoservicio. Créale el acceso antes de subir el contrato.',
       )
     }
+    // O se indica dónde firma el contratante, o se declara que ya firmó en el PDF.
+    const contratanteFirmoEnPdf = d.contratanteFirmoEnPdf === true
+    if (!contratanteFirmoEnPdf && !d.posicionContratante) {
+      throw new ErrorNegocio('Indica dónde firma el contratante dentro del PDF, o marca que ya viene firmado por él.')
+    }
 
     const numero = v(d.numero) ?? (await siguienteNumeroOps())
     const c = await dbAuditado.contratoOps.create({
@@ -740,6 +746,7 @@ export const subirContratoOpsParaFirma = accion(
         rut: v(d.rut),
         estado: 'ACTIVO',
         origenPdf: 'SUBIDO_PARA_FIRMA',
+        firmaContratanteEnPdf: contratanteFirmoEnPdf,
       },
     })
 
@@ -778,51 +785,31 @@ export const subirContratoOpsParaFirma = accion(
       data: {
         posicionFirmas: {
           contratista: d.posicionContratista,
-          contratante: d.posicionContratante,
+          // Sin posición del contratante cuando ya firmó en el PDF: no se le estampa nada.
+          contratante: contratanteFirmoEnPdf ? null : d.posicionContratante ?? null,
           documentoOriginalId: documentoOriginal.id,
         } as object,
       },
     })
 
     // La autorización de datos (Ley 1581) no depende del PDF subido: la sigue
-    // armando la app desde su plantilla y la firma solo el contratista.
+    // armando la app desde su plantilla y la firma solo el contratista. Se
+    // omite si ya se recogió aparte.
     if (d.generarAutorizacion !== false) {
       try {
-        // Los datos del titular salen de la ficha, no del formulario: este alta
-        // no los pide (el contrato ya viene redactado) y una autorización sin
-        // nombre ni cédula no identifica a nadie, así que no autoriza nada.
-        // Se deja que el formulario pise el valor por si algún día los pidiera.
-        const col = await prisma.colaborador.findUnique({
-          where: { id: d.colaboradorId },
-          include: { ciudadResidencia: true, cargo: true, sede: { include: { ciudad: true } } },
-        })
-        const genero = v(d.contratistaGenero) ?? col?.genero ?? null
-        const datosContrato = {
-          // Vacío a propósito: `construirDatosAutorizacion` completa la empresa
-          // con la configuración, que es la fuente de verdad.
-          empresa: { razonSocial: '', marca: null, nit: null, representanteLegal: null, representanteLegalCc: null, correoDevolucion: null },
+        // El titular sale de su ficha: este alta no pide sus datos (el contrato ya
+        // viene redactado) y una autorización sin nombre ni cédula no autoriza nada.
+        const autorizacion = await datosAutorizacionDeColaborador({
+          colaboradorId: d.colaboradorId,
+          vinculo: 'OPS',
+          numero,
+          contrato: { ciudad: d.ciudad, fechaSuscripcion: d.fechaSuscripcion, cargoObjeto: d.cargoObjeto },
           contratista: {
-            nombre: v(d.contratistaNombre) ?? (col ? `${col.nombres} ${col.apellidos}`.toUpperCase() : null),
-            cc: v(d.contratistaCc) ?? (col ? `${col.tipoDocumento} ${col.numeroDocumento}` : null),
-            ccLugar: v(d.contratistaCcLugar) ?? col?.lugarExpedicionDoc ?? null,
-            direccion: v(d.contratistaDireccion) ?? col?.direccion ?? null,
-            email: v(d.contratistaEmail) ?? col?.emailPersonal ?? null,
-            telefono: v(d.contratistaTelefono) ?? col?.celular ?? null,
-            genero,
+            nombre: d.contratistaNombre, cc: d.contratistaCc, ccLugar: d.contratistaCcLugar,
+            direccion: d.contratistaDireccion, email: d.contratistaEmail, telefono: d.contratistaTelefono,
+            genero: d.contratistaGenero,
           },
-          contrato: {
-            numero,
-            ciudad: v(d.ciudad) ?? col?.ciudadResidencia?.nombre ?? col?.sede?.ciudad?.nombre ?? null,
-            fechaSuscripcion: v(d.fechaSuscripcion),
-            fechaInicio: d.fechaInicio,
-            fechaFin: d.fechaFin,
-            plazoMeses: null,
-            valorTotal: d.valorTotal,
-            honorarioMensual: d.valorMensual ?? null,
-            cargoObjeto: v(d.cargoObjeto) ?? col?.cargo?.nombre ?? null,
-          },
-        }
-        const autorizacion = await construirDatosAutorizacion({ datos: datosContrato, genero })
+        })
         // Se guarda en el snapshot para poder regenerarla firmada cuando el
         // contratista firme; el contrato en sí no va aquí: ese es el PDF subido.
         await dbAuditado.contratoOps.update({ where: { id: c.id }, data: { contenidoPdf: { autorizacion } as object } })
@@ -844,6 +831,8 @@ export const subirContratoOpsParaFirma = accion(
     }).catch(() => {})
 
     await publicarVencimientoOps(c.id)
+    // La ficha muestra su propio cargo: se alinea con el del contrato (ver alinearCargoFicha).
+    if (c.colaboradorId) await alinearCargoFicha(c.colaboradorId, c.cargoId)
     revalidatePath('/contratos')
     revalidatePath(`/contratos/ops/${c.id}`)
     return { id: c.id, documentoId: documentoOriginal.id }
@@ -943,14 +932,20 @@ export const habilitarFirmaContratoOps = accion(
       )
     }
     const doc = await documentoDelContratoOps(c.id)
+    // O se indica dónde firma el contratante, o se declara que ya firmó en el PDF.
+    const contratanteFirmoEnPdf = d.contratanteFirmoEnPdf === true
+    if (!contratanteFirmoEnPdf && !d.posicionContratante) {
+      throw new ErrorNegocio('Indica dónde firma el contratante dentro del PDF, o marca que ya viene firmado por él.')
+    }
 
     await dbAuditado.contratoOps.update({
       where: { id: c.id },
       data: {
         origenPdf: 'SUBIDO_PARA_FIRMA',
+        firmaContratanteEnPdf: contratanteFirmoEnPdf,
         posicionFirmas: {
           contratista: d.posicionContratista,
-          contratante: d.posicionContratante,
+          contratante: contratanteFirmoEnPdf ? null : d.posicionContratante ?? null,
           documentoOriginalId: doc.id,
         } as object,
       },

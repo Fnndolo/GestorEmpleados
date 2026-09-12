@@ -12,6 +12,7 @@ import { CuentasCobro } from './cuentas-cliente'
 import { Entregables } from './entregables-cliente'
 import { FirmasContrato } from './firmas-contrato'
 import { GenerarAutorizacion, RegenerarDocumentos } from './generar-autorizacion'
+import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import { HabilitarFirma } from './habilitar-firma'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 
@@ -124,7 +125,9 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
               {c.origenPdf === 'SUBIDO_PARA_FIRMA' && (
                 // Distinto del anterior: este sí recoge firmas, solo que se estampan
                 // sobre el PDF aportado en vez de regenerar el documento.
-                <Badge variant="secondary">Subido · se firma en la app</Badge>
+                <Badge variant="secondary">
+                  {c.firmaContratanteEnPdf ? 'Subido firmado por el contratante · firma el contratista en la app' : 'Subido · se firma en la app'}
+                </Badge>
               )}
               {/* La autorización (Ley 1581) la arma la app en los dos caminos, y su
                   generación al crear el contrato no aborta el alta si falla. Sin este
@@ -141,7 +144,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
             <p className="text-sm text-muted-foreground">Aún no se ha generado el PDF del contrato.</p>
             {/* Solo para contratos de plantilla: en uno subido el snapshot no trae
                 el texto del contrato, así que "regenerar" produciría un PDF vacío. */}
-            {puedeEditar && c.origenPdf === 'GENERADO' && c.contenidoPdf != null && <RegenerarDocumentos contratoId={c.id} />}
+            {GENERAR_CONTRATOS_DESDE_PLANTILLA && puedeEditar && c.origenPdf === 'GENERADO' && c.contenidoPdf != null && <RegenerarDocumentos contratoId={c.id} />}
           </div>
         ) : (
           <ul className="space-y-1.5">
@@ -168,6 +171,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
               nombre: snap?.firmaContratanteNombre ?? '',
               firmado: !!c.firmaContratantePath,
               fecha: c.firmaContratanteFecha ? formatFechaLarga(c.firmaContratanteFecha) : null,
+              enPdf: c.firmaContratanteEnPdf,
             }}
             contratista={{
               nombre: snap?.firmaContratistaNombre ?? nombreContratista,

@@ -38,6 +38,10 @@ export async function POST(req: NextRequest) {
   if (!permitido && entidadTipo === 'VigenciaParametro') {
     permitido = tienePermiso(usuario, 'configuracion', 'EDITAR')
   }
+  // Las facturas de un cumpleaños las gestiona Bienestar, no el expediente del personal.
+  if (!permitido && entidadTipo === 'CelebracionCumpleanos') {
+    permitido = tienePermiso(usuario, 'bienestar', 'EDITAR')
+  }
   let esAporteDelColaborador = false
   // Las excepciones "de dueño" exigen poder ACTUAR en autoservicio: un usuario
   // en solo consulta (rol "Consulta (retirado)") no puede subir nada.
@@ -56,6 +60,10 @@ export async function POST(req: NextRequest) {
     } else if (entidadTipo === 'Solicitud') {
       const sol = await prisma.solicitud.findUnique({ where: { id: entidadId }, select: { colaboradorId: true } })
       if (sol?.colaboradorId === usuario.colaboradorId) permitido = true
+    } else if (entidadTipo === 'Permiso') {
+      // El comprobante de asistencia de SU permiso.
+      const permiso = await prisma.permiso.findUnique({ where: { id: entidadId }, select: { colaboradorId: true } })
+      if (permiso?.colaboradorId === usuario.colaboradorId) permitido = true
     } else if (entidadTipo === 'CuentaCobroOps') {
       // El contratista adjunta la planilla PILA a SU cuenta de cobro.
       const cuenta = await prisma.cuentaCobroOps.findUnique({
@@ -64,6 +72,10 @@ export async function POST(req: NextRequest) {
       })
       const dueno = cuenta?.colaboradorId ?? cuenta?.contratoOps?.colaboradorId
       if (dueno === usuario.colaboradorId) permitido = true
+    } else if (entidadTipo === 'CelebracionCumpleanos') {
+      // El encargado sube las facturas del cumpleaños que tiene a cargo, mientras no esté cerrado.
+      const cel = await prisma.celebracionCumpleanos.findUnique({ where: { id: entidadId }, select: { encargadoId: true, estado: true } })
+      if (cel?.encargadoId === usuario.colaboradorId && cel.estado !== 'CERRADA') permitido = true
     }
   }
   if (!permitido) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })

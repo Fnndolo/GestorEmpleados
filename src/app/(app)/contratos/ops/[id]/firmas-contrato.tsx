@@ -20,12 +20,13 @@ export function FirmasContrato({
 }: {
   contratoId: string
   puedeFirmar: boolean
-  contratante: Estado & { nombre: string }
+  /** `enPdf`: el contratante ya firmó en el PDF aportado; no se le pide firma digital. */
+  contratante: Estado & { nombre: string; enPdf?: boolean }
   contratista: Estado & { nombre: string }
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <ParteFirma contratoId={contratoId} etiqueta="El contratante" nombre={contratante.nombre} estado={contratante} puedeFirmar={puedeFirmar} />
+      <ParteFirma contratoId={contratoId} etiqueta="El contratante" nombre={contratante.nombre} estado={contratante} puedeFirmar={puedeFirmar && !contratante.enPdf} enPdf={contratante.enPdf} />
       {/* La firma del contratista solo la aplica él mismo, desde su autoservicio. */}
       <ParteFirma contratoId={contratoId} etiqueta="La contratista" nombre={contratista.nombre} estado={contratista} puedeFirmar={false} pendienteTexto="Pendiente · firma desde su autoservicio" />
     </div>
@@ -39,6 +40,7 @@ function ParteFirma({
   estado,
   puedeFirmar,
   pendienteTexto = 'Pendiente de firma',
+  enPdf = false,
 }: {
   contratoId: string
   etiqueta: string
@@ -46,6 +48,8 @@ function ParteFirma({
   estado: Estado
   puedeFirmar: boolean
   pendienteTexto?: string
+  /** Ya firmó en el PDF aportado: se muestra como firmado, sin botón. */
+  enPdf?: boolean
 }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
@@ -71,7 +75,11 @@ function ParteFirma({
     <div className="rounded-lg border p-3">
       <div className="text-xs uppercase tracking-wide text-muted-foreground">{etiqueta}</div>
       <div className="mt-0.5 text-sm font-medium">{nombre || '—'}</div>
-      {estado.firmado ? (
+      {enPdf ? (
+        <div className="mt-2 flex items-center gap-1.5 text-sm text-emerald-600">
+          <CircleCheck className="size-4" /> Firmó en el documento aportado
+        </div>
+      ) : estado.firmado ? (
         <div className="mt-2 flex items-center gap-1.5 text-sm text-emerald-600">
           <CircleCheck className="size-4" /> Firmado{estado.fecha ? ` · ${estado.fecha}` : ''}
         </div>

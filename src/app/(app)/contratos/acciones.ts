@@ -7,15 +7,20 @@ import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { subirArchivo } from '@/server/storage'
 import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subida'
+import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
+import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema, subirContratoLaboralSchema } from '@/lib/validaciones/contrato'
-import { parseFechaISO, formatFechaISO } from '@/lib/fechas'
+import { contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema, subirContratoLaboralSchema, subirContratoLaboralParaFirmaSchema, type SubirContratoLaboralInput } from '@/lib/validaciones/contrato'
+import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { publicarVencimiento, resolverVencimiento } from '@/server/vencimientos/servicio'
 import { valorParametroVigente } from '@/server/nomina/parametros'
 import { construirDatosPdfContratoLaboral, generarPdfContratoLaboral, generarPdfAutorizacionDatosLaboral } from '@/server/contratos-laboral-pdf'
 import { construirDatosAutorizacion } from '@/server/contratos-ops-pdf'
 import { aplicarFirmaContratoLaboral } from '@/server/contratos-laboral-firma'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
+import { ubicarFirmasEnPdf, contarPaginas } from '@/server/pdf/firma-en-pdf'
+import { resumenOtrosi, type ValoresOtrosi } from '@/lib/otrosi'
+import { documentosFaltantesDe } from '@/server/expediente'
 import type { FuncionesCargo } from '@/lib/contrato-variables'
 import { vinculoDeContrato, vinculoCoincide, type TipoContratoLaboral, type TipoVinculo } from '@/lib/vinculo-contrato'
 import { devolverAccesoNormal } from '@/server/rol-consulta'
@@ -137,6 +142,7 @@ export const crearContrato = accion(
     }
 
     const vinculoAjustado = await alinearVinculoFicha(d.colaboradorId, d.tipo)
+    await alinearCargoFicha(d.colaboradorId, v(d.cargoId))
     const reactivado = await reactivarSiEstabaRetirado(d.colaboradorId)
 
     revalidatePath('/contratos')
@@ -204,6 +210,125 @@ async function reactivarSiEstabaRetirado(
 }
 
 /**
+ * Alta de un contrato laboral cuyo PDF viene de fuera, compartida por los dos
+ * caminos: el que llega ya firmado en físico (`subirContratoExistente`) y el que
+ * se sube para firmarse en la app (`subirContratoParaFirma`). Valida, numera,
+ * registra el contrato con los datos que necesitan nómina y las alertas, y
+ * archiva el PDF aportado. Lo que difiere entre caminos llega en `origen`.
+ */
+async function registrarContratoSubido(
+  d: SubirContratoLaboralInput,
+  usuario: { id: string },
+  origen: {
+    origenPdf: 'SUBIDO' | 'SUBIDO_PARA_FIRMA'
+    firmaEmpleadorEnPdf?: boolean
+  },
+) {
+  if (d.tipo === 'TERMINO_FIJO' && !d.fechaFin) throw new ErrorNegocio('Un contrato a término fijo requiere fecha de fin.')
+  if (d.tipo === 'OBRA_LABOR' && !d.objetoObraLabor) throw new ErrorNegocio('Indica el objeto de la obra o labor.')
+  if (d.tipo === 'TERMINO_FIJO' && d.fechaFin) {
+    const dur = (parseFechaISO(d.fechaFin)!.getTime() - parseFechaISO(d.fechaInicio)!.getTime()) / (365 * 86_400_000)
+    if (dur > 4) throw new ErrorNegocio('El contrato a término fijo no puede superar 4 años.')
+  }
+
+  // Decodificar el PDF (data URI base64) a Buffer.
+  const base64 = d.pdfBase64.split(',')[1] ?? ''
+  const pdf = Buffer.from(base64, 'base64')
+  if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+
+  let periodoPruebaFin: Date | null = null
+  if (d.periodoPruebaDias && d.periodoPruebaDias > 0) {
+    periodoPruebaFin = parseFechaISO(d.fechaInicio)!
+    periodoPruebaFin.setUTCDate(periodoPruebaFin.getUTCDate() + d.periodoPruebaDias)
+  }
+  const ganaMin = d.ganaSalarioMinimo ?? false
+  const salarioBase = ganaMin ? (await valorParametroVigente('SMMLV')) || d.salarioBase : d.salarioBase
+  const auxConectividad = d.auxConectividad && d.auxConectividad > 0 ? d.auxConectividad : null
+
+  const numero = await siguienteNumero('CT')
+  const contrato = await dbAuditado.contrato.create({
+    data: {
+      numero,
+      colaboradorId: d.colaboradorId,
+      tipo: d.tipo,
+      cargoId: v(d.cargoId),
+      sedeId: d.sedeId,
+      jornada: d.jornada,
+      horasSemanales: d.horasSemanales ?? null,
+      modalidadTrabajo: d.modalidadTrabajo,
+      salarioBase,
+      ganaSalarioMinimo: ganaMin,
+      tieneAuxTransporte: d.tieneAuxTransporte ?? true,
+      auxConectividad,
+      tipoSalario: d.tipoSalario,
+      fechaInicio: parseFechaISO(d.fechaInicio)!,
+      fechaFin: parseFechaISO(d.fechaFin),
+      objetoObraLabor: v(d.objetoObraLabor),
+      etapaAprendizaje: (v(d.etapaAprendizaje) as 'LECTIVA' | 'PRODUCTIVA' | null) ?? null,
+      periodoPruebaDias: d.periodoPruebaDias ?? null,
+      periodoPruebaFin,
+      estado: 'ACTIVO',
+      origenPdf: origen.origenPdf,
+      firmaEmpleadorEnPdf: origen.firmaEmpleadorEnPdf ?? false,
+      observaciones: v(d.observaciones),
+    },
+  })
+
+  // Subir el PDF aportado y registrarlo como Documento del contrato.
+  const sha256 = createHash('sha256').update(pdf).digest('hex')
+  const archivo = await subirArchivo(`contratos/${contrato.id}`, `contrato-${numero}.pdf`, pdf, 'application/pdf')
+  const documento = await dbAuditado.documento.create({
+    data: {
+      entidadTipo: 'Contrato',
+      entidadId: contrato.id,
+      nombre: `Contrato laboral ${numero}`,
+      bucket: archivo.bucket,
+      storagePath: archivo.storagePath,
+      mimeType: 'application/pdf',
+      tamanoBytes: archivo.tamanoBytes,
+      sha256,
+      nivelAcceso: 'GENERAL',
+      sedeId: contrato.sedeId,
+      subidoPorId: usuario.id,
+    },
+  })
+
+  return { contrato, numero, documentoId: documento.id }
+}
+
+/**
+ * Con contrato de trabajo cambia lo que se le exige al expediente (Ajustes →
+ * Tipos de documento, más la tarjeta profesional si el cargo la pide). Se le
+ * dice al colaborador qué le falta al momento del alta, en vez de esperar a que
+ * entre al autoservicio y lo descubra. Si no le falta nada, no se le escribe.
+ */
+async function avisarExpedientePendiente(colaboradorId: string) {
+  const uid = await usuarioDeColaborador(colaboradorId)
+  if (!uid) return
+  const faltan = await documentosFaltantesDe(colaboradorId)
+  if (faltan.length === 0) return
+  const cuantos = faltan.length === 1 ? 'falta 1 documento' : `faltan ${faltan.length} documentos`
+  await avisar(uid, {
+    titulo: 'Completa tu expediente para el contrato de trabajo',
+    mensaje: `Con tu contrato laboral te ${cuantos} por entregar: ${faltan.join(', ')}. Súbelos desde Autoservicio → Mis documentos.`,
+    enlace: '/autoservicio/documentos',
+    llamadoAccion: 'Subir mis documentos',
+    evento: 'expediente_pendiente',
+  }).catch(() => {})
+}
+
+/** Lo que sigue a cualquier alta de contrato laboral: alertas y ficha del colaborador. */
+async function cerrarAltaContrato(contratoId: string, colaboradorId: string, tipo: TipoContratoLaboral, cargoId: string | null) {
+  await publicarVencimientosContrato(contratoId)
+  const vinculoAjustado = await alinearVinculoFicha(colaboradorId, tipo)
+  await alinearCargoFicha(colaboradorId, cargoId)
+  const reactivado = await reactivarSiEstabaRetirado(colaboradorId)
+  await avisarExpedientePendiente(colaboradorId)
+  revalidatePath('/contratos')
+  return { vinculoAjustado, reactivado }
+}
+
+/**
  * Sube un contrato laboral YA EXISTENTE (firmado en físico / hecho fuera del sistema).
  * Crea el registro con los datos estructurados (los necesita nómina y las alertas de
  * vencimiento), marca `origenPdf: SUBIDO` y adjunta el PDF aportado como Documento.
@@ -212,84 +337,106 @@ async function reactivarSiEstabaRetirado(
 export const subirContratoExistente = accion(
   { modulo: 'contratos', accion: 'CREAR', schema: subirContratoLaboralSchema },
   async (d, usuario) => {
-    if (d.tipo === 'TERMINO_FIJO' && !d.fechaFin) throw new ErrorNegocio('Un contrato a término fijo requiere fecha de fin.')
-    if (d.tipo === 'OBRA_LABOR' && !d.objetoObraLabor) throw new ErrorNegocio('Indica el objeto de la obra o labor.')
-    if (d.tipo === 'TERMINO_FIJO' && d.fechaFin) {
-      const dur = (parseFechaISO(d.fechaFin)!.getTime() - parseFechaISO(d.fechaInicio)!.getTime()) / (365 * 86_400_000)
-      if (dur > 4) throw new ErrorNegocio('El contrato a término fijo no puede superar 4 años.')
-    }
-
-    // Decodificar el PDF (data URI base64) a Buffer.
-    const base64 = d.pdfBase64.split(',')[1] ?? ''
-    const pdf = Buffer.from(base64, 'base64')
-    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
-
-    let periodoPruebaFin: Date | null = null
-    if (d.periodoPruebaDias && d.periodoPruebaDias > 0) {
-      periodoPruebaFin = parseFechaISO(d.fechaInicio)!
-      periodoPruebaFin.setUTCDate(periodoPruebaFin.getUTCDate() + d.periodoPruebaDias)
-    }
-    const ganaMin = d.ganaSalarioMinimo ?? false
-    const salarioBase = ganaMin ? (await valorParametroVigente('SMMLV')) || d.salarioBase : d.salarioBase
-    const auxConectividad = d.auxConectividad && d.auxConectividad > 0 ? d.auxConectividad : null
-
-    const numero = await siguienteNumero('CT')
-    const contrato = await dbAuditado.contrato.create({
-      data: {
-        numero,
-        colaboradorId: d.colaboradorId,
-        tipo: d.tipo,
-        cargoId: v(d.cargoId),
-        sedeId: d.sedeId,
-        jornada: d.jornada,
-        horasSemanales: d.horasSemanales ?? null,
-        modalidadTrabajo: d.modalidadTrabajo,
-        salarioBase,
-        ganaSalarioMinimo: ganaMin,
-        tieneAuxTransporte: d.tieneAuxTransporte ?? true,
-        auxConectividad,
-        tipoSalario: d.tipoSalario,
-        fechaInicio: parseFechaISO(d.fechaInicio)!,
-        fechaFin: parseFechaISO(d.fechaFin),
-        objetoObraLabor: v(d.objetoObraLabor),
-        etapaAprendizaje: (v(d.etapaAprendizaje) as 'LECTIVA' | 'PRODUCTIVA' | null) ?? null,
-        periodoPruebaDias: d.periodoPruebaDias ?? null,
-        periodoPruebaFin,
-        estado: 'ACTIVO',
-        origenPdf: 'SUBIDO',
-        observaciones: v(d.observaciones),
-      },
-    })
-
-    // Subir el PDF aportado y registrarlo como Documento del contrato.
-    const sha256 = createHash('sha256').update(pdf).digest('hex')
-    const archivo = await subirArchivo(`contratos/${contrato.id}`, `contrato-${numero}.pdf`, pdf, 'application/pdf')
-    await dbAuditado.documento.create({
-      data: {
-        entidadTipo: 'Contrato',
-        entidadId: contrato.id,
-        nombre: `Contrato laboral ${numero}`,
-        bucket: archivo.bucket,
-        storagePath: archivo.storagePath,
-        mimeType: 'application/pdf',
-        tamanoBytes: archivo.tamanoBytes,
-        sha256,
-        nivelAcceso: 'GENERAL',
-        sedeId: contrato.sedeId,
-        subidoPorId: usuario.id,
-      },
-    })
+    const { contrato, numero } = await registrarContratoSubido(d, usuario, { origenPdf: 'SUBIDO' })
 
     await guardarAutorizacionSubida({
       autorizacionBase64: d.autorizacionBase64,
       entidadTipo: 'Contrato', entidadId: contrato.id, numero, sedeId: contrato.sedeId, usuarioId: usuario.id,
     })
 
-    await publicarVencimientosContrato(contrato.id)
-    const vinculoAjustado = await alinearVinculoFicha(d.colaboradorId, d.tipo)
-    const reactivado = await reactivarSiEstabaRetirado(d.colaboradorId)
-    revalidatePath('/contratos')
-    return { id: contrato.id, vinculoAjustado, reactivado }
+    const cierre = await cerrarAltaContrato(contrato.id, d.colaboradorId, d.tipo, v(d.cargoId))
+    return { id: contrato.id, ...cierre }
+  },
+)
+
+/**
+ * Sube el PDF de un contrato laboral que se firmará DENTRO de la app: espejo de
+ * `subirContratoOpsParaFirma`. El empleado firma desde su autoservicio y el
+ * empleador desde el detalle, salvo que el PDF ya venga firmado por él; las
+ * firmas se estampan sobre el archivo aportado en las posiciones confirmadas.
+ *
+ * La autorización de datos (Ley 1581) va aparte del PDF: la arma la app y la
+ * firma el empleado junto con el contrato, salvo que ya se haya recogido aparte.
+ */
+export const subirContratoParaFirma = accion(
+  { modulo: 'contratos', accion: 'CREAR', schema: subirContratoLaboralParaFirmaSchema },
+  async (d, usuario) => {
+    // Sin usuario de acceso el empleado no puede entrar a firmar: se avisa al
+    // crear, no cuando alguien se pregunte por qué nunca llegó la firma.
+    const uid = await usuarioDeColaborador(d.colaboradorId)
+    if (!uid) {
+      throw new ErrorNegocio(
+        'El colaborador no tiene usuario de acceso, así que no podría firmar desde el autoservicio. Créale el acceso antes de subir el contrato.',
+      )
+    }
+    // O se indica dónde firma el empleador, o se declara que ya firmó en el PDF.
+    const empleadorFirmoEnPdf = d.empleadorFirmoEnPdf === true
+    if (!empleadorFirmoEnPdf && !d.posicionEmpleador) {
+      throw new ErrorNegocio('Indica dónde firma el empleador dentro del PDF, o marca que ya viene firmado por él.')
+    }
+
+    const { contrato, numero, documentoId } = await registrarContratoSubido(d, usuario, {
+      origenPdf: 'SUBIDO_PARA_FIRMA', firmaEmpleadorEnPdf: empleadorFirmoEnPdf,
+    })
+    await dbAuditado.contrato.update({
+      where: { id: contrato.id },
+      data: {
+        posicionFirmas: {
+          empleado: d.posicionEmpleado,
+          empleador: empleadorFirmoEnPdf ? null : d.posicionEmpleador,
+          documentoOriginalId: documentoId,
+        } as object,
+      },
+    })
+
+    if (d.generarAutorizacion !== false) {
+      try {
+        const autorizacion = await datosAutorizacionDeColaborador({
+          colaboradorId: d.colaboradorId, vinculo: 'LABORAL', numero,
+        })
+        // Se guarda en el snapshot para regenerarla firmada cuando el empleado
+        // firme; el contrato en sí no va aquí: ese es el PDF subido.
+        await dbAuditado.contrato.update({ where: { id: contrato.id }, data: { contenidoPdf: { autorizacion } as object } })
+        await generarPdfAutorizacionDatosLaboral({
+          contratoId: contrato.id, numero, sedeId: contrato.sedeId, usuarioId: usuario.id, datos: autorizacion,
+        })
+      } catch (e) {
+        // El contrato queda subido aunque falle la autorización; se regenera aparte.
+        console.error('No se pudo generar la autorización de datos del contrato laboral subido:', e)
+      }
+    }
+
+    await avisar(uid, {
+      evento: 'contrato_pendiente_firma',
+      titulo: 'Contrato pendiente de tu firma',
+      mensaje: `Tu contrato de trabajo ${numero} está listo. Revísalo y fírmalo desde tu autoservicio.`,
+      enlace: '/autoservicio/contratos',
+      llamadoAccion: 'Revisar y firmar el contrato',
+    }).catch(() => {})
+
+    const cierre = await cerrarAltaContrato(contrato.id, d.colaboradorId, d.tipo, v(d.cargoId))
+    revalidatePath(`/contratos/${contrato.id}`)
+    return { id: contrato.id, documentoId, ...cierre }
+  },
+)
+
+/**
+ * Lee un PDF recién elegido y propone dónde firma cada parte de un contrato de
+ * trabajo (etiquetas "EL TRABAJADOR" / "EL EMPLEADOR"). No guarda nada.
+ */
+export const analizarPdfContratoLaboral = accion(
+  {
+    modulo: 'contratos',
+    accion: 'CREAR',
+    schema: z.object({
+      pdfBase64: z.string().startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
+    }),
+  },
+  async (d) => {
+    const pdf = Buffer.from(d.pdfBase64.split(',')[1] ?? '', 'base64')
+    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+    const [posiciones, paginas] = await Promise.all([ubicarFirmasEnPdf(pdf, 'LABORAL'), contarPaginas(pdf)])
+    return { paginas, ...posiciones }
   },
 )
 
@@ -403,7 +550,8 @@ async function generarDocumentosContratoLaboral(
     plantilla: plantillaFuente,
     funciones,
   })
-  const autorizacion = await construirDatosAutorizacion({ datos: datosContrato, genero: colab.genero })
+  // Es un contrato de trabajo: la autorización habla de "trabajador", no de contratista.
+  const autorizacion = await construirDatosAutorizacion({ datos: datosContrato, genero: colab.genero, vinculo: 'LABORAL' })
 
   await dbAuditado.contrato.update({
     where: { id: c.id },
@@ -617,14 +765,37 @@ export const agregarProrroga = accion(
 
 export const agregarOtrosi = accion(
   { modulo: 'contratos', accion: 'EDITAR', schema: otrosiSchema },
-  async (d) => {
+  async (d, usuario) => {
     const contrato = await prisma.contrato.findUniqueOrThrow({
       where: { id: d.contratoId },
-      include: { otrosis: true },
+      include: {
+        otrosis: { select: { numero: true } },
+        cargo: { select: { nombre: true } },
+        sede: { select: { nombre: true } },
+      },
     })
-    const numero = contrato.otrosis.length + 1
-    const antes: Record<string, number> = {}
-    const despues: Record<string, number> = {}
+    const pdf = Buffer.from(d.pdfBase64.split(',')[1] ?? '', 'base64')
+    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF del otrosí está vacío.')
+    // El trabajador firma desde su autoservicio: sin usuario de acceso el otrosí
+    // quedaría sin firmar para siempre. Se avisa al registrar, no después.
+    const usuarioTrabajador = await usuarioDeColaborador(contrato.colaboradorId)
+    if (!usuarioTrabajador) {
+      throw new ErrorNegocio(
+        'El trabajador no tiene usuario de acceso, así que no podría firmar el otrosí desde su autoservicio. Créale el acceso antes de registrarlo.',
+      )
+    }
+
+    const numero = Math.max(0, ...contrato.otrosis.map((o) => o.numero)) + 1
+    // Fecha del otrosí: si cambia la duración, es el inicio del nuevo periodo;
+    // si no, la de hoy (se registra cuando se firma). Es la que rige el cambio
+    // (p. ej. desde cuándo aplica el nuevo salario) y la que muestra el historial.
+    const cambiaDuracion = d.tiposCambio.includes('DURACION') && !!v(d.fechaInicioNueva) && !!v(d.fechaFinNueva)
+    const fechaOtrosi = cambiaDuracion
+      ? parseFechaISO(d.fechaInicioNueva)!
+      : (parseFechaISO(v(d.fecha)) ?? hoyBogota())
+    // Cargo y sede se guardan por nombre: el resumen se lee sin consultar nada.
+    const antes: ValoresOtrosi = {}
+    const despues: ValoresOtrosi = {}
     const updateContrato: Record<string, unknown> = {}
     const updateColab: Record<string, unknown> = {}
 
@@ -637,42 +808,119 @@ export const agregarOtrosi = accion(
           colaboradorId: contrato.colaboradorId,
           salarioAnterior: contrato.salarioBase,
           salarioNuevo: d.salarioNuevo,
-          fechaVigencia: parseFechaISO(d.fecha)!,
+          fechaVigencia: fechaOtrosi,
           motivo: `Otrosí ${numero}`,
         },
       })
     }
     if (d.tiposCambio.includes('CARGO') && v(d.cargoNuevoId)) {
+      const cargo = await prisma.cargo.findUnique({ where: { id: d.cargoNuevoId! }, select: { nombre: true } })
+      if (contrato.cargo) antes.cargo = contrato.cargo.nombre
+      if (cargo) despues.cargo = cargo.nombre
       updateContrato.cargoId = d.cargoNuevoId
       updateColab.cargoId = d.cargoNuevoId
     }
     if (d.tiposCambio.includes('SEDE') && v(d.sedeNuevaId)) {
+      const sede = await prisma.sede.findUnique({ where: { id: d.sedeNuevaId! }, select: { nombre: true } })
+      antes.sede = contrato.sede.nombre
+      if (sede) despues.sede = sede.nombre
       updateContrato.sedeId = d.sedeNuevaId
       updateColab.sedeId = d.sedeNuevaId
     }
     if (d.tiposCambio.includes('MODALIDAD_TRABAJO') && v(d.modalidadNueva)) {
+      antes.modalidad = contrato.modalidadTrabajo
+      despues.modalidad = d.modalidadNueva as string
       updateContrato.modalidadTrabajo = d.modalidadNueva
       updateColab.modalidadTrabajo = d.modalidadNueva
     }
-    if (d.tiposCambio.includes('DURACION') && v(d.fechaFinNueva)) {
+    if (cambiaDuracion) {
+      // El nuevo periodo pactado. La fecha de inicio del contrato no se toca: es
+      // histórica; lo que cambia es hasta cuándo va, y eso mueve las alertas.
+      antes.fechaInicio = formatFechaISO(contrato.fechaInicio)
+      if (contrato.fechaFin) antes.fechaFin = formatFechaISO(contrato.fechaFin)
+      despues.fechaInicio = d.fechaInicioNueva as string
+      despues.fechaFin = d.fechaFinNueva as string
       updateContrato.fechaFin = parseFechaISO(d.fechaFinNueva)
     }
 
-    await dbAuditado.otrosiContrato.create({
+    const otrosi = await dbAuditado.otrosiContrato.create({
       data: {
         contratoId: d.contratoId,
         numero,
-        fecha: parseFechaISO(d.fecha)!,
+        fecha: fechaOtrosi,
         tiposCambio: d.tiposCambio,
-        descripcion: d.descripcion,
         valoresAnteriores: Object.keys(antes).length ? antes : undefined,
         valoresNuevos: Object.keys(despues).length ? despues : undefined,
+        // El PDF subido es el otrosí; el trabajador lo firma en la app en esta posición.
+        requiereFirma: true,
+        posicionFirma: d.posicionFirma,
       },
     })
+
+    // El PDF tal como se subió: base del estampado y referencia para comparar
+    // con el firmado. Entidad propia para que la ficha no lo tome por el contrato.
+    const sha256 = createHash('sha256').update(pdf).digest('hex')
+    const archivo = await subirArchivo(`contratos/${contrato.id}/otrosi-${numero}`, `otrosi-${numero}.pdf`, pdf, 'application/pdf')
+    const doc = await dbAuditado.documento.create({
+      data: {
+        entidadTipo: 'OtrosiContrato',
+        entidadId: otrosi.id,
+        nombre: `Otrosí ${numero} del contrato ${contrato.numero}`,
+        bucket: archivo.bucket,
+        storagePath: archivo.storagePath,
+        mimeType: 'application/pdf',
+        tamanoBytes: archivo.tamanoBytes,
+        sha256,
+        nivelAcceso: 'GENERAL',
+        sedeId: contrato.sedeId,
+        subidoPorId: usuario.id,
+      },
+    })
+    await dbAuditado.otrosiContrato.update({
+      where: { id: otrosi.id },
+      data: { documentoId: doc.id, documentoOriginalId: doc.id },
+    })
+
     if (Object.keys(updateContrato).length) await dbAuditado.contrato.update({ where: { id: d.contratoId }, data: updateContrato })
     if (Object.keys(updateColab).length) await dbAuditado.colaborador.update({ where: { id: contrato.colaboradorId }, data: updateColab })
     if (updateContrato.fechaFin) await publicarVencimientosContrato(d.contratoId)
+
+    const resumen = resumenOtrosi(d.tiposCambio, despues)
+    await avisar(usuarioTrabajador, {
+      titulo: 'Tienes un otrosí pendiente por firmar',
+      mensaje: `Se registró el otrosí ${numero} de tu contrato ${contrato.numero}${resumen ? ` (${resumen})` : ''}. Revísalo y fírmalo desde tu autoservicio.`,
+      enlace: '/autoservicio/contratos',
+      llamadoAccion: 'Revisar y firmar',
+      evento: 'contrato_pendiente_firma',
+    }).catch(() => {})
+
     revalidatePath(`/contratos/${d.contratoId}`)
+    revalidatePath('/autoservicio/contratos')
+    return { id: otrosi.id, numero }
+  },
+)
+
+/**
+ * Lee el PDF de un otrosí recién elegido y propone dónde firma el trabajador.
+ * No guarda nada: es el paso previo a registrarlo, para que la app proponga la
+ * posición y una persona la confirme. Un escaneo (sin capa de texto) devuelve
+ * null y la posición se marca a mano.
+ */
+export const analizarPdfOtrosi = accion(
+  {
+    modulo: 'contratos',
+    accion: 'EDITAR',
+    schema: z.object({
+      pdfBase64: z.string().startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
+    }),
+  },
+  async (d) => {
+    const pdf = Buffer.from(d.pdfBase64.split(',')[1] ?? '', 'base64')
+    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+    const [posiciones, paginas] = await Promise.all([ubicarFirmasEnPdf(pdf, 'LABORAL'), contarPaginas(pdf)])
+    // En un contrato de trabajo la persona es "EL TRABAJADOR"; la detección lo
+    // entrega en la clave `contratista` (la de quien se vincula).
+    return { paginas, trabajador: posiciones.contratista }
   },
 )
 

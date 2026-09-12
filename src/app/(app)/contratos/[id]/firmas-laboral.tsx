@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { FirmaCaptura } from '@/components/firma/firma-captura'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { firmarContratoLaboral, regenerarPdfContratoLaboral } from '../acciones'
+import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 
 type Estado = { firmado: boolean; fecha: string | null }
 
@@ -23,6 +24,7 @@ export function FirmasLaboral({
   puedeFirmar,
   empleador,
   empleado,
+  subido = false,
 }: {
   contratoId: string
   numero: string
@@ -30,8 +32,11 @@ export function FirmasLaboral({
   documentoId: string | null
   autorizacionId: string | null
   puedeFirmar: boolean
-  empleador: Estado & { nombre: string }
+  /** `enPdf`: el empleador ya firmó en el PDF aportado; no se le pide firma digital. */
+  empleador: Estado & { nombre: string; enPdf?: boolean }
   empleado: Estado & { nombre: string }
+  /** PDF subido para firma: no hay plantilla que editar ni regenerar. */
+  subido?: boolean
 }) {
   const router = useRouter()
   const [regen, setRegen] = useState(false)
@@ -57,8 +62,9 @@ export function FirmasLaboral({
           </VisorPdf>
         )}
         {/* Mientras nadie firme, el documento se puede editar y el PDF regenerarse.
-            Desde la primera firma el contenido queda congelado (cambios → otrosí). */}
-        {puedeFirmar && !empleador.firmado && !empleado.firmado && (
+            Desde la primera firma el contenido queda congelado (cambios → otrosí).
+            Solo cuando los contratos se redactan desde plantilla. */}
+        {GENERAR_CONTRATOS_DESDE_PLANTILLA && !subido && puedeFirmar && !empleador.firmado && !empleado.firmado && (
           <>
             {tieneDocumento && (
               <Button size="sm" variant="outline" asChild>
@@ -78,7 +84,7 @@ export function FirmasLaboral({
       </div>
       {tieneDocumento && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <ParteFirma contratoId={contratoId} etiqueta="El empleador" nombre={empleador.nombre} estado={empleador} puedeFirmar={puedeFirmar} />
+          <ParteFirma contratoId={contratoId} etiqueta="El empleador" nombre={empleador.nombre} estado={empleador} puedeFirmar={puedeFirmar && !empleador.enPdf} enPdf={empleador.enPdf} />
           {/* La firma del empleado solo la aplica él mismo, desde su autoservicio. */}
           <ParteFirma contratoId={contratoId} etiqueta="El empleado" nombre={empleado.nombre} estado={empleado} puedeFirmar={false} pendienteTexto="Pendiente · firma desde su autoservicio" />
         </div>
@@ -94,6 +100,7 @@ function ParteFirma({
   estado,
   puedeFirmar,
   pendienteTexto = 'Pendiente de firma',
+  enPdf = false,
 }: {
   contratoId: string
   etiqueta: string
@@ -101,6 +108,8 @@ function ParteFirma({
   estado: Estado
   puedeFirmar: boolean
   pendienteTexto?: string
+  /** Ya firmó en el PDF aportado: se muestra como firmado, sin botón. */
+  enPdf?: boolean
 }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
@@ -126,7 +135,11 @@ function ParteFirma({
     <div className="rounded-lg border p-3">
       <div className="text-xs uppercase tracking-wide text-muted-foreground">{etiqueta}</div>
       <div className="mt-0.5 text-sm font-medium">{nombre || '—'}</div>
-      {estado.firmado ? (
+      {enPdf ? (
+        <div className="mt-2 flex items-center gap-1.5 text-sm text-emerald-600">
+          <CircleCheck className="size-4" /> Firmó en el documento aportado
+        </div>
+      ) : estado.firmado ? (
         <div className="mt-2 flex items-center gap-1.5 text-sm text-emerald-600">
           <CircleCheck className="size-4" /> Firmado{estado.fecha ? ` · ${estado.fecha}` : ''}
         </div>

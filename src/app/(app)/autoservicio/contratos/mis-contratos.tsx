@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FirmaCaptura } from '@/components/firma/firma-captura'
+import { MisOtrosis, type OtrosiItem } from './mis-otrosis'
 import {
   firmarMiContratoOps, solicitarCodigoFirmaContrato,
   firmarMiContratoLaboral, solicitarCodigoFirmaContratoLaboral,
@@ -32,6 +33,8 @@ type ContratoItem = {
   firmadoPorMi: boolean
   fechaMiFirma: string | null
   tieneDocumento: boolean
+  /** Otrosíes del contrato laboral que se firman en la app (los OPS no tienen). */
+  otrosis?: OtrosiItem[]
 }
 
 const ESTADO: Record<string, string> = { BORRADOR: 'Borrador', ACTIVO: 'Activo', FIRMADO: 'Firmado', TERMINADO: 'Terminado' }
@@ -175,6 +178,8 @@ function ContratoCard({ c }: { c: ContratoItem }) {
             <p className="text-sm text-muted-foreground">Los documentos de este contrato aún no están disponibles. Contacta a Talento Humano.</p>
           )}
         </div>
+
+        {c.otrosis && c.otrosis.length > 0 && <MisOtrosis otrosis={c.otrosis} contratoNumero={c.numero} />}
 
         <Dialog open={abierto} onOpenChange={(o) => (o ? setAbierto(true) : reiniciar())}>
           <DialogContent className="max-h-[88vh] overflow-y-auto">

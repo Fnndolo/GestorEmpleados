@@ -40,6 +40,11 @@ export async function aplicarFirmaContratoOps(opts: {
   // Se valida ANTES de guardar la firma: si faltan las posiciones, el contratista
   // quedaría marcado como firmante de un documento que nunca se pudo producir.
   const datosSubido = esSubido ? leerDatosFirmaSubido(c.posicionFirmas) : null
+  // Si el PDF ya venía firmado por el contratante, su firma digital sobra: se
+  // estamparía una segunda firma de la empresa sobre un documento ya firmado.
+  if (opts.rol === 'CONTRATANTE' && c.firmaContratanteEnPdf) {
+    throw new ErrorNegocio('El contratante ya firmó en el documento aportado; no hace falta su firma digital.')
+  }
   const yaFirmada = opts.rol === 'CONTRATISTA' ? c.firmaContratistaPath : c.firmaContratantePath
   if (yaFirmada) throw new ErrorNegocio('Esta parte ya firmó el contrato.')
 
@@ -76,11 +81,13 @@ export async function aplicarFirmaContratoOps(opts: {
     docs.push({ tipo: 'AUTORIZACION', documentoId: r.documentoId, sha256: r.sha256 })
   }
 
-  // Si ambas partes ya firmaron, regenerar el PDF del contrato y marcar FIRMADO.
+  // Si ambas partes ya firmaron —o el contratante firmó en el PDF aportado y solo
+  // faltaba el contratista—, cerrar el documento y marcar FIRMADO.
   let firmado = false
-  if (act.firmaContratistaPath && act.firmaContratantePath) {
+  const contratanteListo = !!act.firmaContratantePath || act.firmaContratanteEnPdf
+  if (act.firmaContratistaPath && contratanteListo) {
     const [imgContratante, imgContratista] = await Promise.all([
-      leerFirmaComoDataUri(act.firmaContratantePath),
+      act.firmaContratantePath ? leerFirmaComoDataUri(act.firmaContratantePath) : Promise.resolve(null),
       leerFirmaComoDataUri(act.firmaContratistaPath),
     ])
     const r = datosSubido
@@ -140,16 +147,22 @@ export async function aplicarFirmaContratoOps(opts: {
     : null
   if (firmado) {
     // Ambas partes firmaron: contrato perfeccionado, avisar a ambos lados.
+    const enPdf = act.firmaContratanteEnPdf
+    const nombreContratista = `${contratista?.nombres ?? ''} ${contratista?.apellidos ?? ''}`.trim()
     if (contratista?.usuarioId) {
       await avisar(contratista.usuarioId, {
         titulo: 'Tu contrato quedó firmado por ambas partes',
-        mensaje: `El contrato ${c.numero} ya tiene las dos firmas. Puedes descargar el PDF firmado desde tu autoservicio.`,
+        mensaje: enPdf
+          ? `El contrato ${c.numero} ya traía la firma del representante legal y con la tuya quedó completo. Puedes descargar el PDF firmado desde tu autoservicio.`
+          : `El contrato ${c.numero} ya tiene las dos firmas. Puedes descargar el PDF firmado desde tu autoservicio.`,
         enlace: '/autoservicio/contratos', llamadoAccion: 'Ver mi contrato', evento: 'contrato_firmado',
       }).catch(() => {})
     }
     await avisarPorRol(['Administrador', 'Recursos Humanos'], {
       titulo: `Contrato ${c.numero} firmado por ambas partes`,
-      mensaje: `${contratista?.nombres ?? ''} ${contratista?.apellidos ?? ''} y el representante legal completaron las firmas del contrato ${c.numero}.`,
+      mensaje: enPdf
+        ? `${nombreContratista} firmó el contrato ${c.numero}; el documento ya traía la firma del representante legal, así que quedó completo.`
+        : `${nombreContratista} y el representante legal completaron las firmas del contrato ${c.numero}.`,
       enlace: `/contratos/ops/${c.id}`, llamadoAccion: 'Ver el contrato', evento: 'contrato_firmado',
     }).catch(() => {})
   } else if (opts.rol === 'CONTRATANTE' && contratista?.usuarioId) {

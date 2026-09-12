@@ -2,11 +2,13 @@ import Link from 'next/link'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { sedeActualId } from '@/server/sede-actual'
+import { catalogosNuevoContrato } from '@/server/contratos-catalogos'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Plus, FileText, ChevronRight, FileExclamationPoint, Receipt, ClipboardCheck } from 'lucide-react'
+import { FileText, ChevronRight, FileExclamationPoint, Receipt, ClipboardCheck } from 'lucide-react'
+import { NuevoContrato, type ClaseNuevo } from './nuevo-contrato'
 import { Chip, Pill, type PillTone } from '@/components/ui-kit'
 import { colorAvatar, iniciales } from '@/lib/etiquetas'
 import { FiltroTabs } from '@/components/shell/filtro-tabs'
@@ -45,13 +47,18 @@ const ESTADO_CONTRATO: Record<string, string> = {
 export default async function ContratosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; nuevo?: string }>
 }) {
   const usuario = await requerirPermiso('contratos', 'VER')
-  const { tab = 'TERMINO_INDEFINIDO' } = await searchParams
+  const { tab = 'TERMINO_INDEFINIDO', nuevo } = await searchParams
   const puedeCrear = tienePermiso(usuario, 'contratos', 'CREAR')
   const sede = await sedeActualId()
   const esOps = tab === 'OPS'
+
+  // El alta se llena en una ventana sobre esta lista; sus catálogos se cargan
+  // solo si la persona puede crear. `?nuevo=` la abre de entrada (enlaces viejos).
+  const catalogos = puedeCrear ? await catalogosNuevoContrato() : null
+  const abrirNuevo: ClaseNuevo | null = nuevo === 'ops' || nuevo === 'laboral' ? nuevo : null
 
   const cuentasSinSoporte = await prisma.cuentaCobroOps.count({
     where: { contratoOpsId: { not: null }, estado: { in: ['RADICADA', 'EN_VERIFICACION_SS', 'BLOQUEADA_SS'] }, soporteSs: { is: null } },
@@ -84,16 +91,7 @@ export default async function ContratosPage({
             <Button size="sm" asChild>
               <Link href="/contratos/acuerdos"><ClipboardCheck className="size-4" /> Evaluación previa</Link>
             </Button>
-            {puedeCrear && (
-              <>
-                <Button size="sm" asChild>
-                  <Link href="/contratos/ops/nuevo"><Plus className="size-4" /> OPS</Link>
-                </Button>
-                <Button size="sm" asChild>
-                  <Link href="/contratos/nuevo"><Plus className="size-4" /> Laboral</Link>
-                </Button>
-              </>
-            )}
+            {catalogos && <NuevoContrato abrirInicial={abrirNuevo} ops={catalogos.ops} laboral={catalogos.laboral} />}
           </div>
         }
       />

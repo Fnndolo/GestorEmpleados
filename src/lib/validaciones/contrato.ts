@@ -67,19 +67,6 @@ export const prorrogaSchema = z.object({
 })
 export type ProrrogaInput = z.infer<typeof prorrogaSchema>
 
-export const otrosiSchema = z.object({
-  contratoId: z.uuid(),
-  fecha: fecha,
-  tiposCambio: z.array(z.enum(['SALARIO', 'CARGO', 'SEDE', 'MODALIDAD_TRABAJO', 'JORNADA', 'FUNCIONES', 'DURACION', 'OTRO'])).min(1, 'Indica al menos un cambio'),
-  descripcion: z.string().trim().min(3).max(1000),
-  salarioNuevo: z.coerce.number().min(0).optional(),
-  cargoNuevoId: uuidOpc,
-  sedeNuevaId: uuidOpc,
-  modalidadNueva: z.enum(['PRESENCIAL', 'REMOTO', 'HIBRIDO']).optional().or(z.literal('')),
-  fechaFinNueva: fechaOpc,
-})
-export type OtrosiInput = z.infer<typeof otrosiSchema>
-
 export const suspensionSchema = z.object({
   contratoId: z.uuid(),
   fechaInicio: fecha,
@@ -176,6 +163,40 @@ export const posicionFirmaSchema = z.object({
 export type PosicionFirmaInput = z.infer<typeof posicionFirmaSchema>
 
 /**
+ * Otrosí de un contrato laboral. No lleva descripción libre: lo que cambia se
+ * declara con los tipos y sus campos, y el documento es el PDF que se sube, que
+ * el trabajador firma desde su autoservicio con la misma lógica del contrato.
+ * Va después de `posicionFirmaSchema` porque lo usa.
+ */
+export const otrosiSchema = z
+  .object({
+    contratoId: z.uuid(),
+    // Ya no se pide en pantalla: si no viene, el servidor toma el inicio del
+    // nuevo periodo (cuando cambia la duración) o la fecha de hoy.
+    fecha: fechaOpc,
+    tiposCambio: z.array(z.enum(['SALARIO', 'CARGO', 'SEDE', 'MODALIDAD_TRABAJO', 'JORNADA', 'FUNCIONES', 'DURACION', 'OTRO'])).min(1, 'Indica al menos un cambio'),
+    salarioNuevo: z.coerce.number().min(0).optional(),
+    cargoNuevoId: uuidOpc,
+    sedeNuevaId: uuidOpc,
+    modalidadNueva: z.enum(['PRESENCIAL', 'REMOTO', 'HIBRIDO']).optional().or(z.literal('')),
+    // Duración: el nuevo periodo pactado, de inicio a fin.
+    fechaInicioNueva: fechaOpc,
+    fechaFinNueva: fechaOpc,
+    pdfBase64: z.string().min(1, 'Adjunta el PDF del otrosí').startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
+    // Dónde firma el trabajador dentro del PDF.
+    posicionFirma: posicionFirmaSchema,
+  })
+  .superRefine((d, ctx) => {
+    if (!d.tiposCambio.includes('DURACION')) return
+    if (!d.fechaInicioNueva || !d.fechaFinNueva) {
+      ctx.addIssue({ code: 'custom', path: ['fechaFinNueva'], message: 'Indica la fecha de inicio y la de fin del nuevo periodo' })
+    } else if (d.fechaFinNueva < d.fechaInicioNueva) {
+      ctx.addIssue({ code: 'custom', path: ['fechaFinNueva'], message: 'La fecha de fin debe ser igual o posterior a la de inicio' })
+    }
+  })
+export type OtrosiInput = z.infer<typeof otrosiSchema>
+
+/**
  * Subir el PDF de un contrato OPS que se firmará DENTRO de la app.
  *
  * Distinto de `subirContratoOpsSchema`: aquel da de alta un contrato que ya
@@ -202,12 +223,32 @@ export const subirContratoOpsParaFirmaSchema = contratoOpsSchema
     // pedirle la firma, así que aquí el colaborador SÍ es obligatorio.
     colaboradorId: z.uuid('Selecciona al contratista que va a firmar'),
     posicionContratista: posicionFirmaSchema,
-    posicionContratante: posicionFirmaSchema,
+    // Puede faltar cuando el PDF ya viene firmado por el contratante.
+    posicionContratante: posicionFirmaSchema.optional(),
+    // El representante legal ya firmó en el PDF aportado: no se le pide firma
+    // digital y el contrato queda firmado con la sola firma del contratista.
+    contratanteFirmoEnPdf: z.boolean().optional(),
     // La autorización de datos (Ley 1581) la sigue generando la app desde su
-    // plantilla: no depende del PDF subido y solo la firma el contratista.
+    // plantilla y la firma el contratista con el contrato; `false` la omite
+    // (ya se recogió aparte).
     generarAutorizacion: z.boolean().optional(),
   })
 export type SubirContratoOpsParaFirmaInput = z.infer<typeof subirContratoOpsParaFirmaSchema>
+
+/**
+ * Subir el PDF de un contrato LABORAL que se firmará DENTRO de la app: espejo de
+ * `subirContratoOpsParaFirmaSchema`. Los datos estructurados son los mismos del
+ * alta de un contrato ya firmado (nómina y alertas los necesitan), más dónde va
+ * cada firma en el PDF y qué hacer con la autorización de datos.
+ */
+export const subirContratoLaboralParaFirmaSchema = subirContratoLaboralSchema.extend({
+  posicionEmpleado: posicionFirmaSchema,
+  // Puede faltar cuando el PDF ya viene firmado por el empleador.
+  posicionEmpleador: posicionFirmaSchema.optional(),
+  empleadorFirmoEnPdf: z.boolean().optional(),
+  generarAutorizacion: z.boolean().optional(),
+})
+export type SubirContratoLaboralParaFirmaInput = z.infer<typeof subirContratoLaboralParaFirmaSchema>
 
 /**
  * Pasar al flujo de firma un contrato OPS que se cargó como «ya firmado en
@@ -219,7 +260,9 @@ export type SubirContratoOpsParaFirmaInput = z.infer<typeof subirContratoOpsPara
 export const habilitarFirmaOpsSchema = z.object({
   contratoId: z.uuid(),
   posicionContratista: posicionFirmaSchema,
-  posicionContratante: posicionFirmaSchema,
+  // Puede faltar cuando el PDF ya viene firmado por el contratante.
+  posicionContratante: posicionFirmaSchema.optional(),
+  contratanteFirmoEnPdf: z.boolean().optional(),
 })
 export type HabilitarFirmaOpsInput = z.infer<typeof habilitarFirmaOpsSchema>
 

@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { aplicarFirmaContratoOps } from '@/server/contratos-ops-firma'
 import { aplicarFirmaContratoLaboral } from '@/server/contratos-laboral-firma'
+import { aplicarFirmaOtrosi } from '@/server/otrosi-firma'
 import { generarYEnviarCodigoFirma, verificarCodigoFirma } from '@/server/firma/codigo-firma'
 import { avisarPorRol } from '@/server/notificaciones/avisar'
 
@@ -164,5 +165,70 @@ export const firmarMiContratoLaboral = accion(
     revalidatePath('/autoservicio/contratos')
     revalidatePath(`/contratos/${d.contratoId}`)
     return { ok: true, firmado }
+  },
+)
+
+/** Confirma que el otrosí existe y pertenece a un contrato a nombre del usuario en sesión. */
+async function otrosiPropioOFalla(otrosiId: string, colaboradorId: string | null): Promise<void> {
+  if (!colaboradorId) throw new ErrorNegocio('Tu usuario no está vinculado a una ficha de colaborador.')
+  const o = await prisma.otrosiContrato.findUnique({
+    where: { id: otrosiId },
+    select: { contrato: { select: { colaboradorId: true } } },
+  })
+  if (!o || o.contrato.colaboradorId !== colaboradorId) throw new ErrorNegocio('Este otrosí no es de un contrato a tu nombre.')
+}
+
+/** Envía a mi correo el código de 6 dígitos para autorizar la firma de un otrosí de MI contrato. */
+export const solicitarCodigoFirmaOtrosi = accion(
+  {
+    modulo: 'autoservicio',
+    accion: 'CREAR',
+    schema: z.object({ otrosiId: z.uuid() }),
+  },
+  async (d, usuario) => {
+    await otrosiPropioOFalla(d.otrosiId, usuario.colaboradorId)
+    const { email, vigenciaMin } = await generarYEnviarCodigoFirma({
+      proposito: 'FIRMA_OTROSI',
+      referenciaId: d.otrosiId,
+      userId: usuario.id,
+      email: usuario.email,
+    })
+    return { ok: true, email, vigenciaMin }
+  },
+)
+
+/**
+ * El trabajador firma un otrosí de SU contrato desde el autoservicio, con la
+ * misma lógica del contrato: código al correo y firma dibujada, que se estampa
+ * sobre el PDF que subió Talento Humano. El aviso a administración lo da
+ * `aplicarFirmaOtrosi`.
+ */
+export const firmarMiOtrosi = accion(
+  {
+    modulo: 'autoservicio',
+    accion: 'CREAR',
+    schema: z.object({
+      otrosiId: z.uuid(),
+      firmaDataUri: z.string().min(1).startsWith('data:image/', 'Firma inválida'),
+      codigo: z.string().regex(/^\d{6}$/, 'El código debe tener 6 dígitos.'),
+    }),
+  },
+  async (d, usuario) => {
+    await otrosiPropioOFalla(d.otrosiId, usuario.colaboradorId)
+    await verificarCodigoFirma({
+      proposito: 'FIRMA_OTROSI',
+      referenciaId: d.otrosiId,
+      userId: usuario.id,
+      codigo: d.codigo,
+    })
+    const r = await aplicarFirmaOtrosi({
+      otrosiId: d.otrosiId,
+      firmaDataUri: d.firmaDataUri,
+      usuarioId: usuario.id,
+      metodoAuth: 'CODIGO_EMAIL',
+    })
+    revalidatePath('/autoservicio/contratos')
+    revalidatePath(`/contratos/${r.contratoId}`)
+    return { ok: true, numero: r.numero }
   },
 )

@@ -3,15 +3,19 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Upload, Save } from 'lucide-react'
+import { Upload, Save, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
-import { SelectorFirmasPdf, type Posicion } from './selector-firmas-pdf'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
+import { SelectorFirmasPdf, type Posicion } from '@/components/contratos/selector-firmas-pdf'
+import { GenerarAutorizacion } from '@/components/contratos/generar-autorizacion'
+import { leerComoDataUri } from '@/lib/archivos'
 import { analizarPdfContratoOps, subirContratoOpsParaFirma } from '../../ops-acciones'
 
 /**
@@ -44,6 +48,8 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
   const [analizando, setAnalizando] = useState(false)
 
   const [pdf, setPdf] = useState<string | null>(null)
+  // El mismo archivo, sin codificar: el visor lo muestra desde el navegador.
+  const [archivoPdf, setArchivoPdf] = useState<File | null>(null)
   // Cambia con cada PDF elegido: remonta el selector para que vuelva a la página
   // propuesta en vez de quedarse en la que se estaba mirando del archivo anterior.
   const [version, setVersion] = useState(0)
@@ -54,6 +60,11 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
     contratista: { ...POR_DEFECTO, pagina: 1 },
     contratante: { ...POR_DEFECTO, pagina: 1 },
   })
+  // El PDF ya viene firmado por el representante legal: solo firma el contratista.
+  const [contratanteFirmo, setContratanteFirmo] = useState(false)
+  // La autorización de datos (Ley 1581) la arma la app y la firma el contratista
+  // con el contrato. No siempre hace falta: a veces ya se recogió aparte.
+  const [generarAutorizacion, setGenerarAutorizacion] = useState(true)
 
   const [f, setF] = useState({
     colaboradorId: '', numero: '', cargoId: '', cargoObjeto: '', sedeId: '',
@@ -64,13 +75,9 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
 
   async function alElegirPdf(archivo: File) {
     if (archivo.type !== 'application/pdf') { toast.error('El archivo debe ser un PDF.'); return }
-    const dataUri = await new Promise<string>((res, rej) => {
-      const r = new FileReader()
-      r.onload = () => res(String(r.result))
-      r.onerror = () => rej(new Error('No se pudo leer el archivo'))
-      r.readAsDataURL(archivo)
-    })
+    const dataUri = await leerComoDataUri(archivo)
     setPdf(dataUri)
+    setArchivoPdf(archivo)
     setNombrePdf(archivo.name)
 
     // La app propone dónde firma cada parte; si el PDF es un escaneo no habrá
@@ -113,68 +120,69 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
         ciudad: f.ciudad,
         fechaSuscripcion: f.fechaSuscripcion,
         posicionContratista: posiciones.contratista,
-        posicionContratante: posiciones.contratante,
+        posicionContratante: contratanteFirmo ? undefined : posiciones.contratante,
+        contratanteFirmoEnPdf: contratanteFirmo,
+        generarAutorizacion,
       })
       if (!res.ok) { toast.error(res.error ?? 'No se pudo subir el contrato.'); return }
-      toast.success('Contrato subido. El contratista ya puede firmarlo desde su autoservicio.')
+      toast.success(contratanteFirmo
+        ? 'Contrato subido. Con la firma del contratista desde su autoservicio quedará completo.'
+        : 'Contrato subido. El contratista ya puede firmarlo desde su autoservicio.')
       router.push(`/contratos/ops/${(res.datos as { id: string }).id}`)
     })
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    /* Una sola columna: datos, luego el PDF con la posición de las firmas, y el
+       botón al final. Se abre en una ventana emergente; a dos columnas la mitad
+       derecha quedaba casi vacía hasta que se elegía el archivo. */
+    <Card><CardContent className="space-y-4 py-4">
       {/* ── Datos del contrato ── */}
-      <Card><CardContent className="space-y-4 py-4">
+      <div className="space-y-1.5">
+        <Label>Contratista (quien va a firmar)</Label>
+        <SelectorColaborador
+          value={f.colaboradorId}
+          onChange={(id) => set('colaboradorId', id)}
+          placeholder="Busca por nombre o documento…"
+        />
+        <p className="text-[11px] text-muted-foreground">Necesita usuario de acceso: firma desde su autoservicio.</p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label>Contratista (quien va a firmar)</Label>
-          <SelectorColaborador
-            value={f.colaboradorId}
-            onChange={(id) => set('colaboradorId', id)}
-            placeholder="Busca por nombre o documento…"
-          />
-          <p className="text-[11px] text-muted-foreground">Necesita usuario de acceso: firma desde su autoservicio.</p>
+          <Label>Sede</Label>
+          <Select value={f.sedeId} onValueChange={(v) => set('sedeId', v)}>
+            <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+            <SelectContent>{sedes.map((s) => <SelectItem key={s.id} value={s.id}>{s.nombre} · {s.ciudad}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label>Sede</Label>
-            <Select value={f.sedeId} onValueChange={(v) => set('sedeId', v)}>
-              <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
-              <SelectContent>{sedes.map((s) => <SelectItem key={s.id} value={s.id}>{s.nombre} · {s.ciudad}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Cargo (opcional)</Label>
-            <Select value={f.cargoId} onValueChange={(v) => { set('cargoId', v); const c = cargos.find((x) => x.id === v); if (c) set('cargoObjeto', c.nombre) }}>
-              <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
-              <SelectContent>{cargos.map((c) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Rol en el contrato</Label>
-            <Input value={f.cargoObjeto} onChange={(e) => set('cargoObjeto', e.target.value)} placeholder="p. ej. auxiliar contable" />
-            <p className="text-[11px] text-muted-foreground">De aquí sale el resumen que se ve en los listados.</p>
-          </div>
-          <div className="space-y-1.5"><Label>Fecha de inicio</Label><Input type="date" value={f.fechaInicio} onChange={(e) => set('fechaInicio', e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Fecha de fin</Label><Input type="date" value={f.fechaFin} onChange={(e) => set('fechaFin', e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Valor total</Label><Input type="number" min={0} value={f.valorTotal} onChange={(e) => set('valorTotal', e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Honorario mensual (opcional)</Label><Input type="number" min={0} value={f.valorMensual} onChange={(e) => set('valorMensual', e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Número (opcional)</Label><Input value={f.numero} onChange={(e) => set('numero', e.target.value)} placeholder="Se asigna solo" /></div>
-          <div className="space-y-1.5"><Label>RUT (opcional)</Label><Input value={f.rut} onChange={(e) => set('rut', e.target.value)} /></div>
-          <div className="space-y-1.5">
-            <Label>Supervisor (opcional)</Label>
-            <SelectorColaborador value={f.supervisorId} onChange={(id) => set('supervisorId', id)} placeholder="Selecciona…" />
-          </div>
-          <div className="space-y-1.5"><Label>Ciudad (opcional)</Label><Input value={f.ciudad} onChange={(e) => set('ciudad', e.target.value)} placeholder="Pasto, Nariño" /></div>
+        <div className="space-y-1.5">
+          <Label>Cargo (opcional)</Label>
+          <Select value={f.cargoId} onValueChange={(v) => { set('cargoId', v); const c = cargos.find((x) => x.id === v); if (c) set('cargoObjeto', c.nombre) }}>
+            <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+            <SelectContent>{cargos.map((c) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
-
-        <Button onClick={guardar} disabled={guardando || !pdf} className="w-full">
-          {guardando ? <Spinner className="size-4" /> : <Save className="size-4" />} Subir y enviar a firma
-        </Button>
-      </CardContent></Card>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label>Rol en el contrato</Label>
+          <Input value={f.cargoObjeto} onChange={(e) => set('cargoObjeto', e.target.value)} placeholder="p. ej. auxiliar contable" />
+          <p className="text-[11px] text-muted-foreground">De aquí sale el resumen que se ve en los listados.</p>
+        </div>
+        <div className="space-y-1.5"><Label>Fecha de inicio</Label><Input type="date" value={f.fechaInicio} onChange={(e) => set('fechaInicio', e.target.value)} /></div>
+        <div className="space-y-1.5"><Label>Fecha de fin</Label><Input type="date" value={f.fechaFin} onChange={(e) => set('fechaFin', e.target.value)} /></div>
+        <div className="space-y-1.5"><Label>Valor total</Label><Input type="number" min={0} value={f.valorTotal} onChange={(e) => set('valorTotal', e.target.value)} /></div>
+        <div className="space-y-1.5"><Label>Honorario mensual (opcional)</Label><Input type="number" min={0} value={f.valorMensual} onChange={(e) => set('valorMensual', e.target.value)} /></div>
+        <div className="space-y-1.5"><Label>Número (opcional)</Label><Input value={f.numero} onChange={(e) => set('numero', e.target.value)} placeholder="Se asigna solo" /></div>
+        <div className="space-y-1.5"><Label>RUT (opcional)</Label><Input value={f.rut} onChange={(e) => set('rut', e.target.value)} /></div>
+        <div className="space-y-1.5">
+          <Label>Supervisor (opcional)</Label>
+          <SelectorColaborador value={f.supervisorId} onChange={(id) => set('supervisorId', id)} placeholder="Selecciona…" />
+        </div>
+        <div className="space-y-1.5"><Label>Ciudad (opcional)</Label><Input value={f.ciudad} onChange={(e) => set('ciudad', e.target.value)} placeholder="Pasto, Nariño" /></div>
+      </div>
 
       {/* ── PDF y posición de las firmas ── */}
-      <Card><CardContent className="space-y-3 py-4">
+      <div className="space-y-3 border-t pt-4">
         <div className="space-y-1.5">
           <Label>PDF del contrato</Label>
           <Input
@@ -182,8 +190,42 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
             accept="application/pdf"
             onChange={(e) => { const a = e.target.files?.[0]; if (a) alElegirPdf(a) }}
           />
-          {nombrePdf && <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Upload className="size-3.5" /> {nombrePdf}</p>}
+          {archivoPdf && (
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="flex min-w-0 items-center gap-1.5"><Upload className="size-3.5 shrink-0" /> <span className="truncate">{nombrePdf}</span></span>
+              {/* Mirarlo entero antes de enviarlo: el selector de firmas muestra una página a la vez. */}
+              <VisorPdf archivo={archivoPdf} titulo={nombrePdf} className="flex items-center gap-1 font-medium text-primary hover:underline">
+                <Eye className="size-3.5" /> Ver PDF
+              </VisorPdf>
+            </p>
+          )}
         </div>
+
+        {/* A veces el PDF llega ya firmado por el representante legal: entonces solo
+            se ubica la firma del contratista y con ella el contrato queda completo. */}
+        <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+          <Checkbox checked={contratanteFirmo} onCheckedChange={(v) => setContratanteFirmo(v === true)} className="mt-0.5" />
+          <span>
+            <span className="font-medium">El PDF ya viene firmado por el contratante</span>
+            <span className="block text-xs text-muted-foreground">
+              Solo se le pedirá la firma al contratista; con ella el contrato queda firmado. No se estampa otra firma de la empresa.
+            </span>
+          </span>
+        </label>
+
+        <GenerarAutorizacion
+          generar={generarAutorizacion}
+          onGenerar={setGenerarAutorizacion}
+          firmante="el contratista"
+          vistaPreviaUrl={f.colaboradorId
+            ? `/api/contratos/autorizacion-datos?${new URLSearchParams({
+                colaboradorId: f.colaboradorId, vinculo: 'OPS',
+                ...(f.cargoObjeto ? { cargo: f.cargoObjeto } : {}),
+                ...(f.ciudad ? { ciudad: f.ciudad } : {}),
+                ...(f.fechaSuscripcion ? { fecha: f.fechaSuscripcion } : {}),
+              })}`
+            : null}
+        />
 
         {analizando && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner className="size-4" /> Leyendo el PDF para proponer dónde va cada firma…</p>}
 
@@ -196,9 +238,20 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
         )}
 
         {pdf && !analizando && (
-          <SelectorFirmasPdf key={version} pdfDataUri={pdf} paginas={paginas} valor={posiciones} onChange={setPosiciones} />
+          <SelectorFirmasPdf
+            key={version}
+            pdfDataUri={pdf}
+            paginas={paginas}
+            valor={posiciones}
+            onChange={setPosiciones}
+            partes={contratanteFirmo ? ['contratista'] : ['contratante', 'contratista']}
+          />
         )}
-      </CardContent></Card>
-    </div>
+      </div>
+
+      <Button onClick={guardar} disabled={guardando || !pdf} className="w-full">
+        {guardando ? <Spinner className="size-4" /> : <Save className="size-4" />} Subir y enviar a firma
+      </Button>
+    </CardContent></Card>
   )
 }

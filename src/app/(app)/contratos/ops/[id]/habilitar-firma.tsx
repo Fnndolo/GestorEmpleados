@@ -6,10 +6,11 @@ import { toast } from 'sonner'
 import { PenLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { SelectorFirmasPdf, type Posicion } from '../nuevo/selector-firmas-pdf'
+import { SelectorFirmasPdf, type Posicion } from '@/components/contratos/selector-firmas-pdf'
 import { prepararFirmaContratoOps, habilitarFirmaContratoOps } from '../../ops-acciones'
 
 /**
@@ -46,6 +47,8 @@ export function HabilitarFirma({ contratoId }: { contratoId: string }) {
     contratista: { ...POR_DEFECTO, pagina: 1 },
     contratante: { ...POR_DEFECTO, pagina: 1 },
   })
+  // El PDF ya viene firmado por el representante legal: solo firma el contratista.
+  const [contratanteFirmo, setContratanteFirmo] = useState(false)
 
   async function abrir() {
     setCargando(true)
@@ -68,7 +71,8 @@ export function HabilitarFirma({ contratoId }: { contratoId: string }) {
       const res = await habilitarFirmaContratoOps({
         contratoId,
         posicionContratista: posiciones.contratista,
-        posicionContratante: posiciones.contratante,
+        posicionContratante: contratanteFirmo ? undefined : posiciones.contratante,
+        contratanteFirmoEnPdf: contratanteFirmo,
       })
       if (!res.ok) { toast.error(res.error); return }
       toast.success('Listo. El contratista ya puede firmarlo desde su autoservicio y le llegó el aviso.')
@@ -102,11 +106,22 @@ export function HabilitarFirma({ contratoId }: { contratoId: string }) {
               </p>
             )}
 
+            <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+              <Checkbox checked={contratanteFirmo} onCheckedChange={(v) => setContratanteFirmo(v === true)} className="mt-0.5" />
+              <span>
+                <span className="font-medium">El PDF ya viene firmado por el contratante</span>
+                <span className="block text-xs text-muted-foreground">
+                  Solo se ubica la firma del contratista; con ella el contrato queda firmado.
+                </span>
+              </span>
+            </label>
+
             <SelectorFirmasPdf
               pdfDataUri={datos.pdfBase64}
               paginas={datos.paginas}
               valor={posiciones}
               onChange={setPosiciones}
+              partes={contratanteFirmo ? ['contratista'] : ['contratante', 'contratista']}
             />
 
             <DialogFooter>

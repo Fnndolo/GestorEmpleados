@@ -163,6 +163,22 @@ describe('OPS · subir PDF y enviar a firma', () => {
     expect(docs.some((doc) => doc.nombre.startsWith('Autorización'))).toBe(true)
   })
 
+  it('no genera la autorización de datos si quien sube el contrato la desmarca', async () => {
+    // A veces la autorización ya se recogió firmada aparte: entonces generar
+    // otra sería pedirle al contratista que firme dos veces lo mismo.
+    actuarComo(admin)
+    const res = await subir({ generarAutorizacion: false })
+    expect(res.ok).toBe(true)
+
+    const { id } = datosDe(res)
+    const c = await prisma.contratoOps.findUniqueOrThrow({ where: { id } })
+    expect((c.contenidoPdf as { autorizacion?: unknown } | null)?.autorizacion).toBeUndefined()
+    const docs = await prisma.documento.findMany({ where: { entidadTipo: 'ContratoOps', entidadId: id } })
+    expect(docs.some((doc) => doc.nombre.startsWith('Autorización'))).toBe(false)
+    // El contrato en sí sí queda archivado.
+    expect(docs.length).toBe(1)
+  })
+
   it('estampa ambas firmas sobre el PDF aportado y marca el contrato FIRMADO', async () => {
     actuarComo(admin)
     const res = await subir()

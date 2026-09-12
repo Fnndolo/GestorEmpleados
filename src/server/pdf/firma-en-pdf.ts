@@ -98,7 +98,7 @@ function proponer(items: ItemTexto[], patron: RegExp): PosicionFirma | null {
  * Devuelve `null` en la parte que no se pudo ubicar (PDF escaneado, etiquetas
  * distintas): el llamador debe pedir que se marque a mano.
  */
-export async function ubicarFirmasEnPdf(pdf: Buffer): Promise<PosicionesFirma> {
+export async function ubicarFirmasEnPdf(pdf: Buffer, vinculo: 'OPS' | 'LABORAL' = 'OPS'): Promise<PosicionesFirma> {
   let items: ItemTexto[]
   try {
     items = await leerTextoConPosiciones(pdf)
@@ -106,10 +106,17 @@ export async function ubicarFirmasEnPdf(pdf: Buffer): Promise<PosicionesFirma> {
     // Un PDF ilegible no debe tumbar la subida: se resuelve marcando a mano.
     return { contratista: null, contratante: null }
   }
-  return {
+  // Las claves son las de OPS y se conservan para el laboral: `contratista` es
+  // quien se vincula (el trabajador) y `contratante` la empresa (el empleador).
+  // Lo que cambia es la etiqueta que cada contrato pone bajo la línea de firma.
+  const etiquetas = vinculo === 'LABORAL'
+    // "TRABAJADOR" es lo habitual en un contrato de trabajo; "EMPLEADO/A" aparece en algunos.
+    ? { persona: /\b(TRABAJADOR|TRABAJADORA|EMPLEADO|EMPLEADA)\b/i, empresa: /\bEMPLEADOR\b/i }
     // \b evita que "CONTRATANTE" satisfaga la búsqueda de "CONTRATISTA".
-    contratista: proponer(items, /\bCONTRATISTA\b/i),
-    contratante: proponer(items, /\bCONTRATANTE\b/i),
+    : { persona: /\bCONTRATISTA\b/i, empresa: /\bCONTRATANTE\b/i }
+  return {
+    contratista: proponer(items, etiquetas.persona),
+    contratante: proponer(items, etiquetas.empresa),
   }
 }
 

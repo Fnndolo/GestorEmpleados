@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
-import { FileText, TriangleAlert } from 'lucide-react'
+import { FileText, TriangleAlert, CircleCheck } from 'lucide-react'
 import { formatFechaLarga, formatFechaCorta, formatFechaISO, duracionContrato } from '@/lib/fechas'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { fmtCOP } from '@/lib/moneda'
@@ -16,6 +16,7 @@ import { TIPO_VINCULO, MODALIDAD_TRABAJO } from '@/lib/etiquetas'
 import { AccionesContrato } from './acciones-cliente'
 import { discrepanciaVinculo, type TipoContratoLaboral, type TipoVinculo } from '@/lib/vinculo-contrato'
 import { FirmasLaboral } from './firmas-laboral'
+import { resumenOtrosi, ETIQUETA_CAMBIO_OTROSI, type ValoresOtrosi, type TipoCambioOtrosi } from '@/lib/otrosi'
 
 export const metadata = { title: 'Contrato · Smart Gadgets RH' }
 
@@ -139,11 +140,22 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
           </>
         ) : (
         <>
-        <h3 className="text-sm font-medium mb-3">Documento y firmas</h3>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-medium">Documento y firmas</h3>
+          {c.origenPdf === 'SUBIDO_PARA_FIRMA' && (
+            // Distinto de «Contrato subido» (firmado en físico): este sí recoge
+            // firmas, solo que se estampan sobre el PDF aportado.
+            <Badge variant="secondary">
+              {c.firmaEmpleadorEnPdf ? 'Subido firmado por el empleador · firma el empleado en la app' : 'Subido · se firma en la app'}
+            </Badge>
+          )}
+        </div>
         <FirmasLaboral
           contratoId={c.id}
           numero={c.numero}
-          tieneDocumento={!!c.contenidoPdf}
+          // Un contrato subido para firma no tiene snapshot de plantilla: el PDF es el documento.
+          tieneDocumento={!!c.contenidoPdf || c.origenPdf === 'SUBIDO_PARA_FIRMA'}
+          subido={c.origenPdf === 'SUBIDO_PARA_FIRMA'}
           documentoId={docContrato?.id ?? null}
           autorizacionId={docAutorizacion?.id ?? null}
           puedeFirmar={puedeEditar}
@@ -151,6 +163,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
             nombre: empresaCfg?.representanteLegal ?? '',
             firmado: !!c.firmaEmpleadorPath,
             fecha: c.firmaEmpleadorFecha ? formatFechaCorta(c.firmaEmpleadorFecha) : null,
+            enPdf: c.firmaEmpleadorEnPdf,
           }}
           empleado={{
             nombre: `${c.colaborador.nombres} ${c.colaborador.apellidos}`,
@@ -224,28 +237,51 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
         </CardContent></Card>
       )}
 
-      {/* Otrosí */}
+      {/* Otrosí. Los nuevos traen el PDF que el trabajador firma en la app (misma
+          lógica que el contrato); los viejos solo tienen texto y, si acaso, un PDF
+          adjuntado a mano, que se puede seguir reemplazando. */}
       {c.otrosis.length > 0 && (
         <Card className="mb-4"><CardContent className="py-4">
           <h3 className="text-sm font-medium mb-2">Otrosí y modificaciones</h3>
-          <ul className="space-y-2">
-            {c.otrosis.map((o) => (
-              <li key={o.id} className="text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">Otrosí {o.numero}</span>
-                  <span className="flex-1 text-muted-foreground">{formatFechaCorta(o.fecha)}</span>
-                  {o.documentoId && (
-                    <VisorPdf documentoId={o.documentoId} titulo={`Otrosí ${o.numero}`} className="text-xs text-primary hover:underline">
-                      Ver PDF
-                    </VisorPdf>
+          <ul className="space-y-3">
+            {c.otrosis.map((o) => {
+              const resumen = resumenOtrosi(o.tiposCambio, o.valoresNuevos as ValoresOtrosi | null)
+              const firma = evidencias.find((e) => e.otrosiId === o.id)
+              return (
+                <li key={o.id} className="text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">Otrosí {o.numero}</span>
+                    <span className="text-muted-foreground">{formatFechaCorta(o.fecha)}</span>
+                    {o.tiposCambio.map((t) => (
+                      <Badge key={t} variant="outline">{ETIQUETA_CAMBIO_OTROSI[t as TipoCambioOtrosi] ?? t}</Badge>
+                    ))}
+                    <span className="flex-1" />
+                    {o.documentoId && (
+                      <VisorPdf documentoId={o.documentoId} titulo={`Otrosí ${o.numero}`} className="text-xs text-primary hover:underline">
+                        Ver PDF
+                      </VisorPdf>
+                    )}
+                    {puedeEditar && !o.requiereFirma && (
+                      <AdjuntarDocumento destino="otrosi" id={o.id} tieneDocumento={Boolean(o.documentoId)} etiqueta={o.documentoId ? 'Reemplazar' : 'Adjuntar PDF'} variante="ghost" />
+                    )}
+                  </div>
+                  {resumen && <p className="text-muted-foreground">{resumen}</p>}
+                  {o.descripcion && <p className="text-muted-foreground">{o.descripcion}</p>}
+                  {o.requiereFirma && (
+                    o.firmaEmpleadoPath ? (
+                      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-emerald-600">
+                        <CircleCheck className="size-3.5" /> Firmado por el trabajador
+                        {o.firmaEmpleadoFecha ? ` · ${formatFechaCorta(o.firmaEmpleadoFecha)}` : ''}
+                        {firma?.userEmail ? ` · ${firma.userEmail}` : ''}{firma?.ip ? ` · IP ${firma.ip}` : ''}
+                        {firma ? (firma.metodoAuth === 'CODIGO_EMAIL' ? ' · código al correo' : ' · sesión') : ''}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">Pendiente de firma del trabajador · firma desde su autoservicio</p>
+                    )
                   )}
-                  {puedeEditar && (
-                    <AdjuntarDocumento destino="otrosi" id={o.id} tieneDocumento={Boolean(o.documentoId)} etiqueta={o.documentoId ? 'Reemplazar' : 'Adjuntar PDF'} variante="ghost" />
-                  )}
-                </div>
-                <p className="text-muted-foreground">{o.descripcion}</p>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         </CardContent></Card>
       )}

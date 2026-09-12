@@ -61,11 +61,14 @@ export function ContratoOpsSplit({
   cargos,
   empresa,
   plantilla,
+  onCancelar,
 }: {
   sedes: { id: string; nombre: string; ciudad: string }[]
   cargos: Cargo[]
   empresa: Empresa
   plantilla: Plantilla
+  /** Qué hace «Cancelar»: en una ventana emergente, cerrarla (ver FormContrato). */
+  onCancelar?: () => void
 }) {
   const router = useRouter()
   const [guardando, setGuardando] = useState(false)
@@ -263,7 +266,9 @@ export function ContratoOpsSplit({
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       {/* Panel de edición (izquierda) */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-2.5">
+      {/* min-w-0: celda de rejilla; sin esto crece al ancho mínimo del resumen
+          en una línea de cada sección (ver FormContrato). */}
+      <form onSubmit={handleSubmit(onSubmit)} className="min-w-0 space-y-2.5">
         {/* ── Contratista: prellenado al elegir el colaborador ── */}
         <Seccion
           icono={User} color="violet" titulo="Contratista"
@@ -468,12 +473,14 @@ export function ContratoOpsSplit({
           </div>
         </Seccion>
 
-        <div className="sticky bottom-4 flex items-center justify-between gap-2 rounded-lg border bg-card p-3 shadow-sm">
+        {/* `bottom-0`: dentro de la ventana emergente, una separación deja una
+            franja por la que asoma el contenido que pasa por debajo. */}
+        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card p-3 shadow-sm">
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input type="checkbox" {...register('generarPdf')} className="size-4" /> Generar PDF al crear
           </label>
-          <div className="flex gap-2">
-            <Button type="button" variant="ghost" onClick={() => router.back()}>Cancelar</Button>
+          <div className="ml-auto flex gap-2">
+            <Button type="button" variant="ghost" onClick={onCancelar ?? (() => router.back())}>Cancelar</Button>
             <Button type="submit" disabled={guardando}>{guardando ? <Spinner /> : <Save className="size-4" />} Crear OPS</Button>
           </div>
         </div>

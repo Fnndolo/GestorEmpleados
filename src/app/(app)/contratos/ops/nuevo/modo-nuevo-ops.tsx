@@ -5,6 +5,7 @@ import { FileText, Upload } from 'lucide-react'
 import { ContratoOpsSplit } from './form-ops'
 import { ContratoOpsSubido } from './form-ops-subido'
 import type { FuncionesCargo } from '@/lib/contrato-variables'
+import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 
 /**
  * Los dos caminos para crear un contrato OPS nuevo.
@@ -24,6 +25,8 @@ type Props = {
   cargos: { id: string; nombre: string; funciones: FuncionesCargo | null }[]
   empresa: React.ComponentProps<typeof ContratoOpsSplit>['empresa']
   plantilla: React.ComponentProps<typeof ContratoOpsSplit>['plantilla']
+  /** Qué hace «Cancelar» en el camino de plantilla (el de subir PDF no lo tiene). */
+  onCancelar?: () => void
 }
 
 type Modo = 'plantilla' | 'subir'
@@ -33,8 +36,11 @@ const OPCIONES: { valor: Modo; titulo: string; detalle: string; icono: typeof Fi
   { valor: 'subir', titulo: 'Subir el PDF', detalle: 'El contrato ya está redactado por fuera; se firma igual en la app.', icono: Upload },
 ]
 
-export function ModoNuevoOps({ sedes, cargos, empresa, plantilla }: Props) {
-  const [modo, setModo] = useState<Modo>('plantilla')
+export function ModoNuevoOps({ sedes, cargos, empresa, plantilla, onCancelar }: Props) {
+  const [modo, setModo] = useState<Modo>(GENERAR_CONTRATOS_DESDE_PLANTILLA ? 'plantilla' : 'subir')
+
+  // Sin plantillas solo queda un camino: se muestra directo, sin selector.
+  if (!GENERAR_CONTRATOS_DESDE_PLANTILLA) return <ContratoOpsSubido sedes={sedes} cargos={cargos} />
 
   return (
     <div className="space-y-4">
@@ -62,7 +68,7 @@ export function ModoNuevoOps({ sedes, cargos, empresa, plantilla }: Props) {
       </div>
 
       {modo === 'plantilla' ? (
-        <ContratoOpsSplit sedes={sedes} cargos={cargos} empresa={empresa} plantilla={plantilla} />
+        <ContratoOpsSplit sedes={sedes} cargos={cargos} empresa={empresa} plantilla={plantilla} onCancelar={onCancelar} />
       ) : (
         <ContratoOpsSubido sedes={sedes} cargos={cargos} />
       )}

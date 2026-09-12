@@ -17,12 +17,26 @@ import { cn } from '@/lib/utils'
  */
 export function VisorPdf({
   documentoId,
+  url: urlPropia,
+  archivo,
   titulo,
   className,
   children,
   mimeType,
 }: {
-  documentoId: string
+  /** Documento guardado (se sirve por /api/documentos/:id). */
+  documentoId?: string
+  /**
+   * O bien una URL cualquiera que devuelva el PDF: las muestras de Ajustes →
+   * Plantillas de documentos no son documentos guardados.
+   */
+  url?: string
+  /**
+   * O bien un archivo que la persona acaba de elegir y todavía no ha subido:
+   * poder mirarlo antes de enviarlo evita subir el PDF equivocado. Se sirve
+   * desde el propio navegador (URL de objeto), que se libera al cerrar.
+   */
+  archivo?: Blob
   titulo: string
   className?: string
   children: ReactNode
@@ -35,13 +49,27 @@ export function VisorPdf({
 }) {
   const [abierto, setAbierto] = useState(false)
   const [amplio, setAmplio] = useState(false)
-  const url = `/api/documentos/${documentoId}`
+  // URL de objeto del archivo local: se crea al abrir y se libera al cerrar,
+  // que es lo que dura la ventana. Un archivo distinto la vuelve a crear.
+  const [urlArchivo, setUrlArchivo] = useState<string | null>(null)
+  const url = archivo ? (urlArchivo ?? '') : (urlPropia ?? `/api/documentos/${documentoId ?? ''}`)
+  // La URL de una muestra ya trae parámetros: el de descarga se suma, no se pisa.
+  // Una URL de objeto no admite parámetros: ahí descarga el atributo `download`.
+  const urlDescarga = archivo ? url : `${url}${url.includes('?') ? '&' : '?'}descargar=1`
+  const nombreDescarga = archivo && 'name' in archivo ? (archivo as File).name : 'documento.pdf'
   // Pantalla táctil o angosta → el iframe no muestra PDFs: usar pdf.js.
   // Se evalúa al abrir (evento de usuario), no en un efecto.
   const [movil, setMovil] = useState(false)
   const alAbrir = () => {
     setMovil(window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768)
+    if (archivo) setUrlArchivo(URL.createObjectURL(archivo))
     setAbierto(true)
+  }
+  const alCambiar = (v: boolean) => {
+    setAbierto(v)
+    if (v) return
+    setAmplio(false)
+    if (urlArchivo) { URL.revokeObjectURL(urlArchivo); setUrlArchivo(null) }
   }
 
   return (
@@ -49,7 +77,7 @@ export function VisorPdf({
       <button type="button" onClick={alAbrir} className={className}>
         {children}
       </button>
-      <Dialog open={abierto} onOpenChange={(v) => { setAbierto(v); if (!v) setAmplio(false) }}>
+      <Dialog open={abierto} onOpenChange={alCambiar}>
         <DialogContent
           className={cn(
             'flex flex-col gap-2 p-3 transition-all sm:p-4',
@@ -62,7 +90,7 @@ export function VisorPdf({
               {amplio ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
             </Button>
             <Button type="button" size="icon" variant="ghost" className="size-7" asChild title="Descargar">
-              <a href={`${url}?descargar=1`}><Download className="size-4" /></a>
+              <a href={urlDescarga} download={archivo ? nombreDescarga : undefined}><Download className="size-4" /></a>
             </Button>
             <Button type="button" size="icon" variant="ghost" className="size-7" asChild title="Abrir en otra pestaña">
               <a href={url} target="_blank" rel="noopener noreferrer"><ExternalLink className="size-4" /></a>

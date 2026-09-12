@@ -6,13 +6,14 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { z } from 'zod'
 import { toast } from 'sonner'
-import { Save, Plus, Trash2, ChevronDown, ChevronRight, ArrowUp, ArrowDown, GripVertical, User, Coins, CalendarClock, FileText, PencilLine, Eye } from 'lucide-react'
+import { Save, Plus, Trash2, ChevronDown, ChevronRight, ArrowUp, ArrowDown, GripVertical, User, Coins, CalendarClock, FileText, PencilLine, Eye, Upload } from 'lucide-react'
 import { renumerarTitulo } from '@/lib/ordinales'
 import { cn } from '@/lib/utils'
 import { contratoSchema, type ContratoInput } from '@/lib/validaciones/contrato'
 
 type ContratoFormValues = z.input<typeof contratoSchema>
-import { crearContrato, actualizarContratoLaboral, datosColaboradorContrato } from './acciones'
+import { crearContrato, actualizarContratoLaboral, datosColaboradorContrato, subirContratoExistente } from './acciones'
+import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import { PreviewLaboral } from './nuevo/preview-laboral'
 import { EditorFunciones } from '@/components/contratos/editor-funciones'
 import { Seccion, type EstadoSeccion } from '@/components/contratos/seccion-acordeon'
@@ -20,6 +21,7 @@ import { plantillaGenericaLaboral } from '@/lib/contrato-plantilla-generica'
 import type { ClausulaPlantilla, FuncionesCargo, DatosContrato } from '@/lib/contrato-variables'
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
 import { Button } from '@/components/ui/button'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -61,6 +63,22 @@ type DatosColab = { nombre: string; cc: string; ccLugar: string | null; direccio
 
 const fmtCOP = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
 
+// Modo "solo PDF": el archivo viaja como data URI dentro de la Server Action
+// (base64: +33 %) y el cuerpo admite 4 MB, así que el tope útil son 3 MB entre
+// el contrato y la autorización (mismo criterio que «Subir contrato existente»).
+const MAX_PDF_BYTES = 3 * 1024 * 1024
+const INPUT_ARCHIVO =
+  'block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90'
+
+function leerComoDataUri(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('lectura'))
+    reader.readAsDataURL(file)
+  })
+}
+
 const TIPOS = [
   { v: 'TERMINO_INDEFINIDO', l: 'Término indefinido' },
   { v: 'TERMINO_FIJO', l: 'Término fijo' },
@@ -91,18 +109,31 @@ export function FormContrato({
   plantillas = [],
   empresa,
   inicial,
+  onCancelar,
 }: {
   catalogos: Cat
   plantillas?: PlantillaTipo[]
   empresa?: EmpresaPreview
   /** Modo edición: contrato existente (sin firmas) precargado; guarda con actualizarContratoLaboral. */
   inicial?: InicialContrato
+  /**
+   * Qué hace «Cancelar». En una ventana emergente debe cerrarla: volver atrás en
+   * el historial sacaría de la lista entera, porque abrirla no navegó. Sin esto,
+   * el formulario está en su propia página y volver atrás es lo correcto.
+   */
+  onCancelar?: () => void
 }) {
   const router = useRouter()
   const editando = Boolean(inicial)
   const [guardando, setGuardando] = useState(false)
   const [nombreColab, setNombreColab] = useState(inicial?.colaboradorNombre ?? '')
   const [datosColab, setDatosColab] = useState<DatosColab | null>(null)
+  // Sin plantillas, el contrato nuevo entra con su PDF ya redactado y firmado en
+  // físico (mismo camino que «Subir contrato existente» de la ficha): la sección
+  // de documento, la vista previa y "generar PDF" no aplican.
+  const modoSubir = !GENERAR_CONTRATOS_DESDE_PLANTILLA && !editando
+  const [pdf, setPdf] = useState<File | null>(null)
+  const [autorizacionPdf, setAutorizacionPdf] = useState<File | null>(null)
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ContratoFormValues, unknown, ContratoInput>({
     resolver: zodResolver(contratoSchema),
     defaultValues: {
@@ -133,7 +164,7 @@ export function FormContrato({
   const [dragKey, setDragKey] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
   // Paneles del acordeón: los tres de datos abiertos; el Documento (plantilla) colapsado.
-  const [panel, setPanel] = useState<Set<string>>(new Set(['identificacion', 'remuneracion', 'jornada']))
+  const [panel, setPanel] = useState<Set<string>>(new Set(['identificacion', 'remuneracion', 'jornada', 'pdf']))
   const togglePanel = (id: string) => setPanel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   // Móvil: alterna entre editar y ver el documento (en xl se muestran ambos).
   const [vistaMovil, setVistaMovil] = useState<'editar' | 'preview'>('editar')
@@ -160,12 +191,13 @@ export function FormContrato({
   const colaboradorId = watch('colaboradorId')
   useEffect(() => {
     let cancelado = false
-    if (!colaboradorId) { setDatosColab(null); return }
+    // Solo alimenta la vista previa: sin ella no hay nada que consultar.
+    if (!colaboradorId || modoSubir) { setDatosColab(null); return }
     datosColaboradorContrato({ colaboradorId }).then((res) => {
       if (!cancelado && res.ok) setDatosColab(res.datos as DatosColab)
     })
     return () => { cancelado = true }
-  }, [colaboradorId])
+  }, [colaboradorId, modoSubir])
 
   // Al elegir cargo se cargan sus funciones (editables solo para este contrato).
   function aplicarCargo(cargoId: string) {
@@ -216,7 +248,43 @@ export function FormContrato({
     setSecOpen((s) => new Set(s).add('clausulas'))
   }
 
+  /**
+   * Modo "solo PDF": registra los datos y adjunta el contrato ya firmado, por la
+   * misma acción que usa «Subir contrato existente» en la ficha del colaborador.
+   */
+  async function subirConPdf(d: ContratoInput) {
+    if (!pdf) { toast.error('Adjunta el PDF del contrato.'); setPanel((s) => new Set(s).add('pdf')); return }
+    const pesoTotal = pdf.size + (autorizacionPdf?.size ?? 0)
+    if (pesoTotal > MAX_PDF_BYTES) {
+      toast.error(`Los PDF suman ${(pesoTotal / 1024 / 1024).toFixed(1)} MB y el máximo son 3 MB en total. Comprímelos o escanéalos a menor resolución.`)
+      return
+    }
+    setGuardando(true)
+    let pdfBase64: string
+    let autorizacionBase64 = ''
+    try {
+      pdfBase64 = await leerComoDataUri(pdf)
+      if (autorizacionPdf) autorizacionBase64 = await leerComoDataUri(autorizacionPdf)
+    } catch {
+      setGuardando(false); toast.error('No se pudo leer el PDF.'); return
+    }
+    // La acción valida con su propio esquema: las claves del documento de plantilla
+    // (título, cláusulas…) que trae `d` se descartan.
+    const res = await subirContratoExistente({ ...d, pdfBase64, autorizacionBase64 })
+    setGuardando(false)
+    if (res.ok) {
+      toast.success('Contrato registrado con su PDF.')
+      const datos = res.datos as { id: string; vinculoAjustado?: AjusteVinculo; reactivado?: Reactivacion | null }
+      for (const aviso of [avisoReactivacion(datos.reactivado), avisoVinculoAjustado(datos.vinculoAjustado)]) {
+        if (aviso) toast.info(aviso, { duration: 8000 })
+      }
+      router.push(`/contratos/${datos.id}`)
+      router.refresh()
+    } else toast.error(res.error)
+  }
+
   async function onSubmit(d: ContratoInput) {
+    if (modoSubir) { await subirConPdf(d); return }
     setGuardando(true)
     const payload = {
       ...d,
@@ -313,8 +381,9 @@ export function FormContrato({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-2">
-    {/* Pestañas Editar / Vista previa — solo en pantallas menores a xl */}
+    <div className={cn('grid gap-6', modoSubir ? 'max-w-3xl' : 'xl:grid-cols-2')}>
+    {/* Pestañas Editar / Vista previa — solo en pantallas menores a xl (y solo con vista previa) */}
+    {!modoSubir && (
     <div className="flex gap-1.5 rounded-lg border bg-muted/40 p-1 xl:hidden">
       <button type="button" onClick={() => setVistaMovil('editar')} className={cn('flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-sm font-medium', vistaMovil === 'editar' ? 'bg-card shadow-sm' : 'text-muted-foreground')}>
         <PencilLine className="size-4" /> Editar
@@ -323,8 +392,13 @@ export function FormContrato({
         <Eye className="size-4" /> Vista previa
       </button>
     </div>
+    )}
 
-    <form onSubmit={handleSubmit(onSubmit)} className={cn('space-y-2.5 self-start', vistaMovil === 'preview' && 'hidden xl:block')}>
+    {/* min-w-0: el formulario es celda de una rejilla y, sin esto, crece hasta el
+        ancho mínimo intrínseco de su contenido — que el resumen de cada sección,
+        en una sola línea (truncate), dispara al ancho del texto entero. En un
+        teléfono, o dentro de una ventana emergente, eso es contenido recortado. */}
+    <form onSubmit={handleSubmit(onSubmit)} className={cn('min-w-0 space-y-2.5 self-start', !modoSubir && vistaMovil === 'preview' && 'hidden xl:block')}>
       {/* ── Identificación ── */}
       <Seccion
         icono={User} color="violet" titulo="Identificación"
@@ -469,7 +543,37 @@ export function FormContrato({
         </div>
       </Seccion>
 
+      {/* ── Modo "solo PDF": el documento se adjunta, no se redacta ── */}
+      {modoSubir && (
+        <Seccion
+          icono={Upload} color="sky" titulo="PDF del contrato"
+          resumen={pdf ? pdf.name : 'Contrato ya redactado y firmado en físico'}
+          estado={pdf ? { tono: 'ok', texto: 'Adjunto' } : { tono: 'warn', texto: 'Falta el PDF' }}
+          open={panel.has('pdf')} onToggle={() => togglePanel('pdf')}
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Se registra el contrato con los datos de arriba (los necesitan nómina y las alertas de vencimiento) y se adjunta el PDF tal cual. No se pide firma digital.
+            </p>
+            <div className="space-y-1.5">
+              <Label>PDF del contrato</Label>
+              <input type="file" accept="application/pdf" onChange={(e) => setPdf(e.target.files?.[0] ?? null)} className={INPUT_ARCHIVO} />
+              {pdf && <ArchivoElegido archivo={pdf} />}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Autorización de datos (opcional)</Label>
+              <input type="file" accept="application/pdf" onChange={(e) => setAutorizacionPdf(e.target.files?.[0] ?? null)} className={INPUT_ARCHIVO} />
+              {autorizacionPdf && <ArchivoElegido archivo={autorizacionPdf} />}
+              <p className="text-xs text-muted-foreground">
+                Autorización de tratamiento de datos firmada en físico (Ley 1581). Si no la tienes digitalizada, puedes subirla después desde el contrato.
+              </p>
+            </div>
+          </div>
+        </Seccion>
+      )}
+
       {/* ── Documento del contrato: prellenado desde la plantilla del tipo ── */}
+      {!modoSubir && (
       <Seccion
         icono={FileText} color="sky" titulo="Documento del contrato"
         resumen={`Título, ${clausulas.length} cláusula${clausulas.length === 1 ? '' : 's'}, funciones y cierre`}
@@ -552,20 +656,37 @@ export function FormContrato({
           </SubSeccion>
         </div>
       </Seccion>
+      )}
 
-      <div className="sticky bottom-4 flex items-center justify-between gap-2 rounded-lg border bg-card p-3 shadow-sm">
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <input type="checkbox" {...register('generarPdf')} className="size-4" /> {editando ? 'Regenerar PDF al guardar' : 'Generar PDF al crear'}
-        </label>
-        <div className="flex gap-2">
-          <Button type="button" variant="ghost" onClick={() => router.back()}>Cancelar</Button>
-          <Button type="submit" disabled={guardando}>{guardando ? <Spinner /> : <Save className="size-4" />} {editando ? 'Guardar cambios' : 'Crear contrato'}</Button>
+      {/* `bottom-0` y no `bottom-4`: dentro de la ventana emergente (un contenedor
+          con scroll) cualquier separación deja una franja por la que asoma el
+          contenido que pasa por debajo. */}
+      <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card p-3 shadow-sm">
+        {modoSubir ? (
+          <span className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Upload className="size-4" /> {pdf ? pdf.name : 'Falta adjuntar el PDF del contrato'}
+          </span>
+        ) : (
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input type="checkbox" {...register('generarPdf')} className="size-4" /> {editando ? 'Regenerar PDF al guardar' : 'Generar PDF al crear'}
+          </label>
+        )}
+        {/* ml-auto: si no caben en la misma línea que el aviso, los botones bajan
+            a la suya y siguen a la derecha (justify-between los dejaría a la
+            izquierda al quedarse solos). Sin envolver, el aviso se partía en un
+            teléfono palabra por palabra. */}
+        <div className="ml-auto flex gap-2">
+          <Button type="button" variant="ghost" onClick={onCancelar ?? (() => router.back())}>Cancelar</Button>
+          <Button type="submit" disabled={guardando}>
+            {guardando ? <Spinner /> : <Save className="size-4" />} {editando ? 'Guardar cambios' : modoSubir ? 'Registrar contrato' : 'Crear contrato'}
+          </Button>
         </div>
       </div>
     </form>
 
     {/* Vista previa del documento (misma hoja del PDF), en vivo con lo diligenciado.
         En xl siempre visible; en móvil, solo con la pestaña "Vista previa". */}
+    {!modoSubir && (
     <div className={cn(vistaMovil === 'preview' ? 'block' : 'hidden', 'xl:block')}>
       <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-lg border bg-muted/30 p-3">
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -579,6 +700,7 @@ export function FormContrato({
         />
       </div>
     </div>
+    )}
     </div>
   )
 }
@@ -590,5 +712,17 @@ function Campo({ label, error, full, children }: { label: string; error?: string
       {children}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
+  )
+}
+
+/** Nombre y peso del archivo recién elegido, con la opción de mirarlo antes de subirlo. */
+function ArchivoElegido({ archivo }: { archivo: File }) {
+  return (
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      <span className="min-w-0 truncate">{archivo.name} ({(archivo.size / 1024).toFixed(0)} KB)</span>
+      <VisorPdf archivo={archivo} titulo={archivo.name} className="flex items-center gap-1 font-medium text-primary hover:underline">
+        <Eye className="size-3.5" /> Ver PDF
+      </VisorPdf>
+    </p>
   )
 }

@@ -7,6 +7,7 @@ import { contextoActual } from '@/server/contexto'
 import { subirArchivo } from '@/server/storage'
 import { leerFirmaComoDataUri } from '@/server/contratos-ops-pdf'
 import { generarPdfContratoLaboral, generarPdfAutorizacionDatosLaboral, type SnapshotContratoLaboral } from '@/server/contratos-laboral-pdf'
+import { generarPdfContratoLaboralEstampado, leerDatosFirmaSubidoLaboral } from '@/server/contratos-laboral-estampar'
 import { fechaLarga } from '@/lib/numero-letras'
 import { avisar, avisarPorRol } from '@/server/notificaciones/avisar'
 
@@ -27,8 +28,19 @@ export async function aplicarFirmaContratoLaboral(opts: {
   metodoAuth?: string
 }): Promise<{ firmado: boolean; numero: string }> {
   const c = await prisma.contrato.findUniqueOrThrow({ where: { id: opts.contratoId } })
-  if (!c.contenidoPdf) {
+  // Dos orígenes con el mismo flujo de firma pero distinto documento final: el
+  // generado se regenera desde su plantilla, el subido se estampa sobre el PDF.
+  const esSubido = c.origenPdf === 'SUBIDO_PARA_FIRMA'
+  if (!esSubido && !c.contenidoPdf) {
     throw new ErrorNegocio('El contrato no tiene un documento generado; regenéralo antes de firmar.')
+  }
+  // Se valida ANTES de guardar la firma: si faltan las posiciones, el empleado
+  // quedaría marcado como firmante de un documento que nunca se pudo producir.
+  const datosSubido = esSubido ? leerDatosFirmaSubidoLaboral(c.posicionFirmas) : null
+  // Si el PDF ya venía firmado por el empleador, su firma digital sobra: se
+  // estamparía una segunda firma de la empresa sobre un documento ya firmado.
+  if (opts.rol === 'EMPLEADOR' && c.firmaEmpleadorEnPdf) {
+    throw new ErrorNegocio('El empleador ya firmó en el documento aportado; no hace falta su firma digital.')
   }
   const yaFirmada = opts.rol === 'EMPLEADO' ? c.firmaEmpleadoPath : c.firmaEmpleadorPath
   if (yaFirmada) throw new ErrorNegocio('Esta parte ya firmó el contrato.')
@@ -45,7 +57,9 @@ export async function aplicarFirmaContratoLaboral(opts: {
       : { firmaEmpleadorPath: archivo.storagePath, firmaEmpleadorFecha: ahora, firmaEmpleadorPorId: opts.usuarioId }
   const act = await dbAuditado.contrato.update({ where: { id: c.id }, data: campos })
 
-  const snapshot = act.contenidoPdf as unknown as SnapshotContratoLaboral
+  // En un contrato subido el snapshot solo transporta la autorización de datos
+  // (que la app sí genera desde plantilla); el contrato en sí es el PDF aportado.
+  const snapshot = (act.contenidoPdf ?? {}) as unknown as SnapshotContratoLaboral
   const docs: DocFirmado[] = []
 
   // La autorización de datos queda firmada con la sola firma del empleado.
@@ -63,27 +77,40 @@ export async function aplicarFirmaContratoLaboral(opts: {
     docs.push({ tipo: 'AUTORIZACION', documentoId: r.documentoId, sha256: r.sha256 })
   }
 
-  // Si ambas partes ya firmaron, regenerar el PDF del contrato con las firmas.
+  // Si ambas partes ya firmaron —o el empleador firmó en el PDF aportado y solo
+  // faltaba el empleado—, cerrar el documento y marcar FIRMADO.
   let firmado = false
-  if (act.firmaEmpleadoPath && act.firmaEmpleadorPath) {
+  const empleadorListo = !!act.firmaEmpleadorPath || act.firmaEmpleadorEnPdf
+  if (act.firmaEmpleadoPath && empleadorListo) {
     const [imgEmpleador, imgEmpleado] = await Promise.all([
-      leerFirmaComoDataUri(act.firmaEmpleadorPath),
+      act.firmaEmpleadorPath ? leerFirmaComoDataUri(act.firmaEmpleadorPath) : Promise.resolve(null),
       leerFirmaComoDataUri(act.firmaEmpleadoPath),
     ])
-    const r = await generarPdfContratoLaboral({
-      contratoId: c.id,
-      numero: c.numero,
-      sedeId: c.sedeId,
-      usuarioId: opts.usuarioId,
-      datos: snapshot,
-      firmas: {
-        empleadorImg: imgEmpleador,
-        empleadoImg: imgEmpleado,
-        empleadorFecha: act.firmaEmpleadorFecha ? fechaLarga(act.firmaEmpleadorFecha.toISOString().slice(0, 10)) : null,
-        empleadoFecha: act.firmaEmpleadoFecha ? fechaLarga(act.firmaEmpleadoFecha.toISOString().slice(0, 10)) : null,
-      },
-      nombreDocumento: `Contrato laboral ${c.numero} (firmado)`,
-    })
+    const r = datosSubido
+      ? await generarPdfContratoLaboralEstampado({
+          contratoId: c.id,
+          numero: c.numero,
+          sedeId: c.sedeId,
+          usuarioId: opts.usuarioId,
+          datos: datosSubido,
+          firmaEmpleadoImg: imgEmpleado,
+          firmaEmpleadorImg: imgEmpleador,
+          nombreDocumento: `Contrato laboral ${c.numero} (firmado)`,
+        })
+      : await generarPdfContratoLaboral({
+          contratoId: c.id,
+          numero: c.numero,
+          sedeId: c.sedeId,
+          usuarioId: opts.usuarioId,
+          datos: snapshot,
+          firmas: {
+            empleadorImg: imgEmpleador,
+            empleadoImg: imgEmpleado,
+            empleadorFecha: act.firmaEmpleadorFecha ? fechaLarga(act.firmaEmpleadorFecha.toISOString().slice(0, 10)) : null,
+            empleadoFecha: act.firmaEmpleadoFecha ? fechaLarga(act.firmaEmpleadoFecha.toISOString().slice(0, 10)) : null,
+          },
+          nombreDocumento: `Contrato laboral ${c.numero} (firmado)`,
+        })
     docs.push({ tipo: 'CONTRATO', documentoId: r.documentoId, sha256: r.sha256 })
     firmado = true
   }
@@ -111,16 +138,22 @@ export async function aplicarFirmaContratoLaboral(opts: {
     select: { usuarioId: true, nombres: true, apellidos: true },
   })
   if (firmado) {
+    const enPdf = act.firmaEmpleadorEnPdf
+    const nombreEmpleado = `${empleado?.nombres ?? ''} ${empleado?.apellidos ?? ''}`.trim()
     if (empleado?.usuarioId) {
       await avisar(empleado.usuarioId, {
         titulo: 'Tu contrato quedó firmado por ambas partes',
-        mensaje: `El contrato ${c.numero} ya tiene las dos firmas. Puedes descargar el PDF firmado desde tu autoservicio.`,
+        mensaje: enPdf
+          ? `El contrato ${c.numero} ya traía la firma del representante legal y con la tuya quedó completo. Puedes descargar el PDF firmado desde tu autoservicio.`
+          : `El contrato ${c.numero} ya tiene las dos firmas. Puedes descargar el PDF firmado desde tu autoservicio.`,
         enlace: '/autoservicio/contratos', llamadoAccion: 'Ver mi contrato', evento: 'contrato_firmado',
       }).catch(() => {})
     }
     await avisarPorRol(['Administrador', 'Recursos Humanos'], {
       titulo: `Contrato ${c.numero} firmado por ambas partes`,
-      mensaje: `${empleado?.nombres ?? ''} ${empleado?.apellidos ?? ''} y el representante legal completaron las firmas del contrato ${c.numero}.`,
+      mensaje: enPdf
+        ? `${nombreEmpleado} firmó el contrato ${c.numero}; el documento ya traía la firma del representante legal, así que quedó completo.`
+        : `${nombreEmpleado} y el representante legal completaron las firmas del contrato ${c.numero}.`,
       enlace: `/contratos/${c.id}`, llamadoAccion: 'Ver el contrato', evento: 'contrato_firmado',
     }).catch(() => {})
   } else if (opts.rol === 'EMPLEADOR' && empleado?.usuarioId) {
