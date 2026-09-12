@@ -6,7 +6,8 @@ import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { aplicaTramite, type Tramite } from '@/lib/tramites-vinculo'
-import { parseFechaISO } from '@/lib/fechas'
+import { parseFechaISO, formatFechaCorta } from '@/lib/fechas'
+import { comprobanteExigido, avisarComprobanteEntregado } from '@/server/comprobante-permiso'
 import { diasHabilesRango } from '@/app/(app)/novedades/acciones'
 import { generarCertificacion } from '@/server/certificaciones'
 import { avisar, avisarPorRol } from '@/server/notificaciones/avisar'
@@ -302,6 +303,8 @@ export const resolverPaso = accion(
       // El jefe puede aprobar proponiendo otras fechas
       nuevaFechaInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
       nuevaFechaFin: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
+      // Permiso: pedir (o no) el comprobante de asistencia. Si no viene, se pide.
+      exigirComprobante: z.boolean().optional(),
     }),
   },
   async (d, usuario) => {
@@ -371,6 +374,17 @@ export const resolverPaso = accion(
       revalidatePath('/autoservicio')
       revalidatePath('/autoservicio/aprobaciones')
       return { ok: true }
+    }
+
+    // Permiso: quien aprueba decide si se le pide el comprobante de asistencia.
+    // Queda en la solicitud para que el último paso lo aplique al crear el permiso
+    // (se relee `datos` porque el bloque de cambio de fechas pudo actualizarlos).
+    if (d.aprobar && paso.solicitud.tipo === 'PERMISO' && d.exigirComprobante !== undefined) {
+      const actual = await prisma.solicitud.findUniqueOrThrow({ where: { id: paso.solicitudId }, select: { datos: true } })
+      await dbAuditado.solicitud.update({
+        where: { id: paso.solicitudId },
+        data: { datos: { ...(actual.datos as Record<string, unknown>), exigirComprobante: d.exigirComprobante } as object },
+      })
     }
 
     await dbAuditado.pasoAprobacion.update({
@@ -458,17 +472,26 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
     }
   } else if (s.tipo === 'PERMISO' && datos.fechaInicio) {
     const porHoras = datos.permisoTipo === 'HORAS' && !!datos.horaInicio && !!datos.horaFin
+    const fechaPermiso = parseFechaISO(datos.fechaInicio)!
+    // Comprobante de asistencia: se pide salvo que el aprobador lo haya desmarcado.
+    // Un auto-registro (representante legal / Subgerencia) no tiene quién lo
+    // verifique, así que no se exige.
+    const exigir = !opts?.constancia && (s.datos as Record<string, unknown>).exigirComprobante !== false
+    const comprobante = exigir ? await comprobanteExigido(fechaPermiso) : null
     await prisma.permiso.create({
       data: {
-        colaboradorId: s.colaboradorId, fecha: parseFechaISO(datos.fechaInicio)!,
+        colaboradorId: s.colaboradorId, fecha: fechaPermiso,
         diaCompleto: !porHoras,
         horaInicio: porHoras ? datos.horaInicio : null,
         horaFin: porHoras ? datos.horaFin : null,
         horas: porHoras ? horasEntre(datos.horaInicio!, datos.horaFin!) : null,
         motivo: datos.motivo ?? 'Permiso', remunerado: true, solicitudId,
+        ...(comprobante ?? {}),
       },
     })
     resultado = porHoras ? `Permiso aprobado (${datos.horaInicio}–${datos.horaFin})` : 'Permiso aprobado (día completo)'
+    // El aviso de aprobación lleva el plazo: es lo primero que el colaborador tiene que saber.
+    if (comprobante) resultado += ` · sube el comprobante de asistencia a más tardar el ${formatFechaCorta(comprobante.comprobanteVence)}`
   } else if (s.tipo === 'INCAPACIDAD' && datos.fechaInicio && datos.fechaFin) {
     const dias = diasCalendario(datos.fechaInicio, datos.fechaFin)
     await prisma.incapacidad.create({
@@ -727,6 +750,36 @@ export const corregirMiSoporte = accion(
     if (paso) await avisarAprobadoresDelPaso(s.id, paso.orden)
     revalidatePath('/autoservicio')
     revalidatePath('/autoservicio/aprobaciones')
+    return { ok: true }
+  },
+)
+
+/**
+ * Comprobante de asistencia de un permiso: el colaborador ya subió el archivo
+ * (vía /api/documentos/subir con entidadTipo "Permiso") y aquí el permiso pasa a
+ * ENTREGADO para que Talento Humano lo verifique. Se admite volver a subirlo
+ * mientras no esté verificado (por ejemplo, si Talento Humano devolvió el anterior).
+ */
+export const entregarComprobantePermiso = accion(
+  { modulo: 'autoservicio', accion: 'CREAR', schema: z.object({ permisoId: z.uuid() }) },
+  async (d, usuario) => {
+    const p = await prisma.permiso.findUniqueOrThrow({ where: { id: d.permisoId } })
+    if (p.colaboradorId !== usuario.colaboradorId) throw new ErrorNegocio('Este permiso no es tuyo.')
+    if (p.comprobanteEstado === 'NO_REQUERIDO') throw new ErrorNegocio('Este permiso no exige comprobante de asistencia.')
+    if (p.comprobanteEstado === 'VERIFICADO') throw new ErrorNegocio('El comprobante de este permiso ya fue verificado.')
+    const archivo = await prisma.documento.findFirst({
+      where: { entidadTipo: 'Permiso', entidadId: p.id },
+      orderBy: { creadoEn: 'desc' },
+      select: { id: true },
+    })
+    if (!archivo) throw new ErrorNegocio('Primero adjunta el archivo del comprobante.')
+    await dbAuditado.permiso.update({
+      where: { id: p.id },
+      data: { comprobanteEstado: 'ENTREGADO', comprobanteEntregadoEn: new Date(), comprobanteNota: null },
+    })
+    await avisarComprobanteEntregado(p.colaboradorId, p.fecha)
+    revalidatePath('/autoservicio')
+    revalidatePath('/novedades')
     return { ok: true }
   },
 )

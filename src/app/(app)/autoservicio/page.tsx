@@ -1,6 +1,7 @@
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { esOps } from '@/lib/tramites-vinculo'
 import { prisma } from '@/lib/db'
+import { documentosFaltantesDe } from '@/server/expediente'
 import { Prisma } from '@/generated/prisma/client'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { liquidarVacaciones } from '@/server/vacaciones-liquidacion'
@@ -8,10 +9,12 @@ import { Card, CardContent } from '@/components/ui/card'
 import { TreePalm, Clock, CreditCard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { fmtCOP } from '@/lib/moneda'
-import { formatFechaCorta, formatFechaLarga, hoyBogota, parseFechaISO } from '@/lib/fechas'
+import { formatFechaCorta, formatFechaLarga, formatFechaISO, hoyBogota, parseFechaISO } from '@/lib/fechas'
 import { defLicencia } from '@/lib/licencias'
+import { situacionComprobante } from '@/lib/comprobante-permiso'
 import { PanelTramites } from './panel-tramites'
-import { MisSolicitudes, type SolicitudItem } from './mis-solicitudes'
+import { CumpleanosACargo, type CumpleanosACargoItem } from './cumpleanos-a-mi-cargo'
+import { MisSolicitudes, type SolicitudItem, type ComprobanteItem } from './mis-solicitudes'
 
 export const metadata = { title: 'Autoservicio · Smart Gadgets RH' }
 
@@ -114,8 +117,8 @@ export default async function AutoservicioPage() {
     )
   }
 
-  const [colab, saldo, solicitudes, disciplinariosAbiertos, contratosPorFirmar, ultimoPago] = await Promise.all([
-    prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { nombres: true, tipoVinculo: true, estado: true, direccion: true, emergenciaNombre: true, epsId: true, afpId: true, bancoId: true, numeroCuenta: true } }),
+  const [colab, saldo, solicitudes, disciplinariosAbiertos, opsPorFirmar, ultimoPago, otrosisPorFirmar] = await Promise.all([
+    prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { nombres: true, tipoVinculo: true, estado: true, fechaNacimiento: true, direccion: true, emergenciaNombre: true, epsId: true, afpId: true, bancoId: true, numeroCuenta: true } }),
     saldoVacaciones(usuario.colaboradorId),
     prisma.solicitud.findMany({
       where: { colaboradorId: usuario.colaboradorId },
@@ -132,18 +135,16 @@ export default async function AutoservicioPage() {
       include: { periodo: { select: { fechaFin: true } } },
       orderBy: { periodo: { fechaFin: 'desc' } },
     }),
-  ])
-
-  // Documentos requeridos por su tipo de vínculo que aún no ha entregado.
-  const [requeridos, entregados] = await Promise.all([
-    prisma.documentoRequerido.findMany({ where: { tipoVinculo: colab.tipoVinculo, obligatorio: true }, select: { tipoDocumentoId: true } }),
-    prisma.documento.findMany({
-      where: { entidadTipo: 'Colaborador', entidadId: usuario.colaboradorId, tipoDocumentoId: { not: null } },
-      select: { tipoDocumentoId: true },
+    // Otrosíes de sus contratos laborales que aún debe firmar en la app.
+    prisma.otrosiContrato.count({
+      where: { contrato: { colaboradorId: usuario.colaboradorId }, requiereFirma: true, firmaEmpleadoPath: null },
     }),
   ])
-  const tiposEntregados = new Set(entregados.map((d) => d.tipoDocumentoId))
-  const documentosFaltantes = requeridos.filter((r) => !tiposEntregados.has(r.tipoDocumentoId)).length
+  // Documentos por firmar: contratos OPS y otrosíes (la tarjeta los muestra juntos).
+  const contratosPorFirmar = opsPorFirmar + otrosisPorFirmar
+
+  // Documentos obligatorios (por vínculo y por cargo) que aún no ha entregado.
+  const documentosFaltantes = (await documentosFaltantesDe(usuario.colaboradorId)).length
 
   // Entregas pendientes de firma digital: dotación (arts. 230-234 CST),
   // actas de activos y recibidos de EPP (D.1072 art. 2.2.4.6.24).
@@ -153,6 +154,31 @@ export default async function AutoservicioPage() {
     prisma.entregaEpp.count({ where: { colaboradorId: usuario.colaboradorId, firmadoEn: null } }),
   ])
   const dotacionPorFirmar = dotSinFirma + actasSinFirma + eppSinFirma
+
+  // Cumpleaños que Talento Humano le encargó organizar: los abiertos y los
+  // cerrados hace poco (para que vea que sus facturas se aceptaron).
+  const hace30 = new Date(); hace30.setUTCDate(hace30.getUTCDate() - 30)
+  const celebraciones = await prisma.celebracionCumpleanos.findMany({
+    where: { encargadoId: usuario.colaboradorId, OR: [{ estado: { not: 'CERRADA' } }, { cerradaEn: { gte: hace30 } }] },
+    include: { colaborador: { select: { nombres: true, apellidos: true } } },
+    orderBy: { fecha: 'asc' },
+  })
+  const facturasCumple = celebraciones.length === 0 ? [] : await prisma.documento.findMany({
+    where: { entidadTipo: 'CelebracionCumpleanos', entidadId: { in: celebraciones.map((c) => c.id) } },
+    select: { id: true, entidadId: true, nombre: true, mimeType: true },
+    orderBy: { creadoEn: 'asc' },
+  })
+  const cumpleanosACargo: CumpleanosACargoItem[] = celebraciones.map((c) => ({
+    id: c.id,
+    homenajeado: `${c.colaborador.nombres} ${c.colaborador.apellidos}`,
+    fecha: formatFechaLarga(c.fecha),
+    esHoy: formatFechaISO(c.fecha) === formatFechaISO(hoyBogota()),
+    estado: c.estado,
+    nota: c.nota,
+    motivoDevolucion: c.motivoDevolucion,
+    valorReportado: c.valorReportado != null ? Number(c.valorReportado) : null,
+    facturas: facturasCumple.filter((f) => f.entidadId === c.id).map(({ id, nombre, mimeType }) => ({ id, nombre, mimeType })),
+  }))
 
   // Novedades registradas directamente por la empresa (sin solicitud del colaborador):
   // deben verse aquí, no solo en la notificación de la campana.
@@ -168,6 +194,35 @@ export default async function AutoservicioPage() {
     vacEmpresa.map((x) => liquidarVacaciones(usuario.colaboradorId!, Number(x.diasHabiles))),
   )
 
+  // Comprobante de asistencia de los permisos —los que nacieron de una solicitud
+  // propia y los que registró la empresa—: situación, plazo y último archivo subido.
+  const permisosDeSolicitud = await prisma.permiso.findMany({
+    where: { colaboradorId: usuario.colaboradorId, solicitudId: { in: solicitudes.map((s) => s.id) } },
+  })
+  const todosLosPermisos = [...permisosDeSolicitud, ...perEmpresa]
+  const docsComprobante = todosLosPermisos.length
+    ? await prisma.documento.findMany({
+        where: { entidadTipo: 'Permiso', entidadId: { in: todosLosPermisos.map((p) => p.id) } },
+        orderBy: { creadoEn: 'desc' },
+        select: { id: true, entidadId: true },
+      })
+    : []
+  const docComprobantePorPermiso = new Map<string, string>()
+  for (const d of docsComprobante) if (!docComprobantePorPermiso.has(d.entidadId)) docComprobantePorPermiso.set(d.entidadId, d.id)
+  const permisoPorSolicitud = new Map(permisosDeSolicitud.map((p) => [p.solicitudId!, p]))
+  const hoy = hoyBogota()
+  const comprobanteDe = (p: (typeof todosLosPermisos)[number]): ComprobanteItem | null => {
+    if (p.comprobanteEstado === 'NO_REQUERIDO') return null
+    return {
+      permisoId: p.id,
+      situacion: situacionComprobante(p.comprobanteEstado, p.comprobanteVence, hoy),
+      vence: p.comprobanteVence ? formatFechaCorta(p.comprobanteVence) : null,
+      nota: p.comprobanteNota,
+      docId: docComprobantePorPermiso.get(p.id) ?? null,
+    }
+  }
+  const comprobantesPorSubir = todosLosPermisos.filter((p) => p.comprobanteEstado === 'PENDIENTE').length
+
   const enTramite = solicitudes.filter((s) => s.estado === 'EN_APROBACION' || s.estado === 'PENDIENTE').length
   const devueltas = solicitudes.filter((s) => s.estado === 'DEVUELTA').length
   const primerNombre = colab.nombres.split(' ')[0]
@@ -175,11 +230,13 @@ export default async function AutoservicioPage() {
   // El saludo dice lo único que exige acción hoy; si no hay nada, no inventa urgencia.
   const pendiente = devueltas > 0
     ? `tienes ${devueltas} solicitud${devueltas > 1 ? 'es' : ''} devuelta${devueltas > 1 ? 's' : ''} por corregir`
-    : contratosPorFirmar > 0
-      ? `tienes ${contratosPorFirmar} documento${contratosPorFirmar > 1 ? 's' : ''} por firmar`
-      : enTramite > 0
-        ? `tienes ${enTramite} solicitud${enTramite > 1 ? 'es' : ''} en trámite`
-        : 'no tienes nada pendiente'
+    : comprobantesPorSubir > 0
+      ? `tienes ${comprobantesPorSubir} comprobante${comprobantesPorSubir > 1 ? 's' : ''} de permiso por subir`
+      : contratosPorFirmar > 0
+        ? `tienes ${contratosPorFirmar} documento${contratosPorFirmar > 1 ? 's' : ''} por firmar`
+        : enTramite > 0
+          ? `tienes ${enTramite} solicitud${enTramite > 1 ? 'es' : ''} en trámite`
+          : 'no tienes nada pendiente'
 
   // ── Mi actividad: solicitudes propias + novedades registradas por la empresa ──
   const actividad: { fecha: Date; item: SolicitudItem }[] = []
@@ -219,11 +276,12 @@ export default async function AutoservicioPage() {
         contrapropuesta: cp
           ? { fechaInicio: fechaLegible(cp.fechaInicio), fechaFin: fechaLegible(cp.fechaFin), comentario: cp.comentario ?? null }
           : null,
+        comprobante: s.tipo === 'PERMISO' && permisoPorSolicitud.has(s.id) ? comprobanteDe(permisoPorSolicitud.get(s.id)!) : null,
       },
     })
   }
 
-  const base = { resultado: null, certId: null, advertencias: [], pasos: [], contrapropuesta: null, origen: ORIGEN_EMPRESA }
+  const base = { resultado: null, certId: null, advertencias: [], pasos: [], contrapropuesta: null, comprobante: null, origen: ORIGEN_EMPRESA }
   vacEmpresa.forEach((x, i) => {
     const liq = liqVacEmpresa[i]
     actividad.push({
@@ -297,6 +355,7 @@ export default async function AutoservicioPage() {
           { label: 'Remunerado', valor: x.remunerado ? 'Sí' : 'No' },
         ],
         liquidacion: null,
+        comprobante: comprobanteDe(x),
       },
     })
   }
@@ -341,7 +400,8 @@ export default async function AutoservicioPage() {
       <PanelTramites
         activo={colab.estado === 'ACTIVO'}
         tipoVinculo={colab.tipoVinculo}
-        fichaFaltantes={[colab.direccion, colab.emergenciaNombre, colab.epsId, colab.afpId, colab.bancoId, colab.numeroCuenta].filter((x) => !x).length}
+        // La fecha de nacimiento cuenta: de ella sale la lista de cumpleaños.
+        fichaFaltantes={[colab.fechaNacimiento, colab.direccion, colab.emergenciaNombre, colab.epsId, colab.afpId, colab.bancoId, colab.numeroCuenta].filter((x) => !x).length}
         contratosPorFirmar={contratosPorFirmar}
         disciplinariosAbiertos={disciplinariosAbiertos}
         puedeAprobar={puedeAprobar}
@@ -349,6 +409,13 @@ export default async function AutoservicioPage() {
         documentosFaltantes={documentosFaltantes}
         dotacionPorFirmar={dotacionPorFirmar}
       />
+
+      {cumpleanosACargo.length > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-2.5 text-[13px] font-bold">Cumpleaños a mi cargo</h2>
+          <CumpleanosACargo items={cumpleanosACargo} />
+        </section>
+      )}
 
       <section className="mt-8">
         <h2 className="mb-2.5 text-[13px] font-bold">Mi actividad reciente</h2>

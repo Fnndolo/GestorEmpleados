@@ -31,6 +31,8 @@ export const permisoSchema = z.object({
   diaCompleto: z.boolean(),
   motivo: z.string().trim().min(3).max(300),
   remunerado: z.boolean(),
+  // Pedirle al colaborador el comprobante de asistencia (si no viene, sí se pide).
+  exigirComprobante: z.boolean().optional(),
 })
 export type PermisoInput = z.infer<typeof permisoSchema>
 

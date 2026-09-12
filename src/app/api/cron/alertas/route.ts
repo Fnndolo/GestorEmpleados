@@ -4,6 +4,8 @@ import { actualizarEstadosVacaciones } from '@/server/vacaciones-liquidacion'
 import { alertarCortesDotacion, alertarInduccionPendiente } from '@/server/dotacion'
 import { alertarContratosVencidosSinCierre } from '@/server/contratos-vencidos'
 import { publicarVencimientosOpsFaltantes } from '@/server/vencimientos/contratos-ops'
+import { alertarComprobantesPermisoVencidos } from '@/server/comprobante-permiso'
+import { recordarCumpleanosProximos } from '@/server/cumpleanos'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -35,7 +37,12 @@ export async function GET(req: NextRequest) {
     // Contratos vencidos que siguen activos: recordatorio semanal a RRHH hasta que se
     // registre la prórroga o la terminación (el sistema no cierra ni restringe solo).
     const contratosVencidos = await alertarContratosVencidosSinCierre()
-    return NextResponse.json({ ok: true, ...resumen, opsFaltantes, vacaciones, dotacion, induccion, contratosVencidos })
+    // Comprobantes de asistencia de permisos con el plazo vencido: aviso semanal a
+    // Talento Humano hasta que se entregue o se deje de exigir.
+    const comprobantesPermiso = await alertarComprobantesPermisoVencidos()
+    // Cumpleaños que se acercan: se le recuerda una vez al encargado.
+    const cumpleanos = await recordarCumpleanosProximos()
+    return NextResponse.json({ ok: true, ...resumen, opsFaltantes, vacaciones, dotacion, induccion, contratosVencidos, comprobantesPermiso, cumpleanos })
   } catch (e) {
     console.error('Error en cron de alertas:', e)
     return NextResponse.json({ error: 'Fallo en el procesamiento' }, { status: 500 })

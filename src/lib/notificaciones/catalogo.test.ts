@@ -6,9 +6,15 @@ describe('CORREO_POR_DEFECTO', () => {
     expect([...CORREO_POR_DEFECTO].sort()).toEqual([
       'contrato_pendiente_firma',
       'contrato_por_firmar',
+      // Organizar un cumpleaños se hace fuera de la app, y el recordatorio
+      // llega justo cuando la persona no está mirando la plataforma.
+      'cumpleanos_encargado_asignado',
+      'cumpleanos_recordatorio',
       'denuncia_acoso',
       'disciplinario_citacion',
       'disciplinario_decision',
+      // Reunir los documentos del expediente es un trámite de días, fuera de la app.
+      'expediente_pendiente',
       'habeas_data',
     ])
   })

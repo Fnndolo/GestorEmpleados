@@ -73,6 +73,25 @@ export function EmpresaForm({ valores }: { valores: EmpresaInput }) {
             </div>
             <Switch checked={sabadoHabil} onCheckedChange={(v) => setValue('sabadoHabil', v)} />
           </div>
+          <div className="sm:col-span-2 flex items-center justify-between gap-4 rounded-lg border p-3">
+            <div>
+              <p className="text-sm font-medium">Plazo para el comprobante de asistencia de un permiso</p>
+              <p className="text-xs text-muted-foreground">
+                Días hábiles, contados desde el día del permiso, que tiene el colaborador para subir la constancia de que asistió a la cita o diligencia. Con cero debe subirla el mismo día.
+              </p>
+              {errors.plazoComprobantePermisoDias && (
+                <p className="mt-1 text-xs text-destructive">{errors.plazoComprobantePermisoDias.message}</p>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Input
+                type="number" min={0} max={60} step={1} inputMode="numeric"
+                className="w-20 text-center tabular-nums"
+                {...register('plazoComprobantePermisoDias', { valueAsNumber: true })}
+              />
+              <span className="text-sm text-muted-foreground">días</span>
+            </div>
+          </div>
         </CardContent>
       </Card>
       <div className="flex justify-end">

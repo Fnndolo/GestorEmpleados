@@ -12,6 +12,16 @@ export type ClaveEvento =
   | 'incapacidad_reportada'
   | 'ficha_actualizada'
   | 'documento_aportado'
+  | 'comprobante_permiso_requerido'
+  | 'comprobante_permiso_entregado'
+  | 'comprobante_permiso_revisado'
+  | 'comprobante_permiso_vencido'
+  | 'expediente_pendiente'
+  // Bienestar
+  | 'cumpleanos_encargado_asignado'
+  | 'cumpleanos_recordatorio'
+  | 'cumpleanos_facturas_entregadas'
+  | 'cumpleanos_facturas_revisadas'
   // Contratos
   | 'contrato_pendiente_firma'
   | 'contrato_por_firmar'
@@ -69,6 +79,17 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
   { clave: 'incapacidad_reportada', etiqueta: 'Incapacidad reportada', descripcion: 'Un colaborador reporta una incapacidad a su jefe.', modulo: 'Autoservicio' },
   { clave: 'ficha_actualizada', etiqueta: 'Ficha actualizada', descripcion: 'El colaborador completa o corrige datos de su ficha.', modulo: 'Autoservicio' },
   { clave: 'documento_aportado', etiqueta: 'Documento aportado', descripcion: 'El colaborador sube un documento a su expediente.', modulo: 'Autoservicio' },
+  { clave: 'comprobante_permiso_requerido', etiqueta: 'Comprobante de permiso requerido', descripcion: 'Al aprobar o registrar un permiso se le pide al colaborador el comprobante de asistencia, con su fecha límite.', modulo: 'Autoservicio' },
+  { clave: 'comprobante_permiso_entregado', etiqueta: 'Comprobante de permiso entregado', descripcion: 'El colaborador sube el comprobante de asistencia y Talento Humano debe verificarlo.', modulo: 'Autoservicio' },
+  { clave: 'comprobante_permiso_revisado', etiqueta: 'Comprobante de permiso revisado', descripcion: 'Talento Humano acepta el comprobante o lo devuelve para que el colaborador suba otro.', modulo: 'Autoservicio' },
+  { clave: 'comprobante_permiso_vencido', etiqueta: 'Comprobante de permiso sin entregar', descripcion: 'Aviso automático a Talento Humano cuando venció el plazo y el colaborador no subió el comprobante.', modulo: 'Autoservicio' },
+  { clave: 'expediente_pendiente', etiqueta: 'Documentos del expediente pendientes', descripcion: 'Al quedar con contrato de trabajo se le dice al colaborador qué documentos le faltan por entregar.', modulo: 'Autoservicio', correoPorDefecto: true },
+
+  // Bienestar
+  { clave: 'cumpleanos_encargado_asignado', etiqueta: 'Cumpleaños a cargo', descripcion: 'Talento Humano le encarga a un colaborador la celebración del cumpleaños de otro.', modulo: 'Bienestar', correoPorDefecto: true },
+  { clave: 'cumpleanos_recordatorio', etiqueta: 'Recordatorio de cumpleaños', descripcion: 'Aviso automático al encargado unos días antes del cumpleaños que tiene a cargo.', modulo: 'Bienestar', correoPorDefecto: true },
+  { clave: 'cumpleanos_facturas_entregadas', etiqueta: 'Facturas de cumpleaños entregadas', descripcion: 'El encargado sube las facturas de la celebración y Talento Humano debe revisarlas.', modulo: 'Bienestar' },
+  { clave: 'cumpleanos_facturas_revisadas', etiqueta: 'Facturas de cumpleaños revisadas', descripcion: 'Talento Humano acepta las facturas o las devuelve para que el encargado las corrija.', modulo: 'Bienestar' },
 
   // Contratos
   { clave: 'contrato_pendiente_firma', etiqueta: 'Contrato pendiente de firma', descripcion: 'Se crea un contrato que el colaborador debe firmar.', modulo: 'Contratos', correoPorDefecto: true },

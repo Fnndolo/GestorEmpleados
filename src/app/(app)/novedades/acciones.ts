@@ -16,6 +16,7 @@ import { DIAS_PREAVISO_EMPRESA, fechaMinimaPreaviso } from '@/server/vacaciones-
 import { liquidarVacaciones, desgloseHtml } from '@/server/vacaciones-liquidacion'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { saldoVacaciones } from '@/server/vacaciones'
+import { comprobanteExigido, avisarComprobanteRequerido, avisarComprobanteRevisado } from '@/server/comprobante-permiso'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
 
@@ -88,14 +89,81 @@ export const registrarPermiso = accion(
   { modulo: 'novedades', accion: 'CREAR', schema: permisoSchema },
   async (d) => {
     await exigirVinculoLaboral(d.colaboradorId, 'permiso')
+    const fecha = parseFechaISO(d.fecha)!
+    // Comprobante de asistencia: se pide salvo que quien registra lo desmarque.
+    const comprobante = d.exigirComprobante === false ? null : await comprobanteExigido(fecha)
     await dbAuditado.permiso.create({
       data: {
-        colaboradorId: d.colaboradorId, fecha: parseFechaISO(d.fecha)!,
+        colaboradorId: d.colaboradorId, fecha,
         horas: d.diaCompleto ? null : d.horas ?? null, diaCompleto: d.diaCompleto,
         motivo: d.motivo, remunerado: d.remunerado,
+        ...(comprobante ?? {}),
       },
     })
+    if (comprobante) await avisarComprobanteRequerido(d.colaboradorId, fecha, comprobante.comprobanteVence)
     revalidatePath('/novedades')
+    revalidatePath('/autoservicio')
+  },
+)
+
+/**
+ * Talento Humano revisa el comprobante de asistencia que subió el colaborador:
+ * lo acepta (VERIFICADO) o lo devuelve con motivo (vuelve a PENDIENTE con la
+ * misma fecha límite; si ya venció, el cron sigue avisando).
+ */
+export const verificarComprobantePermiso = accion(
+  {
+    modulo: 'novedades', accion: 'EDITAR',
+    schema: z.object({ permisoId: z.uuid(), valido: z.boolean(), nota: z.string().trim().max(300).optional() }),
+  },
+  async (d, usuario) => {
+    const p = await prisma.permiso.findUniqueOrThrow({ where: { id: d.permisoId } })
+    if (p.comprobanteEstado !== 'ENTREGADO') throw new ErrorNegocio('Este permiso no tiene un comprobante por verificar.')
+    const nota = v(d.nota)
+    if (!d.valido && !nota) throw new ErrorNegocio('Explica por qué el comprobante no sirve, para que el colaborador sepa qué subir.')
+    if (d.valido) {
+      await dbAuditado.permiso.update({
+        where: { id: p.id },
+        data: { comprobanteEstado: 'VERIFICADO', comprobanteVerificadoEn: new Date(), comprobanteVerificadoPorId: usuario.id, comprobanteNota: nota },
+      })
+    } else {
+      await dbAuditado.permiso.update({
+        where: { id: p.id },
+        data: { comprobanteEstado: 'PENDIENTE', comprobanteEntregadoEn: null, comprobanteNota: nota },
+      })
+    }
+    await avisarComprobanteRevisado(p.colaboradorId, p.fecha, d.valido, nota)
+    revalidatePath('/novedades')
+    revalidatePath('/autoservicio')
+    return { ok: true }
+  },
+)
+
+/**
+ * Pedir el comprobante a un permiso que no lo exigía, o dejar de exigirlo (por
+ * ejemplo, porque el colaborador lo mostró en persona). Al dejar de exigirlo se
+ * apaga también la alerta de plazo vencido.
+ */
+export const cambiarExigenciaComprobante = accion(
+  { modulo: 'novedades', accion: 'EDITAR', schema: z.object({ permisoId: z.uuid(), exigir: z.boolean() }) },
+  async (d) => {
+    const p = await prisma.permiso.findUniqueOrThrow({ where: { id: d.permisoId } })
+    if (d.exigir) {
+      if (p.comprobanteEstado !== 'NO_REQUERIDO') throw new ErrorNegocio('Este permiso ya exige comprobante.')
+      const comprobante = await comprobanteExigido(p.fecha)
+      await dbAuditado.permiso.update({ where: { id: p.id }, data: { ...comprobante, comprobanteNota: null } })
+      await avisarComprobanteRequerido(p.colaboradorId, p.fecha, comprobante.comprobanteVence)
+    } else {
+      if (p.comprobanteEstado === 'NO_REQUERIDO') throw new ErrorNegocio('Este permiso no exige comprobante.')
+      if (p.comprobanteEstado === 'VERIFICADO') throw new ErrorNegocio('El comprobante ya fue verificado; no hay nada que dejar de exigir.')
+      await dbAuditado.permiso.update({
+        where: { id: p.id },
+        data: { comprobanteEstado: 'NO_REQUERIDO', comprobanteVence: null, comprobanteEntregadoEn: null, comprobanteNota: null },
+      })
+    }
+    revalidatePath('/novedades')
+    revalidatePath('/autoservicio')
+    return { ok: true }
   },
 )
 

@@ -5,11 +5,14 @@ import { Card, CardContent } from '@/components/ui/card'
 import { BandejaAprobaciones } from './bandeja'
 import { formatFechaISO } from '@/lib/fechas'
 import { defLicencia } from '@/lib/licencias'
+import { plazoComprobanteDias } from '@/server/comprobante-permiso'
 
 export const metadata = { title: 'Aprobaciones · Smart Gadgets RH' }
 
 export default async function AprobacionesPage() {
   const usuario = await requerirPermiso('autoservicio', 'APROBAR')
+  // Plazo del comprobante de asistencia (Ajustes → Empresa), para mostrarlo al aprobar un permiso.
+  const plazoComprobante = await plazoComprobanteDias()
 
   // Solicitudes con un paso pendiente que este usuario puede resolver
   const esAdminRrhh = ['Administrador', 'Recursos Humanos', 'Subgerencia'].includes(usuario.rolNombre)
@@ -54,6 +57,7 @@ export default async function AprobacionesPage() {
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No tienes solicitudes pendientes.</CardContent></Card>
       ) : (
         <BandejaAprobaciones
+          plazoComprobanteDias={plazoComprobante}
           solicitudes={visibles.map((s) => {
             const pasoActual = s.pasos.find((p) => p.estado === 'PENDIENTE')!
             const datos = s.datos as Record<string, string>

@@ -4,6 +4,7 @@ import { Encabezado } from '@/components/shell/encabezado'
 import { EmpresaForm } from './form'
 import { FirmaRepLegalForm } from './firma-form'
 import { IdentidadEmpresa } from './identidad'
+import { PLAZO_COMPROBANTE_POR_DEFECTO } from '@/lib/comprobante-permiso'
 
 export const metadata = { title: 'Empresa · Configuración' }
 
@@ -42,6 +43,7 @@ export default async function EmpresaPage() {
           direccion: empresa?.direccion ?? '',
           sitioWeb: empresa?.sitioWeb ?? '',
           sabadoHabil: empresa?.sabadoHabil ?? true,
+          plazoComprobantePermisoDias: empresa?.plazoComprobantePermisoDias ?? PLAZO_COMPROBANTE_POR_DEFECTO,
         }}
       />
       <FirmaRepLegalForm

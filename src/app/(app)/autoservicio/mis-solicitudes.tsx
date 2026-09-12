@@ -10,7 +10,8 @@ import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { Pill, type PillTone } from '@/components/ui-kit'
-import { responderContrapropuesta, corregirMiSoporte } from './acciones'
+import type { SituacionComprobante } from '@/lib/comprobante-permiso'
+import { responderContrapropuesta, corregirMiSoporte, entregarComprobantePermiso } from './acciones'
 
 /** El estado se lee de un vistazo por color, no solo por texto. */
 const TONO_ESTADO: Record<string, PillTone> = {
@@ -57,8 +58,21 @@ export type SolicitudItem = {
   contrapropuesta: { fechaInicio: string; fechaFin: string; comentario: string | null } | null
   /** Liquidación del pago de vacaciones aprobadas (cifras ya formateadas en COP). */
   liquidacion: { filas: { label: string; valor: string }[]; total: string } | null
+  /** Comprobante de asistencia del permiso; null cuando no se exige. */
+  comprobante?: ComprobanteItem | null
   /** "Programada por la empresa" cuando la novedad no nació de una solicitud propia. */
   origen?: string | null
+}
+
+export type ComprobanteItem = {
+  permisoId: string
+  situacion: SituacionComprobante
+  /** Fecha límite ya formateada ("17 sep 2026"). */
+  vence: string | null
+  /** Motivo con que Talento Humano lo devolvió, u observación al aceptarlo. */
+  nota: string | null
+  /** Último archivo subido. */
+  docId: string | null
 }
 
 const ESTADO_PASO: Record<string, { label: string; icono: React.ElementType; clase: string }> = {
@@ -81,6 +95,36 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
   const inputSoporte = useRef<HTMLInputElement>(null)
   const [archivoSoporte, setArchivoSoporte] = useState<File | null>(null)
   const [corrigiendo, setCorrigiendo] = useState<string | null>(null)
+  // Comprobante de asistencia de un permiso. Un solo selector de archivo para toda
+  // la lista: se recuerda para qué permiso se abrió, así el archivo elegido no se
+  // le cuelga a otro ítem.
+  const inputComprobante = useRef<HTMLInputElement>(null)
+  const [comprobantePara, setComprobantePara] = useState<string | null>(null)
+  const [archivoComprobante, setArchivoComprobante] = useState<{ permisoId: string; file: File } | null>(null)
+  const [enviandoComprobante, setEnviandoComprobante] = useState<string | null>(null)
+
+  async function enviarComprobante(permisoId: string) {
+    if (archivoComprobante?.permisoId !== permisoId) { toast.error('Adjunta el comprobante de asistencia.'); return }
+    setEnviandoComprobante(permisoId)
+    try {
+      const fd = new FormData()
+      fd.append('archivo', archivoComprobante.file)
+      fd.append('entidadTipo', 'Permiso')
+      fd.append('entidadId', permisoId)
+      fd.append('nombre', `Comprobante de asistencia — ${archivoComprobante.file.name}`)
+      const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+      if (!up.ok) throw new Error('No se pudo subir el archivo.')
+      const res = await entregarComprobantePermiso({ permisoId })
+      if (!res.ok) throw new Error(res.error)
+      toast.success('Comprobante enviado. Talento Humano lo verificará.')
+      setArchivoComprobante(null)
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo enviar el comprobante.')
+    } finally {
+      setEnviandoComprobante(null)
+    }
+  }
 
   async function enviarSoporteCorregido(solicitudId: string) {
     if (!archivoSoporte) { toast.error('Adjunta el soporte corregido.'); return }
@@ -123,6 +167,19 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
 
   return (
     <Card><CardContent className="divide-y p-0">
+      {/* Selector de archivo de los comprobantes. Con el atributo `hidden` (no la
+          clase) para que divide-y no le pinte un borde encima al primer ítem. */}
+      <input
+        ref={inputComprobante}
+        type="file"
+        accept="image/*,application/pdf"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0] ?? null
+          setArchivoComprobante(f && comprobantePara ? { permisoId: comprobantePara, file: f } : null)
+          e.target.value = ''
+        }}
+      />
       {solicitudes.map((s) => {
         const { i: Icono, c } = ICONO_SOL[s.tipo] ?? ICONO_SOL.OTRA
         const expandida = abierta === s.id
@@ -178,6 +235,53 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
               </div>
             )}
 
+            {/* Comprobante de asistencia pendiente (o vencido): exige acción, así que se ve sin expandir. */}
+            {s.comprobante && (s.comprobante.situacion === 'PENDIENTE' || s.comprobante.situacion === 'VENCIDO') && (
+              <div
+                className={cn(
+                  'mx-3 mb-3 space-y-2.5 rounded-lg border p-3 text-xs',
+                  s.comprobante.situacion === 'VENCIDO' ? 'border-rose-500/40 bg-rose-500/5' : 'border-sky-500/40 bg-sky-500/5',
+                )}
+              >
+                <div className="flex items-start gap-2">
+                  {s.comprobante.situacion === 'VENCIDO'
+                    ? <TriangleAlert className="mt-0.5 size-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                    : <FileCheck className="mt-0.5 size-4 shrink-0 text-sky-600 dark:text-sky-400" />}
+                  <div>
+                    <p className="text-[13px] font-medium">
+                      {s.comprobante.situacion === 'VENCIDO' ? 'Venció el plazo del comprobante de asistencia' : 'Sube el comprobante de asistencia'}
+                    </p>
+                    <p className="mt-0.5 text-muted-foreground">
+                      Adjunta la constancia de que asististe a la cita, diligencia o trámite de este permiso
+                      {s.comprobante.vence
+                        ? s.comprobante.situacion === 'VENCIDO'
+                          ? ` (el plazo era hasta el ${s.comprobante.vence}). Súbela cuanto antes.`
+                          : ` a más tardar el ${s.comprobante.vence}.`
+                        : '.'}
+                    </p>
+                    {s.comprobante.nota && (
+                      <p className="mt-0.5 text-muted-foreground">Talento Humano no aceptó el anterior: &ldquo;{s.comprobante.nota}&rdquo;</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    size="sm" variant="outline" disabled={enviandoComprobante !== null}
+                    onClick={() => { setComprobantePara(s.comprobante!.permisoId); inputComprobante.current?.click() }}
+                  >
+                    <Paperclip className="size-4" />
+                    {archivoComprobante?.permisoId === s.comprobante.permisoId ? archivoComprobante.file.name : 'Adjuntar comprobante'}
+                  </Button>
+                  <Button
+                    size="sm" disabled={enviandoComprobante !== null || archivoComprobante?.permisoId !== s.comprobante.permisoId}
+                    onClick={() => enviarComprobante(s.comprobante!.permisoId)}
+                  >
+                    {enviandoComprobante === s.comprobante.permisoId ? <Spinner /> : <FileUp className="size-4" />} Enviar comprobante
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Contrapropuesta del jefe: exige respuesta, así que se ve sin expandir. */}
             {s.estado === 'EN_NEGOCIACION' && s.contrapropuesta && (
               <div className="mx-3 mb-3 space-y-2.5 rounded-lg border border-violet-500/40 bg-violet-500/5 p-3 text-xs">
@@ -189,7 +293,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                       Del <strong>{s.contrapropuesta.fechaInicio}</strong> al <strong>{s.contrapropuesta.fechaFin}</strong>
                     </p>
                     {s.contrapropuesta.comentario && (
-                      <p className="mt-0.5 text-muted-foreground">"{s.contrapropuesta.comentario}"</p>
+                      <p className="mt-0.5 text-muted-foreground">&ldquo;{s.contrapropuesta.comentario}&rdquo;</p>
                     )}
                   </div>
                 </div>
@@ -279,12 +383,30 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                                 {p.rol} — <span className={cn('font-medium', e.clase)}>{e.label}</span>
                                 {p.decididoEn && <span className="text-xs text-muted-foreground"> · {p.decididoEn}</span>}
                               </p>
-                              {p.comentario && <p className="text-xs text-muted-foreground">"{p.comentario}"</p>}
+                              {p.comentario && <p className="text-xs text-muted-foreground">&ldquo;{p.comentario}&rdquo;</p>}
                             </div>
                           </li>
                         )
                       })}
                     </ul>
+                  </div>
+                )}
+
+                {s.comprobante && (s.comprobante.situacion === 'ENTREGADO' || s.comprobante.situacion === 'VERIFICADO') && (
+                  <div>
+                    <p className="mb-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Comprobante de asistencia</p>
+                    <p className="text-sm">
+                      {s.comprobante.situacion === 'ENTREGADO' ? 'Entregado, en verificación por Talento Humano' : 'Verificado por Talento Humano'}
+                      {s.comprobante.situacion === 'VERIFICADO' && s.comprobante.nota ? ` · "${s.comprobante.nota}"` : ''}
+                      {s.comprobante.docId && (
+                        <>
+                          {' · '}
+                          <a href={`/api/documentos/${s.comprobante.docId}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                            ver archivo
+                          </a>
+                        </>
+                      )}
+                    </p>
                   </div>
                 )}
 

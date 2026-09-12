@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, CircleCheck, Paperclip, TreePalm, Stethoscope, File, Clock, CreditCard, type LucideIcon } from 'lucide-react'
+import { Plus, CircleCheck, Paperclip, TreePalm, Stethoscope, File, Clock, CreditCard, Check, X, FileCheck, type LucideIcon } from 'lucide-react'
 import { Pill, type PillTone, type ChipColor } from '@/components/ui-kit'
+import { ETIQUETA_COMPROBANTE, type SituacionComprobante } from '@/lib/comprobante-permiso'
 import { ListaAcordeon } from '@/components/ui-kit/lista-acordeon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +24,7 @@ import { formatFechaCorta } from '@/lib/fechas'
 import {
   registrarVacaciones, registrarIncapacidad, registrarLicencia, registrarPermiso,
   registrarBonificacion, marcarBonificacionPagada,
+  verificarComprobantePermiso, cambiarExigenciaComprobante,
 } from './acciones'
 
 const TABS = [
@@ -52,11 +54,20 @@ const TONO_ESTADO: Record<string, PillTone> = {
   CANCELADA: 'muted',
 }
 
+/** Comprobante de asistencia de un permiso, ya formateado en el servidor. */
+type ComprobanteNov = {
+  situacion: SituacionComprobante
+  vence: string | null
+  entregadoEn: string | null
+  nota: string | null
+  docId: string | null
+}
+
 type Datos = {
   vacaciones: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; fechaInicio: string; fechaFin: string; dias: number; estado: string; desdeAutoservicio: boolean; soporteDocId: string | null }[]
   incapacidades: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; tipo: string; fechaInicio: string; fechaFin: string; dias: number; desdeAutoservicio: boolean; soporteDocId: string | null }[]
   licencias: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; tipo: string; fechaInicio: string; fechaFin: string; dias: number; remunerada: boolean }[]
-  permisos: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; fecha: string; diaCompleto: boolean; horas: number | null; motivo: string; desdeAutoservicio: boolean; soporteDocId: string | null }[]
+  permisos: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; fecha: string; diaCompleto: boolean; horas: number | null; motivo: string; desdeAutoservicio: boolean; soporteDocId: string | null; comprobante: ComprobanteNov }[]
   bonificaciones: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; concepto: string; valor: number; constitutivoSalario: boolean; estadoPago: string; fechaPago: string | null }[]
 }
 
@@ -157,24 +168,7 @@ export function NovedadesCliente({ tab, datos, puedeCrear, puedeEditar }: { tab:
           }))}
         />
       )}
-      {tab === 'permisos' && (
-        <Lista
-          chip={CHIP_NOV.permisos}
-          items={datos.permisos.map((x) => ({
-            id: x.id,
-            titulo: x.colaborador,
-            avatar: { colaboradorId: x.colaboradorId, tieneFoto: x.tieneFoto, nombre: x.colaborador },
-            sub: `${formatFechaCorta(new Date(x.fecha))} · ${x.diaCompleto ? 'Día completo' : `${x.horas ?? 0} horas`} · ${x.motivo}`,
-            campos: [
-              { label: 'Fecha', valor: formatFechaCorta(new Date(x.fecha)) },
-              { label: 'Modalidad', valor: x.diaCompleto ? 'Día completo' : `Por horas (${x.horas ?? 0})` },
-              ...(x.motivo ? [{ label: 'Motivo', valor: x.motivo }] : []),
-              { label: 'Origen', valor: x.desdeAutoservicio ? 'Autoservicio' : 'Registro de RRHH' },
-            ],
-            derecha: <OrigenSoporte autoservicio={x.desdeAutoservicio} docId={x.soporteDocId} />,
-          }))}
-        />
-      )}
+      {tab === 'permisos' && <ListaPermisos items={datos.permisos} puedeEditar={puedeEditar} />}
       {tab === 'bonificaciones' && <ListaBonificaciones items={datos.bonificaciones} puedeEditar={puedeEditar} />}
 
       {dialogo && <DialogRegistro tab={dialogo} onClose={() => setDialogo(null)} />}
@@ -218,6 +212,120 @@ function ListaBonificaciones({ items, puedeEditar }: { items: Datos['bonificacio
   )
 }
 
+function ListaPermisos({ items, puedeEditar }: { items: Datos['permisos']; puedeEditar: boolean }) {
+  return (
+    <Lista
+      chip={CHIP_NOV.permisos}
+      items={items.map((x) => {
+        const et = ETIQUETA_COMPROBANTE[x.comprobante.situacion]
+        return {
+          id: x.id,
+          titulo: x.colaborador,
+          avatar: { colaboradorId: x.colaboradorId, tieneFoto: x.tieneFoto, nombre: x.colaborador },
+          sub: `${formatFechaCorta(new Date(x.fecha))} · ${x.diaCompleto ? 'Día completo' : `${x.horas ?? 0} horas`} · ${x.motivo}`,
+          campos: [
+            { label: 'Fecha', valor: formatFechaCorta(new Date(x.fecha)) },
+            { label: 'Modalidad', valor: x.diaCompleto ? 'Día completo' : `Por horas (${x.horas ?? 0})` },
+            ...(x.motivo ? [{ label: 'Motivo', valor: x.motivo }] : []),
+            { label: 'Origen', valor: x.desdeAutoservicio ? 'Autoservicio' : 'Registro de RRHH' },
+          ],
+          derecha: (
+            <div className="flex shrink-0 items-center gap-2">
+              <OrigenSoporte autoservicio={x.desdeAutoservicio} docId={x.soporteDocId} />
+              {x.comprobante.situacion !== 'NO_REQUERIDO' && <Pill tone={et.tone}>{et.label}</Pill>}
+            </div>
+          ),
+          extra: <ComprobantePermiso permisoId={x.id} c={x.comprobante} puedeEditar={puedeEditar} />,
+        }
+      })}
+    />
+  )
+}
+
+/**
+ * Comprobante de asistencia del permiso: situación, archivo y lo que Talento
+ * Humano puede hacer con él (aceptarlo, devolverlo con motivo, pedirlo o dejar
+ * de exigirlo).
+ */
+function ComprobantePermiso({ permisoId, c, puedeEditar }: { permisoId: string; c: ComprobanteNov; puedeEditar: boolean }) {
+  const router = useRouter()
+  const [g, setG] = useState(false)
+  const [devolviendo, setDevolviendo] = useState(false)
+  const [nota, setNota] = useState('')
+
+  async function correr(fn: () => Promise<{ ok: boolean; error?: string }>, mensajeOk: string) {
+    setG(true)
+    const res = await fn()
+    setG(false)
+    if (res.ok) { toast.success(mensajeOk); setDevolviendo(false); setNota(''); router.refresh() } else toast.error(res.error ?? 'Error')
+  }
+
+  const et = ETIQUETA_COMPROBANTE[c.situacion]
+  const descripcion: Record<SituacionComprobante, string> = {
+    NO_REQUERIDO: 'A este permiso no se le pidió comprobante.',
+    PENDIENTE: `El colaborador debe subirlo a más tardar el ${c.vence ?? '—'}.`,
+    VENCIDO: `El plazo venció el ${c.vence ?? '—'} y el colaborador no lo ha subido.`,
+    ENTREGADO: `Subido el ${c.entregadoEn ?? '—'}. Revisa el archivo y acéptalo o devuélvelo.`,
+    VERIFICADO: 'Verificado por Talento Humano.',
+  }
+
+  return (
+    <div className="rounded-lg border bg-card p-3 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <FileCheck className="size-4 shrink-0 text-muted-foreground" />
+        <p className="text-[13px] font-medium">Comprobante de asistencia</p>
+        <Pill tone={et.tone}>{et.label}</Pill>
+        {c.docId && (
+          <a href={`/api/documentos/${c.docId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+            <Paperclip className="size-3.5" /> Ver archivo
+          </a>
+        )}
+      </div>
+      <p className="mt-1 text-muted-foreground">{descripcion[c.situacion]}</p>
+      {c.nota && (
+        <p className="mt-1 text-muted-foreground">{c.situacion === 'VERIFICADO' ? 'Observación' : 'Devuelto'}: &ldquo;{c.nota}&rdquo;</p>
+      )}
+      {puedeEditar && (devolviendo ? (
+        <div className="mt-2 space-y-2">
+          <Textarea rows={2} placeholder="¿Por qué no sirve? El colaborador verá este motivo." value={nota} onChange={(e) => setNota(e.target.value)} />
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => { setDevolviendo(false); setNota('') }}>Cancelar</Button>
+            <Button
+              size="sm" variant="outline" disabled={g || !nota.trim()}
+              onClick={() => correr(() => verificarComprobantePermiso({ permisoId, valido: false, nota: nota.trim() }), 'Comprobante devuelto al colaborador.')}
+            >
+              {g ? <Spinner /> : <X className="size-4" />} Devolver
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2 flex flex-wrap justify-end gap-2">
+          {c.situacion === 'NO_REQUERIDO' && (
+            <Button size="sm" variant="outline" disabled={g} onClick={() => correr(() => cambiarExigenciaComprobante({ permisoId, exigir: true }), 'Se le pidió el comprobante al colaborador.')}>
+              {g ? <Spinner /> : <FileCheck className="size-4" />} Pedir comprobante
+            </Button>
+          )}
+          {(c.situacion === 'PENDIENTE' || c.situacion === 'VENCIDO') && (
+            <Button size="sm" variant="outline" disabled={g} onClick={() => correr(() => cambiarExigenciaComprobante({ permisoId, exigir: false }), 'Ya no se exige el comprobante.')}>
+              {g ? <Spinner /> : <X className="size-4" />} Dejar de exigir
+            </Button>
+          )}
+          {c.situacion === 'ENTREGADO' && (
+            <>
+              <Button size="sm" variant="outline" disabled={g} onClick={() => setDevolviendo(true)}>
+                <X className="size-4" /> No sirve
+              </Button>
+              <Button size="sm" disabled={g} onClick={() => correr(() => verificarComprobantePermiso({ permisoId, valido: true }), 'Comprobante verificado.')}>
+                {g ? <Spinner /> : <Check className="size-4" />} Aceptar
+              </Button>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function Vacio() {
   return <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Sin registros en esta categoría.</CardContent></Card>
 }
@@ -228,7 +336,7 @@ function DialogRegistro({ tab, onClose }: { tab: string; onClose: () => void }) 
   const [g, setG] = useState(false)
   const [campos, setCampos] = useState<Record<string, string | boolean>>({
     tipo: tab === 'incapacidades' ? 'ENFERMEDAD_GENERAL' : tab === 'licencias' ? 'NO_REMUNERADA' : '',
-    remunerada: true, remunerado: true, diaCompleto: true, constitutivoSalario: false, esProrroga: false,
+    remunerada: true, remunerado: true, diaCompleto: true, constitutivoSalario: false, esProrroga: false, exigirComprobante: true,
   })
   const set = (k: string, v: string | boolean) => setCampos((p) => ({ ...p, [k]: v }))
 
@@ -239,7 +347,7 @@ function DialogRegistro({ tab, onClose }: { tab: string; onClose: () => void }) 
     if (tab === 'vacaciones') res = await registrarVacaciones({ colaboradorId, fechaInicio: campos.fechaInicio as string, fechaFin: campos.fechaFin as string, observaciones: campos.observaciones as string })
     else if (tab === 'incapacidades') res = await registrarIncapacidad({ colaboradorId, tipo: campos.tipo as 'ENFERMEDAD_GENERAL', fechaInicio: campos.fechaInicio as string, fechaFin: campos.fechaFin as string, diagnosticoCie10: campos.diagnosticoCie10 as string, entidad: campos.entidad as string, esProrroga: campos.esProrroga as boolean, observaciones: campos.observaciones as string })
     else if (tab === 'licencias') res = await registrarLicencia({ colaboradorId, tipo: campos.tipo as 'NO_REMUNERADA', fechaInicio: campos.fechaInicio as string, fechaFin: campos.fechaFin as string, remunerada: campos.remunerada as boolean, observaciones: campos.observaciones as string })
-    else if (tab === 'permisos') res = await registrarPermiso({ colaboradorId, fecha: campos.fecha as string, diaCompleto: campos.diaCompleto as boolean, horas: campos.horas ? Number(campos.horas) : undefined, motivo: campos.motivo as string, remunerado: campos.remunerado as boolean })
+    else if (tab === 'permisos') res = await registrarPermiso({ colaboradorId, fecha: campos.fecha as string, diaCompleto: campos.diaCompleto as boolean, horas: campos.horas ? Number(campos.horas) : undefined, motivo: campos.motivo as string, remunerado: campos.remunerado as boolean, exigirComprobante: campos.exigirComprobante as boolean })
     else res = await registrarBonificacion({ colaboradorId, concepto: campos.concepto as string, valor: Number(campos.valor || 0), constitutivoSalario: campos.constitutivoSalario as boolean, observaciones: campos.observaciones as string })
     setG(false)
     if (res?.ok) { toast.success('Novedad registrada.'); onClose(); router.refresh() } else toast.error(res?.error ?? 'Error')
@@ -283,6 +391,10 @@ function DialogRegistro({ tab, onClose }: { tab: string; onClose: () => void }) 
               {!campos.diaCompleto && <Campo label="Horas"><Input type="number" step="0.5" onChange={(e) => set('horas', e.target.value)} /></Campo>}
               <Campo label="Motivo"><Textarea rows={2} onChange={(e) => set('motivo', e.target.value)} /></Campo>
               <label className="flex items-center gap-2 text-sm"><Checkbox checked={campos.remunerado as boolean} onCheckedChange={(v) => set('remunerado', Boolean(v))} /> Remunerado</label>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={campos.exigirComprobante as boolean} onCheckedChange={(v) => set('exigirComprobante', Boolean(v))} />
+                Pedir comprobante de asistencia
+              </label>
             </>
           )}
           {tab === 'incapacidades' && (

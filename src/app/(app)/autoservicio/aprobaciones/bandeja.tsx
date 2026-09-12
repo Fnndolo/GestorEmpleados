@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
@@ -29,9 +30,20 @@ type Solicitud = {
 }
 const TIPO: Record<string, string> = { VACACIONES: 'Vacaciones', PERMISO: 'Permiso', INCAPACIDAD: 'Incapacidad', CERTIFICACION_LABORAL: 'Certificación', LICENCIA: 'Licencia' }
 
-export function BandejaAprobaciones({ solicitudes }: { solicitudes: Solicitud[] }) {
+export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { solicitudes: Solicitud[]; plazoComprobanteDias: number }) {
   const router = useRouter()
   const [procesando, setProcesando] = useState<string | null>(null)
+  // Permiso: pedir el comprobante de asistencia. Se guarda solo lo desmarcado
+  // (por pasoId): si nadie toca la casilla, se pide.
+  const [sinComprobante, setSinComprobante] = useState<Record<string, boolean>>({})
+  const exigeComprobante = (pasoId: string) => !sinComprobante[pasoId]
+  const plazoTexto = plazoComprobanteDias === 1 ? '1 día hábil de plazo' : `${plazoComprobanteDias} días hábiles de plazo`
+  const toggleComprobante = (pasoId: string) => (
+    <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+      <Checkbox checked={exigeComprobante(pasoId)} onCheckedChange={(v) => setSinComprobante((p) => ({ ...p, [pasoId]: v !== true }))} />
+      <span>Pedir comprobante de asistencia <span className="opacity-80">({plazoTexto})</span></span>
+    </label>
+  )
   const [cambioFechas, setCambioFechas] = useState<string | null>(null) // pasoId con el formulario abierto
   const [soporteInvalido, setSoporteInvalido] = useState<string | null>(null) // pasoId de licencia de ley devuelta
   const [comentario, setComentario] = useState('')
@@ -42,10 +54,12 @@ export function BandejaAprobaciones({ solicitudes }: { solicitudes: Solicitud[] 
 
   async function resolver(pasoId: string, aprobar: boolean, conFechas = false) {
     setProcesando(pasoId)
+    const esPermiso = solicitudes.find((x) => x.pasoId === pasoId)?.tipo === 'PERMISO'
     const res = await resolverPaso({
       pasoId, aprobar, comentario: comentario || undefined,
       nuevaFechaInicio: conFechas ? nuevaIni : undefined,
       nuevaFechaFin: conFechas ? nuevaFin : undefined,
+      exigirComprobante: esPermiso && aprobar ? exigeComprobante(pasoId) : undefined,
     })
     setProcesando(null)
     if (res.ok) {
@@ -127,7 +141,7 @@ export function BandejaAprobaciones({ solicitudes }: { solicitudes: Solicitud[] 
                         El colaborador rechazó la contrapropuesta (fechas {s.contrapropuestaRechazada.fechaInicio} a {s.contrapropuestaRechazada.fechaFin})
                       </p>
                       {s.contrapropuestaRechazada.respuesta && (
-                        <p className="text-muted-foreground">"{s.contrapropuestaRechazada.respuesta}"</p>
+                        <p className="text-muted-foreground">&ldquo;{s.contrapropuestaRechazada.respuesta}&rdquo;</p>
                       )}
                       <p className="text-muted-foreground">La solicitud vuelve con las fechas originales: aprueba, rechaza o propón otras fechas.</p>
                     </div>
@@ -210,6 +224,7 @@ export function BandejaAprobaciones({ solicitudes }: { solicitudes: Solicitud[] 
                   </div>
                 )}
                 <Textarea rows={2} placeholder="Comentario para el colaborador (opcional)" value={comentario} onChange={(e) => setComentario(e.target.value)} />
+                {s.tipo === 'PERMISO' && toggleComprobante(s.pasoId)}
                 <div className="flex justify-end gap-2">
                   <Button size="sm" variant="ghost" onClick={() => { setCambioFechas(null); setNuevaIni(''); setNuevaFin('') }}>Cancelar</Button>
                   {s.tipo === 'VACACIONES' ? (
@@ -247,7 +262,8 @@ export function BandejaAprobaciones({ solicitudes }: { solicitudes: Solicitud[] 
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-wrap justify-end gap-2 mt-3">
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                {s.tipo === 'PERMISO' && <div className="mr-auto">{toggleComprobante(s.pasoId)}</div>}
                 <Button size="sm" variant="outline" onClick={() => resolver(s.pasoId, false)} disabled={procesando === s.pasoId}>
                   <X className="size-4" /> Rechazar
                 </Button>
