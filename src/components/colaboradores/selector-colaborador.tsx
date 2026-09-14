@@ -23,8 +23,26 @@ export function SelectorColaborador({
   const [resultados, setResultados] = useState<Resultado[]>([])
   const [seleccionado, setSeleccionado] = useState<Resultado | null>(null)
 
+  // Si llega ya elegido desde fuera (p. ej. `?colaborador=` en la URL) se
+  // resuelve el nombre: "Colaborador seleccionado" no le dice nada a nadie.
   useEffect(() => {
-    if (texto.trim().length < 2) { setResultados([]); return }
+    if (!value || seleccionado?.id === value) return
+    const ctrl = new AbortController()
+    void (async () => {
+      try {
+        const resp = await fetch(`/api/colaboradores/buscar?id=${encodeURIComponent(value)}`, { signal: ctrl.signal })
+        const json = await resp.json()
+        const r = (json.resultados ?? [])[0] as Resultado | undefined
+        if (r) setSeleccionado(r)
+      } catch { /* abortado */ }
+    })()
+    return () => ctrl.abort()
+    // Solo cuando cambia el valor desde fuera; al elegir en la lista ya viene con nombre.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
+
+  useEffect(() => {
+    if (texto.trim().length < 2) return
     const ctrl = new AbortController()
     const t = setTimeout(async () => {
       try {
@@ -49,7 +67,11 @@ export function SelectorColaborador({
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command shouldFilter={false}>
-          <CommandInput placeholder="Buscar por nombre o documento…" value={texto} onValueChange={setTexto} />
+          <CommandInput
+            placeholder="Buscar por nombre o documento…"
+            value={texto}
+            onValueChange={(v) => { setTexto(v); if (v.trim().length < 2) setResultados([]) }}
+          />
           <CommandList>
             <CommandEmpty>{texto.length < 2 ? 'Escribe al menos 2 letras.' : 'Sin resultados.'}</CommandEmpty>
             <CommandGroup>

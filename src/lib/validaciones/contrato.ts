@@ -298,3 +298,13 @@ export const soporteSsSchema = z.object({
   observaciones: z.string().trim().max(500).optional().or(z.literal('')),
 })
 export type SoporteSsInput = z.infer<typeof soporteSsSchema>
+
+/** Cierre de un contrato OPS. RETIRO no se elige aquí: lo pone Terminaciones. */
+export const cerrarContratoOpsSchema = z.object({
+  contratoId: z.uuid(),
+  motivo: z.enum(['VENCIMIENTO_PLAZO', 'TERMINACION_ANTICIPADA', 'MUTUO_ACUERDO']),
+  // Solo para cierres anteriores al plazo; por vencimiento, la fecha es la de fin.
+  fechaCierre: fechaOpc,
+  observacion: z.string().trim().max(500).optional().or(z.literal('')),
+})
+export type CerrarContratoOpsInput = z.infer<typeof cerrarContratoOpsSchema>

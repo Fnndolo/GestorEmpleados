@@ -10,7 +10,7 @@ import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subid
 import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
 import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema } from '@/lib/validaciones/contrato'
+import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema, cerrarContratoOpsSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { publicarVencimiento, resolverVencimiento } from '@/server/vencimientos/servicio'
 import { construirDatosPdfContratoOps, construirDatosAutorizacion, generarPdfContratoOps, generarPdfAutorizacionDatos, leerFirmaComoDataUri, type SnapshotContratoOps } from '@/server/contratos-ops-pdf'
@@ -20,6 +20,8 @@ import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { generarPdfCuentaCobro } from '@/server/cuentas-cobro'
 import { parseFuncionesTexto, type FuncionesCargo, type ClausulaPlantilla } from '@/lib/contrato-variables'
 import { ubicarFirmasEnPdf, contarPaginas } from '@/server/pdf/firma-en-pdf'
+import { restringirAccesoSiSinVinculo } from '@/server/rol-consulta'
+import { MOTIVO_CIERRE_TEXTO } from '@/lib/contratos-cierre'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
 
@@ -990,5 +992,74 @@ export const analizarPdfContratoOps = accion(
     if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
     const [posiciones, paginas] = await Promise.all([ubicarFirmasEnPdf(pdf), contarPaginas(pdf)])
     return { paginas, ...posiciones }
+  },
+)
+
+/**
+ * Cierra un contrato OPS: pasa a TERMINADO con fecha, motivo y quién lo cerró.
+ *
+ * Un OPS termina cuando vence el plazo o, antes, de mutuo acuerdo o de forma
+ * anticipada. Cerrarlo NO retira a la persona —lo normal es que siga con un
+ * contrato nuevo—; eso es cosa de Terminaciones. Lo que sí hace: apaga su
+ * alerta de vencimiento, deja de ser el contrato al que se ligan las cuentas de
+ * cobro nuevas (las ya radicadas siguen su curso), y si a la persona no le
+ * queda ningún vínculo vigente le baja el acceso a solo consulta.
+ *
+ * Es un hecho con fecha y queda en auditoría: no se reabre. Si la relación
+ * continúa, el camino es el contrato nuevo.
+ */
+export const cerrarContratoOps = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: cerrarContratoOpsSchema },
+  async (d, usuario) => {
+    const c = await prisma.contratoOps.findUniqueOrThrow({ where: { id: d.contratoId } })
+    if (c.estado === 'TERMINADO') throw new ErrorNegocio('Este contrato ya está cerrado.')
+    if (c.estado === 'BORRADOR') throw new ErrorNegocio('Un borrador no se cierra: elimínalo o actívalo.')
+
+    const hoy = hoyBogota()
+    let cerradoEn: Date
+    if (d.motivo === 'VENCIMIENTO_PLAZO') {
+      // La fecha es la pactada; si todavía no llega, no venció: es un cierre anticipado.
+      if (c.fechaFin > hoy) {
+        throw new ErrorNegocio(`El plazo vence el ${formatFechaISO(c.fechaFin)}, todavía no ha vencido. Si se cierra antes, registra una terminación anticipada o de mutuo acuerdo.`)
+      }
+      cerradoEn = c.fechaFin
+    } else {
+      cerradoEn = parseFechaISO(d.fechaCierre || null) ?? hoy
+      if (cerradoEn > hoy) throw new ErrorNegocio('La fecha de cierre no puede ser futura: se cierra cuando ya ocurrió.')
+      if (cerradoEn < c.fechaInicio) throw new ErrorNegocio('La fecha de cierre no puede ser anterior al inicio del contrato.')
+    }
+
+    await dbAuditado.contratoOps.update({
+      where: { id: c.id },
+      data: {
+        estado: 'TERMINADO',
+        cerradoEn,
+        motivoCierre: d.motivo,
+        cerradoPorId: usuario.id,
+        observacionCierre: v(d.observacion),
+      },
+    })
+    // Un contrato cerrado ya no vence: se apaga su alerta.
+    await publicarVencimientoOps(c.id)
+
+    let accesoRestringido = false
+    if (c.colaboradorId) {
+      accesoRestringido = await restringirAccesoSiSinVinculo(c.colaboradorId)
+      const uid = await usuarioDeColaborador(c.colaboradorId)
+      if (uid) {
+        await avisar(uid, {
+          evento: 'contrato_cerrado',
+          titulo: 'Tu contrato de prestación de servicios se cerró',
+          mensaje: `El contrato ${c.numero} quedó cerrado el ${formatFechaISO(cerradoEn)} (${MOTIVO_CIERRE_TEXTO[d.motivo]}).${accesoRestringido ? ' Como no tienes otro contrato vigente, tu acceso queda en solo consulta.' : ''}`,
+          enlace: '/autoservicio/contratos',
+          llamadoAccion: 'Ver mis contratos',
+        }).catch(() => {})
+      }
+    }
+
+    revalidatePath('/contratos')
+    revalidatePath(`/contratos/ops/${c.id}`)
+    revalidatePath('/autoservicio/contratos')
+    return { ok: true, accesoRestringido }
   },
 )

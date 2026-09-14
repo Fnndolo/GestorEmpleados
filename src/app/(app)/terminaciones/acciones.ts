@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db'
 import { dbAuditado, auditar } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { parseFechaISO, formatFechaISO } from '@/lib/fechas'
+import { resolverVencimiento } from '@/server/vencimientos/servicio'
 import { cargarParametros } from '@/server/nomina/parametros'
 import { liquidacionDefinitiva } from '@/server/nomina/liquidacion-definitiva'
 import { basesDesdeHistorial, type AjustesBases } from '@/server/nomina/bases-liquidacion'
@@ -33,7 +34,7 @@ export const crearTerminacion = accion(
       procesoDisciplinarioId: z.uuid().optional(),
     }),
   },
-  async (d) => {
+  async (d, usuario) => {
     const existe = await prisma.terminacion.findFirst({ where: { colaboradorId: d.colaboradorId, estado: { not: 'CERRADA' } } })
     if (existe) throw new ErrorNegocio('Ya hay una terminación en proceso para este colaborador.')
 
@@ -93,6 +94,21 @@ export const crearTerminacion = accion(
     // Marcar colaborador como retirado y contrato terminado
     await dbAuditado.colaborador.update({ where: { id: d.colaboradorId }, data: { estado: 'RETIRADO', fechaRetiro } })
     if (contrato) await dbAuditado.contrato.update({ where: { id: contrato.id }, data: { estado: 'TERMINADO' } })
+
+    // Los OPS vigentes también se cierran: quien se retira no sigue prestando
+    // servicios. Antes "Fin de OPS" retiraba a la persona y dejaba el contrato
+    // Activo, con su alerta de vencimiento sonando cada semana.
+    const opsVigentes = await prisma.contratoOps.findMany({
+      where: { colaboradorId: d.colaboradorId, estado: { in: ['ACTIVO', 'FIRMADO'] } },
+      select: { id: true },
+    })
+    for (const o of opsVigentes) {
+      await dbAuditado.contratoOps.update({
+        where: { id: o.id },
+        data: { estado: 'TERMINADO', cerradoEn: fechaRetiro, motivoCierre: 'RETIRO', cerradoPorId: usuario.id },
+      })
+      await resolverVencimiento('ContratoOps', o.id, 'CONTRATO_OPS')
+    }
 
     // Acceso de solo consulta: sin vínculo vigente, el usuario ya no puede crear
     // solicitudes, firmar ni radicar nada — solo ver su historial (habeas data).
@@ -393,6 +409,19 @@ export const anularTerminacion = accion(
     })
     if (contratoTerminado) {
       await dbAuditado.contrato.update({ where: { id: contratoTerminado.id }, data: { estado: 'ACTIVO' } })
+    }
+    // Los OPS que cerró esta terminación (motivo RETIRO en su misma fecha) vuelven
+    // al estado que tenían: FIRMADO si ya tenía las firmas, si no ACTIVO.
+    const opsCerrados = await prisma.contratoOps.findMany({
+      where: { colaboradorId: t.colaboradorId, estado: 'TERMINADO', motivoCierre: 'RETIRO', cerradoEn: t.fechaRetiro },
+      select: { id: true, firmaContratistaPath: true, firmaContratantePath: true, firmaContratanteEnPdf: true },
+    })
+    for (const o of opsCerrados) {
+      const firmado = !!o.firmaContratistaPath && (!!o.firmaContratantePath || o.firmaContratanteEnPdf)
+      await dbAuditado.contratoOps.update({
+        where: { id: o.id },
+        data: { estado: firmado ? 'FIRMADO' : 'ACTIVO', cerradoEn: null, motivoCierre: null, cerradoPorId: null, observacionCierre: null },
+      })
     }
     await devolverAccesoNormal(t.colaboradorId)
 

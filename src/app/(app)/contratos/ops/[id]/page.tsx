@@ -5,7 +5,9 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { formatFechaLarga, formatFechaISO } from '@/lib/fechas'
+import { formatFechaLarga, formatFechaISO, hoyBogota } from '@/lib/fechas'
+import { MOTIVO_CIERRE_TEXTO } from '@/lib/contratos-cierre'
+import { CerrarContratoOps } from './cerrar-contrato'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { fmtCOP } from '@/lib/moneda'
 import { CuentasCobro } from './cuentas-cliente'
@@ -70,14 +72,41 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
     }
   }
 
+  const hoy = hoyBogota()
+  const vigente = c.estado === 'ACTIVO' || c.estado === 'FIRMADO'
+  const vencido = vigente && c.fechaFin < hoy
+
   return (
     <div className="max-w-6xl">
-      <Encabezado titulo={`OPS ${c.numero}`} descripcion={nombreContratista} />
+      <Encabezado
+        titulo={`OPS ${c.numero}`}
+        descripcion={nombreContratista}
+        acciones={puedeEditar && vigente && (
+          <CerrarContratoOps contratoId={c.id} numero={c.numero} fechaFin={formatFechaISO(c.fechaFin)} vencido={vencido} hoy={formatFechaISO(hoy)} />
+        )}
+      />
+
+      {/* Un OPS con el plazo vencido y todavía activo es una contradicción que el
+          sistema no resuelve solo: o hay contrato nuevo y este se cierra, o hay
+          que registrar el retiro. Se dice aquí, donde se puede actuar. */}
+      {vencido && (
+        <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm">
+          <b>El plazo venció el {formatFechaLarga(c.fechaFin)}</b> y el contrato sigue {c.estado === 'FIRMADO' ? 'firmado' : 'activo'}.
+          Si la relación continúa con un contrato nuevo, ciérralo por vencimiento del plazo; si el contratista se retira, regístralo en Terminaciones.
+        </div>
+      )}
 
       <Card className="mb-4"><CardContent className="py-4">
         <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
           <Dato k="Contratista" v={nombreContratista} />
-          <Dato k="Estado" v={<Badge variant={c.estado === 'ACTIVO' ? 'default' : 'secondary'}>{c.estado}</Badge>} />
+          <Dato k="Estado" v={<Badge variant={vigente ? 'default' : 'secondary'}>{ESTADO_OPS[c.estado] ?? c.estado}</Badge>} />
+          {c.estado === 'TERMINADO' && c.cerradoEn && (
+            <Dato
+              k="Cierre"
+              v={`${formatFechaLarga(c.cerradoEn)} · ${c.motivoCierre ? MOTIVO_CIERRE_TEXTO[c.motivoCierre] : 'sin motivo registrado'}${c.observacionCierre ? ` · ${c.observacionCierre}` : ''}`}
+              full
+            />
+          )}
           <Dato k="Objeto" v={c.objeto} full />
           <Dato k="Valor total" v={fmtCOP(Number(c.valorTotal))} />
           <Dato k="Valor mensual" v={c.valorMensual ? fmtCOP(Number(c.valorMensual)) : '—'} />
@@ -232,6 +261,8 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
     </div>
   )
 }
+
+const ESTADO_OPS: Record<string, string> = { BORRADOR: 'Borrador', ACTIVO: 'Activo', FIRMADO: 'Firmado', TERMINADO: 'Terminado' }
 
 function Dato({ k, v, full }: { k: string; v: React.ReactNode; full?: boolean }) {
   return (

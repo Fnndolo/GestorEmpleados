@@ -1225,6 +1225,16 @@ model VariacionSalarial {
 // CONTRATISTAS OPS (prestación de servicios) — flujo separado de nómina (3.2)
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Por qué se cerró un OPS. RETIRO lo pone Terminaciones cuando la persona se va.
+enum MotivoCierreOps {
+  VENCIMIENTO_PLAZO
+  TERMINACION_ANTICIPADA
+  MUTUO_ACUERDO
+  RETIRO
+
+  @@map("motivo_cierre_ops")
+}
+
 enum EstadoContratoOps {
   BORRADOR
   ACTIVO
@@ -1332,6 +1342,14 @@ model ContratoOps {
   fechaFin              DateTime          @map("fecha_fin") @db.Date
   rut                   String?
   estado                EstadoContratoOps @default(ACTIVO)
+  // Cierre del contrato: cuándo, por qué, quién y una nota. Un OPS termina
+  // cuando vence el plazo (o antes, de mutuo acuerdo o de forma anticipada) y
+  // pasa a TERMINADO sin retirar a la persona, que suele seguir con uno nuevo.
+  // Distinto de Terminaciones, que es el retiro de la persona.
+  cerradoEn             DateTime?         @map("cerrado_en") @db.Date
+  motivoCierre          MotivoCierreOps?  @map("motivo_cierre")
+  cerradoPorId          String?           @map("cerrado_por_id") @db.Uuid
+  observacionCierre     String?           @map("observacion_cierre")
   // Snapshot de los datos resueltos del PDF (empresa, plantilla, encabezado, nombres)
   // para poder regenerar el documento firmado sin re-derivar el formulario.
   contenidoPdf          Json?             @map("contenido_pdf")
@@ -3154,4 +3172,17 @@ enum EstadoCelebracion {
   CERRADA
 
   @@map("estado_celebracion")
+}
+
+// ── Latido del sistema ──
+// Una sola fila con la hora de la última escritura de datos. La actualiza el
+// propio cliente de Prisma después de cualquier create/update/delete (ver
+// src/lib/db.ts), y las pantallas abiertas la consultan cada pocos segundos para
+// refrescarse solas cuando alguien más cambió algo. Es una fila y una fecha a
+// propósito: es lo único que se puede compartir entre instancias sin servidor.
+model LatidoSistema {
+  id     Int      @id @default(1)
+  cambio DateTime @default(now())
+
+  @@map("latido_sistema")
 }

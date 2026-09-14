@@ -24,6 +24,7 @@ export type ClaveEvento =
   | 'cumpleanos_facturas_revisadas'
   // Contratos
   | 'contrato_pendiente_firma'
+  | 'contrato_cerrado'
   | 'contrato_por_firmar'
   | 'contrato_firmado'
   | 'contrato_actualizado'
@@ -93,6 +94,7 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
 
   // Contratos
   { clave: 'contrato_pendiente_firma', etiqueta: 'Contrato pendiente de firma', descripcion: 'Se crea un contrato que el colaborador debe firmar.', modulo: 'Contratos', correoPorDefecto: true },
+  { clave: 'contrato_cerrado', etiqueta: 'Contrato OPS cerrado', descripcion: 'Talento Humano cierra un contrato de prestación de servicios (vencimiento del plazo, anticipado o mutuo acuerdo).', modulo: 'Contratos' },
   { clave: 'contrato_por_firmar', etiqueta: 'Falta tu firma en el contrato', descripcion: 'Una parte firmó y falta la otra.', modulo: 'Contratos', correoPorDefecto: true },
   { clave: 'contrato_firmado', etiqueta: 'Contrato firmado', descripcion: 'Se completan las firmas del contrato.', modulo: 'Contratos' },
   { clave: 'contrato_actualizado', etiqueta: 'Contrato actualizado', descripcion: 'Se modifica un contrato ya existente.', modulo: 'Contratos' },

@@ -10,10 +10,13 @@ export async function GET(req: NextRequest) {
   if (!usuario) return NextResponse.json({ resultados: [] })
   if (!tienePermiso(usuario, 'colaboradores', 'VER')) return NextResponse.json({ resultados: [] })
 
+  // `?id=`: resolver una sola persona ya elegida (p. ej. la que llega por la URL
+  // a Terminaciones) para mostrar su nombre; mismo alcance que la búsqueda.
+  const id = req.nextUrl.searchParams.get('id')?.trim() ?? ''
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? ''
-  if (q.length < 2) return NextResponse.json({ resultados: [] })
+  if (!id && q.length < 2) return NextResponse.json({ resultados: [] })
 
-  const base = await whereColaboradores(usuario, filtroBusquedaColaborador(q), { ignorarSedeActiva: true })
+  const base = await whereColaboradores(usuario, id ? { id } : filtroBusquedaColaborador(q), { ignorarSedeActiva: true })
 
   const colaboradores = await prisma.colaborador.findMany({
     where: base,
