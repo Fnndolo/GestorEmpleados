@@ -10,6 +10,7 @@ import { MenuUsuario } from '@/components/shell/menu-usuario'
 import { DrawerMovil } from '@/components/shell/drawer-movil'
 import { BottomNav } from '@/components/shell/bottom-nav'
 import { Campana } from '@/components/shell/campana'
+import { ActualizacionEnVivo } from '@/components/shell/actualizacion-en-vivo'
 import { BusquedaGlobal } from '@/components/shell/busqueda-global'
 import { RegistrarSW } from '@/components/pwa/registrar-sw'
 import { PlegarLateral, ScriptLateral } from '@/components/shell/plegar-lateral'
@@ -87,6 +88,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
       {/* Barra inferior móvil */}
       <BottomNav hrefsVisibles={visibles} badges={badges} />
+
+      {/* Refresca los datos de cualquier pantalla cuando alguien más cambia algo. */}
+      <ActualizacionEnVivo />
     </div>
   )
 }
