@@ -259,9 +259,8 @@ function DialogSubir({ colaboradorId, tipos, tipoInicial, onClose, onDone }: {
   colaboradorId: string; tipos: TipoDoc[]; tipoInicial?: TipoDoc | null; onClose: () => void; onDone: () => void
 }) {
   const inputArchivo = useRef<HTMLInputElement>(null)
-  const [tipoId, setTipoId] = useState(tipoInicial?.id ?? '')
+  const tipoId = tipoInicial?.id ?? ''
   const [nombre, setNombre] = useState('')
-  const [descripcion, setDescripcion] = useState('')
   const [vencimiento, setVencimiento] = useState('')
   const [archivo, setArchivo] = useState<File | null>(null)
   const [g, setG] = useState(false)
@@ -279,7 +278,6 @@ function DialogSubir({ colaboradorId, tipos, tipoInicial, onClose, onDone }: {
       fd.append('entidadId', colaboradorId)
       fd.append('nombre', nombre.trim() || tipo?.nombre || archivo.name)
       if (tipoId) fd.append('tipoDocumentoId', tipoId)
-      if (descripcion.trim()) fd.append('descripcion', descripcion.trim())
       if (vencimiento) fd.append('fechaVencimiento', vencimiento)
       const res = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
       if (!res.ok) {
@@ -301,23 +299,20 @@ function DialogSubir({ colaboradorId, tipos, tipoInicial, onClose, onDone }: {
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{tipoInicial ? `Subir: ${tipoInicial.nombre}` : 'Subir documento a mi expediente'}</DialogTitle>
-          <DialogDescription>Cédula, diplomas, certificados, RUT… Queda en tu hoja de vida y Talento Humano lo revisa.</DialogDescription>
+          <DialogTitle>{tipoInicial ? `Subir: ${tipoInicial.nombre}` : 'Subir documento'}</DialogTitle>
+          <DialogDescription>
+            {tipoInicial ? 'Queda en tu expediente y Talento Humano lo revisa.' : 'Para algo que no está en tu lista. Queda en tu expediente y Talento Humano lo revisa.'}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>Tipo de documento (opcional)</Label>
-            <Select value={tipoId} onValueChange={setTipoId}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona si aplica…" /></SelectTrigger>
-              <SelectContent>
-                {tipos.map((t) => <SelectItem key={t.id} value={t.id}>{t.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Nombre {tipo ? '(opcional: usa el del tipo)' : ''}</Label>
-            <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder={tipo?.nombre ?? 'Ej: Diploma de bachiller'} />
-          </div>
+          {/* Sin selector de tipo: lo exigido se sube desde su fila con el tipo
+              ya puesto; lo suelto solo necesita un nombre. */}
+          {!tipo && (
+            <div className="space-y-1.5">
+              <Label>Nombre del documento</Label>
+              <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Carta de recomendación" />
+            </div>
+          )}
           {tipo?.requiereVencimiento && (
             <div className="space-y-1.5">
               <Label>Fecha de vencimiento</Label>
@@ -325,10 +320,6 @@ function DialogSubir({ colaboradorId, tipos, tipoInicial, onClose, onDone }: {
               <p className="text-xs text-muted-foreground">Este tipo de documento vence; el sistema te avisará antes de la fecha.</p>
             </div>
           )}
-          <div className="space-y-1.5">
-            <Label>Descripción (opcional)</Label>
-            <Textarea rows={2} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
-          </div>
           <div className="space-y-1.5">
             <Label>Archivo (imagen o PDF)</Label>
             <input ref={inputArchivo} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />

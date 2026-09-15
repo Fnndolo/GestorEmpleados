@@ -21,7 +21,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatFechaCorta } from '@/lib/fechas'
 import { cn } from '@/lib/utils'
 import { borrarDocumento } from '@/app/(app)/colaboradores/documentos-acciones'
@@ -220,7 +219,6 @@ export function GestorDocumentos({
           entidadTipo={entidadTipo}
           entidadId={entidadId}
           sedeId={sedeId}
-          tiposDocumento={tiposDocumento}
           tipoInicial={dialogo.tipo}
           subiendo={subiendo}
           setSubiendo={setSubiendo}
@@ -262,9 +260,9 @@ function IconoEstado({ estado }: { estado: ItemSemaforo['estado'] }) {
 }
 
 function DialogSubir({
-  entidadTipo, entidadId, sedeId, tiposDocumento, tipoInicial, subiendo, setSubiendo, onClose, onSubido,
+  entidadTipo, entidadId, sedeId, tipoInicial, subiendo, setSubiendo, onClose, onSubido,
 }: {
-  entidadTipo: string; entidadId: string; sedeId: string | null; tiposDocumento: TipoDoc[]
+  entidadTipo: string; entidadId: string; sedeId: string | null
   /** Tipo ya elegido cuando se abre desde la fila del semáforo. */
   tipoInicial?: TipoDoc | null
   subiendo: boolean; setSubiendo: (b: boolean) => void; onClose: () => void; onSubido: () => void
@@ -272,10 +270,10 @@ function DialogSubir({
   const inputRef = useRef<HTMLInputElement>(null)
   const [archivo, setArchivo] = useState<File | null>(null)
   const [nombre, setNombre] = useState(tipoInicial?.nombre ?? '')
-  const [tipoDocumentoId, setTipoDocumentoId] = useState(tipoInicial?.id ?? '')
+  const tipoDocumentoId = tipoInicial?.id ?? ''
   const [fechaVencimiento, setFechaVencimiento] = useState('')
 
-  const tipoSel = tiposDocumento.find((t) => t.id === tipoDocumentoId)
+  const tipoSel = tipoInicial ?? null
 
   async function onSeleccion(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -331,23 +329,12 @@ function DialogSubir({
               className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground"
             />
           </div>
-          {/* El catálogo de tipos solo aplica donde hay clasificación (expediente del
-              colaborador). Donde no se pasan tipos (p. ej. anexos de contrato) no se
-              muestra un selector vacío: basta el nombre/descripción. */}
-          {tiposDocumento.length > 0 && (
-            <div className="space-y-1.5">
-              <Label>Tipo de documento</Label>
-              <Select value={tipoDocumentoId || undefined} onValueChange={setTipoDocumentoId}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="— Sin clasificar —" /></SelectTrigger>
-                <SelectContent>
-                  {tiposDocumento.map((t) => <SelectItem key={t.id} value={t.id}>{t.nombre}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          {/* Sin selector de tipo: los documentos exigidos se suben desde su
+              propia fila (el tipo ya viene puesto), y el botón general es para
+              lo suelto, que solo necesita un nombre. */}
           <div className="space-y-1.5">
-            <Label>Nombre / descripción</Label>
-            <Input value={nombre} onChange={(e) => setNombre(e.target.value)} />
+            <Label>Nombre del documento</Label>
+            <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Carta de recomendación" />
           </div>
           {tipoSel?.requiereVencimiento && (
             <div className="space-y-1.5">
