@@ -14,7 +14,7 @@ import { TabsContent } from '@/components/ui/tabs'
 import { TabsResponsive } from '@/components/shell/tabs-responsive'
 import {
   Pencil, Phone, ShieldAlert, CalendarDays, FileText, Eye, Receipt,
-  IdCard, HeartPulse, BriefcaseBusiness, Landmark, Shirt, TreePalm, Banknote, CalendarClock,
+  IdCard, HeartPulse, BriefcaseBusiness, Landmark, Shirt, CalendarRange, Banknote, CalendarClock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Stat, BloqueDatos } from '@/components/ui-kit'
@@ -224,7 +224,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
 
       {/* Héroe */}
       <Card className="mb-4 overflow-hidden">
-        <CardContent className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent py-6">
+        <CardContent className="py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <FotoUploader
               colaboradorId={c.id}
@@ -260,21 +260,21 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
 
       {/* Datos clave de un vistazo */}
       <div className="mb-4 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        <Stat icono={CalendarClock} color="bg-indigo-500/12 text-indigo-600 dark:text-indigo-400"
+        <Stat icono={CalendarClock} color="bg-foreground text-background"
           valor={antiguedad(c.fechaIngreso)} label={`Antigüedad · desde ${formatFechaLarga(c.fechaIngreso)}`} />
         {salarioActual && (
-          <Stat icono={Banknote} color="bg-emerald-500/12 text-emerald-600 dark:text-emerald-400"
+          <Stat icono={Banknote} color="bg-foreground text-background"
             valor={salarioActual} label={contratoActivo ? 'Salario base actual' : 'Honorarios OPS'} />
         )}
         <Stat
           icono={FileText}
-          color={docsFaltan > 0 ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-amber-500/12 text-amber-600 dark:text-amber-400'}
+          color={docsFaltan > 0 ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-foreground text-background'}
           valor={`${docsAlDia} de ${semaforo.length}`}
           label={`Documentos al día${docsPorVencer > 0 ? ` · ${docsPorVencer} por vencer` : ''}${docsFaltan > 0 ? ` · ${docsFaltan} falta${docsFaltan > 1 ? 'n' : ''}` : ''}`}
         />
         {/* Un contrato de prestación de servicios no causa vacaciones. */}
         {!esOps(c.tipoVinculo) && (
-          <Stat icono={TreePalm} color="bg-teal-500/12 text-teal-600 dark:text-teal-400"
+          <Stat icono={CalendarRange} color="bg-foreground text-background"
             valor={`${saldoVac.saldoEntero} días`} label="Vacaciones disponibles" />
         )}
       </div>
@@ -292,7 +292,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
 
         {/* Resumen */}
         <TabsContent value="resumen" className="grid gap-3 sm:grid-cols-2">
-          <BloqueDatos titulo="Identificación" icono={IdCard} color="bg-sky-500/12 text-sky-600 dark:text-sky-400" datos={[
+          <BloqueDatos titulo="Identificación" icono={IdCard} color="bg-foreground text-background" datos={[
             ['Documento', `${TIPO_DOCUMENTO_IDENTIDAD[c.tipoDocumento]} ${c.numeroDocumento}`],
             ['Lugar de expedición', c.lugarExpedicionDoc ?? '—'],
             ['Fecha de expedición', c.fechaExpedicionDoc ? formatFechaLarga(c.fechaExpedicionDoc) : '—'],
@@ -309,8 +309,8 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             <Card>
               <CardContent className="py-4">
                 <div className="mb-3 flex items-center gap-2.5">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-teal-500/12 text-teal-600 dark:text-teal-400">
-                    <TreePalm className="size-4" />
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
+                    <CalendarRange className="size-4" />
                   </span>
                   <h3 className="text-sm font-bold">Vacaciones</h3>
                 </div>
@@ -331,19 +331,19 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
               </CardContent>
             </Card>
           )}
-          <BloqueDatos titulo="Contacto" icono={Phone} color="bg-teal-500/12 text-teal-600 dark:text-teal-400" datos={[
+          <BloqueDatos titulo="Contacto" icono={Phone} color="bg-foreground text-background" datos={[
             ['Celular', c.celular],
             ['Correo personal', c.emailPersonal ?? '—'],
             ['Dirección', [c.direccion, c.ciudadResidencia?.nombre].filter(Boolean).join(', ') || '—'],
           ]} />
 
-          <BloqueDatos titulo="Contacto de emergencia" icono={HeartPulse} color="bg-rose-500/12 text-rose-600 dark:text-rose-400" datos={[
+          <BloqueDatos titulo="Contacto de emergencia" icono={HeartPulse} color="bg-foreground text-background" datos={[
             ['Nombre', c.emergenciaNombre ?? '—'],
             ['Parentesco', c.emergenciaParentesco ?? '—'],
             ['Teléfono', c.emergenciaTelefono ?? '—'],
           ]} />
 
-          <BloqueDatos titulo="Información laboral" icono={BriefcaseBusiness} color="bg-indigo-500/12 text-indigo-600 dark:text-indigo-400" datos={[
+          <BloqueDatos titulo="Información laboral" icono={BriefcaseBusiness} color="bg-foreground text-background" datos={[
             ['Vínculo', TIPO_VINCULO[c.tipoVinculo]],
             ['Modalidad', MODALIDAD_TRABAJO[c.modalidadTrabajo]],
             ['Sede', `${c.sede.nombre} · ${c.sede.ciudad.nombre}`],
@@ -354,7 +354,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
           ]} />
 
           {verSalud ? (
-            <BloqueDatos titulo="Seguridad social" icono={ShieldAlert} color="bg-amber-500/12 text-amber-600 dark:text-amber-400" nota="Sensible · Ley 1581" datos={[
+            <BloqueDatos titulo="Seguridad social" icono={ShieldAlert} color="bg-foreground text-background" nota="Sensible · Ley 1581" datos={[
               ['EPS', c.eps?.nombre ?? '—'],
               ['Fondo de pensión', c.afp?.nombre ?? '—'],
               ['Fondo de cesantías', c.fondoCesantias?.nombre ?? '—'],
@@ -369,7 +369,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
           )}
 
           {(puedeEditar || verSalud) && (
-            <BloqueDatos titulo="Datos bancarios" icono={Landmark} color="bg-foreground/8 text-foreground" datos={[
+            <BloqueDatos titulo="Datos bancarios" icono={Landmark} color="bg-foreground text-background" datos={[
               ['Banco', c.banco?.nombre ?? '—'],
               ['Tipo de cuenta', c.tipoCuenta ? TIPO_CUENTA[c.tipoCuenta] : '—'],
               // Completo: es un dato operativo que se necesita para pagar, y este
@@ -379,7 +379,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             ]} />
           )}
 
-          <BloqueDatos titulo="Tallas para dotación" icono={Shirt} color="bg-violet-500/12 text-violet-600 dark:text-violet-400" datos={[
+          <BloqueDatos titulo="Tallas para dotación" icono={Shirt} color="bg-foreground text-background" datos={[
             ['Camisa', c.tallaCamisa ?? '—'],
             ['Pantalón', c.tallaPantalon ?? '—'],
             ['Calzado', c.tallaCalzado ?? '—'],
@@ -390,7 +390,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             <Card className="sm:col-span-2">
               <CardContent className="py-4">
                 <div className="mb-3 flex items-center gap-2.5">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-amber-500/12 text-amber-600 dark:text-amber-400">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
                     <FileText className="size-4" />
                   </span>
                   <h3 className="text-sm font-bold">Semáforo documental</h3>
@@ -426,7 +426,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             <Card className="sm:col-span-2">
               <CardContent className="py-4">
                 <div className="flex items-center gap-3">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-teal-500/12 text-teal-600 dark:text-teal-400">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-foreground text-background">
                     <FileText className="size-[18px]" />
                   </span>
                   <div className="min-w-0 flex-1">
