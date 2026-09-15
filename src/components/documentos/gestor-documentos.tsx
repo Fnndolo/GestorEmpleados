@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import { toast } from 'sonner'
 import {
-  Upload, FileText, Image as ImageIcon, Trash2, Eye, CircleCheck, TriangleAlert, Clock,
+  Upload, FileText, FolderOpen, Image as ImageIcon, Trash2, Eye, CircleCheck, TriangleAlert, Clock,
 } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -66,8 +66,12 @@ export function GestorDocumentos({
       {semaforo.length > 0 && (
         <Card>
           <CardContent className="py-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium">Semáforo documental</h3>
+            <div className="mb-3 flex items-center gap-2.5">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
+                <FileText className="size-4" />
+              </span>
+              <h3 className="text-sm font-bold">Semáforo documental</h3>
+              <span className="flex-1" />
               {obligatoriosFaltantes === 0 ? (
                 <Badge className="bg-emerald-600">Completo</Badge>
               ) : (
@@ -92,8 +96,12 @@ export function GestorDocumentos({
 
       {/* Documentos */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium">Documentos ({documentos.length})</h3>
+        <div className="mb-3 flex items-center gap-2.5">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
+            <FolderOpen className="size-4" />
+          </span>
+          <h3 className="text-sm font-bold">Documentos ({documentos.length})</h3>
+          <span className="flex-1" />
           {puedeEditar && (
             <Button size="sm" onClick={() => setDialogo(true)}>
               <Upload className="size-4" /> Subir documento
@@ -130,7 +138,9 @@ export function GestorDocumentos({
             {visibles.map((d) => (
               <Card key={d.id}>
                 <CardContent className="flex items-center gap-3 py-3">
-                  {d.mimeType.startsWith('image/') ? <ImageIcon className="size-5 text-muted-foreground shrink-0" /> : <FileText className="size-5 text-muted-foreground shrink-0" />}
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-foreground text-background">
+                    {d.mimeType.startsWith('image/') ? <ImageIcon className="size-4" /> : <FileText className="size-4" />}
+                  </span>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-sm truncate">{d.nombre}</p>
                     <p className="text-xs text-muted-foreground">
