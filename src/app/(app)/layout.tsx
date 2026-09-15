@@ -21,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const sedes = await sedesDisponibles(usuario)
   const sedeActual = await sedeActualId()
   const datosUsuario = { nombre: usuario.nombre, email: usuario.email, rol: usuario.rolNombre }
+  const primerNombre = usuario.nombre.trim().split(/\s+/)[0]
   // El enlace a vencimientos en la campana solo se muestra a quien tenga el permiso.
   const verVencimientos = tienePermiso(usuario, 'vencimientos', 'VER')
 
@@ -73,6 +74,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="lg:hidden">
             <Logo compacto />
           </div>
+          {/* Saludo: en el celular es lo primero que se lee tras el logo; en
+              escritorio acompaña al buscador. Se recorta si el nombre es largo. */}
+          <p className="min-w-0 shrink truncate text-sm font-semibold sm:mr-2">Hola, {primerNombre}</p>
           <div className="flex-1 max-w-md hidden sm:block">
             <BusquedaGlobal />
           </div>

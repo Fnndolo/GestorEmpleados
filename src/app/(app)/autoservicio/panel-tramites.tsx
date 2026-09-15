@@ -3,18 +3,16 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import {
-  TreePalm, Clock, File, Stethoscope, FileCheck, Shield,
-  Receipt, Landmark, ShieldAlert, Lock, Inbox, CloudUpload, Shirt, GraduationCap, UserPen,
+  CalendarRange, Clock, IdCard, FileText, FolderUp, FileBadge, CalendarClock, HeartPulse,
+  PenLine, Receipt, GraduationCap, Package, Scale, ShieldAlert, Lock, Inbox,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { aplicaTramite, esOps, type Tramite } from '@/lib/tramites-vinculo'
-import { CHIP } from '@/components/ui-kit'
 import { NuevaSolicitud, type TipoSol } from './nueva-solicitud'
 
 type Item = {
   clave: string
   icono: React.ElementType
-  color: keyof typeof CHIP
   /** Título de escritorio ("Pedir vacaciones"). */
   titulo: string
   /** Título de móvil, corto ("Vacaciones"): el largo se parte feo bajo un ícono. */
@@ -32,10 +30,12 @@ type Item = {
 
 /** Tarjeta de escritorio: hay ancho para el título largo y la descripción. */
 function Tile({ item, onSolicitar }: { item: Item; onSolicitar: (t: TipoSol) => void }) {
-  const { icono: Icono, color, titulo, desc, aviso, nuevo } = item
+  const { icono: Icono, titulo, desc, aviso, nuevo } = item
   const contenido = (
     <>
-      <span className={cn('mb-2.5 grid size-9 place-items-center rounded-[9px]', CHIP[color])}>
+      {/* Un solo color para todos los iconos, el de los botones principales: el
+          color queda reservado para los avisos de pendiente y nuevo. */}
+      <span className="mb-2.5 grid size-9 place-items-center rounded-[9px] bg-foreground text-background">
         <Icono className="size-[18px]" />
       </span>
       <span className="block text-[13px] font-semibold leading-tight">{titulo}</span>
@@ -70,12 +70,12 @@ function Tile({ item, onSolicitar }: { item: Item; onSolicitar: (t: TipoSol) => 
  * que su ícono y caben todos casi sin bajar.
  */
 function TileCompacto({ item, onSolicitar }: { item: Item; onSolicitar: (t: TipoSol) => void }) {
-  const { icono: Icono, color, corto, aviso, nuevo } = item
+  const { icono: Icono, corto, aviso, nuevo } = item
   const contenido = (
     <>
       <span className="relative">
         <span className={cn('grid size-14 place-items-center rounded-2xl border bg-card', 'transition-colors group-active/t:bg-accent')}>
-          <span className={cn('grid size-8 place-items-center rounded-[10px]', CHIP[color])}>
+          <span className="grid size-8 place-items-center rounded-[10px] bg-foreground text-background">
             <Icono className="size-4" />
           </span>
         </span>
@@ -91,7 +91,7 @@ function TileCompacto({ item, onSolicitar }: { item: Item; onSolicitar: (t: Tipo
       </span>
       {/* Alto fijo de dos líneas: sin esto los nombres de una sola línea suben y
           los de dos bajan, y la fila queda con los íconos a distinta altura. */}
-      <span className="mt-1.5 line-clamp-2 block h-[26px] w-[72px] text-center text-[11px] font-medium leading-[13px]">
+      <span className="mt-1.5 line-clamp-2 block h-[26px] w-[84px] break-words text-center text-[11px] font-medium leading-[13px]">
         {corto}
       </span>
     </>
@@ -173,45 +173,45 @@ export function PanelTramites({
   const solicitudes: Item[] = [
     // Trámites operativos: solo con vínculo activo.
     activo && aplica('vacaciones') && {
-      clave: 'vacaciones', icono: TreePalm, color: 'emerald' as const,
+      clave: 'vacaciones', icono: CalendarRange,
       titulo: 'Pedir vacaciones', corto: 'Vacaciones', desc: 'Tu jefe y RRHH aprueban las fechas',
       sol: 'VACACIONES' as TipoSol,
     },
     activo && aplica('permisos') && {
-      clave: 'permiso', icono: Clock, color: 'sky' as const,
+      clave: 'permiso', icono: Clock,
       titulo: 'Pedir permiso', corto: 'Permiso', desc: 'Por día o por horas', sol: 'PERMISO' as TipoSol,
     },
     {
-      clave: 'mi-info', icono: UserPen, color: 'violet' as const,
+      clave: 'mi-info', icono: IdCard,
       titulo: 'Mi información', corto: 'Mi información', desc: 'Completa tus datos, banco y emergencia',
       aviso: fichaFaltantes > 0 ? `${fichaFaltantes} por completar` : null,
       href: '/autoservicio/mi-informacion',
     },
     aplica('desprendibles') && {
-      clave: 'desprendibles', icono: FileCheck, color: 'ink' as const,
+      clave: 'desprendibles', icono: FileText,
       titulo: 'Descargar desprendibles', corto: 'Desprendibles', desc: 'Todos tus pagos en PDF',
       nuevo: true, href: '/autoservicio/desprendibles',
     },
     {
-      clave: 'documentos', icono: CloudUpload, color: 'indigo' as const,
+      clave: 'documentos', icono: FolderUp,
       titulo: 'Mis documentos', corto: 'Documentos', desc: 'Sube cédula, diplomas, certificados…',
       aviso: documentosFaltantes > 0 ? plural(documentosFaltantes, 'pendiente') : null,
       nuevo: true, href: '/autoservicio/documentos',
     },
     // La certificación laboral sigue disponible aunque esté retirado (habeas data).
     {
-      clave: 'certificacion', icono: File, color: 'teal' as const,
+      clave: 'certificacion', icono: FileBadge,
       titulo: ops ? 'Pedir certificación contractual' : 'Pedir certificación', corto: 'Certificación',
       desc: ops ? 'De tu contrato de prestación de servicios' : 'Laboral, con salario, para banco',
       sol: 'CERTIFICACION_LABORAL' as TipoSol,
     },
     activo && aplica('licencias') && {
-      clave: 'licencia', icono: File, color: 'violet' as const,
+      clave: 'licencia', icono: CalendarClock,
       titulo: 'Reportar licencia', corto: 'Licencia', desc: 'Maternidad, luto, estudio…',
       nuevo: true, sol: 'LICENCIA' as TipoSol,
     },
     activo && aplica('incapacidades') && {
-      clave: 'incapacidad', icono: Stethoscope, color: 'rose' as const,
+      clave: 'incapacidad', icono: HeartPulse,
       titulo: 'Subir incapacidad', corto: 'Incapacidad', desc: 'RRHH la valida y registra',
       sol: 'INCAPACIDAD' as TipoSol,
     },
@@ -219,7 +219,7 @@ export function PanelTramites({
 
   const canales: Item[] = [
     {
-      clave: 'contratos', icono: Shield, color: 'amber' as const,
+      clave: 'contratos', icono: PenLine,
       titulo: 'Firmar contrato', corto: 'Contrato', desc: 'Contrato y autorización de datos',
       aviso: contratosPorFirmar > 0 ? plural(contratosPorFirmar, 'pendiente') : null,
       href: '/autoservicio/contratos',
@@ -228,18 +228,18 @@ export function PanelTramites({
     // Si tiene contrato OPS activo, la cuenta se vincula y exige verificar la
     // seguridad social; si no, se radica igual. Ver `crearMiCuentaCobro`.
     {
-      clave: 'cuentas', icono: Receipt, color: 'teal' as const,
+      clave: 'cuentas', icono: Receipt,
       titulo: 'Cuenta de cobro', corto: 'Cuenta de cobro',
       desc: 'Servicios, comisiones o saldos a tu favor', href: '/autoservicio/cuentas-cobro',
     },
     aplica('capacitaciones') && {
-      clave: 'capacitaciones', icono: GraduationCap, color: 'violet' as const,
+      clave: 'capacitaciones', icono: GraduationCap,
       titulo: 'Mis capacitaciones', corto: 'Capacitaciones', desc: 'Tu historial de formación y notas',
       href: '/autoservicio/capacitaciones',
     },
     // Al OPS sí se le pueden entregar activos en custodia; dotación y EPP no.
     {
-      clave: 'entregas', icono: Shirt, color: 'indigo' as const,
+      clave: 'entregas', icono: Package,
       titulo: 'Mis entregas', corto: 'Mis entregas',
       desc: ops ? 'Activos a tu cargo con su acta' : 'Activos, dotación y EPP con su recibido',
       aviso: dotacionPorFirmar > 0 ? `${dotacionPorFirmar} por firmar` : null,
@@ -248,23 +248,23 @@ export function PanelTramites({
     // El poder disciplinario sobre un contratista es el indicio más fuerte
     // de subordinación: no se le ofrece el módulo.
     aplica('disciplinarios') && {
-      clave: 'disciplinarios', icono: Landmark, color: 'ink' as const,
+      clave: 'disciplinarios', icono: Scale,
       titulo: 'Mis disciplinarios', corto: 'Disciplinarios', desc: 'Presentar descargos o apelar',
       aviso: disciplinariosAbiertos > 0 ? plural(disciplinariosAbiertos, 'abierto') : null,
       href: '/autoservicio/disciplinarios',
     },
     {
-      clave: 'acoso', icono: ShieldAlert, color: 'rose' as const,
+      clave: 'acoso', icono: ShieldAlert,
       titulo: 'Línea ética', corto: 'Línea ética', desc: 'Reporta algo, de forma confidencial o anónima',
       href: '/autoservicio/juridica?vista=anti-acoso',
     },
     {
-      clave: 'habeas', icono: Lock, color: 'indigo' as const,
+      clave: 'habeas', icono: Lock,
       titulo: 'Habeas data', corto: 'Habeas data', desc: 'Consulta o reclamo sobre tus datos',
       href: '/autoservicio/juridica?vista=habeas-data',
     },
     puedeAprobar && {
-      clave: 'aprobaciones', icono: Inbox, color: 'violet' as const,
+      clave: 'aprobaciones', icono: Inbox,
       titulo: 'Aprobaciones', corto: 'Aprobaciones', desc: 'Solicitudes de tu equipo',
       href: '/autoservicio/aprobaciones',
     },

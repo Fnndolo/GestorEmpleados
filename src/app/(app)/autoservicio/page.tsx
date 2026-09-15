@@ -6,7 +6,7 @@ import { Prisma } from '@/generated/prisma/client'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { liquidarVacaciones } from '@/server/vacaciones-liquidacion'
 import { Card, CardContent } from '@/components/ui/card'
-import { TreePalm, Clock, CreditCard } from 'lucide-react'
+import { CalendarRange, Clock, CreditCard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta, formatFechaLarga, formatFechaISO, hoyBogota, parseFechaISO } from '@/lib/fechas'
@@ -225,7 +225,6 @@ export default async function AutoservicioPage() {
 
   const enTramite = solicitudes.filter((s) => s.estado === 'EN_APROBACION' || s.estado === 'PENDIENTE').length
   const devueltas = solicitudes.filter((s) => s.estado === 'DEVUELTA').length
-  const primerNombre = colab.nombres.split(' ')[0]
 
   // El saludo dice lo único que exige acción hoy; si no hay nada, no inventa urgencia.
   const pendiente = devueltas > 0
@@ -365,9 +364,11 @@ export default async function AutoservicioPage() {
 
   return (
     <div className="max-w-7xl">
-      <h1 className="text-xl font-bold tracking-tight">Hola, {primerNombre}</h1>
-      <p className="mt-0.5 text-[13px] text-muted-foreground">
-        <span className="capitalize">{formatFechaLarga(hoyBogota())}</span> · {pendiente}
+      {/* El saludo va en la barra superior (ver layout); aquí, lo único que
+          exige acción hoy, con la fecha al lado. */}
+      <p className="text-sm">
+        <span className="font-semibold">{pendiente.charAt(0).toUpperCase() + pendiente.slice(1)}</span>
+        <span className="text-muted-foreground"> · {formatFechaLarga(hoyBogota())}</span>
       </p>
 
       {/* Etiquetas de una palabra: con "Días de vacaciones disponibles" el texto
@@ -376,15 +377,15 @@ export default async function AutoservicioPage() {
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {/* El OPS no causa vacaciones: mostrarle "0 días disponibles" confunde más que omitirlo. */}
         {!esOps(colab.tipoVinculo) && (
-          <Stat icono={TreePalm} color="bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" valor={`${saldo.saldoEntero} día${saldo.saldoEntero === 1 ? "" : "s"}`} label="Vacaciones" />
+          <Stat icono={CalendarRange} color="bg-foreground text-background" valor={`${saldo.saldoEntero} día${saldo.saldoEntero === 1 ? "" : "s"}`} label="Vacaciones" />
         )}
-        <Stat icono={Clock} color="bg-amber-500/12 text-amber-600 dark:text-amber-400" valor={String(enTramite)} label="En trámite" />
+        <Stat icono={Clock} color="bg-foreground text-background" valor={String(enTramite)} label="En trámite" />
         {/* El último pago solo merece recuadro cuando hay algo que mostrar. Sin
             pagos, un recuadro vacío con una raya pesa más de lo que informa: se
             deja como una línea centrada. */}
         {ultimoPago ? (
           <Stat
-            icono={CreditCard} color="bg-foreground/8 text-foreground"
+            icono={CreditCard} color="bg-foreground text-background"
             valor={fmtCOP(Number(ultimoPago.neto))}
             label={`Último pago · ${formatFechaCorta(ultimoPago.periodo.fechaFin)}`}
             className="col-span-2 sm:col-span-1"
