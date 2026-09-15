@@ -91,7 +91,7 @@ function TileCompacto({ item, onSolicitar }: { item: Item; onSolicitar: (t: Tipo
       </span>
       {/* Alto fijo de dos líneas: sin esto los nombres de una sola línea suben y
           los de dos bajan, y la fila queda con los íconos a distinta altura. */}
-      <span className="mt-1.5 line-clamp-2 block h-[26px] w-[84px] break-words text-center text-[11px] font-medium leading-[13px]">
+      <span className="mt-1 line-clamp-2 block h-[26px] w-[86px] text-center text-[10.5px] font-medium leading-[13px]">
         {corto}
       </span>
     </>
@@ -116,8 +116,10 @@ function Seccion({
 }) {
   if (items.length === 0) return null
   return (
-    <section className="mt-6">
-      <h2 className="mb-2.5 text-[13px] font-bold">{titulo}</h2>
+    // En el celular las secciones van pegadas: separadas de mas parecian dos
+    // pantallas distintas y la segunda quedaba lejos del pulgar.
+    <section className="mt-2 sm:mt-6">
+      <h2 className="mb-2 text-[13px] font-bold sm:mb-2.5">{titulo}</h2>
 
       {/* Escritorio */}
       <div className="hidden gap-2.5 sm:grid sm:grid-cols-3 lg:grid-cols-4">
@@ -130,7 +132,7 @@ function Seccion({
           'sm:hidden',
           // Se sale del margen del contenido para que el carrusel llegue al
           // borde de la pantalla y se note que hay más hacia la derecha.
-          '-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1',
+          '-mx-4 flex snap-x gap-2 overflow-x-auto px-4',
           // El desplazamiento horizontal recorta lo que se salga por arriba, y
           // la insignia de pendientes sobresale del ícono: sin este respiro
           // aparecía cortada por la mitad.
