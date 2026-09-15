@@ -3,7 +3,7 @@
 import { useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Paperclip, Scale, Info, TreePalm, TriangleAlert } from 'lucide-react'
+import { Paperclip, Scale, Info, TreePalm, TriangleAlert, CalendarDays } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { es } from 'date-fns/locale'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -36,6 +38,11 @@ const TIPOS_INCAP = [
   { v: 'LICENCIA_MATERNIDAD', l: 'Licencia de maternidad' },
   { v: 'LICENCIA_PATERNIDAD', l: 'Licencia de paternidad' },
 ]
+
+/** "lunes, 15 de septiembre de 2026", con los componentes locales de la fecha. */
+function fechaLargaLocal(d: Date): string {
+  return new Intl.DateTimeFormat('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(d)
+}
 
 /** Date → "yyyy-mm-dd" usando los componentes locales (fecha pura). */
 function toISO(d?: Date): string {
@@ -76,6 +83,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
   const vacAnticipadas = tipo === 'VACACIONES' && diasVac > 0 && diasVac > saldoVac
   // Permiso (un solo día)
   const [permFecha, setPermFecha] = useState<Date | undefined>()
+  const [permCalAbierto, setPermCalAbierto] = useState(false)
   const [permModo, setPermModo] = useState<'DIA' | 'HORAS'>('DIA')
   const [permIni, setPermIni] = useState('08:00')
   const [permFin, setPermFin] = useState('12:00')
@@ -229,10 +237,25 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
             {tipo === 'PERMISO' && (
               <>
                 <div className="space-y-1.5">
-                  <Label>Día del permiso</Label>
-                  <div className="flex justify-center rounded-lg border">
-                    <Calendar mode="single" selected={permFecha} onSelect={setPermFecha} />
-                  </div>
+                  <Label htmlFor="perm-dia">Día del permiso</Label>
+                  {/* El calendario sale al pulsar, no desplegado: abierto ocupaba
+                      todo el formulario y escondía el resto de los campos. */}
+                  <Popover open={permCalAbierto} onOpenChange={setPermCalAbierto}>
+                    <PopoverTrigger asChild>
+                      <Button id="perm-dia" type="button" variant="outline" className="w-full justify-start font-normal">
+                        <CalendarDays className="size-4 text-muted-foreground" />
+                        {permFecha ? fechaLargaLocal(permFecha) : <span className="text-muted-foreground">Elige el día</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        locale={es}
+                        selected={permFecha}
+                        onSelect={(d) => { setPermFecha(d); if (d) setPermCalAbierto(false) }}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Tipo de permiso</Label>
