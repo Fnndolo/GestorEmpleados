@@ -74,9 +74,9 @@ function TileCompacto({ item, onSolicitar }: { item: Item; onSolicitar: (t: Tipo
   const contenido = (
     <>
       <span className="relative">
-        <span className={cn('grid size-14 place-items-center rounded-2xl border bg-card', 'transition-colors group-active/t:bg-accent')}>
-          <span className="grid size-8 place-items-center rounded-[10px] bg-foreground text-background">
-            <Icono className="size-4" />
+        <span className={cn('grid size-16 place-items-center rounded-2xl border bg-card', 'transition-colors group-active/t:bg-accent')}>
+          <span className="grid size-9 place-items-center rounded-[10px] bg-foreground text-background">
+            <Icono className="size-[18px]" />
           </span>
         </span>
         {/* Lo pendiente se marca sobre el ícono, como una notificación: en este
@@ -91,7 +91,7 @@ function TileCompacto({ item, onSolicitar }: { item: Item; onSolicitar: (t: Tipo
       </span>
       {/* Alto fijo de dos líneas: sin esto los nombres de una sola línea suben y
           los de dos bajan, y la fila queda con los íconos a distinta altura. */}
-      <span className="mt-1 line-clamp-2 block h-[26px] w-[86px] text-center text-[10.5px] font-medium leading-[13px]">
+      <span className="-mx-1 mt-1 line-clamp-2 block h-[24px] w-[72px] text-center text-[10px] font-medium leading-[12px]">
         {corto}
       </span>
     </>
@@ -132,7 +132,7 @@ function Seccion({
           'sm:hidden',
           // Se sale del margen del contenido para que el carrusel llegue al
           // borde de la pantalla y se note que hay más hacia la derecha.
-          '-mx-4 flex snap-x gap-2 overflow-x-auto px-4',
+          '-mx-4 flex snap-x gap-2 overflow-x-auto px-4 scroll-pl-4',
           // El desplazamiento horizontal recorta lo que se salga por arriba, y
           // la insignia de pendientes sobresale del ícono: sin este respiro
           // aparecía cortada por la mitad.
@@ -236,7 +236,7 @@ export function PanelTramites({
     },
     aplica('capacitaciones') && {
       clave: 'capacitaciones', icono: GraduationCap,
-      titulo: 'Mis capacitaciones', corto: 'Capacitaciones', desc: 'Tu historial de formación y notas',
+      titulo: 'Mis capacitaciones', corto: 'Capacitación', desc: 'Tu historial de formación y notas',
       href: '/autoservicio/capacitaciones',
     },
     // Al OPS sí se le pueden entregar activos en custodia; dotación y EPP no.
