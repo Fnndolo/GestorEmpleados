@@ -5,7 +5,6 @@ import { prisma } from '@/lib/db'
 import { Card, CardContent } from '@/components/ui/card'
 import { Users, Building2, Bell, ShieldCheck, AlertCircle, Inbox, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { CHIP, type ChipColor } from '@/components/ui-kit'
 import { hoyBogota, formatFechaCorta, formatFechaLarga } from '@/lib/fechas'
 import { BannerPush } from '@/components/pwa/banner-push'
 
@@ -13,23 +12,26 @@ export const metadata = { title: 'Inicio · Smart Gadgets RH' }
 
 
 /** Color y descripción por módulo: el color distingue, la descripción orienta. */
-const MODULO: Record<string, { color: ChipColor; desc: string }> = {
-  '/vencimientos': { color: 'amber', desc: 'Alertas de contratos, exámenes y cursos' },
-  '/colaboradores': { color: 'sky', desc: 'Fichas, documentos y organigrama' },
-  '/contratos': { color: 'teal', desc: 'OPS, cuentas de cobro y firmas' },
-  '/nomina': { color: 'emerald', desc: 'Periodos, liquidación y desprendibles' },
-  '/novedades': { color: 'amber', desc: 'Ausencias, horas extra y ajustes' },
-  '/activos': { color: 'ink', desc: 'Equipos y dotación entregada' },
-  '/capacitaciones': { color: 'violet', desc: 'Cursos y asistencia del personal' },
-  '/evaluaciones': { color: 'indigo', desc: 'Desempeño y periodo de prueba' },
-  '/cumpleanos': { color: 'rose', desc: 'Celebraciones y sus facturas' },
-  '/terminaciones': { color: 'rose', desc: 'Retiros y liquidación final' },
-  '/juridica': { color: 'violet', desc: 'Disciplinarios, anti-acoso y habeas data' },
-  '/calendario-legal': { color: 'teal', desc: 'Obligaciones y fechas legales' },
-  '/sst': { color: 'rose', desc: 'Seguridad y salud en el trabajo' },
-  '/autoservicio': { color: 'indigo', desc: 'Tus vacaciones, permisos y certificados' },
-  '/reportes': { color: 'sky', desc: 'Indicadores y exportes' },
-  '/configuracion': { color: 'ink', desc: 'Empresa, sedes, cargos y roles' },
+// Descripción de cada módulo en la cuadrícula. Sin color por categoría: los
+// iconos van todos en tinta (como en el autoservicio) y el color queda
+// reservado para lo que exige atención.
+const MODULO: Record<string, { desc: string }> = {
+  '/vencimientos': { desc: 'Alertas de contratos, exámenes y cursos' },
+  '/colaboradores': { desc: 'Fichas, documentos y organigrama' },
+  '/contratos': { desc: 'OPS, cuentas de cobro y firmas' },
+  '/nomina': { desc: 'Periodos, liquidación y desprendibles' },
+  '/novedades': { desc: 'Ausencias, horas extra y ajustes' },
+  '/activos': { desc: 'Equipos y dotación entregada' },
+  '/capacitaciones': { desc: 'Cursos y asistencia del personal' },
+  '/evaluaciones': { desc: 'Desempeño y periodo de prueba' },
+  '/cumpleanos': { desc: 'Celebraciones y sus facturas' },
+  '/terminaciones': { desc: 'Retiros y liquidación final' },
+  '/juridica': { desc: 'Disciplinarios, anti-acoso y habeas data' },
+  '/calendario-legal': { desc: 'Obligaciones y fechas legales' },
+  '/sst': { desc: 'Seguridad y salud en el trabajo' },
+  '/autoservicio': { desc: 'Tus vacaciones, permisos y certificados' },
+  '/reportes': { desc: 'Indicadores y exportes' },
+  '/configuracion': { desc: 'Empresa, sedes, cargos y roles' },
 }
 
 export default async function InicioPage() {
@@ -91,20 +93,23 @@ export default async function InicioPage() {
         : `sesión activa como ${usuario.rolNombre}`
 
   // Cada indicador va con su permiso; a quien no le toca ninguno, no ve la fila.
-  const indicadores: { icono: LucideIcon; color: ChipColor; valor: string; label: string }[] = []
-  if (verUsuarios) indicadores.push({ icono: Users, color: 'sky', valor: String(usuarios), label: 'Usuarios activos' })
-  if (verConfiguracion) indicadores.push({ icono: Building2, color: 'ink', valor: String(sedes), label: 'Sedes activas' })
+  // Solo el de vencimientos cambia de color, y solo cuando hay vencidos: es un estado, no una categoría.
+  const indicadores: { icono: LucideIcon; alerta?: boolean; valor: string; label: string }[] = []
+  if (verUsuarios) indicadores.push({ icono: Users, valor: String(usuarios), label: 'Usuarios activos' })
+  if (verConfiguracion) indicadores.push({ icono: Building2, valor: String(sedes), label: 'Sedes activas' })
   if (verVencimientos) {
-    indicadores.push({ icono: Bell, color: vencidos > 0 ? 'rose' : 'amber', valor: String(vencimientos.length), label: 'Vencimientos próximos' })
+    indicadores.push({ icono: Bell, alerta: vencidos > 0, valor: String(vencimientos.length), label: 'Vencimientos próximos' })
   } else if (verConfiguracion) {
-    indicadores.push({ icono: ShieldCheck, color: 'emerald', valor: String(roles), label: 'Roles configurados' })
+    indicadores.push({ icono: ShieldCheck, valor: String(roles), label: 'Roles configurados' })
   }
 
   return (
     <div className="max-w-7xl">
-      <h1 className="text-xl font-bold tracking-tight">{darSaludo()}, {usuario.nombre.split(' ')[0]}</h1>
-      <p className="mt-0.5 text-[13px] text-muted-foreground">
-        <span className="capitalize">{formatFechaLarga(hoy)}</span> · {pendiente}
+      {/* El saludo va en la barra superior (ver layout); aquí, lo único que
+          exige acción hoy, con la fecha al lado. */}
+      <p className="text-sm">
+        <span className="font-semibold">{pendiente.charAt(0).toUpperCase() + pendiente.slice(1)}</span>
+        <span className="text-muted-foreground"> · {formatFechaLarga(hoy)}</span>
       </p>
 
       {/* El aviso vive solo aquí: en el resto de pantallas empujaba el contenido
@@ -135,7 +140,7 @@ export default async function InicioPage() {
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
               {items.map((item) => {
                 const Icono = item.icono
-                const meta = MODULO[item.href] ?? { color: 'ink' as ChipColor, desc: '' }
+                const meta = MODULO[item.href] ?? { desc: '' }
                 const aviso = item.href === '/vencimientos' && vencidos > 0
                   ? `${vencidos} vencido${vencidos > 1 ? 's' : ''}`
                   : null
@@ -149,7 +154,7 @@ export default async function InicioPage() {
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                     )}
                   >
-                    <span className={cn('mb-2 grid size-8 place-items-center rounded-[9px] sm:mb-2.5 sm:size-9', CHIP[meta.color])}>
+                    <span className="mb-2 grid size-8 place-items-center rounded-[9px] bg-foreground text-background sm:mb-2.5 sm:size-9">
                       <Icono className="size-4 sm:size-[18px]" />
                     </span>
                     <span className="block text-[12.5px] font-semibold leading-tight sm:text-[13px]">{item.titulo}</span>
@@ -173,7 +178,7 @@ export default async function InicioPage() {
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                   )}
                 >
-                  <span className={cn('mb-2 grid size-8 place-items-center rounded-[9px] sm:mb-2.5 sm:size-9', CHIP.violet)}>
+                  <span className="mb-2 grid size-8 place-items-center rounded-[9px] bg-foreground text-background sm:mb-2.5 sm:size-9">
                     <Inbox className="size-4 sm:size-[18px]" />
                   </span>
                   <span className="block text-[12.5px] font-semibold leading-tight sm:text-[13px]">Aprobaciones</span>
@@ -202,7 +207,7 @@ export default async function InicioPage() {
               const dias = Math.round((v.fechaVencimiento.getTime() - hoy.getTime()) / 86_400_000)
               return (
                 <div key={v.id} className="flex items-center gap-3 p-3">
-                  <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', vencido ? CHIP.rose : CHIP.amber)}>
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
                     {vencido ? <AlertCircle className="size-4" /> : <Bell className="size-4" />}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -229,12 +234,15 @@ export default async function InicioPage() {
   )
 }
 
-function Stat({ icono: Icono, color, valor, label, className }: {
-  icono: LucideIcon; color: ChipColor; valor: string; label: string; className?: string
+function Stat({ icono: Icono, alerta, valor, label, className }: {
+  icono: LucideIcon; alerta?: boolean; valor: string; label: string; className?: string
 }) {
   return (
     <div className={cn('flex items-center gap-3 rounded-xl border bg-card p-3.5', className)}>
-      <span className={cn('grid size-9 shrink-0 place-items-center rounded-[10px]', CHIP[color])}>
+      <span className={cn(
+        'grid size-9 shrink-0 place-items-center rounded-[10px]',
+        alerta ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-foreground text-background',
+      )}>
         <Icono className="size-[19px]" />
       </span>
       <div className="min-w-0">
@@ -245,11 +253,3 @@ function Stat({ icono: Icono, color, valor, label, className }: {
   )
 }
 
-function darSaludo(): string {
-  const hora = Number(
-    new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hour12: false }),
-  )
-  if (hora < 12) return 'Buenos días'
-  if (hora < 19) return 'Buenas tardes'
-  return 'Buenas noches'
-}
