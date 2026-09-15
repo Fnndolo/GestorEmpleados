@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db'
 import { Card, CardContent } from '@/components/ui/card'
 import { Users, Building2, Bell, ShieldCheck, AlertCircle, Inbox, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { hoyBogota, formatFechaCorta, formatFechaLarga } from '@/lib/fechas'
+import { hoyBogota, formatFechaCorta } from '@/lib/fechas'
 import { BannerPush } from '@/components/pwa/banner-push'
 
 export const metadata = { title: 'Inicio · Smart Gadgets RH' }
@@ -83,14 +83,13 @@ export default async function InicioPage() {
   const vencidos = vencimientos.filter((v) => v.fechaVencimiento < hoy).length
   const proximos = vencimientos.length - vencidos
 
-  // El saludo dice lo que exige acción hoy; si no hay nada, no inventa urgencia.
+  // Una sola línea, y solo cuando hay vencimientos que atender: sin nada que
+  // avisar no se rellena con la fecha ni con el rol de la sesión.
   const pendiente = vencidos > 0
-    ? `tienes ${vencidos} vencimiento${vencidos > 1 ? 's' : ''} vencido${vencidos > 1 ? 's' : ''}${proximos > 0 ? ` y ${proximos} por atender` : ''}`
+    ? `Tienes ${vencidos} vencimiento${vencidos > 1 ? 's' : ''} vencido${vencidos > 1 ? 's' : ''}${proximos > 0 ? ` y ${proximos} por atender` : ''}`
     : proximos > 0
-      ? `tienes ${proximos} vencimiento${proximos > 1 ? 's' : ''} por atender este mes`
-      : verVencimientos
-        ? 'no tienes vencimientos por atender'
-        : `sesión activa como ${usuario.rolNombre}`
+      ? `Tienes ${proximos} vencimiento${proximos > 1 ? 's' : ''} por atender este mes`
+      : null
 
   // Cada indicador va con su permiso; a quien no le toca ninguno, no ve la fila.
   // Solo el de vencimientos cambia de color, y solo cuando hay vencidos: es un estado, no una categoría.
@@ -105,12 +104,13 @@ export default async function InicioPage() {
 
   return (
     <div className="max-w-7xl">
-      {/* El saludo va en la barra superior (ver layout); aquí, lo único que
-          exige acción hoy, con la fecha al lado. */}
-      <p className="text-sm">
-        <span className="font-semibold">{pendiente.charAt(0).toUpperCase() + pendiente.slice(1)}</span>
-        <span className="text-muted-foreground"> · {formatFechaLarga(hoy)}</span>
-      </p>
+      {/* El saludo va en la barra superior (ver layout); aquí solo lo que
+          exige acción hoy, si lo hay. */}
+      {pendiente && (
+        <p className="text-sm font-semibold">
+          <Link href="/vencimientos" className="hover:underline">{pendiente}</Link>
+        </p>
+      )}
 
       {/* El aviso vive solo aquí: en el resto de pantallas empujaba el contenido
           hacia abajo y se llevaba por delante los encabezados fijos. */}
