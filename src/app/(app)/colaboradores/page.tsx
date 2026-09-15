@@ -54,7 +54,7 @@ export default async function ColaboradoresPage({
     <div className="max-w-[1600px]">
       <Encabezado
         titulo="Colaboradores"
-        descripcion="Personal de la empresa en todos sus tipos de vinculación."
+        enLinea
         acciones={
           <div className="flex gap-2">
             <Button variant="outline" size="sm" asChild>

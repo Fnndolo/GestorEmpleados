@@ -52,33 +52,34 @@ export function ListaColaboradores({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Búsqueda */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && navegar(tabActivo, q)}
-          placeholder="Buscar por nombre o documento…"
-          className="pl-9"
-        />
-      </div>
-
-      {/* Filtro por vínculo — móvil: desplegable (sin scroll); escritorio: pestañas */}
-      <div className="sm:hidden">
-        <Select value={tabActivo} onValueChange={(v) => navegar(v, q)}>
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {tabs.map((t) => (
-              <SelectItem key={t.valor} value={t.valor}>
-                {TAB_LABEL[t.valor]} ({t.conteo})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="space-y-3">
+      {/* Búsqueda y, en el celular, el filtro por vínculo en la misma fila:
+          apilados gastaban dos renglones antes de ver a la primera persona. */}
+      <div className="flex gap-2 sm:max-w-md">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && navegar(tabActivo, q)}
+            placeholder="Nombre o documento"
+            className="pl-9"
+          />
+        </div>
+        <div className="sm:hidden">
+          <Select value={tabActivo} onValueChange={(v) => navegar(v, q)}>
+            <SelectTrigger className="w-36" aria-label="Filtrar por vínculo">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {tabs.map((t) => (
+                <SelectItem key={t.valor} value={t.valor}>
+                  {TAB_LABEL[t.valor]} ({t.conteo})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="hidden gap-1.5 overflow-x-auto pb-1 sm:flex">
