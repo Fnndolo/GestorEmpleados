@@ -20,7 +20,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const visibles = hrefsVisibles(usuario)
   const sedes = await sedesDisponibles(usuario)
   const sedeActual = await sedeActualId()
-  const datosUsuario = { nombre: usuario.nombre, email: usuario.email, rol: usuario.rolNombre }
+  // La foto del colaborador vinculado, para el menú de usuario.
+  const fotoDeUsuario = usuario.colaboradorId
+    ? await prisma.colaborador.findUnique({ where: { id: usuario.colaboradorId }, select: { fotoPath: true } })
+    : null
+  const datosUsuario = {
+    nombre: usuario.nombre, email: usuario.email, rol: usuario.rolNombre,
+    fotoUrl: fotoDeUsuario?.fotoPath ? `/api/documentos/foto/${usuario.colaboradorId}` : null,
+  }
   const primerNombre = usuario.nombre.trim().split(/\s+/)[0]
   // El enlace a vencimientos en la campana solo se muestra a quien tenga el permiso.
   const verVencimientos = tienePermiso(usuario, 'vencimientos', 'VER')

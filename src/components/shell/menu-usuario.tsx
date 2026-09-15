@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { LogOut, KeyRound, ChevronsUpDown } from 'lucide-react'
 import { signOut } from '@/lib/auth-client'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { colorAvatar } from '@/lib/etiquetas'
 import {
   DropdownMenu,
@@ -28,10 +28,13 @@ export function MenuUsuario({
   nombre,
   email,
   rol,
+  fotoUrl,
 }: {
   nombre: string
   email: string
   rol: string
+  /** Foto de perfil del colaborador vinculado, si la tiene. */
+  fotoUrl?: string | null
 }) {
   const router = useRouter()
 
@@ -45,6 +48,7 @@ export function MenuUsuario({
     <DropdownMenu>
       <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-md p-2 text-left hover:bg-accent transition-colors">
         <Avatar className="size-8">
+          {fotoUrl && <AvatarImage src={fotoUrl} alt="" />}
           <AvatarFallback className="text-xs font-semibold text-white" style={{ backgroundColor: colorAvatar(nombre) }}>
             {iniciales(nombre)}
           </AvatarFallback>

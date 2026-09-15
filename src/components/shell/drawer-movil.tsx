@@ -29,7 +29,7 @@ export function DrawerMovil({
   badges?: Record<string, number>
   sedes: OpcionSede[]
   sedeActual: string | null
-  usuario: { nombre: string; email: string; rol: string }
+  usuario: { nombre: string; email: string; rol: string; fotoUrl?: string | null }
 }) {
   const [abierto, setAbierto] = useState(false)
 

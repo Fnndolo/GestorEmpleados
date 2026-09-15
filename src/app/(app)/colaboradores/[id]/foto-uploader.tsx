@@ -102,7 +102,8 @@ export function FotoUploader({
               </AlertDialogContent>
             </AlertDialog>
           )}
-          <input ref={inputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={onSeleccion} />
+          {/* Sin `capture`: en el celular forzaba la cámara frontal y no dejaba elegir una foto de la galería. */}
+          <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onSeleccion} />
         </>
       )}
     </div>

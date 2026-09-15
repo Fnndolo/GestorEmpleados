@@ -8,6 +8,8 @@ import { ArrowLeft } from 'lucide-react'
 import { formatFechaISO } from '@/lib/fechas'
 import type { MiFichaInput } from '@/lib/validaciones/colaborador'
 import { MiInformacionForm } from './mi-informacion-form'
+import { FotoUploader } from '@/app/(app)/colaboradores/[id]/foto-uploader'
+import { iniciales } from '@/lib/etiquetas'
 
 export const metadata = { title: 'Mi información · Smart Gadgets RH' }
 
@@ -78,6 +80,25 @@ export default async function MiInformacionPage() {
           </Button>
         }
       />
+      {/* La foto la cambia cada persona: es lo primero que ve el equipo en el
+          menú y en las listas. */}
+      <Card className="mb-4">
+        <CardContent className="flex items-center gap-4 py-4">
+          <FotoUploader
+            colaboradorId={c.id}
+            iniciales={iniciales(c.nombres, c.apellidos)}
+            nombreCompleto={`${c.nombres} ${c.apellidos}`}
+            tieneFoto={Boolean(c.fotoPath)}
+            puedeEditar
+          />
+          <div className="min-w-0">
+            <p className="text-sm font-bold">Tu foto de perfil</p>
+            <p className="text-xs text-muted-foreground">
+              Toca la cámara para cambiarla. Se recomienda una foto de frente, con fondo claro.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
       <div className="mb-4 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
         Estos son los datos que puedes actualizar tú. Tu identidad (documento, nombre), tu correo de acceso
         y tus datos laborales (vínculo, cargo, salario) los gestiona Talento Humano.

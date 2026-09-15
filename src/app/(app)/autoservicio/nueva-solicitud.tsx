@@ -3,7 +3,7 @@
 import { useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Paperclip, Scale, Info, TreePalm, TriangleAlert, CalendarDays } from 'lucide-react'
+import { Paperclip, Scale, Info, TreePalm, TriangleAlert, CalendarDays, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -100,7 +100,13 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
   const [motivo, setMotivo] = useState('')
   const [certTipo, setCertTipo] = useState('')
   const [dirigidaA, setDirigidaA] = useState('')
-  const [archivo, setArchivo] = useState<File | null>(null)
+  // Varios soportes: un permiso puede llevar la cita y la constancia, una
+  // incapacidad las dos caras del formato. Se suben uno a uno tras crear la solicitud.
+  const [archivos, setArchivos] = useState<File[]>([])
+  const agregarArchivos = (lista: FileList | null) => {
+    if (!lista?.length) return
+    setArchivos((prev) => [...prev, ...Array.from(lista)])
+  }
 
   /** Definición de la licencia elegida (null si aún no elige). */
   const lic = licTipo ? defLicencia(licTipo) : null
@@ -116,12 +122,12 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
     } else if (tipo === 'INCAPACIDAD') {
       if (!incaIni || !incaFin) return 'Indica las fechas de inicio y fin de la incapacidad.'
       if (incaFin < incaIni) return 'La fecha de fin no puede ser anterior a la de inicio.'
-      if (!archivo) return 'Adjunta el soporte de la incapacidad (obligatorio).'
+      if (archivos.length === 0) return 'Adjunta el soporte de la incapacidad (obligatorio).'
     } else if (tipo === 'LICENCIA') {
       if (!lic) return 'Selecciona el tipo de licencia.'
       if (!licIni || !licFin) return 'Indica las fechas de inicio y fin de la licencia.'
       if (licFin < licIni) return 'La fecha de fin no puede ser anterior a la de inicio.'
-      if (lic.requiereSoporte && !archivo) return `Adjunta el soporte: ${lic.soporteEsperado}`
+      if (lic.requiereSoporte && archivos.length === 0) return `Adjunta el soporte: ${lic.soporteEsperado}`
     } else if (tipo === 'CERTIFICACION_LABORAL') {
       if (!certTipo) return 'Selecciona el tipo de certificación.'
     }
@@ -154,17 +160,27 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
     setG(true)
     const res = await crearSolicitud(payload())
     if (!res.ok) { setG(false); toast.error(res.error); return }
-    if (archivo) {
-      try {
-        const fd = new FormData()
-        fd.append('archivo', archivo)
-        fd.append('entidadTipo', 'Solicitud')
-        fd.append('entidadId', (res.datos as { id: string }).id)
-        fd.append('nombre', `Soporte solicitud — ${archivo.name}`)
-        const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
-        if (!up.ok) toast.warning('La solicitud se creó, pero el soporte no se pudo adjuntar. Intenta subirlo de nuevo o avisa a Talento Humano.')
-      } catch {
-        toast.warning('La solicitud se creó, pero el soporte no se pudo adjuntar. Intenta subirlo de nuevo o avisa a Talento Humano.')
+    if (archivos.length > 0) {
+      let fallidos = 0
+      for (const archivo of archivos) {
+        try {
+          const fd = new FormData()
+          fd.append('archivo', archivo)
+          fd.append('entidadTipo', 'Solicitud')
+          fd.append('entidadId', (res.datos as { id: string }).id)
+          fd.append('nombre', `Soporte solicitud — ${archivo.name}`)
+          const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+          if (!up.ok) fallidos++
+        } catch {
+          fallidos++
+        }
+      }
+      if (fallidos > 0) {
+        toast.warning(
+          fallidos === archivos.length
+            ? 'La solicitud se creó, pero el soporte no se pudo adjuntar. Intenta subirlo de nuevo o avisa a Talento Humano.'
+            : `La solicitud se creó, pero ${fallidos} de ${archivos.length} soportes no se pudieron adjuntar. Avisa a Talento Humano.`,
+        )
       }
     }
     setG(false)
@@ -298,7 +314,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
               <>
                 <div className="space-y-1.5">
                   <Label>Tipo de licencia</Label>
-                  <Select value={licTipo} onValueChange={(v) => { setLicTipo(v as TipoLicencia); setArchivo(null) }}>
+                  <Select value={licTipo} onValueChange={(v) => { setLicTipo(v as TipoLicencia); setArchivos([]) }}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
@@ -371,11 +387,27 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
                 {tipo === 'LICENCIA' && lic && lic.soporteEsperado !== '—' && (
                   <p className="text-xs text-muted-foreground">{lic.soporteEsperado}</p>
                 )}
-                <input ref={inputArchivo} type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />
+                {/* Sin `capture`: forzaba la cámara y en el celular impedía elegir
+                    varios archivos de la galería. La cámara sigue en el selector. */}
+                <input ref={inputArchivo} type="file" multiple accept="image/*,application/pdf" className="hidden" onChange={(e) => { agregarArchivos(e.target.files); e.target.value = '' }} />
+                {archivos.length > 0 && (
+                  <ul className="space-y-1 rounded-lg border p-2">
+                    {archivos.map((a, i) => (
+                      <li key={`${a.name}-${i}`} className="flex items-center gap-2 text-xs">
+                        <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate">{a.name}</span>
+                        <span className="shrink-0 text-muted-foreground">{(a.size / 1024 / 1024).toFixed(1)} MB</span>
+                        <button type="button" onClick={() => setArchivos((prev) => prev.filter((_, j) => j !== i))} className="shrink-0 text-destructive" aria-label={`Quitar ${a.name}`}>
+                          <X className="size-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
-                  <Paperclip className="size-4" /> {archivo ? archivo.name : 'Adjuntar imagen o PDF'}
+                  <Paperclip className="size-4" /> {archivos.length > 0 ? 'Agregar otro archivo' : 'Adjuntar imágenes o PDF (puedes elegir varios)'}
                 </Button>
-                {adjuntoObligatorio && !archivo && (
+                {adjuntoObligatorio && archivos.length === 0 && (
                   <p className="text-xs text-destructive">
                     {tipo === 'INCAPACIDAD' ? 'Debes adjuntar el soporte de la incapacidad.' : 'Debes adjuntar el soporte de la licencia.'}
                   </p>
