@@ -221,21 +221,8 @@ export default async function AutoservicioPage() {
       docId: docComprobantePorPermiso.get(p.id) ?? null,
     }
   }
-  const comprobantesPorSubir = todosLosPermisos.filter((p) => p.comprobanteEstado === 'PENDIENTE').length
 
   const enTramite = solicitudes.filter((s) => s.estado === 'EN_APROBACION' || s.estado === 'PENDIENTE').length
-  const devueltas = solicitudes.filter((s) => s.estado === 'DEVUELTA').length
-
-  // El saludo dice lo único que exige acción hoy; si no hay nada, no inventa urgencia.
-  const pendiente = devueltas > 0
-    ? `tienes ${devueltas} solicitud${devueltas > 1 ? 'es' : ''} devuelta${devueltas > 1 ? 's' : ''} por corregir`
-    : comprobantesPorSubir > 0
-      ? `tienes ${comprobantesPorSubir} comprobante${comprobantesPorSubir > 1 ? 's' : ''} de permiso por subir`
-      : contratosPorFirmar > 0
-        ? `tienes ${contratosPorFirmar} documento${contratosPorFirmar > 1 ? 's' : ''} por firmar`
-        : enTramite > 0
-          ? `tienes ${enTramite} solicitud${enTramite > 1 ? 'es' : ''} en trámite`
-          : 'no tienes nada pendiente'
 
   // ── Mi actividad: solicitudes propias + novedades registradas por la empresa ──
   const actividad: { fecha: Date; item: SolicitudItem }[] = []
@@ -364,17 +351,12 @@ export default async function AutoservicioPage() {
 
   return (
     <div className="max-w-7xl">
-      {/* El saludo va en la barra superior (ver layout); aquí, lo único que
-          exige acción hoy, con la fecha al lado. */}
-      <p className="text-sm">
-        <span className="font-semibold">{pendiente.charAt(0).toUpperCase() + pendiente.slice(1)}</span>
-        <span className="text-muted-foreground"> · {formatFechaLarga(hoyBogota())}</span>
-      </p>
-
+      {/* Sin encabezado: el saludo vive en la barra superior y lo pendiente ya
+          lo dicen las cifras y los avisos de cada tarjeta. */}
       {/* Etiquetas de una palabra: con "Días de vacaciones disponibles" el texto
           se partía en tres renglones y estiraba los recuadros de más. La cifra
           grande y el ícono ya dicen de qué se trata. */}
-      <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {/* El OPS no causa vacaciones: mostrarle "0 días disponibles" confunde más que omitirlo. */}
         {!esOps(colab.tipoVinculo) && (
           <Stat icono={CalendarRange} color="bg-foreground text-background" valor={`${saldo.saldoEntero} día${saldo.saldoEntero === 1 ? "" : "s"}`} label="Vacaciones" />
