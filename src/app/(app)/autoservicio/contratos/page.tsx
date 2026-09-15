@@ -90,6 +90,8 @@ export default async function MisContratosPage() {
     ...laborales.map((c) => ({
       id: c.id,
       clase: 'LABORAL' as const,
+      fechaInicioMs: c.fechaInicio.getTime(),
+      creadoMs: c.creadoEn.getTime(),
       numero: c.numero,
       objeto: `${TIPO_LABORAL[c.tipo] ?? c.tipo}${c.cargo ? ` — ${c.cargo.nombre}` : ''}`,
       // El empleador puede haber firmado en el PDF aportado en vez de en la app.
@@ -117,6 +119,8 @@ export default async function MisContratosPage() {
     ...contratos.map((c) => ({
       id: c.id,
       clase: 'OPS' as const,
+      fechaInicioMs: c.fechaInicio.getTime(),
+      creadoMs: c.creadoEn.getTime(),
       numero: c.numero,
       objeto: c.objeto,
       estado: c.estado,
@@ -132,6 +136,9 @@ export default async function MisContratosPage() {
       tieneDocumento: !!c.contenidoPdf || c.origenPdf === 'SUBIDO_PARA_FIRMA',
     })),
   ]
+  // Por fecha, el más reciente primero, sin importar si es laboral u OPS: quien
+  // pasó de prestación de servicios a laboral ve arriba el contrato vigente.
+  items.sort((a, b) => b.fechaInicioMs - a.fechaInicioMs || b.creadoMs - a.creadoMs)
 
   return (
     <div className="max-w-5xl">
