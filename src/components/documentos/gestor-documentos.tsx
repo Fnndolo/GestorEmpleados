@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatFechaCorta } from '@/lib/fechas'
+import { cn } from '@/lib/utils'
 import { borrarDocumento } from '@/app/(app)/colaboradores/documentos-acciones'
 
 type Doc = {
@@ -42,7 +43,11 @@ function categoriaDe(d: Doc): string {
   if (d.tipoDocumentoNombre) return 'Expediente'
   return 'Otros'
 }
-type ItemSemaforo = { nombre: string; obligatorio: boolean; estado: 'al_dia' | 'falta' | 'vencido' | 'por_vencer' }
+type ItemSemaforo = {
+  nombre: string; obligatorio: boolean; estado: 'al_dia' | 'falta' | 'vencido' | 'por_vencer'
+  /** Tipo del catálogo, para subirlo desde su propia fila. Sin id no se sube aquí (p. ej. el contrato firmado, que sale de Contratos). */
+  tipoDocumentoId?: string | null
+}
 
 export function GestorDocumentos({
   entidadTipo, entidadId, sedeId, documentos, tiposDocumento, semaforo, puedeEditar,
@@ -52,7 +57,9 @@ export function GestorDocumentos({
 }) {
   const router = useRouter()
   const [subiendo, setSubiendo] = useState(false)
-  const [dialogo, setDialogo] = useState(false)
+  // El diálogo de subida abre suelto (desde el botón general) o con el tipo
+  // ya elegido (desde la fila del semáforo).
+  const [dialogo, setDialogo] = useState<false | { tipo: TipoDoc | null }>(false)
   const [eliminar, setEliminar] = useState<Doc | null>(null)
   const [filtro, setFiltro] = useState('Todos')
 
@@ -61,12 +68,22 @@ export function GestorDocumentos({
   const visibles = filtro === 'Todos' ? documentos : documentos.filter((d) => categoriaDe(d) === filtro)
 
   return (
-    <div className="space-y-6">
-      {/* Semáforo documental */}
+    <div className="space-y-5">
+      {/* El botón general arriba: para lo que no está en la lista obligatoria. */}
+      {puedeEditar && (
+        <div className="flex justify-end">
+          <Button size="sm" className="w-full sm:w-auto" onClick={() => setDialogo({ tipo: null })}>
+            <Upload className="size-4" /> Subir documento
+          </Button>
+        </div>
+      )}
+
+      {/* Semáforo documental: una fila por documento exigido, cada una con su
+          propio botón de subida, para que no haya que adivinar el tipo. */}
       {semaforo.length > 0 && (
         <Card>
           <CardContent className="py-4">
-            <div className="mb-3 flex items-center gap-2.5">
+            <div className="mb-2 flex items-center gap-2.5">
               <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
                 <FileText className="size-4" />
               </span>
@@ -75,21 +92,28 @@ export function GestorDocumentos({
               {obligatoriosFaltantes === 0 ? (
                 <Badge className="bg-emerald-600">Completo</Badge>
               ) : (
-                <Badge variant="destructive">{obligatoriosFaltantes} obligatorio(s) faltante(s)</Badge>
+                <Badge variant="destructive">{obligatoriosFaltantes} faltante{obligatoriosFaltantes > 1 ? 's' : ''}</Badge>
               )}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {semaforo.map((s) => (
-                <span
-                  key={s.nombre}
-                  className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
-                >
-                  <IconoEstado estado={s.estado} />
-                  {s.nombre}
-                  {s.obligatorio && <span className="text-destructive">*</span>}
-                </span>
-              ))}
-            </div>
+            <ul className="divide-y">
+              {semaforo.map((s) => {
+                const tipo = s.tipoDocumentoId ? tiposDocumento.find((t) => t.id === s.tipoDocumentoId) ?? null : null
+                const pendiente = s.estado === 'falta' || s.estado === 'vencido'
+                return (
+                  <li key={s.nombre} className="flex items-center gap-2.5 py-2 text-sm">
+                    <IconoEstado estado={s.estado} />
+                    <span className={cn('min-w-0 flex-1 leading-tight', pendiente && s.obligatorio ? 'font-medium' : 'text-muted-foreground')}>
+                      {s.nombre}{s.obligatorio && <span className="text-destructive"> *</span>}
+                    </span>
+                    {puedeEditar && tipo && (pendiente || s.estado === 'por_vencer') && (
+                      <Button size="sm" variant={pendiente ? 'default' : 'outline'} className="shrink-0" onClick={() => setDialogo({ tipo })}>
+                        <Upload className="size-3.5" /> {s.estado === 'falta' ? 'Subir' : 'Renovar'}
+                      </Button>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
           </CardContent>
         </Card>
       )}
@@ -101,12 +125,6 @@ export function GestorDocumentos({
             <FolderOpen className="size-4" />
           </span>
           <h3 className="text-sm font-bold">Documentos ({documentos.length})</h3>
-          <span className="flex-1" />
-          {puedeEditar && (
-            <Button size="sm" onClick={() => setDialogo(true)}>
-              <Upload className="size-4" /> Subir documento
-            </Button>
-          )}
         </div>
         {categorias.length > 1 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
@@ -178,6 +196,7 @@ export function GestorDocumentos({
           entidadId={entidadId}
           sedeId={sedeId}
           tiposDocumento={tiposDocumento}
+          tipoInicial={dialogo.tipo}
           subiendo={subiendo}
           setSubiendo={setSubiendo}
           onClose={() => setDialogo(false)}
@@ -218,15 +237,17 @@ function IconoEstado({ estado }: { estado: ItemSemaforo['estado'] }) {
 }
 
 function DialogSubir({
-  entidadTipo, entidadId, sedeId, tiposDocumento, subiendo, setSubiendo, onClose, onSubido,
+  entidadTipo, entidadId, sedeId, tiposDocumento, tipoInicial, subiendo, setSubiendo, onClose, onSubido,
 }: {
   entidadTipo: string; entidadId: string; sedeId: string | null; tiposDocumento: TipoDoc[]
+  /** Tipo ya elegido cuando se abre desde la fila del semáforo. */
+  tipoInicial?: TipoDoc | null
   subiendo: boolean; setSubiendo: (b: boolean) => void; onClose: () => void; onSubido: () => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [archivo, setArchivo] = useState<File | null>(null)
-  const [nombre, setNombre] = useState('')
-  const [tipoDocumentoId, setTipoDocumentoId] = useState('')
+  const [nombre, setNombre] = useState(tipoInicial?.nombre ?? '')
+  const [tipoDocumentoId, setTipoDocumentoId] = useState(tipoInicial?.id ?? '')
   const [fechaVencimiento, setFechaVencimiento] = useState('')
 
   const tipoSel = tiposDocumento.find((t) => t.id === tipoDocumentoId)
@@ -271,7 +292,7 @@ function DialogSubir({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Subir documento</DialogTitle>
+          <DialogTitle>{tipoInicial ? `Subir: ${tipoInicial.nombre}` : 'Subir documento'}</DialogTitle>
           <DialogDescription>PDF o imagen (máx. 25 MB). Las fotos se comprimen automáticamente.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -281,7 +302,6 @@ function DialogSubir({
               ref={inputRef}
               type="file"
               accept="image/*,application/pdf"
-              capture="environment"
               onChange={onSeleccion}
               className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground"
             />

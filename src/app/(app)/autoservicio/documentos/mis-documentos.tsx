@@ -36,10 +36,12 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
   colaboradorId: string
   documentos: DocItem[]
   tipos: TipoDoc[]
-  faltantes: string[]
+  /** Obligatorios que aún no ha entregado, cada uno con su botón de subida. */
+  faltantes: TipoDoc[]
 }) {
   const router = useRouter()
-  const [abierto, setAbierto] = useState(false)
+  // Suelto (botón general) o con el tipo ya elegido (fila de pendientes).
+  const [abierto, setAbierto] = useState<false | { tipo: TipoDoc | null }>(false)
   const [imagen, setImagen] = useState<DocItem | null>(null)
   const [filtro, setFiltro] = useState<string>('Todos')
   const [editando, setEditando] = useState<DocItem | null>(null)
@@ -60,14 +62,30 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
 
   return (
     <div className="space-y-4">
+      {/* El botón general arriba: para lo que no está en la lista de pendientes. */}
+      <div className="flex justify-end">
+        <Button className="w-full sm:w-auto" onClick={() => setAbierto({ tipo: null })}><CloudUpload className="size-4" /> Subir documento</Button>
+      </div>
+
       {faltantes.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <div>
-            <p className="text-[13px] font-medium">Documentos pendientes por entregar</p>
-            <p className="mt-0.5 text-muted-foreground">{faltantes.join(' · ')}</p>
-          </div>
-        </div>
+        <Card className="border-amber-500/40">
+          <CardContent className="py-3">
+            <div className="mb-1 flex items-center gap-2">
+              <TriangleAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <p className="text-[13px] font-bold">Pendientes por entregar ({faltantes.length})</p>
+            </div>
+            <ul className="divide-y">
+              {faltantes.map((f) => (
+                <li key={f.id} className="flex items-center gap-2.5 py-2 text-sm">
+                  <span className="min-w-0 flex-1 leading-tight">{f.nombre}</span>
+                  <Button size="sm" className="shrink-0" onClick={() => setAbierto({ tipo: f })}>
+                    <CloudUpload className="size-3.5" /> Subir
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -92,7 +110,6 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
             ))}
           </div>
         ) : <span />}
-        <Button onClick={() => setAbierto(true)}><CloudUpload className="size-4" /> Subir documento</Button>
       </div>
 
       {visibles.length === 0 ? (
@@ -194,6 +211,7 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
         <DialogSubir
           colaboradorId={colaboradorId}
           tipos={tipos}
+          tipoInicial={abierto.tipo}
           onClose={() => setAbierto(false)}
           onDone={() => { setAbierto(false); router.refresh() }}
         />
@@ -202,11 +220,11 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
   )
 }
 
-function DialogSubir({ colaboradorId, tipos, onClose, onDone }: {
-  colaboradorId: string; tipos: TipoDoc[]; onClose: () => void; onDone: () => void
+function DialogSubir({ colaboradorId, tipos, tipoInicial, onClose, onDone }: {
+  colaboradorId: string; tipos: TipoDoc[]; tipoInicial?: TipoDoc | null; onClose: () => void; onDone: () => void
 }) {
   const inputArchivo = useRef<HTMLInputElement>(null)
-  const [tipoId, setTipoId] = useState('')
+  const [tipoId, setTipoId] = useState(tipoInicial?.id ?? '')
   const [nombre, setNombre] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [vencimiento, setVencimiento] = useState('')
@@ -248,7 +266,7 @@ function DialogSubir({ colaboradorId, tipos, onClose, onDone }: {
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Subir documento a mi expediente</DialogTitle>
+          <DialogTitle>{tipoInicial ? `Subir: ${tipoInicial.nombre}` : 'Subir documento a mi expediente'}</DialogTitle>
           <DialogDescription>Cédula, diplomas, certificados, RUT… Queda en tu hoja de vida y Talento Humano lo revisa.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

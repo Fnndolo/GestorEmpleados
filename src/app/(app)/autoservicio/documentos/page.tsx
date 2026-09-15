@@ -48,7 +48,7 @@ export default async function MisDocumentosPage() {
   const tiposEntregados = new Set(documentos.map((d) => d.tipoDocumentoId).filter(Boolean))
   const faltantes = requeridos
     .filter((r) => r.obligatorio && r.tipoDocumento.nombre !== TIPO_CONTRATO_FIRMADO && !tiposEntregados.has(r.tipoDocumentoId))
-    .map((r) => r.tipoDocumento.nombre)
+    .map((r) => ({ id: r.tipoDocumentoId, nombre: r.tipoDocumento.nombre, requiereVencimiento: r.tipoDocumento.requiereVencimiento }))
 
   /** Categoría para filtrar: expediente (requeridos/tipificados), desprendibles, certificaciones, actas, contratos u otros. */
   function categoria(nombre: string, tipoDocumentoId: string | null): string {

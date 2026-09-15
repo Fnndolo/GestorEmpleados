@@ -182,7 +182,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
       else if (doc.fechaVencimiento && doc.fechaVencimiento <= en30) estado = 'por_vencer'
       else estado = 'al_dia'
     }
-    return { nombre: r.tipoDocumento.nombre, obligatorio: r.obligatorio, estado }
+    return { nombre: r.tipoDocumento.nombre, obligatorio: r.obligatorio, estado, tipoDocumentoId: r.tipoDocumentoId }
   })
 
   const edad = calcularEdad(c.fechaNacimiento)
