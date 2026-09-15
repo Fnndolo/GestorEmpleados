@@ -45,10 +45,27 @@ export default async function MisDocumentosPage() {
   // El contrato firmado no lo sube él: sale del módulo de Contratos.
   const requeridos = await documentosRequeridosDe(colab)
   const tiposRequeridos = new Set(requeridos.map((r) => r.tipoDocumentoId))
-  const tiposEntregados = new Set(documentos.map((d) => d.tipoDocumentoId).filter(Boolean))
-  const faltantes = requeridos
-    .filter((r) => r.obligatorio && r.tipoDocumento.nombre !== TIPO_CONTRATO_FIRMADO && !tiposEntregados.has(r.tipoDocumentoId))
-    .map((r) => ({ id: r.tipoDocumentoId, nombre: r.tipoDocumento.nombre, requiereVencimiento: r.tipoDocumento.requiereVencimiento }))
+  // Vienen del más reciente al más antiguo: el primero de cada tipo es el vigente.
+  const vigentePorTipo = new Map<string, (typeof documentos)[number]>()
+  for (const d of documentos) if (d.tipoDocumentoId && !vigentePorTipo.has(d.tipoDocumentoId)) vigentePorTipo.set(d.tipoDocumentoId, d)
+  const hoy = new Date()
+  const exigidos = requeridos
+    .filter((r) => r.tipoDocumento.nombre !== TIPO_CONTRATO_FIRMADO)
+    .map((r) => {
+      const doc = vigentePorTipo.get(r.tipoDocumentoId) ?? null
+      const vencido = !!doc?.fechaVencimiento && doc.fechaVencimiento < hoy
+      return {
+        id: r.tipoDocumentoId,
+        nombre: r.tipoDocumento.nombre,
+        requiereVencimiento: r.tipoDocumento.requiereVencimiento,
+        obligatorio: r.obligatorio,
+        estado: (!doc ? 'falta' : vencido ? 'vencido' : 'al_dia') as 'falta' | 'vencido' | 'al_dia',
+        docId: doc?.id ?? null,
+        docEsImagen: doc?.mimeType.startsWith('image/') ?? false,
+        docNombre: doc?.nombre ?? null,
+        docFecha: doc ? formatFechaCorta(doc.creadoEn) : null,
+      }
+    })
 
   /** Categoría para filtrar: expediente (requeridos/tipificados), desprendibles, certificaciones, actas, contratos u otros. */
   function categoria(nombre: string, tipoDocumentoId: string | null): string {
@@ -70,7 +87,7 @@ export default async function MisDocumentosPage() {
       />
       <MisDocumentos
         colaboradorId={usuario.colaboradorId}
-        faltantes={faltantes}
+        exigidos={exigidos}
         tipos={tipos.map((t) => ({ id: t.id, nombre: t.nombre, requiereVencimiento: t.requiereVencimiento }))}
         documentos={[
           ...documentos.map((d) => ({

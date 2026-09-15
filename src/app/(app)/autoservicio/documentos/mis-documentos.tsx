@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CloudUpload, Download, Eye, FileText, Image as ImageIcon, MoreVertical, Paperclip, Pencil, Trash2, TriangleAlert } from 'lucide-react'
+import { CircleCheck, CloudUpload, Download, Eye, FileText, Image as ImageIcon, MoreVertical, Paperclip, Pencil, Trash2, TriangleAlert } from 'lucide-react'
 import { borrarMiDocumento, editarMiDocumento } from '../documentos-acciones'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import {
@@ -11,7 +11,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -31,13 +31,18 @@ type DocItem = {
 /** Orden fijo de las categorías; solo se muestran las que tienen documentos. */
 const CATEGORIAS = ['Expediente', 'Contratos', 'Desprendibles', 'Certificaciones', 'Actas', 'Otros']
 type TipoDoc = { id: string; nombre: string; requiereVencimiento: boolean }
+type Exigido = TipoDoc & {
+  obligatorio: boolean
+  estado: 'falta' | 'vencido' | 'al_dia'
+  docId: string | null; docEsImagen: boolean; docNombre: string | null; docFecha: string | null
+}
 
-export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
+export function MisDocumentos({ colaboradorId, documentos, tipos, exigidos }: {
   colaboradorId: string
   documentos: DocItem[]
   tipos: TipoDoc[]
-  /** Obligatorios que aún no ha entregado, cada uno con su botón de subida. */
-  faltantes: TipoDoc[]
+  /** Lo que se le exige, con su estado: cada fila abre el que ya está o sube el que falta. */
+  exigidos: Exigido[]
 }) {
   const router = useRouter()
   // Suelto (botón general) o con el tipo ya elegido (fila de pendientes).
@@ -57,8 +62,12 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
     else toast.error(res.error)
   }
 
-  const categorias = CATEGORIAS.filter((c) => documentos.some((d) => d.categoria === c))
-  const visibles = filtro === 'Todos' ? documentos : documentos.filter((d) => d.categoria === filtro)
+  // Lo que ya se ve en la lista de exigidos no se repite abajo.
+  const enLista = new Set(exigidos.map((e) => e.docId).filter(Boolean))
+  const otros = documentos.filter((d) => !enLista.has(d.id))
+  const categorias = CATEGORIAS.filter((c) => otros.some((d) => d.categoria === c))
+  const visibles = filtro === 'Todos' ? otros : otros.filter((d) => d.categoria === filtro)
+  const faltan = exigidos.filter((e) => e.obligatorio && e.estado !== 'al_dia').length
 
   return (
     <div className="space-y-4">
@@ -67,22 +76,43 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
         <Button className="w-full sm:w-auto" onClick={() => setAbierto({ tipo: null })}><CloudUpload className="size-4" /> Subir documento</Button>
       </div>
 
-      {faltantes.length > 0 && (
-        <Card className="border-amber-500/40">
+      {exigidos.length > 0 && (
+        <Card>
           <CardContent className="py-3">
-            <div className="mb-1 flex items-center gap-2">
-              <TriangleAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              <p className="text-[13px] font-bold">Pendientes por entregar ({faltantes.length})</p>
+            <div className="mb-1 flex items-center gap-2.5">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
+                <FileText className="size-4" />
+              </span>
+              <p className="text-[13px] font-bold">Documentos</p>
+              <span className="flex-1" />
+              {faltan > 0 ? (
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-400">{faltan} por entregar</span>
+              ) : (
+                <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">Completo</span>
+              )}
             </div>
             <ul className="divide-y">
-              {faltantes.map((f) => (
-                <li key={f.id} className="flex items-center gap-2.5 py-2 text-sm">
-                  <span className="min-w-0 flex-1 leading-tight">{f.nombre}</span>
-                  <Button size="sm" className="shrink-0" onClick={() => setAbierto({ tipo: f })}>
-                    <CloudUpload className="size-3.5" /> Subir
-                  </Button>
-                </li>
-              ))}
+              {exigidos.map((e) => {
+                const pendiente = e.estado !== 'al_dia'
+                const doc = e.docId ? documentos.find((d) => d.id === e.docId) ?? null : null
+                return (
+                  <li key={e.id} className="flex items-center gap-2.5 py-2 text-sm">
+                    {e.estado === 'al_dia'
+                      ? <CircleCheck className="size-4 shrink-0 text-emerald-600" />
+                      : <TriangleAlert className={`size-4 shrink-0 ${e.estado === 'vencido' ? 'text-destructive' : 'text-amber-600 dark:text-amber-400'}`} />}
+                    <span className="min-w-0 flex-1">
+                      <span className={`block leading-tight ${pendiente && e.obligatorio ? 'font-medium' : ''}`}>{e.nombre}</span>
+                      {e.docFecha && <span className="block truncate text-xs text-muted-foreground">{e.docFecha}{e.estado === 'vencido' ? ' · vencido' : ''}</span>}
+                    </span>
+                    {doc && (doc.esImagen
+                      ? <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => setImagen(doc)}><Eye className="size-3.5" /> Ver</Button>
+                      : <VisorPdf documentoId={doc.id} titulo={doc.nombre} className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' shrink-0'}><Eye className="size-3.5" /> Ver</VisorPdf>)}
+                    <Button size="sm" variant={pendiente ? 'default' : 'ghost'} className="shrink-0" onClick={() => setAbierto({ tipo: e })} aria-label={`${doc ? 'Reemplazar' : 'Subir'} ${e.nombre}`}>
+                      <CloudUpload className="size-3.5" /> {e.estado === 'falta' ? 'Subir' : e.estado === 'vencido' ? 'Renovar' : 'Reemplazar'}
+                    </Button>
+                  </li>
+                )
+              })}
             </ul>
           </CardContent>
         </Card>
@@ -104,7 +134,7 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
               >
                 {c}
                 <span className="ml-1 tabular-nums opacity-60">
-                  {c === 'Todos' ? documentos.length : documentos.filter((d) => d.categoria === c).length}
+                  {c === 'Todos' ? otros.length : otros.filter((d) => d.categoria === c).length}
                 </span>
               </button>
             ))}
@@ -112,10 +142,15 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, faltantes }: {
         ) : <span />}
       </div>
 
+      {exigidos.length > 0 && otros.length > 0 && (
+        <p className="text-[13px] font-bold">Otros documentos ({otros.length})</p>
+      )}
       {visibles.length === 0 ? (
-        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
-          {filtro === 'Todos' ? 'Aún no tienes documentos en tu expediente.' : `No tienes documentos en "${filtro}".`}
-        </CardContent></Card>
+        exigidos.length === 0 && (
+          <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
+            {filtro === 'Todos' ? 'Aún no tienes documentos en tu expediente.' : `No tienes documentos en "${filtro}".`}
+          </CardContent></Card>
+        )
       ) : (
         <Card><CardContent className="divide-y p-0">
           {visibles.map((d) => {

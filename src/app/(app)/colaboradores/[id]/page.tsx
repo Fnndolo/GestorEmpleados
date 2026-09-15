@@ -164,7 +164,8 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   const en30 = new Date(hoy)
   en30.setUTCDate(en30.getUTCDate() + 30)
   const porTipo = new Map<string, typeof documentos[number]>()
-  for (const d of documentos) if (d.tipoDocumentoId) porTipo.set(d.tipoDocumentoId, d)
+  // Vienen del más reciente al más antiguo: el primero de cada tipo es el vigente.
+  for (const d of documentos) if (d.tipoDocumentoId && !porTipo.has(d.tipoDocumentoId)) porTipo.set(d.tipoDocumentoId, d)
   // El contrato NO vive en el expediente: se gestiona en el módulo de Contratos. Por eso
   // este requisito se resuelve mirando los contratos del colaborador (firmados en la app
   // por ambas partes, o subidos ya firmados en físico) en vez de exigir una copia duplicada.
@@ -182,7 +183,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
       else if (doc.fechaVencimiento && doc.fechaVencimiento <= en30) estado = 'por_vencer'
       else estado = 'al_dia'
     }
-    return { nombre: r.tipoDocumento.nombre, obligatorio: r.obligatorio, estado, tipoDocumentoId: r.tipoDocumentoId }
+    return { nombre: r.tipoDocumento.nombre, obligatorio: r.obligatorio, estado, tipoDocumentoId: r.tipoDocumentoId, documentoId: doc?.id ?? null }
   })
 
   const edad = calcularEdad(c.fechaNacimiento)

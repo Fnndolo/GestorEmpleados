@@ -47,6 +47,8 @@ type ItemSemaforo = {
   nombre: string; obligatorio: boolean; estado: 'al_dia' | 'falta' | 'vencido' | 'por_vencer'
   /** Tipo del catálogo, para subirlo desde su propia fila. Sin id no se sube aquí (p. ej. el contrato firmado, que sale de Contratos). */
   tipoDocumentoId?: string | null
+  /** El documento vigente de ese tipo, si ya se subió: se abre desde la misma fila. */
+  documentoId?: string | null
 }
 
 export function GestorDocumentos({
@@ -64,12 +66,18 @@ export function GestorDocumentos({
   const [filtro, setFiltro] = useState('Todos')
 
   const obligatoriosFaltantes = semaforo.filter((s) => s.obligatorio && s.estado === 'falta').length
-  const categorias = CATEGORIAS.filter((c) => documentos.some((d) => categoriaDe(d) === c))
-  const visibles = filtro === 'Todos' ? documentos : documentos.filter((d) => categoriaDe(d) === filtro)
+  // Lo que ya se ve en la lista de exigidos no se repite abajo: "Otros" son los
+  // documentos sueltos y las versiones anteriores de un exigido (que así siguen
+  // a la vista y se pueden borrar).
+  const enLista = new Set(semaforo.map((s) => s.documentoId).filter(Boolean))
+  const otros = documentos.filter((d) => !enLista.has(d.id))
+  const categorias = CATEGORIAS.filter((c) => otros.some((d) => categoriaDe(d) === c))
+  const visibles = filtro === 'Todos' ? otros : otros.filter((d) => categoriaDe(d) === filtro)
+  const porId = new Map(documentos.map((d) => [d.id, d]))
 
   return (
     <div className="space-y-5">
-      {/* El botón general arriba: para lo que no está en la lista obligatoria. */}
+      {/* El botón general arriba: para lo que no está en la lista de exigidos. */}
       {puedeEditar && (
         <div className="flex justify-end">
           <Button size="sm" className="w-full sm:w-auto" onClick={() => setDialogo({ tipo: null })}>
@@ -78,8 +86,8 @@ export function GestorDocumentos({
         </div>
       )}
 
-      {/* Semáforo documental: una fila por documento exigido, cada una con su
-          propio botón de subida, para que no haya que adivinar el tipo. */}
+      {/* Una sola lista: cada documento exigido con su estado, y desde la misma
+          fila se abre el que ya está o se sube el que falta. */}
       {semaforo.length > 0 && (
         <Card>
           <CardContent className="py-4">
@@ -87,7 +95,7 @@ export function GestorDocumentos({
               <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
                 <FileText className="size-4" />
               </span>
-              <h3 className="text-sm font-bold">Semáforo documental</h3>
+              <h3 className="text-sm font-bold">Documentos</h3>
               <span className="flex-1" />
               {obligatoriosFaltantes === 0 ? (
                 <Badge className="bg-emerald-600">Completo</Badge>
@@ -98,16 +106,30 @@ export function GestorDocumentos({
             <ul className="divide-y">
               {semaforo.map((s) => {
                 const tipo = s.tipoDocumentoId ? tiposDocumento.find((t) => t.id === s.tipoDocumentoId) ?? null : null
+                const doc = s.documentoId ? porId.get(s.documentoId) ?? null : null
                 const pendiente = s.estado === 'falta' || s.estado === 'vencido'
                 return (
                   <li key={s.nombre} className="flex items-center gap-2.5 py-2 text-sm">
                     <IconoEstado estado={s.estado} />
-                    <span className={cn('min-w-0 flex-1 leading-tight', pendiente && s.obligatorio ? 'font-medium' : 'text-muted-foreground')}>
-                      {s.nombre}{s.obligatorio && <span className="text-destructive"> *</span>}
+                    <span className="min-w-0 flex-1">
+                      <span className={cn('block leading-tight', pendiente && s.obligatorio ? 'font-medium' : '')}>
+                        {s.nombre}{s.obligatorio && <span className="text-destructive"> *</span>}
+                      </span>
+                      {doc && (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {formatFechaCorta(new Date(doc.creadoEn))}
+                          {doc.fechaVencimiento && ` · vence ${formatFechaCorta(new Date(doc.fechaVencimiento))}`}
+                        </span>
+                      )}
                     </span>
-                    {puedeEditar && tipo && (pendiente || s.estado === 'por_vencer') && (
-                      <Button size="sm" variant={pendiente ? 'default' : 'outline'} className="shrink-0" onClick={() => setDialogo({ tipo })}>
-                        <Upload className="size-3.5" /> {s.estado === 'falta' ? 'Subir' : 'Renovar'}
+                    {doc && (
+                      <VisorPdf documentoId={doc.id} titulo={doc.nombre} mimeType={doc.mimeType} className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' shrink-0'}>
+                        <Eye className="size-3.5" /> Ver
+                      </VisorPdf>
+                    )}
+                    {puedeEditar && tipo && (
+                      <Button size="sm" variant={pendiente ? 'default' : 'ghost'} className="shrink-0" onClick={() => setDialogo({ tipo })} aria-label={`${doc ? 'Reemplazar' : 'Subir'} ${s.nombre}`}>
+                        <Upload className="size-3.5" /> {s.estado === 'falta' ? 'Subir' : s.estado === 'al_dia' ? 'Reemplazar' : 'Renovar'}
                       </Button>
                     )}
                   </li>
@@ -118,13 +140,15 @@ export function GestorDocumentos({
         </Card>
       )}
 
-      {/* Documentos */}
+      {/* Otros documentos: los que no están en la lista de exigidos. Sin lista
+          de exigidos (anexos de contratos, capacitaciones…) es la lista entera. */}
+      {(otros.length > 0 || semaforo.length === 0) && (
       <div>
         <div className="mb-3 flex items-center gap-2.5">
           <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
             <FolderOpen className="size-4" />
           </span>
-          <h3 className="text-sm font-bold">Documentos ({documentos.length})</h3>
+          <h3 className="text-sm font-bold">{semaforo.length > 0 ? 'Otros documentos' : 'Documentos'} ({otros.length})</h3>
         </div>
         {categorias.length > 1 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
@@ -141,7 +165,7 @@ export function GestorDocumentos({
               >
                 {c}
                 <span className="ml-1 tabular-nums opacity-60">
-                  {c === 'Todos' ? documentos.length : documentos.filter((d) => categoriaDe(d) === c).length}
+                  {c === 'Todos' ? otros.length : otros.filter((d) => categoriaDe(d) === c).length}
                 </span>
               </button>
             ))}
@@ -189,6 +213,7 @@ export function GestorDocumentos({
           </div>
         )}
       </div>
+      )}
 
       {dialogo && (
         <DialogSubir
