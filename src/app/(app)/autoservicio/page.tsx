@@ -376,7 +376,7 @@ export default async function AutoservicioPage() {
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {/* El OPS no causa vacaciones: mostrarle "0 días disponibles" confunde más que omitirlo. */}
         {!esOps(colab.tipoVinculo) && (
-          <Stat icono={TreePalm} color="bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" valor={String(saldo.saldo)} label="Vacaciones" />
+          <Stat icono={TreePalm} color="bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" valor={String(saldo.saldoEntero)} label="Vacaciones" />
         )}
         <Stat icono={Clock} color="bg-amber-500/12 text-amber-600 dark:text-amber-400" valor={String(enTramite)} label="En trámite" />
         {/* El último pago solo merece recuadro cuando hay algo que mostrar. Sin
@@ -405,7 +405,7 @@ export default async function AutoservicioPage() {
         contratosPorFirmar={contratosPorFirmar}
         disciplinariosAbiertos={disciplinariosAbiertos}
         puedeAprobar={puedeAprobar}
-        saldoVacaciones={saldo.saldo}
+        saldoVacaciones={saldo.saldoEntero}
         documentosFaltantes={documentosFaltantes}
         dotacionPorFirmar={dotacionPorFirmar}
       />

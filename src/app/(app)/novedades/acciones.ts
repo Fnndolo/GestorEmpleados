@@ -207,6 +207,49 @@ export const registrarVacaciones = accion(
 )
 
 /**
+ * Vacaciones que ya se disfrutaron y no quedaron en el sistema: las de antes de
+ * la plataforma, o las que se tomaron sin registrarlas. Talento Humano las anota
+ * desde la ficha para que descuenten del saldo. No hay preaviso ni aviso al
+ * trabajador porque ya pasaron; las futuras van por `registrarVacaciones`.
+ */
+export const registrarVacacionesDisfrutadas = accion(
+  { modulo: 'novedades', accion: 'CREAR', schema: vacacionesSchema },
+  async (d) => {
+    await exigirVinculoLaboral(d.colaboradorId, 'vacaciones')
+    const inicio = parseFechaISO(d.fechaInicio)!
+    const fin = parseFechaISO(d.fechaFin)!
+    if (fin < inicio) throw new ErrorNegocio('La fecha de fin no puede ser anterior a la de inicio.')
+    if (fin > hoyBogota()) {
+      throw new ErrorNegocio('Aquí solo se registran vacaciones que ya pasaron. Para programar unas futuras usa Novedades → Vacaciones.')
+    }
+    // No se duplica lo que ya está registrado (pedido, programado o disfrutado).
+    const cruce = await prisma.vacaciones.findFirst({
+      where: {
+        colaboradorId: d.colaboradorId,
+        estado: { in: ['SOLICITADA', 'APROBADA', 'EN_DISFRUTE', 'DISFRUTADA'] },
+        fechaInicio: { lte: fin }, fechaFin: { gte: inicio },
+      },
+    })
+    if (cruce) throw new ErrorNegocio('Ya hay vacaciones registradas que se cruzan con esas fechas.')
+    const dias = await diasHabilesRango(d.fechaInicio, d.fechaFin)
+    if (dias === 0) throw new ErrorNegocio('El rango elegido no contiene días hábiles.')
+
+    await dbAuditado.vacaciones.create({
+      data: {
+        colaboradorId: d.colaboradorId,
+        fechaInicio: inicio, fechaFin: fin,
+        diasHabiles: dias, estado: 'DISFRUTADA',
+        observaciones: v(d.observaciones) ?? 'Registradas por Talento Humano como ya disfrutadas',
+      },
+    })
+    revalidatePath(`/colaboradores/${d.colaboradorId}`)
+    revalidatePath('/novedades')
+    revalidatePath('/autoservicio')
+    return { dias }
+  },
+)
+
+/**
  * Vacaciones colectivas (Flujo 2B) — RIT art. 34: "La empresa establecerá la época
  * de vacaciones, ya sea de manera individual o colectiva… notificará al trabajador
  * la fecha de inicio con al menos quince (15) días de anticipación".
@@ -272,8 +315,8 @@ export const registrarVacacionesColectivas = accion(
       if (cruce) { omitidos++; continue }
 
       // Causadas vs. anticipadas por persona (RIT art. 33).
-      const { saldo } = await saldoVacaciones(c.id)
-      const esAnticipada = dias > saldo
+      const { saldoEntero } = await saldoVacaciones(c.id)
+      const esAnticipada = dias > saldoEntero
       if (esAnticipada) anticipados++
 
       await dbAuditado.vacaciones.create({
@@ -282,7 +325,7 @@ export const registrarVacacionesColectivas = accion(
           fechaInicio: inicio, fechaFin: fin, diasHabiles: dias, estado: 'APROBADA',
           observaciones: [
             `Vacaciones colectivas fijadas por la empresa (RIT art. 34).`,
-            esAnticipada ? `Salida anticipada: ${Math.round((dias - saldo) * 100) / 100} día(s) aún sin causar (RIT art. 33).` : null,
+            esAnticipada ? `Salida anticipada: ${Math.round((dias - saldoEntero) * 100) / 100} día(s) aún sin causar (RIT art. 33).` : null,
             v(d.observaciones),
           ].filter(Boolean).join(' '),
         },
@@ -398,9 +441,9 @@ export const reanudarVacaciones = accion(
     }
     const dias = await diasHabilesRango(d.fechaInicio, d.fechaFin)
     if (dias === 0) throw new ErrorNegocio('El rango elegido no contiene días hábiles.')
-    const { saldo } = await saldoVacaciones(origen.colaboradorId)
-    if (dias > saldo) {
-      throw new ErrorNegocio(`La reanudación (${dias} días hábiles) supera el saldo disponible del colaborador (${saldo}).`)
+    const { saldoEntero } = await saldoVacaciones(origen.colaboradorId)
+    if (dias > saldoEntero) {
+      throw new ErrorNegocio(`La reanudación (${dias} días hábiles) supera el saldo disponible del colaborador (${saldoEntero}).`)
     }
 
     await dbAuditado.vacaciones.create({

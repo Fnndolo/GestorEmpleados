@@ -63,11 +63,14 @@ export async function evaluarSolicitudVacaciones(
   fechaFin: string,
 ): Promise<EvaluacionVacaciones> {
   const dias = await diasHabilesRango(fechaInicio, fechaFin)
-  const { saldo } = await saldoVacaciones(colaboradorId)
+  // Contra los días COMPLETOS, que es lo que el colaborador ve como disponible.
+  const { saldoEntero } = await saldoVacaciones(colaboradorId)
+  // Lo que se informa como saldo es el de días completos, el mismo que ve el colaborador.
+  const saldo = saldoEntero
 
   const advertencias: string[] = []
-  const anticipadas = dias > saldo
-  const diasAnticipados = anticipadas ? Math.round((dias - saldo) * 100) / 100 : 0
+  const anticipadas = dias > saldoEntero
+  const diasAnticipados = anticipadas ? dias - saldoEntero : 0
 
   // Art. 37 lit. a: al menos un bloque de 6 días hábiles continuos al año.
   if (dias < DIAS_BLOQUE_MINIMO) {

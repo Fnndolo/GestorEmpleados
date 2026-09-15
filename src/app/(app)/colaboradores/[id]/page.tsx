@@ -28,6 +28,7 @@ import { FotoUploader } from './foto-uploader'
 import { EducacionLista } from './educacion-lista'
 import { BotonCertificacion } from './boton-certificacion'
 import { BotonDisciplinario } from './boton-disciplinario'
+import { RegistrarDisfrute } from './registrar-disfrute'
 import { HistorialDisciplinario, type ItemHistorial } from './historial-disciplinario'
 import { formatFechaLarga, formatFechaISO, formatFechaCorta, calcularEdad, antiguedad, hoyBogota, duracionContrato } from '@/lib/fechas'
 
@@ -51,6 +52,8 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   const { id } = await params
   const usuario = await requerirPermiso('colaboradores', 'VER')
   const puedeEditar = tienePermiso(usuario, 'colaboradores', 'EDITAR')
+  // Registrar vacaciones ya tomadas es una novedad, como programarlas.
+  const puedeNovedades = tienePermiso(usuario, 'novedades', 'CREAR')
   const verSalud = tienePermiso(usuario, 'colaboradores_salud', 'VER')
   const puedeDisciplinar = tienePermiso(usuario, 'juridica', 'CREAR')
   const verDisciplinario = tienePermiso(usuario, 'juridica', 'VER')
@@ -272,7 +275,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
         {/* Un contrato de prestación de servicios no causa vacaciones. */}
         {!esOps(c.tipoVinculo) && (
           <Stat icono={TreePalm} color="bg-teal-500/12 text-teal-600 dark:text-teal-400"
-            valor={`${saldoVac.saldo} días`} label="Vacaciones disponibles" />
+            valor={`${saldoVac.saldoEntero} días`} label="Vacaciones disponibles" />
         )}
       </div>
 
@@ -300,6 +303,34 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             ['Nivel educativo', c.nivelEducativoMax ? NIVEL_EDUCATIVO[c.nivelEducativoMax] : '—'],
           ]} />
 
+          {/* Vacaciones: cuentan desde el contrato de trabajo y se muestran en
+              días completos. Las ya tomadas sin registro se anotan aquí. */}
+          {!esOps(c.tipoVinculo) && (
+            <Card>
+              <CardContent className="py-4">
+                <div className="mb-3 flex items-center gap-2.5">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-teal-500/12 text-teal-600 dark:text-teal-400">
+                    <TreePalm className="size-4" />
+                  </span>
+                  <h3 className="text-sm font-bold">Vacaciones</h3>
+                </div>
+                <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+                  <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Disponibles</dt><dd className="text-sm font-medium">{saldoVac.saldoEntero} días hábiles</dd></div>
+                  <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Causadas</dt><dd className="text-sm">{Math.trunc(saldoVac.causadas)} días</dd></div>
+                  <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Disfrutadas</dt><dd className="text-sm">{Math.trunc(saldoVac.disfrutadas)} días</dd></div>
+                  <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Causan desde</dt><dd className="text-sm">{formatFechaLarga(saldoVac.desde)}</dd></div>
+                  {saldoVac.pendientesAprobacion > 0 && (
+                    <div className="flex flex-col sm:col-span-2"><dt className="text-xs text-muted-foreground">Pedidas, sin aprobar</dt><dd className="text-sm">{Math.trunc(saldoVac.pendientesAprobacion)} días</dd></div>
+                  )}
+                </dl>
+                {puedeNovedades && (
+                  <div className="mt-3">
+                    <RegistrarDisfrute colaboradorId={id} hoyISO={formatFechaISO(hoyBogota())} />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
           <BloqueDatos titulo="Contacto" icono={Phone} color="bg-teal-500/12 text-teal-600 dark:text-teal-400" datos={[
             ['Celular', c.celular],
             ['Correo personal', c.emailPersonal ?? '—'],
