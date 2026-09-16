@@ -3,11 +3,11 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Eye, ExternalLink, Upload, FileText, Image as ImageIcon, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Eye, Upload, FileText, Image as ImageIcon, X } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { cn } from '@/lib/utils'
 
 export const inputArchivoCls =
@@ -83,39 +83,35 @@ export function ZonaArchivos({
   )
 }
 
-/** Visor embebido de PDF/imagen dentro de la app (ajustado para no desbordar). */
-export function VisorDocumento({ documentoId, titulo, onClose }: { documentoId: string; titulo: string; onClose: () => void }) {
-  const url = `/api/documentos/${documentoId}`
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="w-[95vw] sm:max-w-5xl max-h-[92vh] overflow-hidden p-4 gap-3 flex flex-col">
-        <DialogHeader className="shrink-0"><DialogTitle className="truncate pr-6">{titulo}</DialogTitle></DialogHeader>
-        <iframe src={url} title={titulo} className="w-full flex-1 min-h-[55vh] rounded-md border bg-muted" />
-        <DialogFooter className="shrink-0">
-          <Button variant="outline" asChild><a href={url} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /> Abrir en pestaña</a></Button>
-          <Button variant="ghost" onClick={onClose}>Cerrar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 export type SoporteDoc = { id: string; nombre: string; mimeType: string }
 
 /** Lista de soportes SOLO LECTURA (con visor). Los soportes de cada etapa no se editan. */
 export function SoportesLista({ documentos }: { documentos: SoporteDoc[] }) {
-  const [ver, setVer] = useState<{ id: string; titulo: string } | null>(null)
   if (documentos.length === 0) return null
+  const imagenes = documentos.filter((d) => d.mimeType.startsWith('image/'))
+  const archivos = documentos.filter((d) => !d.mimeType.startsWith('image/'))
   return (
-    <div className="mt-1.5 space-y-1">
-      {documentos.map((d) => (
+    <div className="mt-1.5 space-y-1.5">
+      {/* Las fotos van como miniaturas: una captura de pantalla a tamaño real
+          se comía la pantalla del celular. Se amplían en el visor al tocarlas. */}
+      {imagenes.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {imagenes.map((d) => (
+            <VisorPdf key={d.id} documentoId={d.id} titulo={d.nombre} mimeType={d.mimeType} className="overflow-hidden rounded-md border bg-muted/30 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/documentos/${d.id}`} alt={d.nombre} title={d.nombre} loading="lazy" className="h-16 w-20 object-cover" />
+            </VisorPdf>
+          ))}
+        </div>
+      )}
+      {archivos.map((d) => (
         <div key={d.id} className="flex items-center gap-2 text-xs">
-          {d.mimeType.startsWith('image/') ? <ImageIcon className="size-3.5 text-muted-foreground shrink-0" /> : <FileText className="size-3.5 text-muted-foreground shrink-0" />}
-          <span className="truncate flex-1 min-w-0">{d.nombre}</span>
-          <button type="button" onClick={() => setVer({ id: d.id, titulo: d.nombre })} className="text-primary hover:underline shrink-0">Ver</button>
+          <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate">{d.nombre}</span>
+          {/* Visor compartido: el iframe de antes quedaba en blanco en el celular. */}
+          <VisorPdf documentoId={d.id} titulo={d.nombre} mimeType={d.mimeType} className="shrink-0 text-primary hover:underline">Ver</VisorPdf>
         </div>
       ))}
-      {ver && <VisorDocumento documentoId={ver.id} titulo={ver.titulo} onClose={() => setVer(null)} />}
     </div>
   )
 }
@@ -129,7 +125,6 @@ export function SoportesEntidad({
   const router = useRouter()
   const [archivos, setArchivos] = useState<File[]>([])
   const [subiendo, setSubiendo] = useState(false)
-  const [ver, setVer] = useState<{ id: string; titulo: string } | null>(null)
 
   async function subir() {
     if (archivos.length === 0) return
@@ -153,7 +148,7 @@ export function SoportesEntidad({
             <div key={d.id} className="flex items-center gap-2 text-sm">
               {d.mimeType.startsWith('image/') ? <ImageIcon className="size-4 text-muted-foreground shrink-0" /> : <FileText className="size-4 text-muted-foreground shrink-0" />}
               <span className="truncate flex-1 min-w-0">{d.nombre}</span>
-              <Button variant="ghost" size="sm" onClick={() => setVer({ id: d.id, titulo: d.nombre })}><Eye className="size-4" /> Ver</Button>
+              <VisorPdf documentoId={d.id} titulo={d.nombre} mimeType={d.mimeType} className={buttonVariants({ variant: 'ghost', size: 'sm' })}><Eye className="size-4" /> Ver</VisorPdf>
             </div>
           ))}
         </div>
@@ -168,7 +163,6 @@ export function SoportesEntidad({
           )}
         </div>
       )}
-      {ver && <VisorDocumento documentoId={ver.id} titulo={ver.titulo} onClose={() => setVer(null)} />}
     </CardContent></Card>
   )
 }
