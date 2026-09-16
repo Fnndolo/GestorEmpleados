@@ -210,6 +210,21 @@ export default async function AutoservicioPage() {
   const docComprobantePorPermiso = new Map<string, string>()
   for (const d of docsComprobante) if (!docComprobantePorPermiso.has(d.entidadId)) docComprobantePorPermiso.set(d.entidadId, d.id)
   const permisoPorSolicitud = new Map(permisosDeSolicitud.map((p) => [p.solicitudId!, p]))
+
+  // Soportes que el colaborador adjuntó a sus solicitudes (cita, incapacidad, licencia…).
+  const docsSolicitud = solicitudes.length
+    ? await prisma.documento.findMany({
+        where: { entidadTipo: 'Solicitud', entidadId: { in: solicitudes.map((s) => s.id) } },
+        orderBy: { creadoEn: 'asc' },
+        select: { id: true, entidadId: true, nombre: true, mimeType: true },
+      })
+    : []
+  const soportesPorSolicitud = new Map<string, { id: string; nombre: string; esImagen: boolean }[]>()
+  for (const d of docsSolicitud) {
+    const lista = soportesPorSolicitud.get(d.entidadId) ?? []
+    lista.push({ id: d.id, nombre: d.nombre.replace(/^Soporte solicitud — /, ''), esImagen: d.mimeType.startsWith('image/') })
+    soportesPorSolicitud.set(d.entidadId, lista)
+  }
   const hoy = hoyBogota()
   const comprobanteDe = (p: (typeof todosLosPermisos)[number]): ComprobanteItem | null => {
     if (p.comprobanteEstado === 'NO_REQUERIDO') return null
@@ -263,6 +278,7 @@ export default async function AutoservicioPage() {
           ? { fechaInicio: fechaLegible(cp.fechaInicio), fechaFin: fechaLegible(cp.fechaFin), comentario: cp.comentario ?? null }
           : null,
         comprobante: s.tipo === 'PERMISO' && permisoPorSolicitud.has(s.id) ? comprobanteDe(permisoPorSolicitud.get(s.id)!) : null,
+        soportes: soportesPorSolicitud.get(s.id) ?? [],
         // Un permiso se puede corregir mientras siga en aprobación y nadie lo haya decidido.
         edicion: s.tipo === 'PERMISO' && s.estado === 'EN_APROBACION' && s.pasos.every((p) => p.estado === 'PENDIENTE')
           ? {

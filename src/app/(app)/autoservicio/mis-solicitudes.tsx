@@ -4,8 +4,9 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ChevronDown, Download, CalendarRange, Clock, HeartPulse, FileBadge, FileCheck, TriangleAlert, Check, X, CircleDashed, CalendarClock, Paperclip, FileUp, Pencil } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -65,6 +66,8 @@ export type SolicitudItem = {
   origen?: string | null
   /** Datos para corregir el permiso; null cuando ya no se puede (alguien decidió o no es permiso). */
   edicion?: EdicionPermiso | null
+  /** Soportes que se adjuntaron a la solicitud (cita, incapacidad, licencia…). */
+  soportes?: { id: string; nombre: string; esImagen: boolean }[]
 }
 
 export type ComprobanteItem = {
@@ -423,6 +426,27 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                           </li>
                         )
                       })}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Los soportes que se enviaron con la solicitud: antes no se veían
+                    desde aquí y la persona no sabía si habían quedado adjuntos. */}
+                {s.soportes && s.soportes.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Soporte{s.soportes.length > 1 ? 's' : ''} enviado{s.soportes.length > 1 ? 's' : ''}
+                    </p>
+                    <ul className="divide-y rounded-lg border bg-card px-3">
+                      {s.soportes.map((d) => (
+                        <li key={d.id} className="flex items-center gap-2.5 py-1.5 text-sm">
+                          <Paperclip className="size-4 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate">{d.nombre}</span>
+                          <VisorPdf documentoId={d.id} titulo={d.nombre} mimeType={d.esImagen ? 'image/*' : 'application/pdf'} className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' shrink-0'}>
+                            Ver
+                          </VisorPdf>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 )}
