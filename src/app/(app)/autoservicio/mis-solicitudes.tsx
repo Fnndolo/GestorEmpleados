@@ -128,24 +128,27 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
   // le cuelga a otro ítem.
   const inputComprobante = useRef<HTMLInputElement>(null)
   const [comprobantePara, setComprobantePara] = useState<string | null>(null)
-  const [archivoComprobante, setArchivoComprobante] = useState<{ permisoId: string; file: File } | null>(null)
+  // Un comprobante puede ser varios archivos (la cita y la constancia, o las dos caras).
+  const [archivosComprobante, setArchivosComprobante] = useState<{ permisoId: string; files: File[] } | null>(null)
   const [enviandoComprobante, setEnviandoComprobante] = useState<string | null>(null)
 
   async function enviarComprobante(permisoId: string) {
-    if (archivoComprobante?.permisoId !== permisoId) { toast.error('Adjunta el comprobante de asistencia.'); return }
+    if (archivosComprobante?.permisoId !== permisoId || archivosComprobante.files.length === 0) { toast.error('Adjunta el comprobante de asistencia.'); return }
     setEnviandoComprobante(permisoId)
     try {
-      const fd = new FormData()
-      fd.append('archivo', archivoComprobante.file)
-      fd.append('entidadTipo', 'Permiso')
-      fd.append('entidadId', permisoId)
-      fd.append('nombre', `Comprobante de asistencia — ${archivoComprobante.file.name}`)
-      const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
-      if (!up.ok) throw new Error('No se pudo subir el archivo.')
+      for (const file of archivosComprobante.files) {
+        const fd = new FormData()
+        fd.append('archivo', file)
+        fd.append('entidadTipo', 'Permiso')
+        fd.append('entidadId', permisoId)
+        fd.append('nombre', `Comprobante de asistencia — ${file.name}`)
+        const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        if (!up.ok) throw new Error(`No se pudo subir ${file.name}.`)
+      }
       const res = await entregarComprobantePermiso({ permisoId })
       if (!res.ok) throw new Error(res.error)
       toast.success('Comprobante enviado. Talento Humano lo verificará.')
-      setArchivoComprobante(null)
+      setArchivosComprobante(null)
       router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo enviar el comprobante.')
@@ -207,10 +210,16 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
         ref={inputComprobante}
         type="file"
         accept="image/*,application/pdf"
+        multiple
         hidden
         onChange={(e) => {
-          const f = e.target.files?.[0] ?? null
-          setArchivoComprobante(f && comprobantePara ? { permisoId: comprobantePara, file: f } : null)
+          const nuevos = Array.from(e.target.files ?? [])
+          if (nuevos.length > 0 && comprobantePara) {
+            // Se acumulan: elegir otra vez agrega, no reemplaza.
+            setArchivosComprobante((prev) =>
+              prev?.permisoId === comprobantePara ? { permisoId: comprobantePara, files: [...prev.files, ...nuevos] } : { permisoId: comprobantePara, files: nuevos },
+            )
+          }
           e.target.value = ''
         }}
       />
@@ -284,36 +293,54 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                   {s.comprobante.situacion === 'VENCIDO'
                     ? <TriangleAlert className="mt-0.5 size-4 shrink-0 text-rose-600 dark:text-rose-400" />
                     : <FileCheck className="mt-0.5 size-4 shrink-0" />}
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-[13px] font-medium">
                       {s.comprobante.situacion === 'VENCIDO' ? 'Venció el plazo del comprobante de asistencia' : 'Sube el comprobante de asistencia'}
                     </p>
                     <p className="mt-0.5 text-muted-foreground">
-                      Adjunta la constancia de que asististe a la cita, diligencia o trámite de este permiso
-                      {s.comprobante.vence
-                        ? s.comprobante.situacion === 'VENCIDO'
-                          ? ` (el plazo era hasta el ${s.comprobante.vence}). Súbela cuanto antes.`
-                          : ` a más tardar el ${s.comprobante.vence}.`
-                        : '.'}
+                      {s.comprobante.situacion === 'VENCIDO'
+                        ? `El plazo era hasta el ${s.comprobante.vence ?? '—'} · Súbelo cuanto antes.`
+                        : `Cita, diligencia o trámite${s.comprobante.vence ? ` · hasta el ${s.comprobante.vence}` : ''}.`}
                     </p>
                     {s.comprobante.nota && (
                       <p className="mt-0.5 text-muted-foreground">Talento Humano no aceptó el anterior: &ldquo;{s.comprobante.nota}&rdquo;</p>
                     )}
                   </div>
                 </div>
-                <div className="flex flex-wrap justify-end gap-2">
+                {/* Los archivos elegidos, cada uno con su X; y una sola fila: el
+                    clip (solo icono, se pueden agregar varios) y Enviar. */}
+                {archivosComprobante?.permisoId === s.comprobante.permisoId && archivosComprobante.files.length > 0 && (
+                  <ul className="space-y-1 rounded-lg border bg-card p-2">
+                    {archivosComprobante.files.map((a, i) => (
+                      <li key={`${a.name}-${i}`} className="flex items-center gap-2">
+                        <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate">{a.name}</span>
+                        <button
+                          type="button"
+                          aria-label={`Quitar ${a.name}`}
+                          className="shrink-0 text-destructive"
+                          onClick={() => setArchivosComprobante((prev) => prev ? { ...prev, files: prev.files.filter((_, j) => j !== i) } : prev)}
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex items-center justify-end gap-2">
                   <Button
                     size="sm" variant="outline" disabled={enviandoComprobante !== null}
+                    aria-label="Adjuntar comprobante" title="Adjuntar comprobante (puedes elegir varios)"
                     onClick={() => { setComprobantePara(s.comprobante!.permisoId); inputComprobante.current?.click() }}
                   >
                     <Paperclip className="size-4" />
-                    {archivoComprobante?.permisoId === s.comprobante.permisoId ? archivoComprobante.file.name : 'Adjuntar comprobante'}
                   </Button>
                   <Button
-                    size="sm" disabled={enviandoComprobante !== null || archivoComprobante?.permisoId !== s.comprobante.permisoId}
+                    size="sm"
+                    disabled={enviandoComprobante !== null || archivosComprobante?.permisoId !== s.comprobante.permisoId || archivosComprobante.files.length === 0}
                     onClick={() => enviarComprobante(s.comprobante!.permisoId)}
                   >
-                    {enviandoComprobante === s.comprobante.permisoId ? <Spinner /> : <FileUp className="size-4" />} Enviar comprobante
+                    {enviandoComprobante === s.comprobante.permisoId ? <Spinner /> : <FileUp className="size-4" />} Enviar
                   </Button>
                 </div>
               </div>
