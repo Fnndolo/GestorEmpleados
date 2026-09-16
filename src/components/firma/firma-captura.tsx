@@ -1,9 +1,11 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
-import { Pencil, Upload, Eraser } from 'lucide-react'
+import { Pencil, Upload, Eraser, ImageUp, Wand2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { Spinner } from '@/components/ui/spinner'
+import { limpiarFondoFirma } from '@/lib/firma-fondo'
 
 /**
  * Captura de firma: dibujar en un lienzo o subir una imagen.
@@ -11,7 +13,9 @@ import { cn } from '@/lib/utils'
  */
 export function FirmaCaptura({ onChange }: { onChange: (dataUri: string | null) => void }) {
   const [modo, setModo] = useState<'dibujar' | 'subir'>('dibujar')
-  const [subida, setSubida] = useState<string | null>(null)
+  const [subida, setSubida] = useState<{ dataUri: string; fondoQuitado: boolean } | null>(null)
+  const [procesando, setProcesando] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dibujando = useRef(false)
   const huboTrazo = useRef(false)
@@ -62,9 +66,25 @@ export function FirmaCaptura({ onChange }: { onChange: (dataUri: string | null) 
 
   function onSubir(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
+    e.target.value = ''
     if (!f) return
     const reader = new FileReader()
-    reader.onload = () => { const url = reader.result as string; setSubida(url); onChange(url) }
+    reader.onload = async () => {
+      const original = reader.result as string
+      setProcesando(true)
+      try {
+        // Una foto o un escaneo traen el papel detrás; se lo quitamos aquí, en
+        // el navegador, para que sobre el PDF se vea solo el trazo. Si el PNG ya
+        // venía sin fondo, se deja tal cual.
+        const limpia = await limpiarFondoFirma(original)
+        setSubida(limpia)
+        onChange(limpia.dataUri)
+      } catch {
+        toast.error('No se pudo leer la imagen. Prueba con un PNG o JPG.')
+      } finally {
+        setProcesando(false)
+      }
+    }
     reader.readAsDataURL(f)
   }
 
@@ -99,14 +119,30 @@ export function FirmaCaptura({ onChange }: { onChange: (dataUri: string | null) 
         </div>
       ) : (
         <div className="space-y-1.5">
-          <input type="file" accept="image/png,image/jpeg" onChange={onSubir} className="block w-full text-sm" />
-          {subida && (
-            <div className={cn('rounded-lg border bg-white p-2')}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={subida} alt="Firma" className="mx-auto max-h-24 object-contain" />
-            </div>
+          {/* El selector nativo ("Elegir archivo · No se ha seleccionado…") se
+              esconde detrás de un botón: en el celular se cortaba y se leía mal. */}
+          <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onSubir} className="hidden" />
+          {subida ? (
+            <>
+              {/* Fondo a cuadros: así se ve que la firma quedó sin papel detrás. */}
+              <div className="rounded-lg border p-2 [background:repeating-conic-gradient(#e5e7eb_0_25%,#fff_0_50%)_0_0/16px_16px]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={subida.dataUri} alt="Firma" className="mx-auto max-h-28 object-contain" />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Wand2 className="size-3.5" /> {subida.fondoQuitado ? 'Fondo quitado' : 'Ya venía sin fondo'}
+                </p>
+                <Button type="button" size="sm" variant="ghost" onClick={() => inputRef.current?.click()} disabled={procesando}>
+                  <ImageUp className="size-4" /> Cambiar
+                </Button>
+              </div>
+            </>
+          ) : (
+            <Button type="button" size="sm" variant="outline" className="w-full justify-start" onClick={() => inputRef.current?.click()} disabled={procesando}>
+              {procesando ? <Spinner /> : <ImageUp className="size-4" />} Elegir imagen de mi firma
+            </Button>
           )}
-          <p className="text-xs text-muted-foreground">PNG o JPG, mejor con fondo transparente.</p>
         </div>
       )}
     </div>
