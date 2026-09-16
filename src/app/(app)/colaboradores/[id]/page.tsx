@@ -95,6 +95,9 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
 
   // Los desprendibles los ve quien tiene permiso de nómina o el propio colaborador (su ficha)
   const esPropia = usuario.colaboradorId === id
+  // En su propia ficha el colaborador sube documentos igual que en Autoservicio →
+  // Mis documentos (la API ya lo permite y avisa a Talento Humano); borrar no.
+  const puedeSubirPropios = esPropia && tienePermiso(usuario, 'autoservicio', 'CREAR')
   const mostrarPagos = tienePermiso(usuario, 'nomina', 'VER') || esPropia
   const [contratos, contratosOps, eduDocs, liquidaciones, variacionesSalariales, auxTransporte] = await Promise.all([
     prisma.contrato.findMany({ where: { colaboradorId: id }, include: { cargo: true, sede: true }, orderBy: { fechaInicio: 'desc' } }),
@@ -153,11 +156,13 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   // módulo. Los desprendibles viven en la pestaña Pagos, las actas en Activos y
   // los exámenes en SST: repetirlos aquí llena la hoja de vida —24 desprendibles
   // al año por persona— y esconde lo que de verdad falta del expediente.
+  // Los propios se ven todos (habeas data), como en Mis documentos: si no, un
+  // documento que le subió TH con nivel RRHH le aparecía "al día" sin poder abrirlo.
   const deOtroModulo = await documentosDeOtroModulo(id)
   const documentosVisibles = documentos.filter(
     (d) =>
       !deOtroModulo.has(d.id) &&
-      (d.nivelAcceso === 'GENERAL' || verSalud || (d.nivelAcceso === 'RRHH' && puedeEditar)),
+      (esPropia || d.nivelAcceso === 'GENERAL' || verSalud || (d.nivelAcceso === 'RRHH' && puedeEditar)),
   )
 
   // Semáforo documental
@@ -526,7 +531,8 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
               .filter((t) => t.nombre !== TIPO_CONTRATO_FIRMADO)
               .map((t) => ({ id: t.id, nombre: t.nombre, requiereVencimiento: t.requiereVencimiento }))}
             semaforo={semaforo}
-            puedeEditar={puedeEditar}
+            puedeEditar={puedeEditar || puedeSubirPropios}
+            puedeBorrar={puedeEditar}
           />
         </TabsContent>
 

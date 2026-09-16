@@ -51,10 +51,14 @@ type ItemSemaforo = {
 }
 
 export function GestorDocumentos({
-  entidadTipo, entidadId, sedeId, documentos, tiposDocumento, semaforo, puedeEditar,
+  entidadTipo, entidadId, sedeId, documentos, tiposDocumento, semaforo, puedeEditar, puedeBorrar = puedeEditar,
 }: {
   entidadTipo: string; entidadId: string; sedeId: string | null
-  documentos: Doc[]; tiposDocumento: TipoDoc[]; semaforo: ItemSemaforo[]; puedeEditar: boolean
+  documentos: Doc[]; tiposDocumento: TipoDoc[]; semaforo: ItemSemaforo[]
+  /** Puede subir (y reemplazar) documentos. */
+  puedeEditar: boolean
+  /** Puede borrarlos. Por defecto va con `puedeEditar`; el propio colaborador sube a su ficha pero no borra desde aquí. */
+  puedeBorrar?: boolean
 }) {
   const router = useRouter()
   const [subiendo, setSubiendo] = useState(false)
@@ -201,7 +205,7 @@ export function GestorDocumentos({
                     <Eye className="size-4" />
                     <span className="sr-only">Ver {d.nombre}</span>
                   </VisorPdf>
-                  {puedeEditar && (
+                  {puedeBorrar && (
                     <Button variant="ghost" size="icon" onClick={() => setEliminar(d)} aria-label="Eliminar">
                       <Trash2 className="size-4 text-destructive" />
                     </Button>
