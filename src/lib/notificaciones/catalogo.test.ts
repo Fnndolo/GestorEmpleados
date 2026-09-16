@@ -13,14 +13,13 @@ describe('CORREO_POR_DEFECTO', () => {
       'denuncia_acoso',
       'disciplinario_citacion',
       'disciplinario_decision',
-      // Reunir los documentos del expediente es un trámite de días, fuera de la app.
-      'expediente_pendiente',
       'habeas_data',
     ])
   })
 
   it('deja sin correo las confirmaciones de lo que la persona acaba de hacer', () => {
-    for (const clave of ['contrato_firmado', 'dotacion_firmada', 'ficha_actualizada', 'solicitud_creada']) {
+    // 'expediente_pendiente' sale junto al correo del contrato: no debe competir con él.
+    for (const clave of ['contrato_firmado', 'dotacion_firmada', 'ficha_actualizada', 'solicitud_creada', 'expediente_pendiente']) {
       expect(CORREO_POR_DEFECTO.has(clave)).toBe(false)
     }
   })

@@ -84,7 +84,10 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
   { clave: 'comprobante_permiso_entregado', etiqueta: 'Comprobante de permiso entregado', descripcion: 'El colaborador sube el comprobante de asistencia y Talento Humano debe verificarlo.', modulo: 'Autoservicio' },
   { clave: 'comprobante_permiso_revisado', etiqueta: 'Comprobante de permiso revisado', descripcion: 'Talento Humano acepta el comprobante o lo devuelve para que el colaborador suba otro.', modulo: 'Autoservicio' },
   { clave: 'comprobante_permiso_vencido', etiqueta: 'Comprobante de permiso sin entregar', descripcion: 'Aviso automático a Talento Humano cuando venció el plazo y el colaborador no subió el comprobante.', modulo: 'Autoservicio' },
-  { clave: 'expediente_pendiente', etiqueta: 'Documentos del expediente pendientes', descripcion: 'Al quedar con contrato de trabajo se le dice al colaborador qué documentos le faltan por entregar.', modulo: 'Autoservicio', correoPorDefecto: true },
+  // Sin correo: sale en el mismo momento que el del contrato, y dos correos a la
+  // vez hacen que se ignore el que importa (la firma). Lo que falta se ve en la
+  // campana y en Mis documentos.
+  { clave: 'expediente_pendiente', etiqueta: 'Documentos del expediente pendientes', descripcion: 'Al quedar con contrato de trabajo se le dice al colaborador qué documentos le faltan por entregar.', modulo: 'Autoservicio' },
 
   // Bienestar
   { clave: 'cumpleanos_encargado_asignado', etiqueta: 'Cumpleaños a cargo', descripcion: 'Talento Humano le encarga a un colaborador la celebración del cumpleaños de otro.', modulo: 'Bienestar', correoPorDefecto: true },
