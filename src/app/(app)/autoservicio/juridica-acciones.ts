@@ -29,6 +29,7 @@ export const crearMiDenuncia = accion(
     accion: 'CREAR',
     schema: z.object({
       tipo: z.enum(['ACOSO_LABORAL', 'ACOSO_SEXUAL', 'CONDUCTA_IRREGULAR', 'SUGERENCIA']),
+      asunto: z.string().trim().min(3, 'Escribe de qué se trata.').max(120),
       anonima: z.boolean(),
       denuncianteNombre: z.string().max(150).optional(),
       hechos: z.string().trim().min(10, 'Describe los hechos (mínimo 10 caracteres).').max(2000),
@@ -42,6 +43,7 @@ export const crearMiDenuncia = accion(
       data: {
         codigo,
         tipo: d.tipo,
+        asunto: d.asunto,
         anonima: d.anonima,
         denuncianteNombre: d.anonima ? null : v(d.denuncianteNombre),
         hechos: d.hechos,

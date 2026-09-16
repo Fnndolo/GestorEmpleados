@@ -17,7 +17,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { crearMiDenuncia, crearMiConsultaReclamo, consultarMiDenuncia } from '../juridica-acciones'
 import { TIPOS_REPORTE, type TipoReporte } from '@/lib/linea-etica'
-import { cn } from '@/lib/utils'
 
 const ESTADO_DENUNCIA: Record<string, { label: string; tone: PillTone; nota: string }> = {
   RECIBIDA: { label: 'Recibida', tone: 'warn', nota: 'Tu denuncia fue recibida y está pendiente de revisión por el Comité de Convivencia / Jurídica.' },
@@ -182,7 +181,8 @@ function DialogSeguimiento({ onClose }: { onClose: () => void }) {
 function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: (codigo: string) => void }) {
   const router = useRouter()
   const [anonima, setAnonima] = useState(true)
-  const [tipo, setTipo] = useState<TipoReporte>('ACOSO_LABORAL')
+  const [tipo, setTipo] = useState<TipoReporte | ''>('')
+  const [asunto, setAsunto] = useState('')
   const [nombre, setNombre] = useState('')
   const [hechos, setHechos] = useState('')
   const [fechaHechos, setFechaHechos] = useState('')
@@ -192,9 +192,11 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
   const [g, setG] = useState(false)
 
   async function enviar() {
+    if (asunto.trim().length < 3) { toast.error('Escribe de qué se trata.'); return }
+    if (!tipo) { toast.error('Elige el tipo de reporte.'); return }
     if (hechos.trim().length < 10) { toast.error('Describe los hechos (mínimo 10 caracteres).'); return }
     setG(true)
-    const res = await crearMiDenuncia({ tipo, anonima, denuncianteNombre: anonima ? undefined : nombre, hechos, fechaHechos: fechaHechos || undefined })
+    const res = await crearMiDenuncia({ tipo, asunto, anonima, denuncianteNombre: anonima ? undefined : nombre, hechos, fechaHechos: fechaHechos || undefined })
     if (!res.ok) { setG(false); toast.error(res.error); return }
     // Las evidencias van por su propio endpoint, que no registra quién las sube;
     // la prueba de que son de este reporte es el código.
@@ -219,41 +221,35 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto">
+      <DialogContent className="max-h-[88vh] overflow-y-auto" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Línea ética</DialogTitle>
-          <DialogDescription>Solo el Comité de Convivencia y Jurídica acceden al contenido.</DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-start gap-2 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
+        {/* Una línea: lo que importa saber antes de escribir. */}
+        <p className="flex items-start gap-2 rounded-lg bg-muted/60 p-2.5 text-xs text-muted-foreground">
           <Lock className="mt-0.5 size-4 shrink-0" />
-          <span>Tu reporte es confidencial: <strong>no se registra quién lo envía</strong>. Si lo marcas anónimo, tampoco se guarda tu nombre. Anota el código que verás al enviarlo para dar seguimiento.</span>
-        </div>
+          <span>Confidencial: <strong>no se registra quién lo envía</strong>. Guarda el código que verás al enviarlo.</span>
+        </p>
 
         <div className="space-y-4">
-          {/* El tipo decide el camino: los dos de acoso van al Comité de
-              Convivencia con el procedimiento de la Ley 1010; los demás no. */}
-          <Campo label="¿Qué quieres reportar?">
-            <div className="grid gap-2">
-              {TIPOS_REPORTE.map((t) => (
-                <button
-                  key={t.valor}
-                  type="button"
-                  onClick={() => setTipo(t.valor)}
-                  className={cn(
-                    'rounded-lg border p-2.5 text-left transition',
-                    tipo === t.valor ? 'border-primary bg-accent' : 'hover:border-foreground/20',
-                  )}
-                >
-                  <p className="text-sm font-medium">{t.etiqueta}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{t.ayuda}</p>
-                </button>
-              ))}
-            </div>
+          {/* De qué se trata lo escribe la persona; el tipo queda como una
+              lista corta porque decide el camino: los de acoso van al Comité de
+              Convivencia con su procedimiento, los demás no. */}
+          <Campo label="¿De qué se trata?">
+            <Input value={asunto} onChange={(e) => setAsunto(e.target.value)} maxLength={120} placeholder="Ej.: Gritos de un supervisor, faltante en caja, horario del almuerzo…" />
+          </Campo>
+          <Campo label="Tipo">
+            <Select value={tipo} onValueChange={(v) => setTipo(v as TipoReporte)}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+              <SelectContent>
+                {TIPOS_REPORTE.map((t) => <SelectItem key={t.valor} value={t.valor}>{t.etiqueta}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </Campo>
           <label className="flex items-center gap-2 text-sm"><Checkbox checked={anonima} onCheckedChange={(v) => setAnonima(Boolean(v))} /> Enviar de forma anónima</label>
           {!anonima && <Campo label="Tu nombre (opcional)"><Input value={nombre} onChange={(e) => setNombre(e.target.value)} /></Campo>}
-          <Campo label="¿Qué ocurrió?"><Textarea rows={5} value={hechos} onChange={(e) => setHechos(e.target.value)} placeholder="Describe los hechos, personas involucradas, lugar y contexto." /></Campo>
+          <Campo label="Detalles"><Textarea rows={5} value={hechos} onChange={(e) => setHechos(e.target.value)} placeholder="Qué pasó, quiénes, dónde y cuándo." /></Campo>
           <Campo label="Fecha de los hechos (opcional)"><Input type="date" value={fechaHechos} onChange={(e) => setFechaHechos(e.target.value)} /></Campo>
           <Campo label="Evidencias (opcional)">
             <input

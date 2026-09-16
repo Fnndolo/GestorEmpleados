@@ -2532,6 +2532,8 @@ model DenunciaAcoso {
   tipo                  TipoReporte    @default(ACOSO_LABORAL)
   anonima               Boolean        @default(true)
   denuncianteNombre     String?        @map("denunciante_nombre")
+  // De qué se trata, en palabras de quien reporta (los detalles van en hechos).
+  asunto                String?
   hechos                String
   fechaHechos           DateTime?      @map("fecha_hechos") @db.Date
   sedeId                String?        @map("sede_id") @db.Uuid

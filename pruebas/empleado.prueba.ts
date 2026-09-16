@@ -135,7 +135,7 @@ describe('lo que el empleado SÍ puede hacer', () => {
   it('reporta por la línea ética y consulta con su código', async () => {
     actuarComo(empleado)
     const res = await crearMiDenuncia({
-      tipo: 'CONDUCTA_IRREGULAR', anonima: true, hechos: `Hechos de ${MARCA} para probar el canal`,
+      tipo: 'CONDUCTA_IRREGULAR', asunto: 'Prueba del canal', anonima: true, hechos: `Hechos de ${MARCA} para probar el canal`,
     } as never)
     expect(res.ok, res.ok ? '' : res.error).toBe(true)
     const { codigo } = (res.ok ? res.datos : { codigo: '' }) as { codigo: string }

@@ -65,7 +65,7 @@ type Props = {
   tab: string; puedeCrear: boolean; puedeEditar: boolean
   documentos: DocLegal[]
   disciplinarios: { id: string; colaborador: string; asunto: string; etapa: string; cerrado: boolean }[]
-  denuncias: { id: string; codigo: string; tipo: string; anonima: boolean; estado: string; fecha: string }[]
+  denuncias: { id: string; codigo: string; tipo: string; asunto: string | null; anonima: boolean; estado: string; fecha: string }[]
   consultas: Consulta[]
 }
 
@@ -105,7 +105,7 @@ export function JuridicaCliente(p: Props) {
               href: `/juridica/denuncias/${d.id}`,
               // El tipo va en el título porque decide el procedimiento: no es lo
               // mismo atender un acoso que una sugerencia.
-              titulo: `${etiquetaReporte(d.tipo)} · ${d.codigo}${d.anonima ? ' (anónima)' : ''}`,
+              titulo: `${d.asunto ? `${d.asunto} · ` : ''}${etiquetaReporte(d.tipo)} · ${d.codigo}${d.anonima ? ' (anónima)' : ''}`,
               sub: formatFechaCorta(new Date(d.fecha)),
               badge: EST_DEN[d.estado] ?? d.estado,
               tone: d.estado === 'RESUELTA' ? 'ok' : d.estado === 'ARCHIVADA' ? 'muted' : 'warn',
