@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Bell, CheckCheck, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { colorAvatar } from '@/lib/etiquetas'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { marcarLeidas } from '@/app/(app)/notificaciones-acciones'
 import { ActivarPush } from './activar-push'
@@ -16,7 +18,27 @@ const ES_MOVIL =
   typeof navigator !== 'undefined' &&
   /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent)
 
-type Notif = { id: string; titulo: string; mensaje: string; enlace: string | null; leida: boolean; evento: string | null; creadoEn: string }
+type Persona = { nombre: string; iniciales: string; fotoUrl: string | null }
+type Notif = { id: string; titulo: string; mensaje: string; enlace: string | null; leida: boolean; evento: string | null; creadoEn: string; persona: Persona | null }
+
+/** Quién: la miniatura de la persona de la que habla el aviso; si no habla de nadie, la campana. */
+function Quien({ persona }: { persona: Persona | null }) {
+  if (!persona) {
+    return (
+      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-foreground text-background">
+        <Bell className="size-3.5" />
+      </span>
+    )
+  }
+  return (
+    <Avatar className="size-8 shrink-0">
+      {persona.fotoUrl && <AvatarImage src={persona.fotoUrl} alt="" />}
+      <AvatarFallback className="text-[11px] font-semibold text-white" style={{ backgroundColor: colorAvatar(persona.nombre) }}>
+        {persona.iniciales}
+      </AvatarFallback>
+    </Avatar>
+  )
+}
 
 /**
  * Algunos mensajes llegan en HTML (la misma plantilla del correo, p. ej. el
@@ -73,9 +95,7 @@ export function Campana({ verVencimientos = false }: { verVencimientos?: boolean
       toast.custom(
         (id) => (
           <div className="flex w-full items-start gap-3 rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-lg">
-            <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
-              <Bell className="size-4" />
-            </span>
+            <Quien persona={n.persona} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold leading-snug">{n.titulo}</p>
               {n.mensaje && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{textoPlano(n.mensaje)}</p>}
@@ -209,7 +229,7 @@ export function Campana({ verVencimientos = false }: { verVencimientos?: boolean
                     const detalle = textoPlano(n.mensaje)
                     const contenido = (
                       <div className={`flex gap-2.5 px-3 py-2.5 ${!n.leida ? 'bg-accent/40' : ''}`}>
-                        <span className={`mt-1.5 size-2 shrink-0 rounded-full ${!n.leida ? 'bg-primary' : 'bg-transparent'}`} aria-hidden />
+                        <Quien persona={n.persona} />
                         <div className="min-w-0 flex-1">
                           <p className="text-[13px] font-semibold leading-snug">{n.titulo}</p>
                           {detalle && <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{detalle}</p>}

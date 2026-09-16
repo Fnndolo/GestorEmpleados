@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
       const colab = await prisma.colaborador.findUnique({ where: { id: entidadId }, select: { nombres: true, apellidos: true } })
       await avisarPorRol(['Recursos Humanos', 'Administrador'], {
         evento: 'documento_aportado',
+        colaboradorId: entidadId,
         titulo: `${nombreCorto(colab?.nombres, colab?.apellidos)} subió un documento`,
         mensaje: `"${doc.nombre}" · Revísalo y clasifícalo si corresponde.`,
         enlace: `/colaboradores/${entidadId}`,

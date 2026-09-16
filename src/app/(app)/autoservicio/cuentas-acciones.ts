@@ -51,6 +51,7 @@ export const crearMiCuentaCobro = accion(
     const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { nombres: true, apellidos: true } })
     await avisarPorRol(['Contador', 'Administrador', 'Subgerencia'], {
       evento: 'cuenta_cobro_radicada',
+      colaboradorId: usuario.colaboradorId,
       titulo: `${nombreCorto(colab.nombres, colab.apellidos)} radicó la cuenta de cobro ${cuenta.numero}`,
       mensaje: `Periodo ${d.periodo}${contrato ? ' · Verifica la seguridad social antes de aprobar.' : ''}`,
       enlace: contrato ? `/contratos/ops/${contrato.id}` : '/contratos/cuentas-cobro',
@@ -124,6 +125,7 @@ export const adjuntarMiSoporteSs = accion(
     const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { nombres: true, apellidos: true } })
     await avisarPorRol(['Contador', 'Administrador', 'Subgerencia'], {
       evento: 'soporte_ss_adjuntado',
+      colaboradorId: usuario.colaboradorId,
       titulo: `${nombreCorto(colab.nombres, colab.apellidos)} adjuntó la planilla PILA`,
       mensaje: `Cuenta ${cuenta.numero} · periodo ${d.periodoCotizado} · Verifícala para aprobar el pago.`,
       enlace: `/contratos/ops/${cuenta.contratoOpsId}`,

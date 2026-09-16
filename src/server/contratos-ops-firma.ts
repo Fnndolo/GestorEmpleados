@@ -160,6 +160,7 @@ export async function aplicarFirmaContratoOps(opts: {
     await avisarPorRol(['Administrador', 'Recursos Humanos'], {
       titulo: `${nombreContratista} firmó el contrato ${c.numero}`,
       mensaje: enPdf ? 'Quedó completo: el PDF ya traía la firma del representante legal.' : 'Quedó firmado por ambas partes.',
+      colaboradorId: c.colaboradorId,
       enlace: `/contratos/ops/${c.id}`, llamadoAccion: 'Ver el contrato', evento: 'contrato_firmado',
     }).catch(() => {})
   } else if (opts.rol === 'CONTRATANTE' && contratista?.usuarioId) {
@@ -174,6 +175,7 @@ export async function aplicarFirmaContratoOps(opts: {
     await avisarPorRol(['Administrador', 'Recursos Humanos'], {
       titulo: `${nombreCorto(contratista?.nombres, contratista?.apellidos)} firmó el contrato ${c.numero}`,
       mensaje: 'Falta la firma del representante legal.',
+      colaboradorId: c.colaboradorId,
       enlace: `/contratos/ops/${c.id}`, llamadoAccion: 'Aplicar la firma del contratante', evento: 'contrato_por_firmar',
     }).catch(() => {})
   }

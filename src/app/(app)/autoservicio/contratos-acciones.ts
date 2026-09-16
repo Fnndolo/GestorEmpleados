@@ -82,6 +82,7 @@ export const firmarMiContratoOps = accion(
     const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: colaboradorId }, select: { nombres: true, apellidos: true } })
     await avisarPorRol(['Administrador', 'Recursos Humanos', 'Subgerencia'], {
       evento: 'contrato_firmado',
+      colaboradorId,
       titulo: `${nombreCorto(colab.nombres, colab.apellidos)} firmó el contrato OPS ${numero}`,
       mensaje: firmado ? 'Firmado por ambas partes · El PDF ya está disponible.' : 'Falta la firma del representante legal.',
       enlace: `/contratos/ops/${d.contratoId}`,
@@ -157,6 +158,7 @@ export const firmarMiContratoLaboral = accion(
     const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: colaboradorId }, select: { nombres: true, apellidos: true } })
     await avisarPorRol(['Administrador', 'Recursos Humanos', 'Subgerencia'], {
       evento: 'contrato_firmado',
+      colaboradorId,
       titulo: `${nombreCorto(colab.nombres, colab.apellidos)} firmó el contrato ${numero}`,
       mensaje: firmado ? 'Firmado por ambas partes · El PDF ya está disponible.' : 'Falta la firma del representante legal.',
       enlace: `/contratos/${d.contratoId}`,

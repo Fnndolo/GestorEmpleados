@@ -252,7 +252,7 @@ export const firmarRecibidoDotacion = accion(
     await avisarPorRol(['Recursos Humanos', 'Administrador'], {
       titulo: `${nombreCorto(entrega.colaborador.nombres, entrega.colaborador.apellidos)} firmó el recibido de dotación`,
       mensaje: `${entrega.corte} ${entrega.anio} · La constancia quedó en el expediente.`,
-      enlace: '/activos?tab=dotacion', evento: 'dotacion_firmada',
+      enlace: '/activos?tab=dotacion', evento: 'dotacion_firmada', colaboradorId: entrega.colaboradorId,
     })
     revalidatePath('/autoservicio/dotacion')
     revalidatePath('/activos')

@@ -154,6 +154,7 @@ export const crearMiConsultaReclamo = accion(
 
     await avisarPorRol(['Jurídica', 'Administrador'], {
       evento: 'habeas_data',
+      colaboradorId: usuario.colaboradorId,
       titulo: `${nombreCorto(colab.nombres, colab.apellidos)} radicó ${d.tipo === 'CONSULTA' ? 'una consulta' : 'un reclamo'} de habeas data`,
       mensaje: `Plazo legal: ${d.tipo === 'CONSULTA' ? '10' : '15'} días hábiles.`,
       enlace: '/juridica?tab=habeas',

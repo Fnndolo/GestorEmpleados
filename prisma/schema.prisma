@@ -655,6 +655,8 @@ model Colaborador {
   brigadas               Brigadista[]
   designacionesSgsst     ResponsableSgsst[]
   novedadesArl           NovedadArl[]
+  /// Avisos que hablan de esta persona (para mostrar su foto en la campana).
+  notificaciones         Notificacion[]
   /// Acuerdo de evaluación del que nació esta ficha (si vino de una evaluación previa).
   acuerdoEvaluacion      AcuerdoEvaluacion?       @relation("ColaboradorDesdeEvaluacion")
 
@@ -951,20 +953,25 @@ model SuscripcionPush {
 }
 
 model Notificacion {
-  id        String   @id @default(uuid(7)) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  titulo    String
-  mensaje   String
-  enlace    String?
-  leida     Boolean  @default(false)
+  id            String       @id @default(uuid(7)) @db.Uuid
+  userId        String       @map("user_id") @db.Uuid
+  titulo        String
+  mensaje       String
+  enlace        String?
+  leida         Boolean      @default(false)
   // Clave del evento (ver src/lib/notificaciones/catalogo.ts). Permite que el
   // admin configure qué eventos muestran pop-up. Null = aviso sin catalogar.
-  evento    String?
+  evento        String?
   // Evita duplicar la misma notificación si el cron corre dos veces
-  dedupeKey String   @unique @map("dedupe_key")
-  creadoEn  DateTime @default(now()) @map("creado_en")
+  dedupeKey     String       @unique @map("dedupe_key")
+  // De quién habla el aviso ("Yeison Córdoba pidió permiso"): la campana pone su
+  // foto. Null cuando el aviso es sobre uno mismo o sobre nadie en particular.
+  colaboradorId String?      @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador? @relation(fields: [colaboradorId], references: [id], onDelete: SetNull)
+  creadoEn      DateTime     @default(now()) @map("creado_en")
 
   @@index([userId, leida, creadoEn])
+  @@index([colaboradorId])
   @@map("notificacion")
 }
 

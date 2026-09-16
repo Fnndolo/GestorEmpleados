@@ -35,7 +35,7 @@ export async function aplicarFirmaOtrosi(opts: {
     where: { id: opts.otrosiId },
     include: {
       contrato: {
-        select: { id: true, numero: true, sedeId: true, colaborador: { select: { nombres: true, apellidos: true } } },
+        select: { id: true, numero: true, sedeId: true, colaboradorId: true, colaborador: { select: { nombres: true, apellidos: true } } },
       },
     },
   })
@@ -120,6 +120,7 @@ export async function aplicarFirmaOtrosi(opts: {
     enlace: `/contratos/${o.contratoId}`,
     llamadoAccion: 'Ver el contrato',
     evento: 'contrato_firmado',
+    colaboradorId: o.contrato.colaboradorId,
   }).catch(() => {})
 
   return { numero: o.numero, contratoId: o.contratoId, contratoNumero: o.contrato.numero }

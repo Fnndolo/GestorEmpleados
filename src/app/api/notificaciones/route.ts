@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { obtenerSesion } from '@/server/sesion'
 import { prisma } from '@/lib/db'
+import { urlFoto } from '@/lib/foto'
+import { iniciales } from '@/lib/etiquetas'
 
 export const runtime = 'nodejs'
 
@@ -15,6 +17,7 @@ export async function GET() {
       where: { userId: usuario.id },
       orderBy: { creadoEn: 'desc' },
       take: 20,
+      include: { colaborador: { select: { id: true, nombres: true, apellidos: true, fotoPath: true } } },
     }),
     // Eventos que el administrador desactivó para el pop-up (la campana omite su toast).
     prisma.preferenciaNotificacion.findMany({ where: { popup: false }, select: { evento: true } }),
@@ -31,6 +34,14 @@ export async function GET() {
       leida: n.leida,
       evento: n.evento,
       creadoEn: n.creadoEn.toISOString(),
+      // De quién habla el aviso: la campana pone su miniatura (o sus iniciales).
+      persona: n.colaborador
+        ? {
+            nombre: `${n.colaborador.nombres} ${n.colaborador.apellidos}`,
+            iniciales: iniciales(n.colaborador.nombres, n.colaborador.apellidos),
+            fotoUrl: urlFoto(n.colaborador.id, n.colaborador.fotoPath, true),
+          }
+        : null,
     })),
   })
 }

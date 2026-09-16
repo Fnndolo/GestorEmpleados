@@ -86,6 +86,7 @@ export async function avisarEncargadoAsignado(opts: { encargadoId: string; homen
     enlace: '/autoservicio',
     llamadoAccion: 'Ver el cumpleaños a mi cargo',
     evento: 'cumpleanos_encargado_asignado',
+    colaboradorId: opts.homenajeadoId,
   })
 }
 
@@ -98,6 +99,7 @@ export async function avisarFacturasEntregadas(opts: { encargadoId: string; home
     enlace: '/cumpleanos',
     llamadoAccion: 'Revisar las facturas',
     evento: 'cumpleanos_facturas_entregadas',
+    colaboradorId: opts.encargadoId,
   })
 }
 
@@ -142,6 +144,7 @@ export async function recordarCumpleanosProximos(): Promise<{ recordados: number
         enlace: '/autoservicio',
         llamadoAccion: 'Ver el cumpleaños a mi cargo',
         evento: 'cumpleanos_recordatorio',
+        colaboradorId: c.colaboradorId,
       }).catch(() => {})
       recordados++
     }

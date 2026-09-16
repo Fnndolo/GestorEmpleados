@@ -94,13 +94,14 @@ export async function procesarAlertas(): Promise<{ vencidos: number; alertas: nu
     const users = await destinatarios(v.id)
     const { titulo, mensaje } = textoAviso(v.titulo, alerta.paso, v.fechaVencimiento)
     const enlace = enlaceDe(v.entidadTipo, v.entidadId)
+    const colaboradorId = await colaboradorDe(v.entidadTipo, v.entidadId)
 
     for (const u of users) {
       const dedupe = `${alerta.id}:${u.id}`
       // Notificación in-app (idempotente por dedupeKey)
       try {
         await prisma.notificacion.create({
-          data: { userId: u.id, titulo, mensaje, enlace, dedupeKey: dedupe, evento: 'vencimiento_alerta' },
+          data: { userId: u.id, titulo, mensaje, enlace, dedupeKey: dedupe, evento: 'vencimiento_alerta', colaboradorId },
         })
         notificaciones++
       } catch {
@@ -168,6 +169,30 @@ export async function procesarOutbox(): Promise<number> {
     }
   }
   return enviados
+}
+
+/** De qué colaborador es lo que vence, para ponerle la foto al aviso. */
+async function colaboradorDe(entidadTipo: string, entidadId: string): Promise<string | null> {
+  try {
+    switch (entidadTipo) {
+      case 'Colaborador':
+        return entidadId
+      case 'Documento': {
+        const d = await prisma.documento.findUnique({ where: { id: entidadId }, select: { entidadTipo: true, entidadId: true } })
+        return d?.entidadTipo === 'Colaborador' ? d.entidadId : null
+      }
+      case 'Contrato':
+        return (await prisma.contrato.findUnique({ where: { id: entidadId }, select: { colaboradorId: true } }))?.colaboradorId ?? null
+      case 'ContratoOps':
+        return (await prisma.contratoOps.findUnique({ where: { id: entidadId }, select: { colaboradorId: true } }))?.colaboradorId ?? null
+      case 'ExamenMedico':
+        return (await prisma.examenMedico.findUnique({ where: { id: entidadId }, select: { colaboradorId: true } }))?.colaboradorId ?? null
+      default:
+        return null
+    }
+  } catch {
+    return null
+  }
 }
 
 function enlaceDe(entidadTipo: string, entidadId: string): string | null {

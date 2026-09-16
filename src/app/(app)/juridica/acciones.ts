@@ -163,6 +163,7 @@ export const presentarDescargos = accion(
     // Avisar a Jurídica/RRHH que el colaborador presentó descargos
     await avisarPorRol(['Jurídica', 'Recursos Humanos', 'Administrador'], {
       evento: 'disciplinario_descargos',
+      colaboradorId: proceso.colaboradorId,
       titulo: `${nombreCorto(proceso.colaborador.nombres, proceso.colaborador.apellidos)} presentó descargos`,
       mensaje: `Proceso "${proceso.asunto}".`,
       enlace: `/juridica/disciplinarios/${d.procesoId}`,
@@ -249,6 +250,7 @@ export const apelarDecisionDisciplinario = accion(
     await dbAuditado.procesoDisciplinario.update({ where: { id: d.procesoId }, data: { etapa: 'RECURSO', fechaLimite: null } })
     await avisarPorRol(['Jurídica', 'Recursos Humanos', 'Administrador'], {
       evento: 'disciplinario_apelacion',
+      colaboradorId: proceso.colaboradorId,
       titulo: `${nombreCorto(proceso.colaborador.nombres, proceso.colaborador.apellidos)} apeló la decisión`,
       mensaje: `Proceso "${proceso.asunto}".`,
       enlace: `/juridica/disciplinarios/${d.procesoId}`,

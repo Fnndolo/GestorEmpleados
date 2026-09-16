@@ -64,6 +64,7 @@ export async function avisarComprobanteEntregado(colaboradorId: string, fechaPer
     enlace: '/novedades?tab=permisos',
     llamadoAccion: 'Verificar el comprobante',
     evento: 'comprobante_permiso_entregado',
+    colaboradorId,
   })
 }
 
@@ -94,7 +95,7 @@ export async function alertarComprobantesPermisoVencidos(): Promise<{ vencidos: 
 
   const vencidos = await prisma.permiso.findMany({
     where: { comprobanteEstado: 'PENDIENTE', comprobanteVence: { lt: hoy } },
-    select: { id: true, fecha: true, comprobanteVence: true, colaborador: { select: { nombres: true, apellidos: true } } },
+    select: { id: true, fecha: true, comprobanteVence: true, colaboradorId: true, colaborador: { select: { nombres: true, apellidos: true } } },
   })
   if (vencidos.length === 0) return { vencidos: 0 }
 
@@ -115,6 +116,7 @@ export async function alertarComprobantesPermisoVencidos(): Promise<{ vencidos: 
         '/novedades?tab=permisos',
         `comprobante_permiso_vencido:${p.id}:${u.id}:${semana}`,
         'comprobante_permiso_vencido',
+        p.colaboradorId,
       )
     }
   }

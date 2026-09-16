@@ -136,6 +136,7 @@ export const actualizarMiFicha = accion(
     const colab = await prisma.colaborador.findUnique({ where: { id: colaboradorId }, select: { nombres: true, apellidos: true } })
     await avisarPorRol(['Recursos Humanos', 'Administrador'], {
       evento: 'ficha_actualizada',
+      colaboradorId,
       titulo: `${nombreCorto(colab?.nombres, colab?.apellidos)} actualizó su información`,
       mensaje: 'Cambió datos de su ficha desde el autoservicio.',
       enlace: `/colaboradores/${colaboradorId}`,
@@ -246,6 +247,7 @@ export const crearSolicitud = accion(
             : `${rango} · Talento Humano la valida y registra.`,
           enlace: '/autoservicio/aprobaciones',
           evento: esLic ? 'licencia_reportada' : 'incapacidad_reportada',
+          colaboradorId,
         })
       }
     }
@@ -272,11 +274,13 @@ async function avisarAprobadoresDelPaso(solicitudId: string, orden: number) {
         titulo: `${quien} reportó licencia de ${defLicencia(datosSol.licenciaTipo).label.toLowerCase()}`,
         mensaje: `${detalle} · Es de ley: valida el soporte y regístrala.`,
         enlace: '/autoservicio/aprobaciones', llamadoAccion: 'Validar el soporte', evento: 'solicitud_creada',
+        colaboradorId: solicitud.colaboradorId,
       }
     : {
         titulo: `${quien} pidió ${etiquetaTipo(solicitud.tipo)}`,
         mensaje: detalle,
         enlace: '/autoservicio/aprobaciones', llamadoAccion: 'Revisar la solicitud', evento: 'solicitud_creada',
+        colaboradorId: solicitud.colaboradorId,
       }
 
   if (paso.usaJefeInmediato && solicitud.colaborador.jefeInmediatoId) {
@@ -714,7 +718,7 @@ export const responderContrapropuesta = accion(
           await ejecutarEfecto(s.id, cp.propuestaPorId)
         }
       }
-      await avisarUsuario(cp.propuestaPorId, `${quien} aceptó las fechas propuestas`, `${rangoBreve(cp.fechaInicio, cp.fechaFin)} · La solicitud sigue su trámite.`)
+      await avisarUsuario(cp.propuestaPorId, `${quien} aceptó las fechas propuestas`, `${rangoBreve(cp.fechaInicio, cp.fechaFin)} · La solicitud sigue su trámite.`, s.colaboradorId)
     } else {
       datos.contrapropuesta = { ...cp, aceptada: false, respuesta: d.comentario ?? null }
       await dbAuditado.solicitud.update({ where: { id: s.id }, data: { estado: 'EN_APROBACION', datos: datos as object } })
@@ -722,6 +726,7 @@ export const responderContrapropuesta = accion(
         cp.propuestaPorId,
         `${quien} no aceptó las fechas propuestas`,
         `${d.comentario ? `${d.comentario} · ` : ''}Vuelve a tu bandeja con las fechas originales.`,
+        s.colaboradorId,
       )
     }
     revalidatePath('/autoservicio')
@@ -730,8 +735,8 @@ export const responderContrapropuesta = accion(
   },
 )
 
-async function avisarUsuario(usuarioId: string, titulo: string, mensaje: string) {
-  await avisar(usuarioId, { titulo, mensaje, enlace: '/autoservicio/aprobaciones', evento: 'solicitud_resuelta' })
+async function avisarUsuario(usuarioId: string, titulo: string, mensaje: string, colaboradorId?: string) {
+  await avisar(usuarioId, { titulo, mensaje, enlace: '/autoservicio/aprobaciones', evento: 'solicitud_resuelta', colaboradorId })
 }
 
 export const cancelarSolicitud = accion(

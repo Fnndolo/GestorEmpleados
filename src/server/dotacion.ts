@@ -161,6 +161,7 @@ export async function alertarInduccionPendiente(): Promise<{ sinInduccion: numbe
         '/capacitaciones',
         `induccion:${c.id}:${u.id}`,
         'induccion_pendiente',
+        c.id,
       )
     }
   }

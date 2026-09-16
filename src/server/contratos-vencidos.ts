@@ -24,11 +24,11 @@ export async function alertarContratosVencidosSinCierre(): Promise<{ vencidos: n
   const [laborales, ops] = await Promise.all([
     prisma.contrato.findMany({
       where: { estado: 'ACTIVO', fechaFin: { lt: hoy } },
-      select: { id: true, numero: true, fechaFin: true, colaborador: { select: { nombres: true, apellidos: true } } },
+      select: { id: true, numero: true, fechaFin: true, colaboradorId: true, colaborador: { select: { nombres: true, apellidos: true } } },
     }),
     prisma.contratoOps.findMany({
       where: { estado: { in: ['ACTIVO', 'FIRMADO'] }, fechaFin: { lt: hoy } },
-      select: { id: true, numero: true, fechaFin: true, colaborador: { select: { nombres: true, apellidos: true } } },
+      select: { id: true, numero: true, fechaFin: true, colaboradorId: true, colaborador: { select: { nombres: true, apellidos: true } } },
     }),
   ])
 
@@ -54,6 +54,7 @@ export async function alertarContratosVencidosSinCierre(): Promise<{ vencidos: n
         c.enlace,
         `contrato_vencido:${c.id}:${u.id}:${semana}`,
         'contrato_vencido_sin_cierre',
+        c.colaboradorId,
       )
     }
   }
