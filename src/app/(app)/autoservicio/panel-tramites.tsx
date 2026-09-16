@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import Link from 'next/link'
 import {
   CalendarRange, Clock, IdCard, FileText, FolderUp, FileBadge, CalendarClock, HeartPulse,
@@ -127,12 +127,65 @@ function Seccion({
       </div>
 
       {/* Móvil */}
+      <CarruselMovil>
+        {items.map((i) => (
+          <div key={i.clave} className={cn('flex shrink-0 snap-start justify-center', ANCHO_CASILLA)}>
+            <TileCompacto item={i} onSolicitar={onSolicitar} />
+          </div>
+        ))}
+      </CarruselMovil>
+    </section>
+  )
+}
+
+/**
+ * Ancho de cada casilla del carrusel móvil, calculado para que en pantalla
+ * quepan exactamente 4 tiles y MEDIO: el quinto asoma cortado por la mitad y
+ * eso, más el degradado del borde, le dice al pulgar que hay más a la derecha.
+ * Con el ancho natural del tile (72px) el corte caía donde cayera según el
+ * teléfono; a veces justo en el borde y parecía que la fila terminaba ahí.
+ *
+ * La cuenta: el 100% es el ancho de contenido del carrusel (pantalla − 2rem de
+ * padding). Lo visible desde la primera casilla hasta el borde derecho de la
+ * pantalla es ese 100% + el 1rem de padding derecho. Ahí caben 4.5 casillas y
+ * los 4 huecos de 0.5rem entre ellas (2rem): 4.5·w = 100% + 1rem − 2rem.
+ */
+const ANCHO_CASILLA = 'basis-[calc((100%-1rem)/4.5)]'
+
+/** ¿Queda contenido a la derecha? El −1 absorbe el redondeo de subpíxeles, que
+ *  si no dejaba el degradado prendido con el carrusel ya al tope. */
+function quedaPorVer(el: HTMLElement): boolean {
+  return el.scrollLeft + el.clientWidth < el.scrollWidth - 1
+}
+
+/**
+ * Fila deslizable del celular. Se sale del margen del contenido para llegar al
+ * borde de la pantalla, y sombrea el borde derecho con un degradado hacia el
+ * fondo mientras quede algo por ver: cuando el usuario llega al final el
+ * degradado se apaga, porque seguir insinuando "hay más" cuando no hay más es
+ * mentirle.
+ */
+function CarruselMovil({ children }: { children: React.ReactNode }) {
+  const [hayMas, setHayMas] = useState(false)
+  // El ref hace la medición inicial y vuelve a medir si cambia el tamaño (girar
+  // el teléfono); el onScroll cubre el desplazamiento. React 19 acepta que el
+  // ref devuelva su limpieza, así el observer se suelta con el elemento.
+  const observar = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return
+    const actualizar = () => setHayMas(quedaPorVer(el))
+    actualizar()
+    const ro = new ResizeObserver(actualizar)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  return (
+    <div className="relative -mx-4 sm:hidden">
       <div
+        ref={observar}
+        onScroll={(e) => setHayMas(quedaPorVer(e.currentTarget))}
         className={cn(
-          'sm:hidden',
-          // Se sale del margen del contenido para que el carrusel llegue al
-          // borde de la pantalla y se note que hay más hacia la derecha.
-          '-mx-4 flex snap-x gap-2 overflow-x-auto px-4 scroll-pl-4',
+          'flex snap-x gap-2 overflow-x-auto px-4 scroll-pl-4',
           // El desplazamiento horizontal recorta lo que se salga por arriba, y
           // la insignia de pendientes sobresale del ícono: sin este respiro
           // aparecía cortada por la mitad.
@@ -140,13 +193,17 @@ function Seccion({
           '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         )}
       >
-        {items.map((i) => (
-          <div key={i.clave} className="snap-start">
-            <TileCompacto item={i} onSolicitar={onSolicitar} />
-          </div>
-        ))}
+        {children}
       </div>
-    </section>
+      <div
+        aria-hidden
+        className={cn(
+          'pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-background via-background/70 to-transparent',
+          'transition-opacity duration-300',
+          hayMas ? 'opacity-100' : 'opacity-0',
+        )}
+      />
+    </div>
   )
 }
 
