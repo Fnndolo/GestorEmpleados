@@ -1,42 +1,19 @@
 import Link from 'next/link'
 import { requerirSesion, tienePermiso } from '@/server/sesion'
-import { seccionesVisibles } from '@/lib/navegacion'
+import { hrefsVisibles } from '@/lib/navegacion'
 import { prisma } from '@/lib/db'
 import { Card, CardContent } from '@/components/ui/card'
-import { Users, Building2, Bell, ShieldCheck, AlertCircle, Inbox, type LucideIcon } from 'lucide-react'
+import { Users, Building2, Bell, ShieldCheck, AlertCircle, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { hoyBogota, formatFechaCorta } from '@/lib/fechas'
 import { BannerPush } from '@/components/pwa/banner-push'
+import { ModulosInicio } from './modulos-inicio'
 
 export const metadata = { title: 'Inicio · Smart Gadgets RH' }
 
 
-/** Color y descripción por módulo: el color distingue, la descripción orienta. */
-// Descripción de cada módulo en la cuadrícula. Sin color por categoría: los
-// iconos van todos en tinta (como en el autoservicio) y el color queda
-// reservado para lo que exige atención.
-const MODULO: Record<string, { desc: string }> = {
-  '/vencimientos': { desc: 'Alertas de contratos, exámenes y cursos' },
-  '/colaboradores': { desc: 'Fichas, documentos y organigrama' },
-  '/contratos': { desc: 'OPS, cuentas de cobro y firmas' },
-  '/nomina': { desc: 'Periodos, liquidación y desprendibles' },
-  '/novedades': { desc: 'Ausencias, horas extra y ajustes' },
-  '/activos': { desc: 'Equipos y dotación entregada' },
-  '/capacitaciones': { desc: 'Cursos y asistencia del personal' },
-  '/evaluaciones': { desc: 'Desempeño y periodo de prueba' },
-  '/cumpleanos': { desc: 'Celebraciones y sus facturas' },
-  '/terminaciones': { desc: 'Retiros y liquidación final' },
-  '/juridica': { desc: 'Disciplinarios, anti-acoso y habeas data' },
-  '/calendario-legal': { desc: 'Obligaciones y fechas legales' },
-  '/sst': { desc: 'Seguridad y salud en el trabajo' },
-  '/autoservicio': { desc: 'Tus vacaciones, permisos y certificados' },
-  '/reportes': { desc: 'Indicadores y exportes' },
-  '/configuracion': { desc: 'Empresa, sedes, cargos y roles' },
-}
-
 export default async function InicioPage() {
   const usuario = await requerirSesion()
-  const secciones = seccionesVisibles(usuario)
 
   const verVencimientos = tienePermiso(usuario, 'vencimientos', 'VER')
   const puedeAprobar = tienePermiso(usuario, 'autoservicio', 'APROBAR')
@@ -129,71 +106,16 @@ export default async function InicioPage() {
         </div>
       )}
 
-      {secciones.map((seccion) => {
-        const items = seccion.items.filter((i) => i.href !== '/inicio')
-        // "General" también aloja Aprobaciones para quien puede aprobar solicitudes.
-        const conAprobaciones = seccion.titulo === 'General' && puedeAprobar
-        if (items.length === 0 && !conAprobaciones) return null
-        return (
-          <section key={seccion.titulo} className="mt-6">
-            <h2 className="mb-2.5 text-[13px] font-bold">{seccion.titulo}</h2>
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
-              {items.map((item) => {
-                const Icono = item.icono
-                const meta = MODULO[item.href] ?? { desc: '' }
-                const aviso = item.href === '/vencimientos' && vencidos > 0
-                  ? `${vencidos} vencido${vencidos > 1 ? 's' : ''}`
-                  : null
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'rounded-xl border bg-card p-3 text-left transition-all sm:p-3.5',
-                      'hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                    )}
-                  >
-                    <span className="mb-2 grid size-8 place-items-center rounded-[9px] bg-foreground text-background sm:mb-2.5 sm:size-9">
-                      <Icono className="size-4 sm:size-[18px]" />
-                    </span>
-                    <span className="block text-[12.5px] font-semibold leading-tight sm:text-[13px]">{item.titulo}</span>
-                    {meta.desc && (
-                      <span className="mt-0.5 hidden text-[11px] leading-snug text-muted-foreground sm:block">{meta.desc}</span>
-                    )}
-                    {aviso && (
-                      <span className="mt-2 inline-block rounded-full bg-rose-500/12 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-400">
-                        {aviso}
-                      </span>
-                    )}
-                  </Link>
-                )
-              })}
-              {conAprobaciones && (
-                <Link
-                  href="/autoservicio/aprobaciones"
-                  className={cn(
-                    'rounded-xl border bg-card p-3 text-left transition-all sm:p-3.5',
-                    'hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                  )}
-                >
-                  <span className="mb-2 grid size-8 place-items-center rounded-[9px] bg-foreground text-background sm:mb-2.5 sm:size-9">
-                    <Inbox className="size-4 sm:size-[18px]" />
-                  </span>
-                  <span className="block text-[12.5px] font-semibold leading-tight sm:text-[13px]">Aprobaciones</span>
-                  <span className="mt-0.5 hidden text-[11px] leading-snug text-muted-foreground sm:block">Solicitudes de tu equipo por aprobar</span>
-                  {porAprobar > 0 && (
-                    <span className="mt-2 inline-block rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">
-                      {porAprobar} pendiente{porAprobar > 1 ? 's' : ''}
-                    </span>
-                  )}
-                </Link>
-              )}
-            </div>
-          </section>
-        )
-      })}
+      {/* Módulos: cuadrícula en escritorio y carrusel por sección en el
+          celular, el mismo diseño del autoservicio. Solo se pasan datos
+          serializables; los iconos los resuelve el componente cliente. */}
+      <ModulosInicio
+        hrefsVisibles={hrefsVisibles(usuario)}
+        avisos={{
+          ...(vencidos > 0 ? { '/vencimientos': { texto: `${vencidos} vencido${vencidos > 1 ? 's' : ''}`, tono: 'bad' as const } } : {}),
+          ...(porAprobar > 0 ? { '/autoservicio/aprobaciones': { texto: `${porAprobar} pendiente${porAprobar > 1 ? 's' : ''}`, tono: 'warn' as const } } : {}),
+        }}
+      />
 
       {verVencimientos && vencimientos.length > 0 && (
         <section className="mt-8">
