@@ -26,11 +26,24 @@ import type { FuncionesCargo } from '@/lib/contrato-variables'
 import { vinculoDeContrato, vinculoCoincide, type TipoContratoLaboral, type TipoVinculo } from '@/lib/vinculo-contrato'
 import { devolverAccesoNormal } from '@/server/rol-consulta'
 
-async function siguienteNumero(prefijo: string): Promise<string> {
-  const anio = new Date().getUTCFullYear()
-  const modelo = prefijo === 'CT' ? prisma.contrato : prisma.contratoOps
-  const total = await (modelo as typeof prisma.contrato).count()
-  return `${prefijo}-${anio}-${String(total + 1).padStart(4, '0')}`
+/**
+ * Serie CT-<año>-####: consecutivo sobre el MAYOR número ya usado en el año,
+ * igual que KC-### en OPS y EV-### en acuerdos. Antes era «cantidad de
+ * contratos + 1»: en cuanto se borró un contrato registrado por error, la
+ * cuenta bajó y el siguiente alta repetía un número existente (`numero` es
+ * único), así que ningún contrato laboral se podía crear.
+ */
+async function siguienteNumero(prefijo: 'CT'): Promise<string> {
+  const serie = `${prefijo}-${new Date().getUTCFullYear()}-`
+  const previos = await prisma.contrato.findMany({
+    where: { numero: { startsWith: serie } },
+    select: { numero: true },
+  })
+  const mayor = previos.reduce((m, c) => {
+    const n = parseInt(c.numero.slice(serie.length), 10)
+    return Number.isFinite(n) && n > m ? n : m
+  }, 0)
+  return `${serie}${String(mayor + 1).padStart(4, '0')}`
 }
 
 function nombreColab(c: { nombres: string; apellidos: string }) {
