@@ -3,14 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { PenLine, CircleCheck, FileText, ShieldCheck, Mail, MailCheck, FilePen } from 'lucide-react'
+import { PenLine, CircleCheck, FileText, FilePen } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { FirmaCaptura } from '@/components/firma/firma-captura'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { PasosFirma } from '@/components/firma/pasos-firma'
 import { firmarMiOtrosi, solicitarCodigoFirmaOtrosi } from '../contratos-acciones'
 
 export type OtrosiItem = {
@@ -116,63 +114,23 @@ function OtrosiFila({ o, contratoNumero }: { o: OtrosiItem; contratoNumero: stri
       </div>
 
       <Dialog open={abierto} onOpenChange={(ab) => (ab ? setAbierto(true) : reiniciar())}>
-        <DialogContent className="max-h-[88vh] overflow-y-auto">
+        <DialogContent className="max-h-[88vh] overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Firmar otrosí {o.numero}</DialogTitle>
-            <DialogDescription>
-              Lee el documento antes de firmar. Tu firma se estampa sobre el PDF del otrosí y con ella
-              aceptas la modificación de tu contrato {contratoNumero} (firma electrónica, Ley 527 de 1999).
-            </DialogDescription>
           </DialogHeader>
-          {o.documentoId && (
-            <div className="flex flex-wrap gap-2">
-              <VisorPdf documentoId={o.documentoId} titulo={titulo} className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' gap-2'}>
-                <FileText className="size-4 shrink-0 text-primary" /> {titulo}
-              </VisorPdf>
-            </div>
-          )}
-
-          {/* Paso 1: autorización por código enviado al correo */}
-          <div className="rounded-lg border bg-muted/30 p-3">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <ShieldCheck className="size-4 text-primary" /> Autoriza tu firma con un código
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Te enviaremos un código de 6 dígitos a tu correo. Escríbelo aquí para confirmar que eres tú quien firma.
-            </p>
-            {!correoEnviado ? (
-              <Button size="sm" variant="outline" className="mt-3" onClick={enviarCodigo} disabled={enviando}>
-                {enviando ? <Spinner /> : <Mail className="size-4" />} Enviar código a mi correo
-              </Button>
-            ) : (
-              <div className="mt-3 space-y-2">
-                <p className="flex items-center gap-1.5 text-xs text-emerald-600">
-                  <MailCheck className="size-4" /> Código enviado a {correoEnviado}
-                </p>
-                <div className="flex items-end gap-2">
-                  <div className="grow">
-                    <Label htmlFor={`codigo-otrosi-${o.id}`} className="text-xs">Código de 6 dígitos</Label>
-                    <Input
-                      id={`codigo-otrosi-${o.id}`}
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      placeholder="______"
-                      value={codigo}
-                      onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      className="tracking-[0.5em] font-mono"
-                    />
-                  </div>
-                  <Button size="sm" variant="ghost" onClick={enviarCodigo} disabled={enviando}>
-                    {enviando ? <Spinner /> : 'Reenviar'}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Paso 2: firma */}
-          <FirmaCaptura onChange={setFirma} />
+          <PasosFirma
+            documentos={o.documentoId ? [{ id: o.documentoId, titulo, etiqueta: `Otrosí ${o.numero}`, icono: FileText }] : []}
+            correoEnviado={correoEnviado}
+            enviando={enviando}
+            onEnviarCodigo={enviarCodigo}
+            codigo={codigo}
+            onCodigo={setCodigo}
+            onFirma={setFirma}
+            idCodigo={`codigo-otrosi-${o.id}`}
+          />
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Al firmar aceptas la modificación de tu contrato {contratoNumero} (firma electrónica, Ley 527 de 1999).
+          </p>
           <DialogFooter>
             <Button variant="ghost" onClick={reiniciar}>Cancelar</Button>
             <Button onClick={firmar} disabled={g || !firma || !codigoCompleto}>{g && <Spinner />}Firmar otrosí</Button>

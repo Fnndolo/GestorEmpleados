@@ -92,8 +92,8 @@ export function FirmaCaptura({ onChange }: { onChange: (dataUri: string | null) 
             onPointerUp={fin}
             onPointerLeave={fin}
           />
-          <div className="flex justify-between">
-            <p className="text-xs text-muted-foreground">Dibuja tu firma con el mouse o el dedo.</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Con el dedo o el mouse.</p>
             <Button type="button" size="sm" variant="ghost" onClick={limpiar}><Eraser className="size-4" /> Limpiar</Button>
           </div>
         </div>
@@ -106,7 +106,7 @@ export function FirmaCaptura({ onChange }: { onChange: (dataUri: string | null) 
               <img src={subida} alt="Firma" className="mx-auto max-h-24 object-contain" />
             </div>
           )}
-          <p className="text-xs text-muted-foreground">Sube una imagen de tu firma (PNG con fondo transparente recomendado).</p>
+          <p className="text-xs text-muted-foreground">PNG o JPG, mejor con fondo transparente.</p>
         </div>
       )}
     </div>

@@ -3,17 +3,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { PenLine, CircleCheck, FileText, ShieldCheck, FilePenLine, Mail, MailCheck, ChevronDown, Eye } from 'lucide-react'
+import { PenLine, CircleCheck, FileText, ShieldCheck, FilePenLine, ChevronDown, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Pill, type PillTone } from '@/components/ui-kit'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { FirmaCaptura } from '@/components/firma/firma-captura'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { PasosFirma } from '@/components/firma/pasos-firma'
 import { MisOtrosis, type OtrosiItem } from './mis-otrosis'
 import {
   firmarMiContratoOps, solicitarCodigoFirmaContrato,
@@ -73,15 +71,6 @@ function DocFila({ documentoId, titulo, etiqueta, Icono }: { documentoId: string
   )
 }
 
-/** En el diálogo de firma los documentos van como botones, para leerlos antes de firmar. */
-function DocBoton({ documentoId, titulo, etiqueta, Icono }: { documentoId: string; titulo: string; etiqueta: string; Icono: typeof FileText }) {
-  return (
-    <VisorPdf documentoId={documentoId} titulo={titulo} className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' gap-2'}>
-      <Icono className="size-4 shrink-0 text-primary" />
-      <span className="max-w-[220px] truncate">{etiqueta}</span>
-    </VisorPdf>
-  )
-}
 
 export function MisContratos({ contratos }: { contratos: ContratoItem[] }) {
   return (
@@ -205,67 +194,25 @@ function ContratoCard({ c }: { c: ContratoItem }) {
         )}
 
         <Dialog open={abierto} onOpenChange={(o) => (o ? setAbierto(true) : reiniciar())}>
-          <DialogContent className="max-h-[88vh] overflow-y-auto">
+          {/* Sin párrafo bajo el título: los tres pasos numerados dicen qué
+              hacer, y la nota legal va corta junto al botón de firmar. */}
+          <DialogContent className="max-h-[88vh] overflow-y-auto" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>Firmar contrato {c.numero}</DialogTitle>
-              <DialogDescription>
-                Lee ambos documentos antes de firmar. Tu firma se aplica al contrato y a la autorización de
-                tratamiento de datos (Ley 1581); ambos quedan aceptados (firma electrónica, Ley 527 de 1999).
-              </DialogDescription>
             </DialogHeader>
-            <div className="flex flex-wrap gap-2">
-              {c.documentos.map((d) => (
-                <DocBoton
-                  key={d.id}
-                  documentoId={d.id}
-                  titulo={d.nombre}
-                  etiqueta={etiquetaDoc(d.nombre)}
-                  Icono={esAutorizacion(d.nombre) ? ShieldCheck : FileText}
-                />
-              ))}
-            </div>
-
-            {/* Paso 1: autorización por código enviado al correo */}
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <ShieldCheck className="size-4 text-primary" /> Autoriza tu firma con un código
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Te enviaremos un código de 6 dígitos a tu correo. Escríbelo aquí para confirmar que eres tú quien firma.
-              </p>
-              {!correoEnviado ? (
-                <Button size="sm" variant="outline" className="mt-3" onClick={enviarCodigo} disabled={enviando}>
-                  {enviando ? <Spinner /> : <Mail className="size-4" />} Enviar código a mi correo
-                </Button>
-              ) : (
-                <div className="mt-3 space-y-2">
-                  <p className="flex items-center gap-1.5 text-xs text-emerald-600">
-                    <MailCheck className="size-4" /> Código enviado a {correoEnviado}
-                  </p>
-                  <div className="flex items-end gap-2">
-                    <div className="grow">
-                      <Label htmlFor={`codigo-${c.id}`} className="text-xs">Código de 6 dígitos</Label>
-                      <Input
-                        id={`codigo-${c.id}`}
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        maxLength={6}
-                        placeholder="______"
-                        value={codigo}
-                        onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        className="tracking-[0.5em] font-mono"
-                      />
-                    </div>
-                    <Button size="sm" variant="ghost" onClick={enviarCodigo} disabled={enviando}>
-                      {enviando ? <Spinner /> : 'Reenviar'}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Paso 2: firma */}
-            <FirmaCaptura onChange={setFirma} />
+            <PasosFirma
+              documentos={c.documentos.map((d) => ({ id: d.id, titulo: d.nombre, etiqueta: etiquetaDoc(d.nombre), icono: esAutorizacion(d.nombre) ? ShieldCheck : FileText }))}
+              correoEnviado={correoEnviado}
+              enviando={enviando}
+              onEnviarCodigo={enviarCodigo}
+              codigo={codigo}
+              onCodigo={setCodigo}
+              onFirma={setFirma}
+              idCodigo={`codigo-${c.id}`}
+            />
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Al firmar aceptas el contrato y la autorización de tratamiento de datos (firma electrónica, Ley 527 de 1999).
+            </p>
             <DialogFooter>
               <Button variant="ghost" onClick={reiniciar}>Cancelar</Button>
               <Button onClick={firmar} disabled={g || !firma || !codigoCompleto}>{g && <Spinner />}Firmar contrato</Button>
