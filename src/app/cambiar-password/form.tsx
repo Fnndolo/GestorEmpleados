@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { authClient } from '@/lib/auth-client'
 import { marcarPasswordCambiada } from './acciones'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { InputPassword } from '@/components/ui/input-password'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -63,9 +63,8 @@ export function CambiarPasswordForm({ obligatorio }: { obligatorio: boolean }) {
       )}
       <div className="space-y-2">
         <Label htmlFor="actual">Contraseña actual</Label>
-        <Input
+        <InputPassword
           id="actual"
-          type="password"
           autoComplete="current-password"
           required
           value={actual}
@@ -74,9 +73,8 @@ export function CambiarPasswordForm({ obligatorio }: { obligatorio: boolean }) {
       </div>
       <div className="space-y-2">
         <Label htmlFor="nueva">Nueva contraseña</Label>
-        <Input
+        <InputPassword
           id="nueva"
-          type="password"
           autoComplete="new-password"
           required
           value={nueva}
@@ -86,9 +84,8 @@ export function CambiarPasswordForm({ obligatorio }: { obligatorio: boolean }) {
       </div>
       <div className="space-y-2">
         <Label htmlFor="confirmar">Confirmar nueva contraseña</Label>
-        <Input
+        <InputPassword
           id="confirmar"
-          type="password"
           autoComplete="new-password"
           required
           value={confirmar}
