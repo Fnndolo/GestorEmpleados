@@ -1,6 +1,7 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
-import { hoyBogota, formatFechaCorta } from '@/lib/fechas'
+import { hoyBogota } from '@/lib/fechas'
+import { nombreCorto, fechaBreve } from '@/lib/notificaciones/texto'
 import { notificarUsuario } from '@/server/notificaciones/avisar'
 
 /**
@@ -44,14 +45,12 @@ export async function alertarContratosVencidosSinCierre(): Promise<{ vencidos: n
 
   for (const c of pendientes) {
     const dias = Math.floor((hoy.getTime() - c.fechaFin!.getTime()) / 86_400_000)
-    const persona = c.colaborador ? `${c.colaborador.nombres} ${c.colaborador.apellidos}` : 'contratista sin ficha'
+    const persona = c.colaborador ? nombreCorto(c.colaborador.nombres, c.colaborador.apellidos) : 'Contratista sin ficha'
     for (const u of destinatarios) {
       await notificarUsuario(
         u.id,
-        'Contrato vencido sin cerrar',
-        `El contrato ${c.tipo} ${c.numero} de ${persona} venció el ${formatFechaCorta(c.fechaFin!)} ` +
-          `(hace ${dias} día${dias === 1 ? '' : 's'}) y sigue activo. Si continúa trabajando registra la prórroga; ` +
-          `si ya no, registra la terminación (mientras tanto conserva su acceso completo).`,
+        `${persona}: contrato ${c.tipo} ${c.numero} vencido sin cerrar`,
+        `Venció el ${fechaBreve(c.fechaFin!)} (hace ${dias} día${dias === 1 ? '' : 's'}) y sigue activo · Registra la prórroga o la terminación.`,
         c.enlace,
         `contrato_vencido:${c.id}:${u.id}:${semana}`,
         'contrato_vencido_sin_cierre',

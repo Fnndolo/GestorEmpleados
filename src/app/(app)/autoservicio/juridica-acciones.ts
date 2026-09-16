@@ -8,6 +8,7 @@ import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { parseFechaISO, hoyBogota } from '@/lib/fechas'
 import { avisarPorRol } from '@/server/notificaciones/avisar'
+import { nombreCorto } from '@/lib/notificaciones/texto'
 import { sumarDiasHabiles, festivosDeRango } from '@/lib/dias-habiles'
 import { etiquetaReporte } from '@/lib/linea-etica'
 
@@ -55,8 +56,8 @@ export const crearMiDenuncia = accion(
     const etiqueta = etiquetaReporte(d.tipo).toLowerCase()
     await avisarPorRol(['Jurídica', 'Administrador', 'Subgerencia'], {
       evento: 'denuncia_acoso',
-      titulo: `Nuevo reporte en la línea ética: ${etiqueta}`,
-      mensaje: `Se recibió un reporte de ${etiqueta} (código ${codigo}). Revísalo de forma confidencial.`,
+      titulo: `Línea ética: reporte de ${etiqueta}`,
+      mensaje: `Código ${codigo} · Confidencial.`,
       enlace: '/juridica?tab=denuncias',
       llamadoAccion: 'Revisar la línea ética',
     })
@@ -153,8 +154,8 @@ export const crearMiConsultaReclamo = accion(
 
     await avisarPorRol(['Jurídica', 'Administrador'], {
       evento: 'habeas_data',
-      titulo: `Nuevo ${d.tipo === 'CONSULTA' ? 'consulta' : 'reclamo'} de habeas data`,
-      mensaje: `${colab.nombres} ${colab.apellidos} radicó ${d.tipo === 'CONSULTA' ? 'una consulta' : 'un reclamo'} sobre el tratamiento de sus datos. Plazo legal: ${d.tipo === 'CONSULTA' ? '10' : '15'} días hábiles.`,
+      titulo: `${nombreCorto(colab.nombres, colab.apellidos)} radicó ${d.tipo === 'CONSULTA' ? 'una consulta' : 'un reclamo'} de habeas data`,
+      mensaje: `Plazo legal: ${d.tipo === 'CONSULTA' ? '10' : '15'} días hábiles.`,
       enlace: '/juridica?tab=habeas',
       llamadoAccion: 'Atender la solicitud',
     })

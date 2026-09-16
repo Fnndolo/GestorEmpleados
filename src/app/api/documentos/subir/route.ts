@@ -6,6 +6,7 @@ import { guardarDocumento } from '@/server/documentos'
 import { ejecutarConContexto } from '@/server/contexto'
 import { prisma } from '@/lib/db'
 import { avisarPorRol } from '@/server/notificaciones/avisar'
+import { nombreCorto } from '@/lib/notificaciones/texto'
 
 export const runtime = 'nodejs'
 const MAX_BYTES = 25 * 1024 * 1024 // 25 MB
@@ -108,8 +109,8 @@ export async function POST(req: NextRequest) {
       const colab = await prisma.colaborador.findUnique({ where: { id: entidadId }, select: { nombres: true, apellidos: true } })
       await avisarPorRol(['Recursos Humanos', 'Administrador'], {
         evento: 'documento_aportado',
-        titulo: 'Un colaborador subió un documento a su expediente',
-        mensaje: `${colab?.nombres ?? ''} ${colab?.apellidos ?? ''} subió "${doc.nombre}" a su hoja de vida. Revísalo y clasifícalo si corresponde.`,
+        titulo: `${nombreCorto(colab?.nombres, colab?.apellidos)} subió un documento`,
+        mensaje: `"${doc.nombre}" · Revísalo y clasifícalo si corresponde.`,
         enlace: `/colaboradores/${entidadId}`,
         llamadoAccion: 'Ver el expediente',
       }).catch(() => {})

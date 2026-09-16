@@ -17,6 +17,7 @@ import { construirDatosPdfContratoOps, construirDatosAutorizacion, generarPdfCon
 import { fechaLarga } from '@/lib/numero-letras'
 import { aplicarFirmaContratoOps } from '@/server/contratos-ops-firma'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
+import { fechaBreve } from '@/lib/notificaciones/texto'
 import { generarPdfCuentaCobro } from '@/server/cuentas-cobro'
 import { parseFuncionesTexto, type FuncionesCargo, type ClausulaPlantilla } from '@/lib/contrato-variables'
 import { ubicarFirmasEnPdf, contarPaginas } from '@/server/pdf/firma-en-pdf'
@@ -226,8 +227,8 @@ export const crearContratoOps = accion(
       if (uid) {
         await avisar(uid, {
           evento: 'contrato_pendiente_firma',
-          titulo: 'Contrato pendiente de tu firma',
-          mensaje: `Tu contrato de prestación de servicios ${numero} y la autorización de tratamiento de datos fueron generados. Revísalos y fírmalos desde tu autoservicio.`,
+          titulo: `Firma tu contrato ${numero}`,
+          mensaje: 'Contrato y autorización de datos listos en tu autoservicio.',
           enlace: '/autoservicio/contratos',
           llamadoAccion: 'Revisar y firmar el contrato',
         })
@@ -577,8 +578,8 @@ export const crearCuentaCobroEmpresa = accion(
     const usuarioColab = await usuarioDeColaborador(d.colaboradorId)
     if (usuarioColab) {
       await avisar(usuarioColab, {
-        titulo: 'La empresa radicó tu cuenta de cobro',
-        mensaje: `Se radicó a tu nombre la cuenta ${cuenta.numero} (periodo ${d.periodo}, ${d.concepto || 'sin concepto'}). Revísala en tu autoservicio${contrato ? ' y adjunta tu planilla PILA para que pueda aprobarse' : ''}.`,
+        titulo: `Cuenta de cobro ${cuenta.numero} radicada a tu nombre`,
+        mensaje: `Periodo ${d.periodo}${d.concepto ? ` · ${d.concepto}` : ''}${contrato ? ' · Adjunta tu planilla PILA para que se apruebe.' : ''}`,
         enlace: '/autoservicio/cuentas-cobro', llamadoAccion: 'Ver mi cuenta de cobro', evento: 'cuenta_cobro_radicada',
       })
     }
@@ -636,8 +637,8 @@ export const registrarSoporteSs = accion(
       if (usuarioDueno) {
         await avisar(usuarioDueno, {
           evento: 'soporte_ss_invalido',
-          titulo: 'Tu planilla de seguridad social no pasó la verificación',
-          mensaje: `El soporte de tu cuenta de cobro ${cuenta.numero} fue marcado como inválido${d.observaciones ? `: ${d.observaciones}` : '.'} Sube la planilla corregida desde tu autoservicio para continuar con el pago.`,
+          titulo: 'Tu planilla PILA no fue aceptada',
+          mensaje: `Cuenta ${cuenta.numero}${d.observaciones ? ` · ${d.observaciones}` : ''} · Sube la corregida para seguir con el pago.`,
           enlace: '/autoservicio/cuentas-cobro',
           llamadoAccion: 'Corregir el soporte',
         })
@@ -678,10 +679,10 @@ export const cambiarEstadoCuenta = accion(
 
     // Avisar al dueño de la cuenta en los cambios que le exigen actuar o le confirman el pago.
     const MENSAJES: Record<string, { titulo: string; mensaje: string } | undefined> = {
-      BLOQUEADA_SS: { titulo: 'Cuenta de cobro bloqueada por seguridad social', mensaje: `Tu cuenta ${cuenta.numero} quedó bloqueada: el soporte de seguridad social no está al día. Sube la planilla corregida desde tu autoservicio.` },
-      APROBADA: { titulo: 'Cuenta de cobro aprobada', mensaje: `Tu cuenta ${cuenta.numero} fue aprobada y está en trámite de pago.` },
-      PAGADA: { titulo: 'Cuenta de cobro pagada', mensaje: `Tu cuenta ${cuenta.numero} fue pagada${d.fechaPago ? ` el ${d.fechaPago}` : ''}.` },
-      RECHAZADA: { titulo: 'Cuenta de cobro rechazada', mensaje: `Tu cuenta ${cuenta.numero} fue rechazada. Contacta a la administración para conocer el detalle.` },
+      BLOQUEADA_SS: { titulo: `Tu cuenta ${cuenta.numero} quedó bloqueada`, mensaje: 'Seguridad social sin verificar · Sube la planilla corregida.' },
+      APROBADA: { titulo: `Tu cuenta ${cuenta.numero} fue aprobada`, mensaje: 'En trámite de pago.' },
+      PAGADA: { titulo: `Tu cuenta ${cuenta.numero} fue pagada`, mensaje: d.fechaPago ? `Pago del ${fechaBreve(d.fechaPago)}.` : '' },
+      RECHAZADA: { titulo: `Tu cuenta ${cuenta.numero} fue rechazada`, mensaje: 'Consulta el detalle con la administración.' },
     }
     const aviso = MENSAJES[d.estado]
     if (aviso) {
@@ -826,8 +827,8 @@ export const subirContratoOpsParaFirma = accion(
 
     await avisar(uid, {
       evento: 'contrato_pendiente_firma',
-      titulo: 'Contrato pendiente de tu firma',
-      mensaje: `Tu contrato de prestación de servicios ${numero} está listo. Revísalo y fírmalo desde tu autoservicio.`,
+      titulo: `Firma tu contrato ${numero}`,
+      mensaje: 'Está listo en tu autoservicio.',
       enlace: '/autoservicio/contratos',
       llamadoAccion: 'Revisar y firmar el contrato',
     }).catch(() => {})
@@ -959,8 +960,8 @@ export const habilitarFirmaContratoOps = accion(
 
     await avisar(uid, {
       evento: 'contrato_pendiente_firma',
-      titulo: 'Contrato pendiente de tu firma',
-      mensaje: `Tu contrato de prestación de servicios ${c.numero} está listo. Revísalo y fírmalo desde tu autoservicio.`,
+      titulo: `Firma tu contrato ${c.numero}`,
+      mensaje: 'Está listo en tu autoservicio.',
       enlace: '/autoservicio/contratos',
       llamadoAccion: 'Revisar y firmar el contrato',
     }).catch(() => {})
@@ -1049,8 +1050,8 @@ export const cerrarContratoOps = accion(
       if (uid) {
         await avisar(uid, {
           evento: 'contrato_cerrado',
-          titulo: 'Tu contrato de prestación de servicios se cerró',
-          mensaje: `El contrato ${c.numero} quedó cerrado el ${formatFechaISO(cerradoEn)} (${MOTIVO_CIERRE_TEXTO[d.motivo]}).${accesoRestringido ? ' Como no tienes otro contrato vigente, tu acceso queda en solo consulta.' : ''}`,
+          titulo: `Tu contrato ${c.numero} se cerró`,
+          mensaje: `Contrato ${c.numero} · ${fechaBreve(cerradoEn)} · ${MOTIVO_CIERRE_TEXTO[d.motivo]}${accesoRestringido ? ' · Tu acceso queda en solo consulta.' : ''}`,
           enlace: '/autoservicio/contratos',
           llamadoAccion: 'Ver mis contratos',
         }).catch(() => {})

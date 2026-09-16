@@ -8,6 +8,7 @@ import { contextoActual } from '@/server/contexto'
 import { subirArchivo, leerArchivo } from '@/server/storage'
 import { estamparFirmasEnPdf, type PosicionFirma } from '@/server/pdf/firma-en-pdf'
 import { avisarPorRol } from '@/server/notificaciones/avisar'
+import { nombreCorto } from '@/lib/notificaciones/texto'
 import { resumenOtrosi, type ValoresOtrosi } from '@/lib/otrosi'
 
 /**
@@ -111,11 +112,11 @@ export async function aplicarFirmaOtrosi(opts: {
     },
   })
 
-  const nombre = `${o.contrato.colaborador.nombres} ${o.contrato.colaborador.apellidos}`.trim()
+  const nombre = nombreCorto(o.contrato.colaborador.nombres, o.contrato.colaborador.apellidos)
   const resumen = resumenOtrosi(o.tiposCambio, o.valoresNuevos as ValoresOtrosi | null)
   await avisarPorRol(['Administrador', 'Recursos Humanos'], {
-    titulo: `Otrosí ${o.numero} del contrato ${o.contrato.numero} firmado`,
-    mensaje: `${nombre} firmó el otrosí ${o.numero}${resumen ? ` (${resumen})` : ''}. El PDF firmado ya está en el contrato.`,
+    titulo: `${nombre} firmó el otrosí ${o.numero}`,
+    mensaje: `Contrato ${o.contrato.numero}${resumen ? ` · ${resumen}` : ''} · El PDF firmado ya está en el contrato.`,
     enlace: `/contratos/${o.contratoId}`,
     llamadoAccion: 'Ver el contrato',
     evento: 'contrato_firmado',

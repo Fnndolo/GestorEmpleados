@@ -8,6 +8,7 @@ import { accion, ErrorNegocio } from '@/server/accion'
 import { parseFechaISO, hoyBogota } from '@/lib/fechas'
 import { generarPdfCuentaCobro } from '@/server/cuentas-cobro'
 import { avisarPorRol } from '@/server/notificaciones/avisar'
+import { nombreCorto } from '@/lib/notificaciones/texto'
 
 /** Cualquier colaborador crea y envía su propia cuenta de cobro (OPS o, p. ej., comisiones/saldos). */
 export const crearMiCuentaCobro = accion(
@@ -50,8 +51,8 @@ export const crearMiCuentaCobro = accion(
     const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { nombres: true, apellidos: true } })
     await avisarPorRol(['Contador', 'Administrador', 'Subgerencia'], {
       evento: 'cuenta_cobro_radicada',
-      titulo: 'Nueva cuenta de cobro radicada',
-      mensaje: `${colab.nombres} ${colab.apellidos} radicó la cuenta de cobro ${cuenta.numero} (periodo ${d.periodo}).${contrato ? ' Verifica el pago de seguridad social antes de aprobar.' : ''}`,
+      titulo: `${nombreCorto(colab.nombres, colab.apellidos)} radicó la cuenta de cobro ${cuenta.numero}`,
+      mensaje: `Periodo ${d.periodo}${contrato ? ' · Verifica la seguridad social antes de aprobar.' : ''}`,
       enlace: contrato ? `/contratos/ops/${contrato.id}` : '/contratos/cuentas-cobro',
       llamadoAccion: 'Revisar la cuenta de cobro',
     })
@@ -123,8 +124,8 @@ export const adjuntarMiSoporteSs = accion(
     const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { nombres: true, apellidos: true } })
     await avisarPorRol(['Contador', 'Administrador', 'Subgerencia'], {
       evento: 'soporte_ss_adjuntado',
-      titulo: 'Soporte de seguridad social por verificar',
-      mensaje: `${colab.nombres} ${colab.apellidos} adjuntó la planilla PILA de la cuenta ${cuenta.numero} (periodo cotizado ${d.periodoCotizado}). Verifícala para poder aprobar el pago.`,
+      titulo: `${nombreCorto(colab.nombres, colab.apellidos)} adjuntó la planilla PILA`,
+      mensaje: `Cuenta ${cuenta.numero} · periodo ${d.periodoCotizado} · Verifícala para aprobar el pago.`,
       enlace: `/contratos/ops/${cuenta.contratoOpsId}`,
       llamadoAccion: 'Verificar el soporte',
     })

@@ -9,6 +9,7 @@ import { aplicarFirmaContratoLaboral } from '@/server/contratos-laboral-firma'
 import { aplicarFirmaOtrosi } from '@/server/otrosi-firma'
 import { generarYEnviarCodigoFirma, verificarCodigoFirma } from '@/server/firma/codigo-firma'
 import { avisarPorRol } from '@/server/notificaciones/avisar'
+import { nombreCorto } from '@/lib/notificaciones/texto'
 
 /**
  * Confirma que el contrato existe y está a nombre del usuario en sesión.
@@ -81,8 +82,8 @@ export const firmarMiContratoOps = accion(
     const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: colaboradorId }, select: { nombres: true, apellidos: true } })
     await avisarPorRol(['Administrador', 'Recursos Humanos', 'Subgerencia'], {
       evento: 'contrato_firmado',
-      titulo: firmado ? 'Contrato OPS firmado por ambas partes' : 'El contratista firmó su contrato OPS',
-      mensaje: `${colab.nombres} ${colab.apellidos} firmó el contrato ${numero} y la autorización de tratamiento de datos.${firmado ? ' El contrato firmado ya está disponible.' : ' Falta la firma del representante legal en el contrato.'}`,
+      titulo: `${nombreCorto(colab.nombres, colab.apellidos)} firmó el contrato OPS ${numero}`,
+      mensaje: firmado ? 'Firmado por ambas partes · El PDF ya está disponible.' : 'Falta la firma del representante legal.',
       enlace: `/contratos/ops/${d.contratoId}`,
       llamadoAccion: 'Ver el contrato',
     })
@@ -156,8 +157,8 @@ export const firmarMiContratoLaboral = accion(
     const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: colaboradorId }, select: { nombres: true, apellidos: true } })
     await avisarPorRol(['Administrador', 'Recursos Humanos', 'Subgerencia'], {
       evento: 'contrato_firmado',
-      titulo: firmado ? 'Contrato laboral firmado por ambas partes' : 'El empleado firmó su contrato laboral',
-      mensaje: `${colab.nombres} ${colab.apellidos} firmó el contrato ${numero} y la autorización de tratamiento de datos.${firmado ? ' El contrato firmado ya está disponible.' : ' Falta la firma del representante legal en el contrato.'}`,
+      titulo: `${nombreCorto(colab.nombres, colab.apellidos)} firmó el contrato ${numero}`,
+      mensaje: firmado ? 'Firmado por ambas partes · El PDF ya está disponible.' : 'Falta la firma del representante legal.',
       enlace: `/contratos/${d.contratoId}`,
       llamadoAccion: 'Ver el contrato',
     })

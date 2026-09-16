@@ -5,6 +5,7 @@ import { subirArchivo } from '@/server/storage'
 import { renderActaDotacion } from '@/server/pdf/acta-dotacion'
 import { hoyBogota } from '@/lib/fechas'
 import { notificarUsuario } from '@/server/notificaciones/avisar'
+import { nombreCorto } from '@/lib/notificaciones/texto'
 
 /**
  * Genera (o regenera con firma) el PDF del recibido de dotación (arts. 230-234
@@ -115,8 +116,8 @@ export async function alertarCortesDotacion(): Promise<{ corte: string | null; s
     // dedupeKey por (usuario, año, corte): la alerta llega una sola vez por corte.
     await notificarUsuario(
       u.id,
-      `Dotación ${proximo.corte} ${anio}: entregas pendientes`,
-      `${sinEntrega} colaborador(es) con derecho a dotación (salario ≤ 2 SMMLV) aún no tienen registrada la entrega del corte de ${proximo.corte} (límite ${proximo.dia} de ${proximo.corte.toLowerCase()}, arts. 230-232 CST).`,
+      `Dotación ${proximo.corte} ${anio}: ${sinEntrega} entrega${sinEntrega === 1 ? '' : 's'} pendiente${sinEntrega === 1 ? '' : 's'}`,
+      `Límite: ${proximo.dia} de ${proximo.corte.toLowerCase()} (arts. 230-232 CST).`,
       '/activos?tab=dotacion',
       `dotacion:${anio}:${proximo.corte}:${u.id}`,
       'dotacion_corte',
@@ -151,13 +152,12 @@ export async function alertarInduccionPendiente(): Promise<{ sinInduccion: numbe
     where: { estado: 'ACTIVO', rol: { nombre: { in: ['Recursos Humanos', 'Administrador'] } } },
     select: { id: true },
   })
-  const nombres = sinInduccion.slice(0, 5).map((c) => `${c.nombres} ${c.apellidos}`).join(', ')
   for (const u of rrhh) {
     for (const c of sinInduccion) {
       await notificarUsuario(
         u.id,
-        'Inducción pendiente',
-        `${sinInduccion.length} colaborador(es) con más de ${DIAS_PLAZO_INDUCCION} días de ingreso no tienen inducción registrada (RIT arts. 7 y 95): ${nombres}${sinInduccion.length > 5 ? '…' : ''}.`,
+        `${nombreCorto(c.nombres, c.apellidos)} no tiene inducción registrada`,
+        `Más de ${DIAS_PLAZO_INDUCCION} días desde su ingreso (RIT arts. 7 y 95).`,
         '/capacitaciones',
         `induccion:${c.id}:${u.id}`,
         'induccion_pendiente',

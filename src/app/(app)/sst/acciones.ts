@@ -214,7 +214,7 @@ export const entregarEpp = accion(
     if (usuarioColab) {
       await avisar(usuarioColab, {
         titulo: 'Firma el recibido de tus EPP',
-        mensaje: 'Se registró la entrega de tus elementos de protección personal. Entra a tu autoservicio para firmar la constancia de recibido.',
+        mensaje: 'La constancia está lista en tu autoservicio.',
         enlace: '/autoservicio/dotacion', llamadoAccion: 'Firmar el recibido', evento: 'epp_entregado',
       })
     }

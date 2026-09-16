@@ -15,6 +15,7 @@ import { cargarFestivos } from '@/server/vencimientos/festivos'
 import { DIAS_PREAVISO_EMPRESA, fechaMinimaPreaviso } from '@/server/vacaciones-reglas'
 import { liquidarVacaciones, desgloseHtml } from '@/server/vacaciones-liquidacion'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
+import { fechaBreve, rangoBreve, dias as diasTexto } from '@/lib/notificaciones/texto'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { comprobanteExigido, avisarComprobanteRequerido, avisarComprobanteRevisado } from '@/server/comprobante-permiso'
 
@@ -194,10 +195,10 @@ export const registrarVacaciones = accion(
     if (usuarioId) {
       const liq = await liquidarVacaciones(d.colaboradorId, dias)
       await avisar(usuarioId, {
-        titulo: 'La empresa programó tus vacaciones',
+        titulo: `La empresa programó tus vacaciones: ${rangoBreve(d.fechaInicio, d.fechaFin)}`,
         mensaje: liq
           ? desgloseHtml(liq, d.fechaInicio, d.fechaFin).replace('fueron aprobadas', 'fueron programadas por la empresa con el preaviso legal de 15 días (RIT art. 34)')
-          : `La empresa programó tus vacaciones del ${d.fechaInicio} al ${d.fechaFin} (${dias} días hábiles), con el preaviso legal de 15 días (RIT art. 34).`,
+          : `${diasTexto(dias, true)} · Preaviso legal de 15 días (RIT art. 34).`,
         enlace: '/autoservicio', llamadoAccion: 'Ver mis vacaciones', evento: 'vacaciones_programadas',
       })
     }
@@ -336,10 +337,10 @@ export const registrarVacacionesColectivas = accion(
       if (c.usuarioId) {
         const liq = await liquidarVacaciones(c.id, dias)
         await avisar(c.usuarioId, {
-          titulo: 'Vacaciones colectivas programadas',
+          titulo: `Vacaciones colectivas: ${rangoBreve(d.fechaInicio, d.fechaFin)}`,
           mensaje: liq
             ? desgloseHtml(liq, d.fechaInicio, d.fechaFin).replace('fueron aprobadas', 'fueron fijadas como vacaciones colectivas por la empresa, con el preaviso legal de 15 días (RIT art. 34)')
-            : `La empresa fijó vacaciones colectivas del ${d.fechaInicio} al ${d.fechaFin} (${dias} días hábiles), con el preaviso legal de 15 días (RIT art. 34).`,
+            : `${diasTexto(dias, true)} · Preaviso legal de 15 días (RIT art. 34).`,
           enlace: '/autoservicio', llamadoAccion: 'Ver mis vacaciones', evento: 'vacaciones_colectivas',
         })
       }
@@ -404,7 +405,7 @@ export const interrumpirVacaciones = accion(
     if (vac.colaborador.usuarioId) {
       await avisar(vac.colaborador.usuarioId, {
         titulo: 'Tus vacaciones fueron interrumpidas',
-        mensaje: `Se registró la interrupción de tus vacaciones el ${d.fechaInterrupcion} por: ${d.motivo}. Conservas ${restantes} día(s) hábiles para reanudar cuando se acuerde la nueva fecha (RIT art. 36).`,
+        mensaje: `${fechaBreve(d.fechaInterrupcion)} · ${d.motivo} · Conservas ${diasTexto(restantes, true)} para reanudar (RIT art. 36).`,
         enlace: '/autoservicio', llamadoAccion: 'Ver mis vacaciones', evento: 'vacaciones_interrumpidas',
       })
     }
@@ -458,10 +459,10 @@ export const reanudarVacaciones = accion(
     if (origen.colaborador.usuarioId) {
       const liq = await liquidarVacaciones(origen.colaboradorId, dias)
       await avisar(origen.colaborador.usuarioId, {
-        titulo: 'Reanudación de tus vacaciones',
+        titulo: `Tus vacaciones se reanudan: ${rangoBreve(d.fechaInicio, d.fechaFin)}`,
         mensaje: liq
           ? desgloseHtml(liq, d.fechaInicio, d.fechaFin).replace('fueron aprobadas', 'quedaron programadas como reanudación de tu descanso interrumpido (RIT art. 36)')
-          : `Reanudarás tus vacaciones del ${d.fechaInicio} al ${d.fechaFin} (${dias} días hábiles) — RIT art. 36.`,
+          : `${diasTexto(dias, true)} (RIT art. 36).`,
         enlace: '/autoservicio', llamadoAccion: 'Ver mis vacaciones', evento: 'vacaciones_reanudadas',
       })
     }

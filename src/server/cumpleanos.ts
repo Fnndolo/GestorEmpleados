@@ -2,7 +2,8 @@ import 'server-only'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { avisar, avisarPorRol, usuarioDeColaborador } from '@/server/notificaciones/avisar'
-import { formatFechaCorta, hoyBogota } from '@/lib/fechas'
+import { hoyBogota } from '@/lib/fechas'
+import { nombreCorto, fechaBreve } from '@/lib/notificaciones/texto'
 import { fmtCOP } from '@/lib/moneda'
 
 /**
@@ -71,7 +72,7 @@ export async function cumpleanosEntre(desde: Date, hasta: Date, where: Record<st
 
 async function nombreDe(colaboradorId: string): Promise<string> {
   const c = await prisma.colaborador.findUnique({ where: { id: colaboradorId }, select: { nombres: true, apellidos: true } })
-  return `${c?.nombres ?? ''} ${c?.apellidos ?? ''}`.trim()
+  return nombreCorto(c?.nombres, c?.apellidos)
 }
 
 /** Le dice al encargado qué cumpleaños tiene a cargo y qué se espera de él. */
@@ -80,8 +81,8 @@ export async function avisarEncargadoAsignado(opts: { encargadoId: string; homen
   if (!uid) return
   const homenajeado = await nombreDe(opts.homenajeadoId)
   await avisar(uid, {
-    titulo: 'Tienes un cumpleaños a cargo',
-    mensaje: `Talento Humano te encargó la celebración del cumpleaños de ${homenajeado}, el ${formatFechaCorta(opts.fecha)}.${opts.nota ? ` Indicaciones: ${opts.nota}` : ''} Después de la celebración, sube las facturas de lo que compraste desde tu autoservicio.`,
+    titulo: `Cumpleaños de ${homenajeado} a tu cargo`,
+    mensaje: `${fechaBreve(opts.fecha)}${opts.nota ? ` · ${opts.nota}` : ''} · Después sube las facturas desde tu autoservicio.`,
     enlace: '/autoservicio',
     llamadoAccion: 'Ver el cumpleaños a mi cargo',
     evento: 'cumpleanos_encargado_asignado',
@@ -92,8 +93,8 @@ export async function avisarEncargadoAsignado(opts: { encargadoId: string; homen
 export async function avisarFacturasEntregadas(opts: { encargadoId: string; homenajeadoId: string; valor: number | null }): Promise<void> {
   const [encargado, homenajeado] = await Promise.all([nombreDe(opts.encargadoId), nombreDe(opts.homenajeadoId)])
   await avisarPorRol(ROLES_TH, {
-    titulo: 'Facturas de cumpleaños por revisar',
-    mensaje: `${encargado} subió las facturas del cumpleaños de ${homenajeado}${opts.valor != null ? ` por ${fmtCOP(opts.valor)}` : ''}. Revísalas en Cumpleaños y acéptalas o devuélvelas.`,
+    titulo: `${encargado} subió las facturas del cumpleaños de ${homenajeado}`,
+    mensaje: `${opts.valor != null ? `${fmtCOP(opts.valor)} · ` : ''}Acéptalas o devuélvelas en Cumpleaños.`,
     enlace: '/cumpleanos',
     llamadoAccion: 'Revisar las facturas',
     evento: 'cumpleanos_facturas_entregadas',
@@ -106,10 +107,10 @@ export async function avisarFacturasRevisadas(opts: { encargadoId: string; homen
   if (!uid) return
   const homenajeado = await nombreDe(opts.homenajeadoId)
   await avisar(uid, {
-    titulo: opts.aceptadas ? 'Facturas de cumpleaños aceptadas' : 'Facturas de cumpleaños devueltas',
+    titulo: opts.aceptadas ? 'Tus facturas del cumpleaños fueron aceptadas' : 'Tus facturas del cumpleaños fueron devueltas',
     mensaje: opts.aceptadas
-      ? `Talento Humano aceptó las facturas del cumpleaños de ${homenajeado}. Gracias por organizarlo.`
-      : `Talento Humano devolvió las facturas del cumpleaños de ${homenajeado}${opts.motivo ? `: ${opts.motivo}` : ''}. Súbelas de nuevo desde tu autoservicio.`,
+      ? `Cumpleaños de ${homenajeado} · Gracias por organizarlo.`
+      : `Cumpleaños de ${homenajeado}${opts.motivo ? ` · ${opts.motivo}` : ''} · Súbelas de nuevo desde tu autoservicio.`,
     enlace: '/autoservicio',
     llamadoAccion: opts.aceptadas ? 'Ver' : 'Volver a subir las facturas',
     evento: 'cumpleanos_facturas_revisadas',
@@ -136,8 +137,8 @@ export async function recordarCumpleanosProximos(): Promise<{ recordados: number
     if (uid) {
       const faltan = Math.round((c.fecha.getTime() - hoy.getTime()) / 86_400_000)
       await avisar(uid, {
-        titulo: faltan === 0 ? 'Hoy es el cumpleaños que tienes a cargo' : `Cumpleaños a cargo en ${faltan} día${faltan === 1 ? '' : 's'}`,
-        mensaje: `${c.colaborador.nombres} ${c.colaborador.apellidos} cumple años el ${formatFechaCorta(c.fecha)}.${c.nota ? ` Indicaciones: ${c.nota}` : ''} Recuerda subir las facturas después de la celebración.`,
+        titulo: `${nombreCorto(c.colaborador.nombres, c.colaborador.apellidos)} cumple años ${faltan === 0 ? 'hoy' : faltan === 1 ? 'mañana' : `en ${faltan} días`}`,
+        mensaje: `${fechaBreve(c.fecha)}${c.nota ? ` · ${c.nota}` : ''} · Recuerda subir las facturas después.`,
         enlace: '/autoservicio',
         llamadoAccion: 'Ver el cumpleaños a mi cargo',
         evento: 'cumpleanos_recordatorio',

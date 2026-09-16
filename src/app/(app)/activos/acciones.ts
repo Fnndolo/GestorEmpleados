@@ -11,6 +11,7 @@ import { subirArchivo } from '@/server/storage'
 import { renderActaActivo } from '@/server/pdf/acta-activo'
 import { generarRecibidoDotacion } from '@/server/dotacion'
 import { avisar, avisarPorRol, usuarioDeColaborador } from '@/server/notificaciones/avisar'
+import { nombreCorto } from '@/lib/notificaciones/texto'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
 
@@ -148,8 +149,8 @@ export const asignarActivos = accion(
         ? `"${activos[0].nombre}" (${activos[0].codigo})`
         : `${activos.length} activos: ${activos.map((a) => a.nombre).join(', ')}`
       await avisar(usuarioColab, {
-        titulo: `Se te asignó ${activos.length === 1 ? 'un activo' : 'material'} — firma el acta`,
-        mensaje: `Se te entregó ${detalle}. Entra a tu autoservicio para firmar el acta de entrega; recuerda custodiar${activos.length === 1 ? 'lo' : 'los'} y devolver${activos.length === 1 ? 'lo' : 'los'} cuando la empresa lo requiera.`,
+        titulo: `Firma el acta de entrega de ${activos.length === 1 ? 'tu activo' : 'tus activos'}`,
+        mensaje: `${detalle} · Queda a tu cargo hasta que la empresa lo requiera.`,
         enlace: '/autoservicio/dotacion', llamadoAccion: 'Firmar el acta', evento: 'activo_asignado',
       })
     }
@@ -221,7 +222,7 @@ export const registrarDotacion = accion(
     if (usuarioColab) {
       await avisar(usuarioColab, {
         titulo: 'Firma el recibido de tu dotación',
-        mensaje: `Se registró la entrega de tu dotación (${d.corte} ${d.anio}: ${d.items}). Entra a tu autoservicio para firmar el recibido.`,
+        mensaje: `${d.corte} ${d.anio} · ${d.items}`,
         enlace: '/autoservicio/dotacion', llamadoAccion: 'Firmar el recibido', evento: 'dotacion_entregada',
       })
     }
@@ -241,13 +242,16 @@ export const firmarRecibidoDotacion = accion(
     schema: z.object({ entregaId: z.uuid(), firmaDataUri: z.string().min(50) }),
   },
   async (d, usuario) => {
-    const entrega = await prisma.entregaDotacion.findUniqueOrThrow({ where: { id: d.entregaId } })
+    const entrega = await prisma.entregaDotacion.findUniqueOrThrow({
+      where: { id: d.entregaId },
+      include: { colaborador: { select: { nombres: true, apellidos: true } } },
+    })
     if (entrega.colaboradorId !== usuario.colaboradorId) throw new ErrorNegocio('Esta entrega de dotación no es tuya.')
     if (entrega.firmadoEn) throw new ErrorNegocio('Este recibido ya está firmado.')
     const docId = await generarRecibidoDotacion(d.entregaId, usuario.id, { dataUri: d.firmaDataUri, fecha: new Date() })
     await avisarPorRol(['Recursos Humanos', 'Administrador'], {
-      titulo: 'Recibido de dotación firmado',
-      mensaje: `Se firmó digitalmente el recibido de dotación ${entrega.corte} ${entrega.anio}. La constancia quedó en el expediente.`,
+      titulo: `${nombreCorto(entrega.colaborador.nombres, entrega.colaborador.apellidos)} firmó el recibido de dotación`,
+      mensaje: `${entrega.corte} ${entrega.anio} · La constancia quedó en el expediente.`,
       enlace: '/activos?tab=dotacion', evento: 'dotacion_firmada',
     })
     revalidatePath('/autoservicio/dotacion')

@@ -37,6 +37,26 @@ function textoPlano(html: string): string {
     .replace(/\s*·\s*$/, '')
 }
 
+const MES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+/** "ahora", "5m", "3h", "2d"; pasado un mes, la fecha ("12 ago"). */
+function haceCuanto(iso: string): string {
+  const d = new Date(iso)
+  const min = Math.floor((Date.now() - d.getTime()) / 60_000)
+  if (min < 1) return 'ahora'
+  if (min < 60) return `${min}m`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h}h`
+  const dias = Math.floor(h / 24)
+  if (dias < 30) return `${dias}d`
+  return `${d.getDate()} ${MES_CORTO[d.getMonth()]}`
+}
+
+/** Creada hoy según el reloj del dispositivo. */
+function esDeHoy(iso: string): boolean {
+  return new Date(iso).toDateString() === new Date().toDateString()
+}
+
 /** Campana con contador en vivo (polling cada 30 s + al recuperar foco) y toast al llegar algo nuevo. */
 export function Campana({ verVencimientos = false }: { verVencimientos?: boolean }) {
   const router = useRouter()
@@ -58,7 +78,7 @@ export function Campana({ verVencimientos = false }: { verVencimientos?: boolean
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold leading-snug">{n.titulo}</p>
-              <p className="mt-0.5 line-clamp-3 text-xs text-muted-foreground">{textoPlano(n.mensaje)}</p>
+              {n.mensaje && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{textoPlano(n.mensaje)}</p>}
               {n.enlace && (
                 <button
                   type="button"
@@ -174,28 +194,44 @@ export function Campana({ verVencimientos = false }: { verVencimientos?: boolean
           {notifs.length === 0 ? (
             <p className="p-6 text-center text-sm text-muted-foreground">Sin notificaciones.</p>
           ) : (
-            <ul className="divide-y">
-              {notifs.map((n) => {
-                const contenido = (
-                  <div className={`p-3 ${!n.leida ? 'bg-accent/40' : ''}`}>
-                    <p className="text-sm font-medium leading-snug">{n.titulo}</p>
-                    <p className="text-xs text-muted-foreground">{textoPlano(n.mensaje)}</p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">
-                      {new Date(n.creadoEn).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}
-                    </p>
-                  </div>
-                )
-                return (
-                  <li key={n.id}>
-                    {n.enlace ? (
-                      <Link href={n.enlace} onClick={() => setAbierto(false)} className="block hover:bg-accent/60">
-                        {contenido}
-                      </Link>
-                    ) : contenido}
-                  </li>
-                )
-              })}
-            </ul>
+            /* Dos bloques: lo de hoy y lo anterior. Cada fila dice quién y qué en
+               la primera línea, el dato en la segunda y hace cuánto a la derecha. */
+            [
+              { clave: 'nuevas', titulo: 'Nuevas', lista: notifs.filter((n) => esDeHoy(n.creadoEn)) },
+              { clave: 'anteriores', titulo: 'Anteriores', lista: notifs.filter((n) => !esDeHoy(n.creadoEn)) },
+            ].filter((g) => g.lista.length > 0).map((g) => (
+              <section key={g.clave}>
+                <h3 className="sticky top-0 z-10 bg-popover px-3 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  {g.titulo}
+                </h3>
+                <ul className="divide-y">
+                  {g.lista.map((n) => {
+                    const detalle = textoPlano(n.mensaje)
+                    const contenido = (
+                      <div className={`flex gap-2.5 px-3 py-2.5 ${!n.leida ? 'bg-accent/40' : ''}`}>
+                        <span className={`mt-1.5 size-2 shrink-0 rounded-full ${!n.leida ? 'bg-primary' : 'bg-transparent'}`} aria-hidden />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-semibold leading-snug">{n.titulo}</p>
+                          {detalle && <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{detalle}</p>}
+                        </div>
+                        <time dateTime={n.creadoEn} className="shrink-0 pt-0.5 text-[11px] tabular-nums text-muted-foreground">
+                          {haceCuanto(n.creadoEn)}
+                        </time>
+                      </div>
+                    )
+                    return (
+                      <li key={n.id}>
+                        {n.enlace ? (
+                          <Link href={n.enlace} onClick={() => setAbierto(false)} className="block hover:bg-accent/60">
+                            {contenido}
+                          </Link>
+                        ) : contenido}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            ))
           )}
         </div>
         <div className="space-y-1 border-t p-2">

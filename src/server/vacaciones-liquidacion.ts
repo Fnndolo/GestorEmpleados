@@ -1,6 +1,7 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
-import { hoyBogota, formatFechaISO } from '@/lib/fechas'
+import { hoyBogota } from '@/lib/fechas'
+import { fechaBreve } from '@/lib/notificaciones/texto'
 import { fmtCOP } from '@/lib/moneda'
 import { notificarUsuario } from '@/server/notificaciones/avisar'
 
@@ -88,7 +89,7 @@ export async function actualizarEstadosVacaciones(): Promise<{ enDisfrute: numbe
       await notificarUsuario(
         v.colaborador.usuarioId,
         '¡Empiezan tus vacaciones!',
-        `Hoy inicia tu descanso hasta el ${formatFechaISO(v.fechaFin)}. Disfrútalo — tu derecho a la desconexión laboral está garantizado (RIT art. 19 num. 6).`,
+        `Hasta el ${fechaBreve(v.fechaFin)} · Desconéctate: es tu derecho (RIT art. 19).`,
         '/autoservicio',
         `vacaciones-inicio:${v.id}`,
         'vacaciones_inicio',

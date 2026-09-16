@@ -9,6 +9,7 @@ import { generarPdfContratoOps, generarPdfAutorizacionDatos, leerFirmaComoDataUr
 import { generarPdfContratoOpsEstampado, leerDatosFirmaSubido } from '@/server/contratos-ops-estampar'
 import { fechaLarga } from '@/lib/numero-letras'
 import { avisar, avisarPorRol } from '@/server/notificaciones/avisar'
+import { nombreCorto } from '@/lib/notificaciones/texto'
 
 type DocFirmado = { tipo: 'CONTRATO' | 'AUTORIZACION'; documentoId: string; sha256: string }
 
@@ -148,35 +149,31 @@ export async function aplicarFirmaContratoOps(opts: {
   if (firmado) {
     // Ambas partes firmaron: contrato perfeccionado, avisar a ambos lados.
     const enPdf = act.firmaContratanteEnPdf
-    const nombreContratista = `${contratista?.nombres ?? ''} ${contratista?.apellidos ?? ''}`.trim()
+    const nombreContratista = nombreCorto(contratista?.nombres, contratista?.apellidos)
     if (contratista?.usuarioId) {
       await avisar(contratista.usuarioId, {
-        titulo: 'Tu contrato quedó firmado por ambas partes',
-        mensaje: enPdf
-          ? `El contrato ${c.numero} ya traía la firma del representante legal y con la tuya quedó completo. Puedes descargar el PDF firmado desde tu autoservicio.`
-          : `El contrato ${c.numero} ya tiene las dos firmas. Puedes descargar el PDF firmado desde tu autoservicio.`,
+        titulo: `Tu contrato ${c.numero} quedó firmado`,
+        mensaje: 'Ya tiene las dos firmas · Descarga el PDF desde tu autoservicio.',
         enlace: '/autoservicio/contratos', llamadoAccion: 'Ver mi contrato', evento: 'contrato_firmado',
       }).catch(() => {})
     }
     await avisarPorRol(['Administrador', 'Recursos Humanos'], {
-      titulo: `Contrato ${c.numero} firmado por ambas partes`,
-      mensaje: enPdf
-        ? `${nombreContratista} firmó el contrato ${c.numero}; el documento ya traía la firma del representante legal, así que quedó completo.`
-        : `${nombreContratista} y el representante legal completaron las firmas del contrato ${c.numero}.`,
+      titulo: `${nombreContratista} firmó el contrato ${c.numero}`,
+      mensaje: enPdf ? 'Quedó completo: el PDF ya traía la firma del representante legal.' : 'Quedó firmado por ambas partes.',
       enlace: `/contratos/ops/${c.id}`, llamadoAccion: 'Ver el contrato', evento: 'contrato_firmado',
     }).catch(() => {})
   } else if (opts.rol === 'CONTRATANTE' && contratista?.usuarioId) {
     // Firmó la empresa: el contratista debe entrar a firmar.
     await avisar(contratista.usuarioId, {
-      titulo: 'Tienes un contrato pendiente por firmar',
-      mensaje: `El representante legal ya firmó el contrato ${c.numero}. Entra a tu autoservicio para revisarlo y firmarlo.`,
+      titulo: `Firma tu contrato ${c.numero}`,
+      mensaje: 'El representante legal ya firmó · Está en tu autoservicio.',
       enlace: '/autoservicio/contratos', llamadoAccion: 'Firmar mi contrato', evento: 'contrato_por_firmar',
     }).catch(() => {})
   } else if (opts.rol === 'CONTRATISTA') {
     // Firmó el contratista: falta la firma del representante legal.
     await avisarPorRol(['Administrador', 'Recursos Humanos'], {
-      titulo: 'Contrato firmado por el contratista',
-      mensaje: `${contratista?.nombres ?? ''} ${contratista?.apellidos ?? ''} firmó el contrato ${c.numero}. Falta la firma del representante legal para perfeccionarlo.`,
+      titulo: `${nombreCorto(contratista?.nombres, contratista?.apellidos)} firmó el contrato ${c.numero}`,
+      mensaje: 'Falta la firma del representante legal.',
       enlace: `/contratos/ops/${c.id}`, llamadoAccion: 'Aplicar la firma del contratante', evento: 'contrato_por_firmar',
     }).catch(() => {})
   }

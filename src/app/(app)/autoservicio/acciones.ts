@@ -17,6 +17,7 @@ import { evaluarSolicitudVacaciones } from '@/server/vacaciones-reglas'
 import { liquidarVacaciones, desgloseHtml } from '@/server/vacaciones-liquidacion'
 import { usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { fmtCOP } from '@/lib/moneda'
+import { nombreCorto, fechaBreve, rangoBreve, dias as diasTexto } from '@/lib/notificaciones/texto'
 import type { UsuarioSesion } from '@/server/sesion'
 
 const crearSolicitudSchema = z.object({
@@ -135,8 +136,8 @@ export const actualizarMiFicha = accion(
     const colab = await prisma.colaborador.findUnique({ where: { id: colaboradorId }, select: { nombres: true, apellidos: true } })
     await avisarPorRol(['Recursos Humanos', 'Administrador'], {
       evento: 'ficha_actualizada',
-      titulo: 'Un colaborador completó su información',
-      mensaje: `${colab?.nombres ?? ''} ${colab?.apellidos ?? ''} actualizó los datos de su ficha desde el autoservicio. Revísalos si corresponde.`,
+      titulo: `${nombreCorto(colab?.nombres, colab?.apellidos)} actualizó su información`,
+      mensaje: 'Cambió datos de su ficha desde el autoservicio.',
       enlace: `/colaboradores/${colaboradorId}`,
       llamadoAccion: 'Ver la ficha',
     }).catch(() => {})
@@ -235,13 +236,14 @@ export const crearSolicitud = accion(
       const jefe = await prisma.colaborador.findUnique({ where: { id: colab.jefeInmediatoId }, select: { usuarioId: true } })
       const yo = await prisma.colaborador.findUnique({ where: { id: colaboradorId }, select: { nombres: true, apellidos: true } })
       if (jefe?.usuarioId) {
-        const quien = `${yo?.nombres ?? ''} ${yo?.apellidos ?? ''}`.trim()
+        const quien = nombreCorto(yo?.nombres, yo?.apellidos)
         const esLic = d.tipo === 'LICENCIA'
+        const rango = rangoBreve(d.fechaInicio, d.fechaFin)
         await avisar(jefe.usuarioId, {
-          titulo: esLic ? 'Tu colaborador reportó una licencia de ley' : 'Tu colaborador reportó una incapacidad',
+          titulo: esLic ? `${quien} reportó licencia de ${defLicencia(d.licenciaTipo!).label.toLowerCase()}` : `${quien} reportó una incapacidad`,
           mensaje: esLic
-            ? `${quien} reportó una licencia de ${defLicencia(d.licenciaTipo!).label.toLowerCase()}. Es un derecho de ley, no requiere tu aprobación: Talento Humano valida el soporte y la registra. Te avisamos para que organices el trabajo del área.`
-            : `${quien} reportó una incapacidad. Talento Humano la validará y registrará.`,
+            ? `${rango} · Es de ley, no requiere tu aprobación: Talento Humano valida el soporte.`
+            : `${rango} · Talento Humano la valida y registra.`,
           enlace: '/autoservicio/aprobaciones',
           evento: esLic ? 'licencia_reportada' : 'incapacidad_reportada',
         })
@@ -259,20 +261,21 @@ async function avisarAprobadoresDelPaso(solicitudId: string, orden: number) {
     where: { id: solicitudId },
     include: { colaborador: { select: { nombres: true, apellidos: true, jefeInmediatoId: true } } },
   })
-  const quien = `${solicitud.colaborador.nombres} ${solicitud.colaborador.apellidos}`
+  const quien = nombreCorto(solicitud.colaborador.nombres, solicitud.colaborador.apellidos)
   // Una licencia por derecho no se aprueba: se valida el soporte y se registra. El
   // aviso lo dice así para no inducir a "negar" algo que la ley ya concedió.
   const datosSol = solicitud.datos as Record<string, string>
   const esDerechoLic = solicitud.tipo === 'LICENCIA' && !!datosSol.licenciaTipo && esDerecho(datosSol.licenciaTipo)
+  const detalle = resumenSolicitud(solicitud.tipo, datosSol)
   const opts = esDerechoLic
     ? {
-        titulo: `Licencia de ${defLicencia(datosSol.licenciaTipo).label.toLowerCase()} por validar`,
-        mensaje: `${quien} reportó una licencia de ley. No se aprueba ni se niega: valida el soporte y regístrala.`,
+        titulo: `${quien} reportó licencia de ${defLicencia(datosSol.licenciaTipo).label.toLowerCase()}`,
+        mensaje: `${detalle} · Es de ley: valida el soporte y regístrala.`,
         enlace: '/autoservicio/aprobaciones', llamadoAccion: 'Validar el soporte', evento: 'solicitud_creada',
       }
     : {
-        titulo: `Solicitud de ${etiquetaTipo(solicitud.tipo)} por aprobar`,
-        mensaje: `${quien} solicita tu aprobación. Entra a la plataforma para revisarla y decidir.`,
+        titulo: `${quien} pidió ${etiquetaTipo(solicitud.tipo)}`,
+        mensaje: detalle,
         enlace: '/autoservicio/aprobaciones', llamadoAccion: 'Revisar la solicitud', evento: 'solicitud_creada',
       }
 
@@ -355,7 +358,11 @@ export const resolverPaso = accion(
       }
       await dbAuditado.solicitud.update({ where: { id: paso.solicitudId }, data: { datos: datos as object } })
       notaCambioFechas = ` Tu jefe propuso nuevas fechas: ${datos.fechaInicio ?? ''}${datos.fechaFin ? ` a ${datos.fechaFin}` : ''}.`
-      await avisarSolicitante(paso.solicitudId, 'Tu solicitud fue aprobada con cambio de fechas', `${d.comentario ?? ''}${notaCambioFechas}`)
+      await avisarSolicitante(
+        paso.solicitudId,
+        `${tituloPropio(paso.solicitud.tipo, 'aprobad')} con otras fechas`,
+        [rangoBreve(datos.fechaInicio, datos.fechaFin), d.comentario].filter(Boolean).join(' · '),
+      )
     }
 
     // La licencia por derecho no se "rechaza": queda DEVUELTA por soporte insuficiente.
@@ -369,7 +376,7 @@ export const resolverPaso = accion(
       await avisarSolicitante(
         paso.solicitudId,
         'Tu licencia necesita soporte',
-        `Tu licencia es un derecho y no se está negando, pero el soporte no pudo validarse: ${d.comentario}. Corrígelo desde tu autoservicio: la misma solicitud sigue abierta.`,
+        `${d.comentario} · No se niega: corrige el soporte desde tu autoservicio y la misma solicitud sigue.`,
       )
       revalidatePath('/autoservicio')
       revalidatePath('/autoservicio/aprobaciones')
@@ -400,11 +407,7 @@ export const resolverPaso = accion(
         where: { id: paso.solicitudId },
         data: { estado: 'RECHAZADA', resultado: d.comentario ?? 'Rechazada' },
       })
-      await avisarSolicitante(
-        paso.solicitudId,
-        'Tu solicitud fue rechazada',
-        d.comentario ?? 'Tu jefe inmediato rechazó la solicitud.',
-      )
+      await avisarSolicitante(paso.solicitudId, tituloPropio(paso.solicitud.tipo, 'rechazad'), d.comentario ?? '')
       revalidatePath('/autoservicio')
       revalidatePath('/autoservicio/aprobaciones')
       return { ok: true }
@@ -435,6 +438,9 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
   const s = await prisma.solicitud.findUniqueOrThrow({ where: { id: solicitudId } })
   const datos = s.datos as Record<string, string>
   let resultado = 'Aprobada'
+  // El aviso al colaborador va aparte de `resultado` (que queda en la solicitud):
+  // corto, con lo que necesita saber y sin repetir el título.
+  let aviso = { titulo: 'Tu solicitud fue aprobada', mensaje: '' }
 
   if (s.tipo === 'VACACIONES' && datos.fechaInicio && datos.fechaFin) {
     const dias = await diasHabilesRango(datos.fechaInicio, datos.fechaFin)
@@ -453,6 +459,10 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
       },
     })
     resultado = `Vacaciones aprobadas (${dias} días hábiles${calculo?.anticipadas ? `, ${calculo.diasAnticipados} anticipados` : ''})`
+    aviso = {
+      titulo: tituloPropio('VACACIONES', 'aprobad'),
+      mensaje: `${rangoBreve(datos.fechaInicio, datos.fechaFin)} · ${diasTexto(dias, true)}${calculo?.anticipadas ? ` (${calculo.diasAnticipados} anticipados)` : ''}`,
+    }
     // Liquidación del pago (RIT art. 42) + correo con el desglose (RIT arts. 34 y 35).
     const liq = await liquidarVacaciones(s.colaboradorId, dias)
     if (liq) {
@@ -461,10 +471,11 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
         data: { datos: { ...datosObj, liquidacionVacaciones: liq } as object },
       })
       resultado += ` · pago liquidado: ${fmtCOP(liq.total)}`
+      aviso.mensaje += ` · Pago: ${fmtCOP(liq.total)}`
       const usuarioId = await usuarioDeColaborador(s.colaboradorId)
       if (usuarioId && !opts?.constancia) {
         await avisar(usuarioId, {
-          titulo: 'Vacaciones aprobadas: desglose de tu pago',
+          titulo: 'Desglose del pago de tus vacaciones',
           mensaje: desgloseHtml(liq, datos.fechaInicio, datos.fechaFin),
           enlace: '/autoservicio', llamadoAccion: 'Ver mi solicitud', evento: 'vacaciones_liquidadas',
         })
@@ -492,6 +503,10 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
     resultado = porHoras ? `Permiso aprobado (${datos.horaInicio}–${datos.horaFin})` : 'Permiso aprobado (día completo)'
     // El aviso de aprobación lleva el plazo: es lo primero que el colaborador tiene que saber.
     if (comprobante) resultado += ` · sube el comprobante de asistencia a más tardar el ${formatFechaCorta(comprobante.comprobanteVence)}`
+    aviso = {
+      titulo: tituloPropio('PERMISO', 'aprobad'),
+      mensaje: `${fechaBreve(datos.fechaInicio)} · ${porHoras ? `${datos.horaInicio}–${datos.horaFin}` : 'día completo'}${comprobante ? ` · Sube el comprobante antes del ${fechaBreve(comprobante.comprobanteVence)}` : ''}`,
+    }
   } else if (s.tipo === 'INCAPACIDAD' && datos.fechaInicio && datos.fechaFin) {
     const dias = diasCalendario(datos.fechaInicio, datos.fechaFin)
     await prisma.incapacidad.create({
@@ -503,6 +518,7 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
       },
     })
     resultado = `Incapacidad registrada (${dias} día(s))`
+    aviso = { titulo: tituloPropio('INCAPACIDAD', 'registrad'), mensaje: `${rangoBreve(datos.fechaInicio, datos.fechaFin)} · ${diasTexto(dias)}` }
   } else if (s.tipo === 'LICENCIA' && datos.fechaInicio && datos.fechaFin) {
     const def = defLicencia(datos.licenciaTipo)
     // El luto y el compensatorio de votación los cuenta la ley en días HÁBILES;
@@ -524,6 +540,10 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
     resultado = def.derecho
       ? `Licencia de ${def.label.toLowerCase()} registrada (${dias} ${unidad}, ${def.remunerada ? 'remunerada' : 'no remunerada'})`
       : `Licencia de ${def.label.toLowerCase()} aprobada (${dias} ${unidad}, ${def.remunerada ? 'remunerada' : 'no remunerada'})`
+    aviso = {
+      titulo: tituloPropio('LICENCIA', def.derecho ? 'registrad' : 'aprobad'),
+      mensaje: `${def.label} · ${rangoBreve(datos.fechaInicio, datos.fechaFin)} · ${diasTexto(dias, enHabiles)} · ${def.remunerada ? 'remunerada' : 'no remunerada'}`,
+    }
   } else if (s.tipo === 'CERTIFICACION_LABORAL') {
     const { documentoId } = await generarCertificacion({
       colaboradorId: s.colaboradorId,
@@ -532,12 +552,13 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
       generadoPorId: usuarioId,
     })
     resultado = `Certificación generada:${documentoId}`
+    aviso = { titulo: 'Tu certificación está lista', mensaje: 'Descárgala desde tu autoservicio.' }
   }
 
   const resultadoFinal = opts?.constancia ? `${resultado} · ${opts.constancia}` : resultado
   await dbAuditado.solicitud.update({ where: { id: solicitudId }, data: { estado: 'APROBADA', resultado: resultadoFinal } })
   // En auto-registro (representante legal) no se notifica a sí mismo.
-  if (!opts?.constancia) await avisarSolicitante(solicitudId, 'Tu solicitud fue aprobada', resultado)
+  if (!opts?.constancia) await avisarSolicitante(solicitudId, aviso.titulo, aviso.mensaje)
 }
 
 /**
@@ -584,7 +605,7 @@ export const emitirCertificacion = accion(
 
     await dbAuditado.pasoAprobacion.update({ where: { id: d.pasoId }, data: { estado: 'APROBADO', decididoPorId: usuario.id, decididoEn: new Date() } })
     await dbAuditado.solicitud.update({ where: { id: paso.solicitudId }, data: { estado: 'APROBADA', resultado: `Certificación generada:${documentoId}` } })
-    await avisarSolicitante(paso.solicitudId, 'Tu certificación está lista', 'Tu certificación laboral fue emitida. Ya puedes descargarla desde tu autoservicio.')
+    await avisarSolicitante(paso.solicitudId, 'Tu certificación está lista', 'Descárgala desde tu autoservicio.')
     revalidatePath('/autoservicio')
     revalidatePath('/autoservicio/aprobaciones')
     return { documentoId }
@@ -637,8 +658,8 @@ export const proponerFechas = accion(
     })
     await avisarSolicitante(
       paso.solicitudId,
-      'Tu jefe propone otras fechas de vacaciones',
-      `Por necesidades del servicio, se proponen las fechas ${d.fechaInicio} a ${d.fechaFin} (RIT art. 34).${d.comentario ? ` Comentario: ${d.comentario}` : ''} Entra a tu autoservicio para aceptarlas o rechazarlas.`,
+      'Te proponen otras fechas de vacaciones',
+      `${rangoBreve(d.fechaInicio, d.fechaFin)}${d.comentario ? ` · ${d.comentario}` : ''} · Acéptalas o recházalas en tu autoservicio.`,
     )
     revalidatePath('/autoservicio')
     revalidatePath('/autoservicio/aprobaciones')
@@ -661,9 +682,10 @@ export const responderContrapropuesta = accion(
   async (d, usuario) => {
     const s = await prisma.solicitud.findUniqueOrThrow({
       where: { id: d.solicitudId },
-      include: { pasos: { orderBy: { orden: 'asc' } } },
+      include: { pasos: { orderBy: { orden: 'asc' } }, colaborador: { select: { nombres: true, apellidos: true } } },
     })
     if (s.colaboradorId !== usuario.colaboradorId) throw new ErrorNegocio('Esta solicitud no es tuya.')
+    const quien = nombreCorto(s.colaborador.nombres, s.colaborador.apellidos)
     if (s.estado !== 'EN_NEGOCIACION') throw new ErrorNegocio('Esta solicitud no tiene una contrapropuesta pendiente.')
     const datos = { ...(s.datos as Record<string, unknown>) }
     const cp = datos.contrapropuesta as { fechaInicio: string; fechaFin: string; propuestaPorId: string; pasoId: string } | undefined
@@ -692,14 +714,14 @@ export const responderContrapropuesta = accion(
           await ejecutarEfecto(s.id, cp.propuestaPorId)
         }
       }
-      await avisarUsuario(cp.propuestaPorId, 'Contrapropuesta aceptada', 'El colaborador aceptó las fechas propuestas; la solicitud continúa su trámite.')
+      await avisarUsuario(cp.propuestaPorId, `${quien} aceptó las fechas propuestas`, `${rangoBreve(cp.fechaInicio, cp.fechaFin)} · La solicitud sigue su trámite.`)
     } else {
       datos.contrapropuesta = { ...cp, aceptada: false, respuesta: d.comentario ?? null }
       await dbAuditado.solicitud.update({ where: { id: s.id }, data: { estado: 'EN_APROBACION', datos: datos as object } })
       await avisarUsuario(
         cp.propuestaPorId,
-        'Contrapropuesta rechazada',
-        `El colaborador no aceptó las fechas propuestas${d.comentario ? `: ${d.comentario}` : '.'} La solicitud vuelve a tu bandeja con las fechas originales para que decidas.`,
+        `${quien} no aceptó las fechas propuestas`,
+        `${d.comentario ? `${d.comentario} · ` : ''}Vuelve a tu bandeja con las fechas originales.`,
       )
     }
     revalidatePath('/autoservicio')
@@ -795,4 +817,32 @@ async function avisarSolicitante(solicitudId: string, titulo: string, mensaje: s
 function etiquetaTipo(tipo: string): string {
   return tipo === 'VACACIONES' ? 'vacaciones' : tipo === 'PERMISO' ? 'permiso'
     : tipo === 'INCAPACIDAD' ? 'incapacidad' : tipo === 'LICENCIA' ? 'licencia' : 'certificación'
+}
+
+const ETIQUETA_CERT: Record<string, string> = {
+  SIMPLE: 'Simple', CON_SALARIO: 'Con salario', CON_FUNCIONES: 'Con funciones', ENTIDAD_FINANCIERA: 'Para entidad financiera',
+}
+
+/** Segunda línea del aviso: el dato que importa de la solicitud ("22 sep · 08:00–12:00 · Cita médica"). */
+function resumenSolicitud(tipo: string, datos: Record<string, string>): string {
+  switch (tipo) {
+    case 'VACACIONES':
+    case 'INCAPACIDAD':
+      return rangoBreve(datos.fechaInicio, datos.fechaFin)
+    case 'PERMISO': {
+      const horas = datos.permisoTipo === 'HORAS' && datos.horaInicio && datos.horaFin ? `${datos.horaInicio}–${datos.horaFin}` : 'día completo'
+      return [fechaBreve(datos.fechaInicio), horas, datos.motivo].filter(Boolean).join(' · ')
+    }
+    case 'LICENCIA':
+      return [datos.licenciaTipo ? defLicencia(datos.licenciaTipo).label : '', rangoBreve(datos.fechaInicio, datos.fechaFin)].filter(Boolean).join(' · ')
+    default:
+      return [ETIQUETA_CERT[datos.tipoCertificacion] ?? 'Laboral', datos.dirigidaA ? `para ${datos.dirigidaA}` : ''].filter(Boolean).join(' · ')
+  }
+}
+
+/** Título para el propio solicitante: "Tus vacaciones fueron aprobadas", "Tu permiso fue rechazado". */
+function tituloPropio(tipo: string, verbo: 'aprobad' | 'rechazad' | 'registrad'): string {
+  const plural = tipo === 'VACACIONES'
+  const femenino = tipo !== 'PERMISO'
+  return `${plural ? 'Tus' : 'Tu'} ${etiquetaTipo(tipo)} ${plural ? 'fueron' : 'fue'} ${verbo}${femenino ? 'a' : 'o'}${plural ? 's' : ''}`
 }

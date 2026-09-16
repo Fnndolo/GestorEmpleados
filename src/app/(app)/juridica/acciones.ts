@@ -8,6 +8,7 @@ import { accion, ErrorNegocio } from '@/server/accion'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { publicarVencimiento } from '@/server/vencimientos/servicio'
 import { avisar, avisarPorRol, usuarioDeColaborador } from '@/server/notificaciones/avisar'
+import { nombreCorto } from '@/lib/notificaciones/texto'
 import { sumarDiasHabiles, festivosDeRango } from '@/lib/dias-habiles'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
@@ -113,7 +114,6 @@ export const crearProcesoDisciplinario = accion(
     }),
   },
   async (d) => {
-    const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: d.colaboradorId }, select: { nombres: true } })
     const esLlamado = d.clase === 'LLAMADO_ATENCION'
     const p = await dbAuditado.procesoDisciplinario.create({
       data: { colaboradorId: d.colaboradorId, clase: d.clase, asunto: d.asunto, descripcion: v(d.descripcion), fechaApertura: parseFechaISO(d.fechaApertura)!, etapa: 'CITACION_DESCARGOS', fechaLimite: limite5DiasHabiles() },
@@ -134,10 +134,10 @@ export const crearProcesoDisciplinario = accion(
     if (userId) {
       await avisar(userId, {
         evento: 'disciplinario_citacion',
-        titulo: esLlamado ? 'Llamado de atención' : 'Citación a descargos — proceso disciplinario',
+        titulo: esLlamado ? 'Tienes un llamado de atención' : 'Citación a descargos',
         mensaje: esLlamado
-          ? `${colab.nombres}, se te hizo un llamado de atención por: "${d.asunto}". No es una sanción, pero si quieres explicar lo ocurrido tienes 5 días hábiles para hacerlo desde tu autoservicio.`
-          : `${colab.nombres}, se abrió un proceso disciplinario por: "${d.asunto}". Tienes derecho a presentar tus descargos dentro de los 5 días hábiles siguientes. Ingresa a Autoservicio para hacerlo.`,
+          ? `"${d.asunto}" · No es una sanción; puedes explicar lo ocurrido en 5 días hábiles.`
+          : `"${d.asunto}" · Tienes 5 días hábiles para presentar tus descargos.`,
         enlace: '/autoservicio/disciplinarios',
         llamadoAccion: esLlamado ? 'Ver el llamado' : 'Presentar mis descargos',
       })
@@ -163,8 +163,8 @@ export const presentarDescargos = accion(
     // Avisar a Jurídica/RRHH que el colaborador presentó descargos
     await avisarPorRol(['Jurídica', 'Recursos Humanos', 'Administrador'], {
       evento: 'disciplinario_descargos',
-      titulo: 'Descargos presentados',
-      mensaje: `${proceso.colaborador.nombres} ${proceso.colaborador.apellidos} presentó sus descargos en el proceso "${proceso.asunto}".`,
+      titulo: `${nombreCorto(proceso.colaborador.nombres, proceso.colaborador.apellidos)} presentó descargos`,
+      mensaje: `Proceso "${proceso.asunto}".`,
       enlace: `/juridica/disciplinarios/${d.procesoId}`,
       llamadoAccion: 'Revisar los descargos',
     })
@@ -194,8 +194,8 @@ export const avanzarEtapaDisciplinario = accion(
     if (proceso.colaborador.usuarioId && d.etapa !== 'DESCARGOS') {
       await avisar(proceso.colaborador.usuarioId, {
         evento: 'disciplinario_avance',
-        titulo: `Proceso disciplinario: ${ETAPA_TXT[d.etapa]}`,
-        mensaje: `Hay una nueva actuación en el proceso "${proceso.asunto}": ${ETAPA_TXT[d.etapa]}.${d.detalle ? ` ${d.detalle}` : ''}`,
+        titulo: `Tu proceso disciplinario: ${ETAPA_TXT[d.etapa].toLowerCase()}`,
+        mensaje: `"${proceso.asunto}"${d.detalle ? ` · ${d.detalle}` : ''}`,
         enlace: '/autoservicio/disciplinarios',
         llamadoAccion: 'Ver el proceso',
       })
@@ -223,8 +223,8 @@ export const registrarDecisionDisciplinario = accion(
     if (proceso.colaborador.usuarioId) {
       await avisar(proceso.colaborador.usuarioId, {
         evento: 'disciplinario_decision',
-        titulo: 'Decisión del proceso disciplinario',
-        mensaje: 'Se tomó una decisión en tu proceso. Si no estás de acuerdo, puedes apelar dentro de los 5 días hábiles siguientes desde tu autoservicio.',
+        titulo: 'Hay decisión en tu proceso disciplinario',
+        mensaje: 'Puedes apelar en los 5 días hábiles siguientes.',
         enlace: '/autoservicio/disciplinarios',
         llamadoAccion: 'Ver la decisión / apelar',
       })
@@ -249,8 +249,8 @@ export const apelarDecisionDisciplinario = accion(
     await dbAuditado.procesoDisciplinario.update({ where: { id: d.procesoId }, data: { etapa: 'RECURSO', fechaLimite: null } })
     await avisarPorRol(['Jurídica', 'Recursos Humanos', 'Administrador'], {
       evento: 'disciplinario_apelacion',
-      titulo: 'Recurso de apelación presentado',
-      mensaje: `${proceso.colaborador.nombres} ${proceso.colaborador.apellidos} apeló la decisión del proceso "${proceso.asunto}".`,
+      titulo: `${nombreCorto(proceso.colaborador.nombres, proceso.colaborador.apellidos)} apeló la decisión`,
+      mensaje: `Proceso "${proceso.asunto}".`,
       enlace: `/juridica/disciplinarios/${d.procesoId}`,
       llamadoAccion: 'Resolver el recurso',
     })
@@ -281,7 +281,7 @@ export const cerrarDisciplinario = accion(
     await dbAuditado.etapaProceso.create({ data: { procesoId: d.procesoId, etapa: 'CERRADO', fecha: hoyBogota(), detalle: v(d.detalle) } })
     await dbAuditado.procesoDisciplinario.update({ where: { id: d.procesoId }, data: { etapa: 'CERRADO', cerrado: true, fechaLimite: null } })
     if (proceso.colaborador.usuarioId) {
-      await avisar(proceso.colaborador.usuarioId, { evento: 'disciplinario_cerrado', titulo: 'Proceso disciplinario cerrado', mensaje: `Tu proceso disciplinario fue cerrado.${d.detalle ? ` ${d.detalle}` : ''}`, enlace: '/autoservicio/disciplinarios', llamadoAccion: 'Ver el proceso' })
+      await avisar(proceso.colaborador.usuarioId, { evento: 'disciplinario_cerrado', titulo: 'Tu proceso disciplinario se cerró', mensaje: d.detalle ?? '', enlace: '/autoservicio/disciplinarios', llamadoAccion: 'Ver el proceso' })
     }
     revalidatePath(`/juridica/disciplinarios/${d.procesoId}`)
   },
@@ -419,8 +419,8 @@ export const crearLlamadoAtencion = accion(
     if (userId) {
       await avisar(userId, {
         evento: 'llamado_atencion',
-        titulo: `Llamado de atención ${d.tipo === 'VERBAL' ? 'verbal' : 'escrito'}`,
-        mensaje: `${colab.nombres}, se registró un llamado de atención por: "${d.motivo}". No es una sanción y no requiere que presentes descargos, pero queda en tu historial.`,
+        titulo: `Tienes un llamado de atención ${d.tipo === 'VERBAL' ? 'verbal' : 'escrito'}`,
+        mensaje: `"${d.motivo}" · No es una sanción; queda en tu historial.`,
         enlace: '/autoservicio/disciplinarios',
         llamadoAccion: 'Ver mi historial',
       })
@@ -501,8 +501,8 @@ export const registrarVencimientoDescargos = accion(
     if (proceso.colaborador.usuarioId) {
       await avisar(proceso.colaborador.usuarioId, {
         evento: 'disciplinario_avance',
-        titulo: 'Venció el plazo para presentar descargos',
-        mensaje: `Se cumplieron los 5 días hábiles del proceso "${proceso.asunto}" sin que presentaras descargos. El proceso continúa y se te notificará la decisión.`,
+        titulo: 'Venció tu plazo para presentar descargos',
+        mensaje: `"${proceso.asunto}" · El proceso continúa; se te notificará la decisión.`,
         enlace: '/autoservicio/disciplinarios',
         llamadoAccion: 'Ver el proceso',
       })
@@ -556,8 +556,8 @@ export const escalarAProcesoDisciplinario = accion(
     if (proceso.colaborador.usuarioId) {
       await avisar(proceso.colaborador.usuarioId, {
         evento: 'disciplinario_avance',
-        titulo: 'El llamado de atención pasó a proceso disciplinario',
-        mensaje: `${proceso.colaborador.nombres}, el llamado por "${proceso.asunto}" se escaló a proceso disciplinario. ${d.motivo}`,
+        titulo: 'Tu llamado de atención pasó a proceso disciplinario',
+        mensaje: `"${proceso.asunto}" · ${d.motivo}`,
         enlace: '/autoservicio/disciplinarios',
         llamadoAccion: 'Ver el proceso',
       })

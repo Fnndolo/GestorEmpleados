@@ -309,8 +309,8 @@ async function avisarExpedientePendiente(colaboradorId: string) {
   if (faltan.length === 0) return
   const cuantos = faltan.length === 1 ? 'falta 1 documento' : `faltan ${faltan.length} documentos`
   await avisar(uid, {
-    titulo: 'Completa tu expediente para el contrato de trabajo',
-    mensaje: `Con tu contrato laboral te ${cuantos} por entregar: ${faltan.join(', ')}. Súbelos desde Autoservicio → Mis documentos.`,
+    titulo: `Te ${cuantos} para tu expediente laboral`,
+    mensaje: `${faltan.join(', ')} · Súbelos en Mis documentos.`,
     enlace: '/autoservicio/documentos',
     llamadoAccion: 'Subir mis documentos',
     evento: 'expediente_pendiente',
@@ -408,8 +408,8 @@ export const subirContratoParaFirma = accion(
 
     await avisar(uid, {
       evento: 'contrato_pendiente_firma',
-      titulo: 'Contrato pendiente de tu firma',
-      mensaje: `Tu contrato de trabajo ${numero} está listo. Revísalo y fírmalo desde tu autoservicio.`,
+      titulo: `Firma tu contrato ${numero}`,
+      mensaje: 'Está listo en tu autoservicio.',
       enlace: '/autoservicio/contratos',
       llamadoAccion: 'Revisar y firmar el contrato',
     }).catch(() => {})
@@ -568,8 +568,8 @@ async function generarDocumentosContratoLaboral(
     if (uid) {
       await avisar(uid, {
         evento: 'contrato_pendiente_firma',
-        titulo: 'Contrato pendiente de tu firma',
-        mensaje: `Tu contrato laboral ${c.numero} y la autorización de tratamiento de datos fueron generados. Revísalos y fírmalos desde tu autoservicio.`,
+        titulo: `Firma tu contrato ${c.numero}`,
+        mensaje: 'Contrato y autorización de datos listos en tu autoservicio.',
         enlace: '/autoservicio/contratos',
         llamadoAccion: 'Revisar y firmar el contrato',
       }).catch(() => {})
@@ -651,8 +651,8 @@ export const actualizarContratoLaboral = accion(
     if (uid) {
       await avisar(uid, {
         evento: 'contrato_actualizado',
-        titulo: 'Tu contrato fue actualizado',
-        mensaje: `El contrato ${c.numero} fue modificado por la empresa antes de la firma. Revisa la versión actualizada${d.generarPdf !== false ? ' del documento' : ''} y fírmala desde tu autoservicio.`,
+        titulo: `Tu contrato ${c.numero} cambió antes de la firma`,
+        mensaje: 'Revisa la versión nueva y fírmala desde tu autoservicio.',
         enlace: '/autoservicio/contratos',
         llamadoAccion: 'Revisar el contrato actualizado',
       }).catch(() => {})
@@ -887,8 +887,8 @@ export const agregarOtrosi = accion(
 
     const resumen = resumenOtrosi(d.tiposCambio, despues)
     await avisar(usuarioTrabajador, {
-      titulo: 'Tienes un otrosí pendiente por firmar',
-      mensaje: `Se registró el otrosí ${numero} de tu contrato ${contrato.numero}${resumen ? ` (${resumen})` : ''}. Revísalo y fírmalo desde tu autoservicio.`,
+      titulo: `Firma el otrosí ${numero} de tu contrato ${contrato.numero}`,
+      mensaje: resumen || 'Está listo en tu autoservicio.',
       enlace: '/autoservicio/contratos',
       llamadoAccion: 'Revisar y firmar',
       evento: 'contrato_pendiente_firma',

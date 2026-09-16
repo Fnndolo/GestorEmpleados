@@ -5,7 +5,8 @@ import { z } from 'zod'
 import { dbAuditado } from '@/lib/auditoria'
 import { prisma } from '@/lib/db'
 import { accion } from '@/server/accion'
-import { parseFechaISO, formatFechaISO } from '@/lib/fechas'
+import { parseFechaISO } from '@/lib/fechas'
+import { fechaBreve } from '@/lib/notificaciones/texto'
 import { avisar } from '@/server/notificaciones/avisar'
 
 export const crearCapacitacion = accion(
@@ -50,8 +51,8 @@ export const convocarCapacitacion = accion(
     })
     for (const col of colaboradores) {
       await avisar(col.usuarioId!, {
-        titulo: `Convocatoria: ${c.titulo}`,
-        mensaje: `Estás convocado(a) a la capacitación "${c.titulo}" el ${formatFechaISO(c.fecha)}${c.duracionHoras ? ` (${c.duracionHoras}h)` : ''}${c.facilitador ? `, facilita ${c.facilitador}` : ''}. Tu asistencia es obligatoria (RIT art. 68 num. 27); si no puedes asistir, justifícalo con tu jefe.`,
+        titulo: `Capacitación: ${c.titulo}`,
+        mensaje: `${fechaBreve(c.fecha)}${c.duracionHoras ? ` · ${c.duracionHoras} h` : ''}${c.facilitador ? ` · ${c.facilitador}` : ''} · Asistencia obligatoria (RIT art. 68).`,
         enlace: '/autoservicio/capacitaciones', llamadoAccion: 'Ver mis capacitaciones', evento: 'capacitacion_convocatoria',
       })
     }

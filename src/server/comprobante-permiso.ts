@@ -1,7 +1,8 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
 import { cargarFestivos } from '@/server/vencimientos/festivos'
-import { hoyBogota, formatFechaCorta } from '@/lib/fechas'
+import { hoyBogota } from '@/lib/fechas'
+import { nombreCorto, fechaBreve } from '@/lib/notificaciones/texto'
 import { fechaLimiteComprobante, PLAZO_COMPROBANTE_POR_DEFECTO } from '@/lib/comprobante-permiso'
 import { avisar, avisarPorRol, notificarUsuario, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 
@@ -46,10 +47,8 @@ export async function avisarComprobanteRequerido(colaboradorId: string, fechaPer
   const usuarioId = await usuarioDeColaborador(colaboradorId)
   if (!usuarioId) return
   await avisar(usuarioId, {
-    titulo: 'Sube el comprobante de asistencia de tu permiso',
-    mensaje:
-      `Para el permiso del ${formatFechaCorta(fechaPermiso)} debes adjuntar la constancia de que asististe ` +
-      `(cita, diligencia o trámite) a más tardar el ${formatFechaCorta(vence)}. Súbela desde Autoservicio, en "Mi actividad reciente".`,
+    titulo: `Sube el comprobante de tu permiso del ${fechaBreve(fechaPermiso)}`,
+    mensaje: `Plazo: hasta el ${fechaBreve(vence)} · Se sube desde "Mi actividad reciente".`,
     enlace: '/autoservicio',
     llamadoAccion: 'Subir el comprobante',
     evento: 'comprobante_permiso_requerido',
@@ -59,10 +58,9 @@ export async function avisarComprobanteRequerido(colaboradorId: string, fechaPer
 /** Avisa a Talento Humano que hay un comprobante nuevo por verificar. */
 export async function avisarComprobanteEntregado(colaboradorId: string, fechaPermiso: Date): Promise<void> {
   const colab = await prisma.colaborador.findUnique({ where: { id: colaboradorId }, select: { nombres: true, apellidos: true } })
-  const persona = `${colab?.nombres ?? ''} ${colab?.apellidos ?? ''}`.trim()
   await avisarPorRol(ROLES_TH, {
-    titulo: 'Comprobante de permiso por verificar',
-    mensaje: `${persona} subió el comprobante de asistencia del permiso del ${formatFechaCorta(fechaPermiso)}. Revísalo en Novedades → Permisos y acéptalo o devuélvelo.`,
+    titulo: `${nombreCorto(colab?.nombres, colab?.apellidos)} subió el comprobante de su permiso`,
+    mensaje: `Permiso del ${fechaBreve(fechaPermiso)} · Acéptalo o devuélvelo en Novedades → Permisos.`,
     enlace: '/novedades?tab=permisos',
     llamadoAccion: 'Verificar el comprobante',
     evento: 'comprobante_permiso_entregado',
@@ -74,10 +72,10 @@ export async function avisarComprobanteRevisado(colaboradorId: string, fechaPerm
   const usuarioId = await usuarioDeColaborador(colaboradorId)
   if (!usuarioId) return
   await avisar(usuarioId, {
-    titulo: valido ? 'Comprobante de permiso aceptado' : 'Tu comprobante de permiso no fue aceptado',
+    titulo: valido ? 'Tu comprobante fue aceptado' : 'Tu comprobante no fue aceptado',
     mensaje: valido
-      ? `Talento Humano verificó el comprobante de asistencia de tu permiso del ${formatFechaCorta(fechaPermiso)}.${nota ? ` Observación: ${nota}` : ''}`
-      : `Talento Humano no aceptó el comprobante del permiso del ${formatFechaCorta(fechaPermiso)}: ${nota ?? 'no acredita la asistencia'}. Sube uno corregido desde Autoservicio.`,
+      ? `Permiso del ${fechaBreve(fechaPermiso)}${nota ? ` · ${nota}` : ''}`
+      : `Permiso del ${fechaBreve(fechaPermiso)} · ${nota ?? 'No acredita la asistencia'} · Sube uno corregido.`,
     enlace: '/autoservicio',
     llamadoAccion: valido ? 'Ver mi actividad' : 'Subir otro comprobante',
     evento: 'comprobante_permiso_revisado',
@@ -108,14 +106,12 @@ export async function alertarComprobantesPermisoVencidos(): Promise<{ vencidos: 
   for (const p of vencidos) {
     const vence = p.comprobanteVence!
     const dias = Math.floor((hoy.getTime() - vence.getTime()) / 86_400_000)
-    const persona = `${p.colaborador.nombres} ${p.colaborador.apellidos}`
+    const persona = nombreCorto(p.colaborador.nombres, p.colaborador.apellidos)
     for (const u of destinatarios) {
       await notificarUsuario(
         u.id,
-        'Comprobante de permiso sin entregar',
-        `${persona} no ha subido el comprobante de asistencia del permiso del ${formatFechaCorta(p.fecha)}. ` +
-          `El plazo venció el ${formatFechaCorta(vence)} (hace ${dias} día${dias === 1 ? '' : 's'}). ` +
-          'Revísalo en Novedades → Permisos: puedes esperar, recordárselo o dejar de exigirlo.',
+        `${persona} no ha entregado el comprobante de su permiso`,
+        `Permiso del ${fechaBreve(p.fecha)} · Plazo vencido el ${fechaBreve(vence)} (hace ${dias} día${dias === 1 ? '' : 's'}).`,
         '/novedades?tab=permisos',
         `comprobante_permiso_vencido:${p.id}:${u.id}:${semana}`,
         'comprobante_permiso_vencido',

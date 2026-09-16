@@ -2,12 +2,28 @@ import 'server-only'
 import { urlApp } from '@/lib/app-url'
 import { prisma } from '@/lib/db'
 import { enviarCorreo } from '@/server/notificaciones/correo'
-import { hoyBogota, hoyBogotaISO, formatFechaCorta } from '@/lib/fechas'
+import { hoyBogota, hoyBogotaISO } from '@/lib/fechas'
+import { fechaBreve } from '@/lib/notificaciones/texto'
 
-const PASO_TITULO: Record<string, string> = {
-  PRIMERA: 'Próximo a vencer',
-  ULTIMA: 'Vence muy pronto',
-  VENCIDO: 'Vencido',
+/**
+ * Texto del aviso: primero la persona, luego qué vence, y la fecha en la
+ * segunda línea. Los vencimientos de personas se registran como
+ * "Cosa — Nombre Apellido" (documentos, contratos, exámenes); los que no son
+ * de nadie (un comité, una obligación legal) se dejan tal cual.
+ */
+function textoAviso(tituloVencimiento: string, paso: string, fecha: Date): { titulo: string; mensaje: string } {
+  const sep = tituloVencimiento.lastIndexOf(' — ')
+  let titulo = tituloVencimiento
+  if (sep > 0) {
+    const cosa = tituloVencimiento.slice(0, sep).trim()
+    const persona = tituloVencimiento.slice(sep + 3).trim()
+    // "Vence contrato fijo…" → "vence contrato fijo…"; siglas y nombres propios se respetan.
+    const cosaMin = cosa.length > 1 && cosa[1] === cosa[1].toLowerCase() ? cosa[0].toLowerCase() + cosa.slice(1) : cosa
+    titulo = `${persona}: ${cosaMin}`
+  }
+  const cuando = fechaBreve(fecha)
+  const mensaje = paso === 'VENCIDO' ? `Venció el ${cuando}.` : paso === 'ULTIMA' ? `Vence muy pronto: ${cuando}.` : `Vence el ${cuando}.`
+  return { titulo, mensaje }
 }
 
 /** Usuarios destinatarios de un vencimiento: responsables explícitos + por rol; fallback Admin/RRHH. */
@@ -76,11 +92,7 @@ export async function procesarAlertas(): Promise<{ vencidos: number; alertas: nu
     }
 
     const users = await destinatarios(v.id)
-    const titulo = `${PASO_TITULO[alerta.paso]}: ${v.titulo}`
-    const mensaje =
-      alerta.paso === 'VENCIDO'
-        ? `Venció el ${formatFechaCorta(v.fechaVencimiento)}.`
-        : `Vence el ${formatFechaCorta(v.fechaVencimiento)}.`
+    const { titulo, mensaje } = textoAviso(v.titulo, alerta.paso, v.fechaVencimiento)
     const enlace = enlaceDe(v.entidadTipo, v.entidadId)
 
     for (const u of users) {
