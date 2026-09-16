@@ -14,7 +14,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { es } from 'date-fns/locale'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LICENCIAS, defLicencia, type TipoLicencia } from '@/lib/licencias'
 import { festivosDeRango, esDiaHabil } from '@/lib/dias-habiles'
@@ -61,6 +61,11 @@ function diasHabilesInclusivo(iniISO: string, finISO: string): number {
     if (esDiaHabil(d, festivos)) conteo++
   }
   return conteo
+}
+
+/** "1 día hábil", "3 días hábiles". */
+function diasHabilesTexto(n: number): string {
+  return n === 1 ? '1 día hábil' : `${n} días hábiles`
 }
 
 /**
@@ -198,16 +203,11 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
   return (
     <>
       <Dialog open onOpenChange={(o) => !o && onClose()}>
-        <DialogContent>
+        {/* Sin descripción: el paso siguiente (jefe, Talento Humano) lo dice el
+            aviso al enviar; aquí solo estorbaba antes de llegar a los campos. */}
+        <DialogContent aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Nueva solicitud — {ETIQUETA_TIPO[tipo]}</DialogTitle>
-            <DialogDescription>
-              {tipo === 'INCAPACIDAD'
-                ? 'La incapacidad la valida y registra Talento Humano. Recibirás notificaciones.'
-                : lic?.derecho
-                  ? 'Esta licencia te la concede la ley: Talento Humano solo valida el soporte y la registra.'
-                  : 'La revisa primero tu jefe inmediato y luego Talento Humano. Recibirás notificaciones en cada paso.'}
-            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 max-h-[70vh] overflow-y-auto px-0.5">
@@ -218,13 +218,13 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
                   <div className="space-y-1.5"><Label>Hasta</Label><Input type="date" value={vacFin} onChange={(e) => setVacFin(e.target.value)} /></div>
                 </div>
 
-                <div className="flex items-center gap-2 rounded-lg border p-3 text-xs">
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
                   <CalendarRange className="size-4 shrink-0" />
-                  <p>
-                    Tienes <strong>{saldoVac} día{saldoVac === 1 ? '' : 's'} hábiles</strong> de vacaciones disponibles.
-                    {diasVac > 0 && <> Estás pidiendo <strong>{diasVac} día{diasVac === 1 ? '' : 's'} hábiles</strong>.</>}
-                  </p>
-                </div>
+                  <span>
+                    Disponibles: <strong className="text-foreground">{diasHabilesTexto(saldoVac)}</strong>
+                    {diasVac > 0 && <> · Pides <strong className="text-foreground">{diasHabilesTexto(diasVac)}</strong></>}
+                  </span>
+                </p>
 
                 {vacAnticipadas && (
                   <div className="space-y-2.5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
@@ -340,13 +340,9 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
                           ? 'Es un derecho tuyo: no se aprueba ni se niega.'
                           : 'La autoriza tu jefe inmediato.'}
                       </p>
-                      <p className="text-muted-foreground">{lic.fundamento}</p>
                       <p className="text-muted-foreground">
-                        {lic.derecho
-                          ? 'Talento Humano solo valida el soporte y la registra. A tu jefe se le avisa para que organice el trabajo del área.'
-                          : 'No la concede la ley, así que tu jefe puede autorizarla o no.'}
-                        {' '}Es <strong>{lic.remunerada ? 'remunerada' : 'no remunerada'}</strong>
-                        {lic.diasLey ? ` y la ley fija ${lic.diasLey} día(s).` : '.'}
+                        {lic.fundamento} · <strong>{lic.remunerada ? 'Remunerada' : 'No remunerada'}</strong>
+                        {lic.diasLey ? ` · ${lic.diasLey} día${lic.diasLey === 1 ? '' : 's'} de ley` : ''}
                       </p>
                     </div>
                   </div>
@@ -405,7 +401,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
                   </ul>
                 )}
                 <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
-                  <Paperclip className="size-4" /> {archivos.length > 0 ? 'Agregar otro archivo' : 'Adjuntar imágenes o PDF (puedes elegir varios)'}
+                  <Paperclip className="size-4" /> {archivos.length > 0 ? 'Agregar otro archivo' : 'Adjuntar imagen o PDF'}
                 </Button>
                 {adjuntoObligatorio && archivos.length === 0 && (
                   <p className="text-xs text-destructive">
