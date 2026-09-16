@@ -18,6 +18,7 @@ import { colorAvatar, iniciales } from '@/lib/etiquetas'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta, formatFechaLarga, parseFechaISO } from '@/lib/fechas'
 import { asignarEncargadoCumpleanos, cancelarCelebracionCumpleanos, revisarFacturasCumpleanos } from './acciones'
+import { urlFoto } from '@/lib/foto'
 
 export type CelebracionItem = {
   id: string
@@ -52,7 +53,7 @@ const ESTADO: Record<CelebracionItem['estado'], { texto: string; tono: PillTone 
 function AvatarColab({ c }: { c: FilaCumpleanos['colaborador'] }) {
   return (
     <Avatar className="size-9 shrink-0">
-      {c.fotoPath && <AvatarImage src={`/api/documentos/foto/${c.id}`} alt="" />}
+      {c.fotoPath && <AvatarImage src={urlFoto(c.id, c.fotoPath, true)!} alt="" />}
       <AvatarFallback className="text-[11px] font-semibold text-white" style={{ backgroundColor: colorAvatar(`${c.nombres} ${c.apellidos}`) }}>
         {iniciales(c.nombres, c.apellidos)}
       </AvatarFallback>

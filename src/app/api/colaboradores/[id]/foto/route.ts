@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { obtenerSesion, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { subirArchivo, eliminarArchivo } from '@/server/storage'
+import { subirArchivo, subirArchivoEn, eliminarArchivo } from '@/server/storage'
+import { rutaMiniatura } from '@/lib/foto'
 
 export const runtime = 'nodejs'
 const MAX_BYTES = 8 * 1024 * 1024
@@ -25,7 +26,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const contenido = Buffer.from(await archivo.arrayBuffer())
   const subido = await subirArchivo(`colaborador/${id}/foto`, archivo.name || 'foto.jpg', contenido, archivo.type || 'image/jpeg')
-  if (c.fotoPath) await eliminarArchivo(c.fotoPath)
+  // La miniatura (96 px) la manda el navegador junto a la foto; si no llega, las
+  // listas caen a la completa.
+  const miniatura = form.get('miniatura')
+  if (miniatura instanceof File && miniatura.size > 0) {
+    await subirArchivoEn(rutaMiniatura(subido.storagePath), Buffer.from(await miniatura.arrayBuffer()), 'image/jpeg').catch(() => {})
+  }
+  if (c.fotoPath) {
+    await eliminarArchivo(c.fotoPath)
+    await eliminarArchivo(rutaMiniatura(c.fotoPath)).catch(() => {})
+  }
   await prisma.colaborador.update({ where: { id }, data: { fotoPath: subido.storagePath } })
 
   return NextResponse.json({ ok: true })
@@ -41,7 +51,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   const c = await prisma.colaborador.findUnique({ where: { id }, select: { fotoPath: true } })
   if (!c) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
-  if (c.fotoPath) await eliminarArchivo(c.fotoPath)
+  if (c.fotoPath) {
+    await eliminarArchivo(c.fotoPath)
+    await eliminarArchivo(rutaMiniatura(c.fotoPath)).catch(() => {})
+  }
   await prisma.colaborador.update({ where: { id }, data: { fotoPath: null } })
 
   return NextResponse.json({ ok: true })

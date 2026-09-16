@@ -60,6 +60,19 @@ export async function subirArchivo(
   return { storagePath, bucket: BUCKET, mimeType, tamanoBytes: contenido.byteLength }
 }
 
+/** Sube a una ruta exacta (p. ej. la miniatura junto a su foto), pisando lo que haya. */
+export async function subirArchivoEn(storagePath: string, contenido: Buffer, mimeType: string): Promise<void> {
+  if (DRIVER === 'supabase') {
+    const supabase = clienteSupabase()
+    const { error } = await supabase.storage.from(BUCKET).upload(storagePath, contenido, { contentType: mimeType, upsert: true })
+    if (error) throw new Error(`Supabase Storage: ${error.message}`)
+  } else {
+    const destino = join(DIR_LOCAL, storagePath)
+    await mkdir(dirname(destino), { recursive: true })
+    await writeFile(destino, contenido)
+  }
+}
+
 /** Devuelve el contenido del archivo (para servirlo desde un Route Handler protegido). */
 export async function leerArchivo(storagePath: string): Promise<Buffer> {
   if (DRIVER === 'supabase') {

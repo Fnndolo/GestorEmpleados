@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { whereColaboradores } from '@/server/consultas/colaboradores'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Organigrama, type NodoOrg } from './organigrama'
+import { urlFoto } from '@/lib/foto'
 
 export const metadata = { title: 'Organigrama · Smart Gadgets RH' }
 
@@ -25,7 +26,7 @@ export default async function OrganigramaPage() {
     id: c.id,
     nombre: `${c.nombres} ${c.apellidos}`,
     cargo: c.cargo?.nombre ?? c.area?.nombre ?? 'Sin cargo',
-    tieneFoto: Boolean(c.fotoPath),
+    fotoUrl: urlFoto(c.id, c.fotoPath),
     // Si el jefe no está en la vista (alcance), se trata como raíz
     jefeId: c.jefeInmediatoId && idsVisibles.has(c.jefeInmediatoId) ? c.jefeInmediatoId : null,
   }))

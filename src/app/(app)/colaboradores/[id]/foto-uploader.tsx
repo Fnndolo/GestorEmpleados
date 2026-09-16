@@ -14,9 +14,12 @@ import {
 } from '@/components/ui/alert-dialog'
 
 export function FotoUploader({
-  colaboradorId, iniciales, nombreCompleto, tieneFoto, puedeEditar,
+  colaboradorId, iniciales, nombreCompleto, fotoUrl, puedeEditar,
 }: {
-  colaboradorId: string; iniciales: string; nombreCompleto?: string; tieneFoto: boolean; puedeEditar: boolean
+  colaboradorId: string; iniciales: string; nombreCompleto?: string
+  /** URL versionada de la foto (ver `urlFoto`), o null si no tiene. */
+  fotoUrl: string | null
+  puedeEditar: boolean
 }) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -28,9 +31,15 @@ export function FotoUploader({
     if (!f) return
     setSubiendo(true)
     try {
-      const comprimida = await imageCompression(f, { maxWidthOrHeight: 800, maxSizeMB: 0.5, useWebWorker: true })
+      // Dos tamaños: la completa para la ficha y una miniatura para los círculos
+      // de las listas, que a 96 px pesa una fracción y carga al instante.
+      const [comprimida, miniatura] = await Promise.all([
+        imageCompression(f, { maxWidthOrHeight: 800, maxSizeMB: 0.5, useWebWorker: true }),
+        imageCompression(f, { maxWidthOrHeight: 96, maxSizeMB: 0.03, useWebWorker: true }),
+      ])
       const fd = new FormData()
       fd.append('archivo', comprimida, 'foto.jpg')
+      fd.append('miniatura', miniatura, 'mini.jpg')
       const resp = await fetch(`/api/colaboradores/${colaboradorId}/foto`, { method: 'POST', body: fd })
       if (!resp.ok) throw new Error('No se pudo subir')
       toast.success('Foto actualizada.')
@@ -40,6 +49,9 @@ export function FotoUploader({
       toast.error('No se pudo actualizar la foto.')
     } finally {
       setSubiendo(false)
+      // Si no se vacía, elegir el MISMO archivo otra vez (p. ej. al reintentar
+      // tras un fallo) no dispara `onChange` y parece que el botón no hace nada.
+      e.target.value = ''
     }
   }
 
@@ -61,7 +73,7 @@ export function FotoUploader({
   return (
     <div className="relative">
       <Avatar className="size-20">
-        {tieneFoto && <AvatarImage src={`/api/documentos/foto/${colaboradorId}?v=${version}`} alt="" />}
+        {fotoUrl && <AvatarImage src={`${fotoUrl}&r=${version}`} alt="" />}
         <AvatarFallback
           className="text-lg font-semibold text-white"
           style={{ backgroundColor: colorAvatar(nombreCompleto ?? iniciales) }}
@@ -79,7 +91,7 @@ export function FotoUploader({
           >
             {subiendo ? <Spinner className="size-3.5" /> : <Camera className="size-3.5" />}
           </button>
-          {tieneFoto && (
+          {fotoUrl && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <button

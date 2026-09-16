@@ -10,6 +10,7 @@ import type { MiFichaInput } from '@/lib/validaciones/colaborador'
 import { MiInformacionForm } from './mi-informacion-form'
 import { FotoUploader } from '@/app/(app)/colaboradores/[id]/foto-uploader'
 import { iniciales } from '@/lib/etiquetas'
+import { urlFoto } from '@/lib/foto'
 
 export const metadata = { title: 'Mi información · Smart Gadgets RH' }
 
@@ -88,7 +89,7 @@ export default async function MiInformacionPage() {
             colaboradorId={c.id}
             iniciales={iniciales(c.nombres, c.apellidos)}
             nombreCompleto={`${c.nombres} ${c.apellidos}`}
-            tieneFoto={Boolean(c.fotoPath)}
+            fotoUrl={urlFoto(c.id, c.fotoPath)}
             puedeEditar
           />
           <div className="min-w-0">

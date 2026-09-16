@@ -14,6 +14,7 @@ import { ActualizacionEnVivo } from '@/components/shell/actualizacion-en-vivo'
 import { BusquedaGlobal } from '@/components/shell/busqueda-global'
 import { RegistrarSW } from '@/components/pwa/registrar-sw'
 import { PlegarLateral, ScriptLateral } from '@/components/shell/plegar-lateral'
+import { urlFoto } from '@/lib/foto'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const usuario = await requerirSesion()
@@ -26,7 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     : null
   const datosUsuario = {
     nombre: usuario.nombre, email: usuario.email, rol: usuario.rolNombre,
-    fotoUrl: fotoDeUsuario?.fotoPath ? `/api/documentos/foto/${usuario.colaboradorId}` : null,
+    fotoUrl: usuario.colaboradorId ? urlFoto(usuario.colaboradorId, fotoDeUsuario?.fotoPath, true) : null,
   }
   const primerNombre = usuario.nombre.trim().split(/\s+/)[0]
   // El enlace a vencimientos en la campana solo se muestra a quien tenga el permiso.

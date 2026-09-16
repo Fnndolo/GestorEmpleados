@@ -64,11 +64,11 @@ type ComprobanteNov = {
 }
 
 type Datos = {
-  vacaciones: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; fechaInicio: string; fechaFin: string; dias: number; estado: string; desdeAutoservicio: boolean; soporteDocId: string | null }[]
-  incapacidades: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; tipo: string; fechaInicio: string; fechaFin: string; dias: number; desdeAutoservicio: boolean; soporteDocId: string | null }[]
-  licencias: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; tipo: string; fechaInicio: string; fechaFin: string; dias: number; remunerada: boolean }[]
-  permisos: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; fecha: string; diaCompleto: boolean; horas: number | null; motivo: string; desdeAutoservicio: boolean; soporteDocId: string | null; comprobante: ComprobanteNov }[]
-  bonificaciones: { id: string; colaborador: string; colaboradorId: string; tieneFoto: boolean; concepto: string; valor: number; constitutivoSalario: boolean; estadoPago: string; fechaPago: string | null }[]
+  vacaciones: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; fechaInicio: string; fechaFin: string; dias: number; estado: string; desdeAutoservicio: boolean; soporteDocId: string | null }[]
+  incapacidades: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; tipo: string; fechaInicio: string; fechaFin: string; dias: number; desdeAutoservicio: boolean; soporteDocId: string | null }[]
+  licencias: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; tipo: string; fechaInicio: string; fechaFin: string; dias: number; remunerada: boolean }[]
+  permisos: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; fecha: string; diaCompleto: boolean; horas: number | null; motivo: string; desdeAutoservicio: boolean; soporteDocId: string | null; comprobante: ComprobanteNov }[]
+  bonificaciones: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; concepto: string; valor: number; constitutivoSalario: boolean; estadoPago: string; fechaPago: string | null }[]
 }
 
 /** Ícono y color por tipo de novedad — mismo lenguaje visual que "Mi actividad" de autoservicio. */
@@ -113,7 +113,7 @@ export function NovedadesCliente({ tab, datos, puedeCrear, puedeEditar }: { tab:
           items={datos.vacaciones.map((x) => ({
             id: x.id,
             titulo: x.colaborador,
-            avatar: { colaboradorId: x.colaboradorId, tieneFoto: x.tieneFoto, nombre: x.colaborador },
+            avatar: { colaboradorId: x.colaboradorId, fotoUrl: x.fotoUrl, nombre: x.colaborador },
             sub: `${formatFechaCorta(new Date(x.fechaInicio))} a ${formatFechaCorta(new Date(x.fechaFin))} · ${x.dias} días hábiles`,
             campos: [
               { label: 'Desde', valor: formatFechaCorta(new Date(x.fechaInicio)) },
@@ -137,7 +137,7 @@ export function NovedadesCliente({ tab, datos, puedeCrear, puedeEditar }: { tab:
           items={datos.incapacidades.map((x) => ({
             id: x.id,
             titulo: x.colaborador,
-            avatar: { colaboradorId: x.colaboradorId, tieneFoto: x.tieneFoto, nombre: x.colaborador },
+            avatar: { colaboradorId: x.colaboradorId, fotoUrl: x.fotoUrl, nombre: x.colaborador },
             sub: `${TIPO_INCAP[x.tipo]} · ${formatFechaCorta(new Date(x.fechaInicio))} a ${formatFechaCorta(new Date(x.fechaFin))} · ${x.dias} días`,
             campos: [
               { label: 'Tipo', valor: TIPO_INCAP[x.tipo] ?? x.tipo },
@@ -156,7 +156,7 @@ export function NovedadesCliente({ tab, datos, puedeCrear, puedeEditar }: { tab:
           items={datos.licencias.map((x) => ({
             id: x.id,
             titulo: x.colaborador,
-            avatar: { colaboradorId: x.colaboradorId, tieneFoto: x.tieneFoto, nombre: x.colaborador },
+            avatar: { colaboradorId: x.colaboradorId, fotoUrl: x.fotoUrl, nombre: x.colaborador },
             sub: `${TIPO_LIC[x.tipo]} · ${x.dias} días · ${x.remunerada ? 'Remunerada' : 'No remunerada'}`,
             campos: [
               { label: 'Tipo', valor: TIPO_LIC[x.tipo] ?? x.tipo },
@@ -190,7 +190,7 @@ function ListaBonificaciones({ items, puedeEditar }: { items: Datos['bonificacio
       items={items.map((x) => ({
         id: x.id,
         titulo: x.colaborador,
-        avatar: { colaboradorId: x.colaboradorId, tieneFoto: x.tieneFoto, nombre: x.colaborador },
+        avatar: { colaboradorId: x.colaboradorId, fotoUrl: x.fotoUrl, nombre: x.colaborador },
         sub: `${x.concepto} · ${fmtCOP(x.valor)} · ${x.constitutivoSalario ? 'Constitutivo' : 'No constitutivo'}`,
         campos: [
           { label: 'Concepto', valor: x.concepto },
@@ -221,7 +221,7 @@ function ListaPermisos({ items, puedeEditar }: { items: Datos['permisos']; puede
         return {
           id: x.id,
           titulo: x.colaborador,
-          avatar: { colaboradorId: x.colaboradorId, tieneFoto: x.tieneFoto, nombre: x.colaborador },
+          avatar: { colaboradorId: x.colaboradorId, fotoUrl: x.fotoUrl, nombre: x.colaborador },
           sub: `${formatFechaCorta(new Date(x.fecha))} · ${x.diaCompleto ? 'Día completo' : `${x.horas ?? 0} horas`} · ${x.motivo}`,
           campos: [
             { label: 'Fecha', valor: formatFechaCorta(new Date(x.fecha)) },

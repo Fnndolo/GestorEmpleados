@@ -7,6 +7,7 @@ import { formatFechaISO, formatFechaCorta, hoyBogota } from '@/lib/fechas'
 import { situacionComprobante } from '@/lib/comprobante-permiso'
 import Link from 'next/link'
 import { Inbox, ChevronRight } from 'lucide-react'
+import { urlFoto } from '@/lib/foto'
 
 export const metadata = { title: 'Novedades · Smart Gadgets RH' }
 
@@ -101,11 +102,11 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
         datos={{
-          vacaciones: vacaciones.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, tieneFoto: !!x.colaborador.fotoPath, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: Number(x.diasHabiles), estado: x.estado, desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId) })),
-          incapacidades: incapacidades.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, tieneFoto: !!x.colaborador.fotoPath, tipo: x.tipo, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: x.dias, desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId) })),
-          licencias: licencias.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, tieneFoto: !!x.colaborador.fotoPath, tipo: x.tipo, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: x.dias, remunerada: x.remunerada })),
+          vacaciones: vacaciones.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true), fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: Number(x.diasHabiles), estado: x.estado, desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId) })),
+          incapacidades: incapacidades.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true), tipo: x.tipo, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: x.dias, desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId) })),
+          licencias: licencias.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true), tipo: x.tipo, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: x.dias, remunerada: x.remunerada })),
           permisos: permisos.map((x) => ({
-            id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, tieneFoto: !!x.colaborador.fotoPath,
+            id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true),
             fecha: formatFechaISO(x.fecha), diaCompleto: x.diaCompleto, horas: x.horas ? Number(x.horas) : null, motivo: x.motivo,
             desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId),
             comprobante: {
@@ -116,7 +117,7 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
               docId: comprobantePorPermiso.get(x.id) ?? null,
             },
           })),
-          bonificaciones: bonificaciones.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, tieneFoto: !!x.colaborador.fotoPath, concepto: x.concepto, valor: Number(x.valor), constitutivoSalario: x.constitutivoSalario, estadoPago: x.estadoPago, fechaPago: x.fechaPago ? formatFechaISO(x.fechaPago) : null })),
+          bonificaciones: bonificaciones.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true), concepto: x.concepto, valor: Number(x.valor), constitutivoSalario: x.constitutivoSalario, estadoPago: x.estadoPago, fechaPago: x.fechaPago ? formatFechaISO(x.fechaPago) : null })),
         }}
       />
     </div>

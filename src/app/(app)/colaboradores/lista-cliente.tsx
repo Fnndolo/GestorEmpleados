@@ -13,6 +13,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/
 import { Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TIPO_VINCULO_CORTO, MODALIDAD_TRABAJO, ESTADO_COLABORADOR, iniciales, colorAvatar } from '@/lib/etiquetas'
+import { urlFoto } from '@/lib/foto'
 
 type Colaborador = {
   id: string; nombres: string; apellidos: string; tipoDocumento: string
@@ -120,7 +121,7 @@ export function ListaColaboradores({
               className="flex items-center gap-3 p-3 hover:bg-accent/50 transition-colors"
             >
               <Avatar className="size-10">
-                {c.fotoPath && <AvatarImage src={`/api/documentos/foto/${c.id}`} alt="" />}
+                {c.fotoPath && <AvatarImage src={urlFoto(c.id, c.fotoPath, true)!} alt="" />}
                 <AvatarFallback
                   className="text-xs font-semibold text-white"
                   style={{ backgroundColor: colorAvatar(`${c.nombres} ${c.apellidos}`) }}

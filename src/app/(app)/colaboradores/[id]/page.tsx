@@ -29,6 +29,7 @@ import { EducacionLista } from './educacion-lista'
 import { BotonCertificacion } from './boton-certificacion'
 import { BotonDisciplinario } from './boton-disciplinario'
 import { RegistrarDisfrute } from './registrar-disfrute'
+import { urlFoto } from '@/lib/foto'
 import { HistorialDisciplinario, type ItemHistorial } from './historial-disciplinario'
 import { formatFechaLarga, formatFechaISO, formatFechaCorta, calcularEdad, antiguedad, hoyBogota, duracionContrato } from '@/lib/fechas'
 
@@ -231,7 +232,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
               colaboradorId={c.id}
               iniciales={iniciales(c.nombres, c.apellidos)}
               nombreCompleto={`${c.nombres} ${c.apellidos}`}
-              tieneFoto={Boolean(c.fotoPath)}
+              fotoUrl={urlFoto(c.id, c.fotoPath)}
               puedeEditar={puedeEditar}
             />
             <div className="min-w-0 flex-1">

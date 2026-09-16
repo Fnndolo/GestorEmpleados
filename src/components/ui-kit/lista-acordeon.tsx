@@ -17,7 +17,7 @@ export type ItemAcordeon = {
   /** Chip de categoría propio del ítem (si no, se usa el de la lista). */
   chip?: { icono: LucideIcon; color: ChipColor | string }
   /** Foto de perfil junto al chip (colaborador dueño del registro). */
-  avatar?: { colaboradorId: string; tieneFoto: boolean; nombre: string }
+  avatar?: { colaboradorId: string; fotoUrl: string | null; nombre: string }
   /** Contenido a la derecha de la fila (badge de estado, acción); vive fuera del botón. */
   derecha?: React.ReactNode
   /** Contenido extra dentro del panel expandido, debajo de los campos. */
@@ -58,7 +58,7 @@ export function ListaAcordeon({ items, chip }: {
                 {c && <Chip icono={c.icono} color={c.color} />}
                 {x.avatar && (
                   <Avatar className="size-8 shrink-0">
-                    {x.avatar.tieneFoto && <AvatarImage src={`/api/documentos/foto/${x.avatar.colaboradorId}`} alt="" />}
+                    {x.avatar.fotoUrl && <AvatarImage src={x.avatar.fotoUrl} alt="" />}
                     <AvatarFallback className="text-[10px] font-semibold text-white" style={{ backgroundColor: colorAvatar(x.avatar.nombre) }}>
                       {inicialesDeNombre(x.avatar.nombre)}
                     </AvatarFallback>

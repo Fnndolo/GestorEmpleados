@@ -15,6 +15,7 @@ import { colorAvatar, iniciales } from '@/lib/etiquetas'
 import { FiltroTabs } from '@/components/shell/filtro-tabs'
 import { formatFechaCorta, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { fmtCOP } from '@/lib/moneda'
+import { urlFoto } from '@/lib/foto'
 
 export const metadata = { title: 'Contratación · Smart Gadgets RH' }
 
@@ -25,7 +26,7 @@ const TONO_CONTRATO: Record<string, PillTone> = {
 function AvatarColab({ c }: { c: { id: string; nombres: string; apellidos: string; fotoPath: string | null } }) {
   return (
     <Avatar className="size-8 shrink-0">
-      {c.fotoPath && <AvatarImage src={`/api/documentos/foto/${c.id}`} alt="" />}
+      {c.fotoPath && <AvatarImage src={urlFoto(c.id, c.fotoPath, true)!} alt="" />}
       <AvatarFallback className="text-[10px] font-semibold text-white" style={{ backgroundColor: colorAvatar(`${c.nombres} ${c.apellidos}`) }}>
         {iniciales(c.nombres, c.apellidos)}
       </AvatarFallback>

@@ -18,7 +18,7 @@ export type NodoOrg = {
   id: string
   nombre: string
   cargo: string
-  tieneFoto: boolean
+  fotoUrl: string | null
   jefeId: string | null
 }
 
@@ -66,7 +66,7 @@ export function Organigrama({ nodos }: { nodos: NodoOrg[] }) {
       pid: n.jefeId ?? undefined,
       name: n.nombre,
       title: n.cargo,
-      img: n.tieneFoto ? `/api/documentos/foto/${n.id}` : avatarIniciales(n.nombre),
+      img: n.fotoUrl ?? avatarIniciales(n.nombre),
     }))
 
     const chart = new OrgChart(cont, {
