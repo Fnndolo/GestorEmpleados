@@ -124,7 +124,7 @@ export default async function AutoservicioPage() {
       where: { colaboradorId: usuario.colaboradorId },
       include: { pasos: { orderBy: { orden: 'asc' } } },
       orderBy: { creadoEn: 'desc' },
-      take: 20,
+      take: 40,
     }),
     prisma.procesoDisciplinario.count({ where: { colaboradorId: usuario.colaboradorId, cerrado: false } }),
     prisma.contratoOps.count({
@@ -374,7 +374,13 @@ export default async function AutoservicioPage() {
   }
 
   actividad.sort((a, b) => b.fecha.getTime() - a.fecha.getTime())
-  const itemsActividad = actividad.slice(0, 20).map((a) => a.item)
+  // A la vista, lo de la última semana y lo que sigue abierto; lo demás queda
+  // detrás de "Ver más" para que la lista no crezca sin fin.
+  const hace7dias = hoy.getTime() - 7 * 86_400_000
+  const abierta = (i: SolicitudItem) =>
+    ['EN_APROBACION', 'EN_NEGOCIACION', 'DEVUELTA', 'PENDIENTE', 'SOLICITADA'].includes(i.estado) ||
+    i.comprobante?.situacion === 'PENDIENTE' || i.comprobante?.situacion === 'VENCIDO'
+  const itemsActividad = actividad.slice(0, 40).map((a) => ({ ...a.item, reciente: a.fecha.getTime() >= hace7dias || abierta(a.item) }))
 
   return (
     <div className="max-w-7xl">

@@ -68,6 +68,8 @@ export type SolicitudItem = {
   edicion?: EdicionPermiso | null
   /** Soportes que se adjuntaron a la solicitud (cita, incapacidad, licencia…). */
   soportes?: { id: string; nombre: string; esImagen: boolean }[]
+  /** De la última semana o todavía abierta: se ve sin pulsar "Ver más". */
+  reciente?: boolean
 }
 
 export type ComprobanteItem = {
@@ -176,6 +178,10 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
   }
 
   const [editando, setEditando] = useState<EdicionPermiso | null>(null)
+  // Lo viejo se pliega: la lista muestra la semana y lo abierto; "Ver más" trae el resto.
+  const [verTodo, setVerTodo] = useState(false)
+  const visibles = verTodo ? solicitudes : solicitudes.filter((s) => s.reciente !== false)
+  const ocultas = solicitudes.length - visibles.length
 
   async function responder(solicitudId: string, aceptar: boolean) {
     setRespondiendo(solicitudId)
@@ -208,7 +214,10 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
           e.target.value = ''
         }}
       />
-      {solicitudes.map((s) => {
+      {visibles.length === 0 && (
+        <p className="p-4 text-center text-sm text-muted-foreground">Nada nuevo esta semana.</p>
+      )}
+      {visibles.map((s) => {
         const Icono = ICONO_SOL[s.tipo] ?? ICONO_SOL.OTRA
         const expandida = abierta === s.id
         return (
@@ -488,6 +497,16 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
           </div>
         )
       })}
+      {(ocultas > 0 || (verTodo && solicitudes.some((s) => s.reciente === false))) && (
+        <button
+          type="button"
+          onClick={() => setVerTodo((v) => !v)}
+          className="flex w-full items-center justify-center gap-1.5 p-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+        >
+          {verTodo ? 'Ver menos' : `Ver más (${ocultas} anterior${ocultas === 1 ? '' : 'es'})`}
+          <ChevronDown className={cn('size-4 transition-transform', verTodo && 'rotate-180')} />
+        </button>
+      )}
       {editando && <NuevaSolicitud tipoInicial="PERMISO" edicion={editando} onClose={() => setEditando(null)} />}
     </CardContent></Card>
   )
