@@ -3,8 +3,10 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { BandejaAprobaciones } from './bandeja'
-import { formatFechaISO } from '@/lib/fechas'
 import { defLicencia } from '@/lib/licencias'
+import { fechaBreve, rangoBreve, dias as diasTexto } from '@/lib/notificaciones/texto'
+import { urlFoto } from '@/lib/foto'
+import { iniciales } from '@/lib/etiquetas'
 import { plazoComprobanteDias } from '@/server/comprobante-permiso'
 
 export const metadata = { title: 'Aprobaciones · Smart Gadgets RH' }
@@ -23,7 +25,7 @@ export default async function AprobacionesPage() {
       pasos: { some: { estado: 'PENDIENTE' } },
     },
     include: {
-      colaborador: { select: { nombres: true, apellidos: true, jefeInmediatoId: true, sede: { select: { nombre: true } } } },
+      colaborador: { select: { nombres: true, apellidos: true, fotoPath: true, jefeInmediatoId: true, sede: { select: { nombre: true } } } },
       pasos: { orderBy: { orden: 'asc' } },
     },
     orderBy: { creadoEn: 'asc' },
@@ -52,7 +54,7 @@ export default async function AprobacionesPage() {
 
   return (
     <div className="max-w-5xl">
-      <Encabezado titulo="Solicitudes por aprobar" descripcion="Aprueba o rechaza las solicitudes de autoservicio de tu equipo." />
+      <Encabezado enLinea titulo="Solicitudes por aprobar" />
       {visibles.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No tienes solicitudes pendientes.</CardContent></Card>
       ) : (
@@ -73,9 +75,12 @@ export default async function AprobacionesPage() {
               esPasoJefe: pasoActual.usaJefeInmediato,
               colaborador: `${s.colaborador.nombres} ${s.colaborador.apellidos}`,
               colaboradorId: s.colaboradorId,
+              iniciales: iniciales(s.colaborador.nombres, s.colaborador.apellidos),
+              fotoUrl: urlFoto(s.colaboradorId, s.colaborador.fotoPath, true),
               sede: s.colaborador.sede.nombre,
-              creadoEn: formatFechaISO(s.creadoEn),
-              detalle: detalleSolicitud(s.tipo, datos),
+              creadoEn: fechaBreve(s.creadoEn),
+              cuando: cuandoSolicitud(s.tipo, datos, calculoVacaciones?.dias ?? null),
+              motivo: datos.motivo?.trim() || null,
               fechaInicio: datos.fechaInicio ?? '',
               fechaFin: datos.fechaFin ?? '',
               documentos: docsPorSolicitud.get(s.id) ?? [],
@@ -108,17 +113,23 @@ const TIPO_INCAP: Record<string, string> = {
   ENFERMEDAD_LABORAL: 'Enfermedad laboral', LICENCIA_MATERNIDAD: 'Lic. maternidad', LICENCIA_PATERNIDAD: 'Lic. paternidad',
 }
 
-function detalleSolicitud(tipo: string, datos: Record<string, string>): string {
-  if (tipo === 'VACACIONES') return `Del ${datos.fechaInicio} al ${datos.fechaFin}`
+const TIPO_CERT: Record<string, string> = {
+  SIMPLE: 'Simple', CON_SALARIO: 'Con salario', CON_FUNCIONES: 'Con funciones', ENTIDAD_FINANCIERA: 'Para entidad financiera',
+}
+
+/** Una línea con lo que se pide: fechas cortas, horas, tipo. El motivo va aparte. */
+function cuandoSolicitud(tipo: string, datos: Record<string, string>, diasHabiles: number | null): string {
+  if (tipo === 'VACACIONES') return `${rangoBreve(datos.fechaInicio, datos.fechaFin)}${diasHabiles ? ` · ${diasTexto(diasHabiles, true)}` : ''}`
   if (tipo === 'PERMISO') {
-    const cuando = datos.permisoTipo === 'HORAS' && datos.horaInicio ? `${datos.fechaInicio} · ${datos.horaInicio}–${datos.horaFin}` : `${datos.fechaInicio} · día completo`
-    return `${cuando}${datos.motivo ? ` · ${datos.motivo}` : ''}`
+    return datos.permisoTipo === 'HORAS' && datos.horaInicio
+      ? `${fechaBreve(datos.fechaInicio)} · ${datos.horaInicio}–${datos.horaFin}`
+      : `${fechaBreve(datos.fechaInicio)} · día completo`
   }
-  if (tipo === 'INCAPACIDAD') return `${TIPO_INCAP[datos.incapacidadTipo] ?? 'Incapacidad'} · del ${datos.fechaInicio} al ${datos.fechaFin}${datos.entidad ? ` · ${datos.entidad}` : ''}`
-  if (tipo === 'CERTIFICACION_LABORAL') return `${datos.tipoCertificacion ?? 'Simple'}${datos.dirigidaA ? ` · para ${datos.dirigidaA}` : ''}`
+  if (tipo === 'INCAPACIDAD') return `${TIPO_INCAP[datos.incapacidadTipo] ?? 'Incapacidad'} · ${rangoBreve(datos.fechaInicio, datos.fechaFin)}${datos.entidad ? ` · ${datos.entidad}` : ''}`
+  if (tipo === 'CERTIFICACION_LABORAL') return `${TIPO_CERT[datos.tipoCertificacion] ?? 'Simple'}${datos.dirigidaA ? ` · para ${datos.dirigidaA}` : ''}`
   if (tipo === 'LICENCIA' && datos.licenciaTipo) {
     const def = defLicencia(datos.licenciaTipo)
-    return `${def.label} · del ${datos.fechaInicio} al ${datos.fechaFin} · ${def.remunerada ? 'remunerada' : 'no remunerada'}${datos.motivo ? ` · ${datos.motivo}` : ''}`
+    return `${def.label} · ${rangoBreve(datos.fechaInicio, datos.fechaFin)} · ${def.remunerada ? 'remunerada' : 'no remunerada'}`
   }
   return ''
 }

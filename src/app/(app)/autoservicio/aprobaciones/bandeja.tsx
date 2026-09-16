@@ -3,13 +3,16 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Check, X, CalendarClock, Paperclip, FilePenLine, Scale, TriangleAlert } from 'lucide-react'
+import { Check, X, CalendarClock, Paperclip, FilePenLine, Scale, TriangleAlert, ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Pill } from '@/components/ui-kit'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { colorAvatar } from '@/lib/etiquetas'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Spinner } from '@/components/ui/spinner'
@@ -19,7 +22,14 @@ import { resolverPaso, emitirCertificacion, proponerFechas } from '../acciones'
 
 type Solicitud = {
   id: string; pasoId: string; tipo: string; esPasoJefe: boolean; colaborador: string; colaboradorId: string; sede: string
-  creadoEn: string; detalle: string; fechaInicio: string; fechaFin: string
+  iniciales: string; fotoUrl: string | null
+  /** Fecha corta de radicación ("16 sep"). */
+  creadoEn: string
+  /** Lo que se pide, en una línea corta ("29 sep · 08:00–12:00"). */
+  cuando: string
+  /** Texto libre del colaborador; puede ser largo. */
+  motivo: string | null
+  fechaInicio: string; fechaFin: string
   documentos: { id: string; nombre: string; esImagen: boolean }[]; esCertFinal: boolean
   licenciaDerecho: boolean; licenciaFundamento: string | null
   calculoVacaciones: { dias: number; saldo: number; anticipadas: boolean; diasAnticipados: number; advertencias: string[] } | null
@@ -51,6 +61,9 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
   const [nuevaFin, setNuevaFin] = useState('')
   const [certDe, setCertDe] = useState<Solicitud | null>(null)
   const [imagenAmpliada, setImagenAmpliada] = useState<{ id: string; nombre: string } | null>(null)
+  // Plegadas por defecto: quién, qué y los botones bastan para decidir lo
+  // rutinario; sede, saldo, avisos, soportes y opciones finas salen al tocar.
+  const [abierta, setAbierta] = useState<string | null>(null)
 
   async function resolver(pasoId: string, aprobar: boolean, conFechas = false) {
     setProcesando(pasoId)
@@ -106,31 +119,55 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
 
   return (
     <div className="space-y-3">
-      {solicitudes.map((s) => (
+      {solicitudes.map((s) => {
+        const expandida = abierta === s.id
+        const avisos = (s.calculoVacaciones?.advertencias.length ?? 0) + (s.contrapropuestaRechazada ? 1 : 0)
+        return (
         <Card key={s.id}>
-          <CardContent className="py-4">
-            <div className="flex items-start justify-between gap-3">
+          <CardContent className="py-3">
+            <button
+              type="button"
+              onClick={() => setAbierta(expandida ? null : s.id)}
+              aria-expanded={expandida}
+              className="flex w-full items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Avatar className="size-9 shrink-0">
+                {s.fotoUrl && <AvatarImage src={s.fotoUrl} alt="" />}
+                <AvatarFallback className="text-xs font-semibold text-white" style={{ backgroundColor: colorAvatar(s.colaborador) }}>{s.iniciales}</AvatarFallback>
+              </Avatar>
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-sm font-bold">{s.colaborador}</span>
+                  <Pill tone="muted">{TIPO[s.tipo]}</Pill>
+                  {s.calculoVacaciones?.anticipadas && <Pill tone="warn">Anticipadas</Pill>}
+                  {s.soporteCorregido && <Pill tone="ok">Soporte corregido</Pill>}
+                  {s.contrapropuestaRechazada && <Pill tone="bad">Rechazó las fechas</Pill>}
+                </span>
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                  {s.cuando}{s.motivo ? ` · ${s.motivo}` : ''}
+                </span>
+                <span className="block truncate text-[11px] text-muted-foreground/80">
+                  {s.esPasoJefe ? 'Jefe inmediato' : 'Talento Humano'} · {s.creadoEn}
+                  {s.documentos.length > 0 && ` · ${s.documentos.length} adjunto${s.documentos.length === 1 ? '' : 's'}`}
+                  {avisos > 0 && ` · ${avisos} aviso${avisos === 1 ? '' : 's'}`}
+                </span>
+              </span>
+              <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expandida && 'rotate-180')} />
+            </button>
+
+            {expandida && (
+            <div className="mt-3 space-y-2.5 border-t pt-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium">{s.colaborador}</p>
-                  <Badge variant="outline">{TIPO[s.tipo]}</Badge>
-                  <Badge variant="secondary" className="text-[10px]">{s.esPasoJefe ? 'Jefe inmediato' : 'Talento Humano'}</Badge>
-                  {s.soporteCorregido && (
-                    <Badge className="bg-emerald-500/15 text-[10px] text-emerald-700 dark:text-emerald-400" variant="secondary">
-                      Soporte corregido
-                    </Badge>
-                  )}
-                  {s.calculoVacaciones?.anticipadas && (
-                    <Badge className="bg-amber-500/15 text-[10px] text-amber-700 dark:text-amber-400" variant="secondary">
-                      Anticipadas ({s.calculoVacaciones.diasAnticipados} día{s.calculoVacaciones.diasAnticipados === 1 ? '' : 's'})
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">{s.detalle}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{s.sede} · {s.creadoEn}</p>
+                {s.motivo && (
+                  <p className="text-sm">
+                    <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Motivo · </span>{s.motivo}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">{s.sede} · radicada el {s.creadoEn}</p>
                 {s.calculoVacaciones && (
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Pide {s.calculoVacaciones.dias} día{s.calculoVacaciones.dias === 1 ? '' : 's'} hábiles · saldo disponible: {s.calculoVacaciones.saldo}
+                    {s.calculoVacaciones.anticipadas && ` · ${s.calculoVacaciones.diasAnticipados} anticipado${s.calculoVacaciones.diasAnticipados === 1 ? '' : 's'}`}
                   </p>
                 )}
                 {s.contrapropuestaRechazada && (
@@ -201,8 +238,12 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
                     )}
                   </div>
                 )}
+                {s.tipo === 'PERMISO' && !s.licenciaDerecho && cambioFechas !== s.pasoId && (
+                  <div className="mt-2">{toggleComprobante(s.pasoId)}</div>
+                )}
               </div>
             </div>
+            )}
 
             {/* Formulario de cambio de fechas (solo el jefe inmediato).
                 Permiso: aprueba con otro día de una vez. Vacaciones: envía una
@@ -263,15 +304,20 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
               </div>
             ) : (
               <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                {s.tipo === 'PERMISO' && <div className="mr-auto">{toggleComprobante(s.pasoId)}</div>}
                 <Button size="sm" variant="outline" onClick={() => resolver(s.pasoId, false)} disabled={procesando === s.pasoId}>
                   <X className="size-4" /> Rechazar
                 </Button>
                 {/* Permiso: solo el jefe cambia el día. Vacaciones: cualquier aprobador
                     del paso puede contraproponer fechas (el backend valida quién puede). */}
                 {(s.tipo === 'VACACIONES' || (s.esPasoJefe && s.tipo === 'PERMISO')) && (
-                  <Button size="sm" variant="outline" onClick={() => { setCambioFechas(s.pasoId); setNuevaIni(s.fechaInicio); setNuevaFin(s.fechaFin) }} disabled={procesando === s.pasoId}>
-                    <CalendarClock className="size-4" /> {s.tipo === 'VACACIONES' ? 'Proponer otras fechas' : 'Aprobar con otras fechas'}
+                  <Button
+                    size="sm" variant="outline" disabled={procesando === s.pasoId}
+                    onClick={() => { setCambioFechas(s.pasoId); setNuevaIni(s.fechaInicio); setNuevaFin(s.fechaFin) }}
+                    aria-label={s.tipo === 'VACACIONES' ? 'Proponer otras fechas' : 'Aprobar con otro día'}
+                    title={s.tipo === 'VACACIONES' ? 'Proponer otras fechas' : 'Aprobar con otro día'}
+                  >
+                    {/* En el celular solo el icono: con texto, los tres botones no cabían en una fila. */}
+                    <CalendarClock className="size-4" /> <span className="hidden sm:inline">{s.tipo === 'VACACIONES' ? 'Otras fechas' : 'Otro día'}</span>
                   </Button>
                 )}
                 {s.esCertFinal ? (
@@ -287,7 +333,8 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
             )}
           </CardContent>
         </Card>
-      ))}
+        )
+      })}
 
       {certDe && <DialogCertificacion solicitud={certDe} onClose={() => setCertDe(null)} onDone={() => { setCertDe(null); router.refresh() }} />}
 
