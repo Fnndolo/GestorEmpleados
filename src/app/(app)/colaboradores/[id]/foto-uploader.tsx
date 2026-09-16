@@ -4,14 +4,18 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import { toast } from 'sonner'
-import { Camera, X } from 'lucide-react'
+import { Camera, ImageUp, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { colorAvatar } from '@/lib/etiquetas'
 import { Spinner } from '@/components/ui/spinner'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+
+const CLASE_CAMARA =
+  'absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow ring-2 ring-background'
 
 export function FotoUploader({
   colaboradorId, iniciales, nombreCompleto, fotoUrl, puedeEditar,
@@ -25,6 +29,7 @@ export function FotoUploader({
   const inputRef = useRef<HTMLInputElement>(null)
   const [subiendo, setSubiendo] = useState(false)
   const [version, setVersion] = useState(0)
+  const [confirmarQuitar, setConfirmarQuitar] = useState(false)
 
   async function onSeleccion(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -83,37 +88,38 @@ export function FotoUploader({
       </Avatar>
       {puedeEditar && (
         <>
-          <button
-            onClick={() => inputRef.current?.click()}
-            disabled={subiendo}
-            className="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow ring-2 ring-background"
-            aria-label="Cambiar foto"
-          >
-            {subiendo ? <Spinner className="size-3.5" /> : <Camera className="size-3.5" />}
-          </button>
-          {fotoUrl && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <button
-                  disabled={subiendo}
-                  className="absolute -top-1 -right-1 flex size-6 items-center justify-center rounded-full bg-destructive text-white shadow ring-2 ring-background"
-                  aria-label="Eliminar foto"
-                >
-                  <X className="size-3.5" />
+          {/* Un solo control, la cámara. Sin foto abre el selector directo; con
+              foto despliega Cambiar / Quitar: la X roja encima de la cara se
+              veía como un error y quedaba a un toque de borrar sin querer. */}
+          {fotoUrl ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button disabled={subiendo} className={CLASE_CAMARA} aria-label="Opciones de la foto">
+                  {subiendo ? <Spinner className="size-3.5" /> : <Camera className="size-3.5" />}
                 </button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Eliminar foto de perfil</AlertDialogTitle>
-                  <AlertDialogDescription>Se eliminará la foto del colaborador. Esta acción no se puede deshacer.</AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={eliminar} className="bg-destructive text-white hover:bg-destructive/90">Eliminar</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="bottom">
+                <DropdownMenuItem onSelect={() => inputRef.current?.click()}><ImageUp className="size-4" /> Cambiar foto</DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" onSelect={() => setConfirmarQuitar(true)}><Trash2 className="size-4" /> Quitar foto</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <button onClick={() => inputRef.current?.click()} disabled={subiendo} className={CLASE_CAMARA} aria-label="Cambiar foto">
+              {subiendo ? <Spinner className="size-3.5" /> : <Camera className="size-3.5" />}
+            </button>
           )}
+          <AlertDialog open={confirmarQuitar} onOpenChange={setConfirmarQuitar}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Quitar la foto de perfil</AlertDialogTitle>
+                <AlertDialogDescription>Volverán a verse las iniciales. Esta acción no se puede deshacer.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={eliminar} className="bg-destructive text-white hover:bg-destructive/90">Quitar</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           {/* Sin `capture`: en el celular forzaba la cámara frontal y no dejaba elegir una foto de la galería. */}
           <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onSeleccion} />
         </>

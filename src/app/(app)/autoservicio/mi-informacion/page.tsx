@@ -3,7 +3,6 @@ import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import { formatFechaISO } from '@/lib/fechas'
 import type { MiFichaInput } from '@/lib/validaciones/colaborador'
@@ -72,15 +71,12 @@ export default async function MiInformacionPage() {
 
   return (
     <div className="max-w-5xl">
-      <Encabezado
-        titulo="Mi información"
-        descripcion="Completa y mantén al día tus datos personales, de contacto, seguridad social y bancarios. Talento Humano los revisa."
-        acciones={
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/autoservicio"><ArrowLeft className="size-4" /> Volver</Link>
-          </Button>
-        }
-      />
+      {/* Regreso arriba y sin párrafo: en el celular el texto explicativo
+          empujaba la foto y el formulario fuera de la primera pantalla. */}
+      <Link href="/autoservicio" className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-4" /> Volver
+      </Link>
+      <Encabezado enLinea titulo="Mi información" />
       {/* La foto la cambia cada persona: es lo primero que ve el equipo en el
           menú y en las listas. */}
       <Card className="mb-4">
@@ -94,16 +90,13 @@ export default async function MiInformacionPage() {
           />
           <div className="min-w-0">
             <p className="text-sm font-bold">Tu foto de perfil</p>
-            <p className="text-xs text-muted-foreground">
-              Toca la cámara para cambiarla. Se recomienda una foto de frente, con fondo claro.
-            </p>
+            <p className="text-xs text-muted-foreground">Toca la cámara para cambiarla o quitarla.</p>
           </div>
         </CardContent>
       </Card>
-      <div className="mb-4 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-        Estos son los datos que puedes actualizar tú. Tu identidad (documento, nombre), tu correo de acceso
-        y tus datos laborales (vínculo, cargo, salario) los gestiona Talento Humano.
-      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Documento, nombre, correo y datos laborales los gestiona Talento Humano.
+      </p>
       <MiInformacionForm catalogos={catalogos} valores={valores} />
     </div>
   )
