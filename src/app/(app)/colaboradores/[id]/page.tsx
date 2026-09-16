@@ -226,6 +226,13 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
                 </Button>
               </>
             )}
+            {/* En su propia ficha, sin permiso de editar, el lápiz lleva a
+                Mi información: es donde cada persona actualiza sus datos. */}
+            {!puedeEditar && esPropia && (
+              <Button asChild size="sm">
+                <Link href="/autoservicio/mi-informacion" aria-label="Editar mi información"><Pencil className="size-4" /> <span className="hidden sm:inline">Editar</span></Link>
+              </Button>
+            )}
           </div>
         }
       />
