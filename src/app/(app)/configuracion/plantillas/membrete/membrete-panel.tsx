@@ -17,7 +17,8 @@ const MAX_BYTES = 2 * 1024 * 1024
 const MUESTRAS = [
   { tipo: 'contrato-laboral', nombre: 'Contrato de trabajo' },
   { tipo: 'contrato-ops', nombre: 'Contrato de prestación de servicios' },
-  { tipo: 'autorizacion', nombre: 'Autorización de datos' },
+  { tipo: 'autorizacion', nombre: 'Autorización de datos (OPS)' },
+  { tipo: 'autorizacion-laboral', nombre: 'Autorización de datos (laboral)' },
   { tipo: 'acuerdo', nombre: 'Acuerdo de evaluación previa' },
 ] as const
 

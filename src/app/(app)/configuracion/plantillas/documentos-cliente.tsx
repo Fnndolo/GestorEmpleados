@@ -16,17 +16,22 @@ import { EditorAutorizacion } from './autorizacion-datos/editor'
 import { PlantillasCliente } from './cuentas-cobro/plantillas-cliente'
 import type { Editor } from './editores'
 
+type Autorizacion = {
+  plantilla: PlantillaAutorizacion
+  personalizada: boolean
+  estado: string
+  empresa: DatosAutorizacion['empresa']
+}
+
 type Props = {
   /** Editor que debe abrirse de entrada (`?abrir=…`, para enlaces viejos y avisos). */
   abrirInicial: Editor | null
   puedeEditar: boolean
   membrete: { tieneMembrete: boolean; pie: string }
-  autorizacion: {
-    plantilla: PlantillaAutorizacion
-    personalizada: boolean
-    estado: string
-    empresa: DatosAutorizacion['empresa']
-  }
+  /** Autorización de datos del contratista OPS. */
+  autorizacion: Autorizacion
+  /** Autorización de datos del trabajador con contrato laboral. */
+  autorizacionLaboral: Autorizacion
   cuentasCobro: {
     plantillas: React.ComponentProps<typeof PlantillasCliente>['plantillas']
     empresa: { razonSocial: string; nit: string }
@@ -41,9 +46,14 @@ const FILAS: { clave: Editor; icono: LucideIcon; titulo: string; desc: string; m
     muestra: null,
   },
   {
-    clave: 'autorizacion', icono: ScrollText, titulo: 'Autorización de tratamiento de datos',
-    desc: 'Se genera con cada contrato (laboral y OPS) y la firma la persona vinculada. Texto editable con vista previa al instante.',
+    clave: 'autorizacion', icono: ScrollText, titulo: 'Autorización de datos · Contrato OPS',
+    desc: 'Se genera con cada contrato de prestación de servicios y la firma el contratista. Texto editable con vista previa al instante.',
     muestra: '/api/configuracion/membrete/muestra?tipo=autorizacion',
+  },
+  {
+    clave: 'autorizacion-laboral', icono: ScrollText, titulo: 'Autorización de datos · Contrato laboral',
+    desc: 'Se genera con cada contrato de trabajo y la firma el trabajador: monitoreo de productividad, huella, videovigilancia e imagen promocional.',
+    muestra: '/api/configuracion/membrete/muestra?tipo=autorizacion-laboral',
   },
   {
     clave: 'cuentas-cobro', icono: Receipt, titulo: 'Cuenta de cobro',
@@ -56,7 +66,7 @@ const FILAS: { clave: Editor; icono: LucideIcon; titulo: string; desc: string; m
  * Lista de los documentos que la aplicación genera sola. Cada "Editar" abre su
  * editor en una ventana emergente centrada: no hay pestañas ni páginas aparte.
  */
-export function DocumentosPlantillas({ abrirInicial, puedeEditar, membrete, autorizacion, cuentasCobro, plantillasContrato }: Props) {
+export function DocumentosPlantillas({ abrirInicial, puedeEditar, membrete, autorizacion, autorizacionLaboral, cuentasCobro, plantillasContrato }: Props) {
   const [abierto, setAbierto] = useState<Editor | null>(abrirInicial)
 
   function cerrar() {
@@ -71,6 +81,7 @@ export function DocumentosPlantillas({ abrirInicial, puedeEditar, membrete, auto
   const estado: Record<Editor, string> = {
     membrete: membrete.tieneMembrete ? 'Propio' : 'De la aplicación',
     autorizacion: autorizacion.estado,
+    'autorizacion-laboral': autorizacionLaboral.estado,
     'cuentas-cobro': `${n} plantilla${n === 1 ? '' : 's'}`,
   }
 
@@ -148,20 +159,40 @@ export function DocumentosPlantillas({ abrirInicial, puedeEditar, membrete, auto
         </DialogContent>
       </Dialog>
 
-      {/* Autorización de datos */}
+      {/* Autorización de datos · OPS */}
       <Dialog open={abierto === 'autorizacion'} onOpenChange={(o) => !o && cerrar()}>
         <DialogContent onOpenAutoFocus={enfocarDialogo} className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl">
           <DialogHeader>
-            <DialogTitle>Autorización de tratamiento de datos</DialogTitle>
+            <DialogTitle>Autorización de datos · Contrato OPS</DialogTitle>
             <DialogDescription>
-              La firma cada persona al vincularse (Ley 1581 de 2012) y se genera junto con su contrato. Los cambios aplican desde el siguiente documento que se genere.
+              La firma el contratista al vincularse (Ley 1581 de 2012) y se genera junto con su contrato de prestación de servicios. Los cambios aplican desde el siguiente documento que se genere.
             </DialogDescription>
           </DialogHeader>
           <EditorAutorizacion
+            vinculo="OPS"
             plantilla={autorizacion.plantilla}
             personalizada={autorizacion.personalizada}
             puedeEditar={puedeEditar}
             empresa={autorizacion.empresa}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Autorización de datos · Laboral */}
+      <Dialog open={abierto === 'autorizacion-laboral'} onOpenChange={(o) => !o && cerrar()}>
+        <DialogContent onOpenAutoFocus={enfocarDialogo} className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl">
+          <DialogHeader>
+            <DialogTitle>Autorización de datos · Contrato laboral</DialogTitle>
+            <DialogDescription>
+              La firma el trabajador al vincularse (Ley 1581 de 2012) y se genera junto con su contrato de trabajo. Los cambios aplican desde el siguiente documento que se genere.
+            </DialogDescription>
+          </DialogHeader>
+          <EditorAutorizacion
+            vinculo="LABORAL"
+            plantilla={autorizacionLaboral.plantilla}
+            personalizada={autorizacionLaboral.personalizada}
+            puedeEditar={puedeEditar}
+            empresa={autorizacionLaboral.empresa}
           />
         </DialogContent>
       </Dialog>

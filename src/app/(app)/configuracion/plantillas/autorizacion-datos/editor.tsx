@@ -14,7 +14,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import {
-  AUTORIZACION_POR_DEFECTO, VARIABLES_AUTORIZACION, type DatosAutorizacion, type PlantillaAutorizacion,
+  autorizacionPorDefecto, VARIABLES_AUTORIZACION, type DatosAutorizacion, type PlantillaAutorizacion, type VinculoAutorizacion,
 } from '@/lib/plantillas-documento/autorizacion-datos'
 import { PreviewAutorizacion } from '@/components/plantillas/preview-autorizacion'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
@@ -29,8 +29,10 @@ const MUESTRA = {
 }
 
 export function EditorAutorizacion({
-  plantilla, personalizada, puedeEditar, empresa,
+  vinculo, plantilla, personalizada, puedeEditar, empresa,
 }: {
+  /** Qué autorización se edita: cada vínculo tiene la suya. */
+  vinculo: VinculoAutorizacion
   plantilla: PlantillaAutorizacion
   personalizada: boolean
   puedeEditar: boolean
@@ -39,7 +41,6 @@ export function EditorAutorizacion({
   const router = useRouter()
   const [titulo, setTitulo] = useState(plantilla.titulo)
   const [contenido, setContenido] = useState(plantilla.contenido)
-  const [vinculo, setVinculo] = useState<'OPS' | 'LABORAL'>('OPS')
   const [genero, setGenero] = useState<'FEMENINO' | 'MASCULINO'>('FEMENINO')
   const [guardando, setGuardando] = useState(false)
   // Móvil: alterna entre editar y ver el documento (en xl se muestran ambos).
@@ -65,7 +66,7 @@ export function EditorAutorizacion({
 
   async function guardar() {
     setGuardando(true)
-    const res = await guardarPlantillaAutorizacion({ titulo, contenido })
+    const res = await guardarPlantillaAutorizacion({ vinculo, titulo, contenido })
     setGuardando(false)
     if (res.ok) {
       toast.success('Texto guardado. Aplica desde el próximo documento que se genere.')
@@ -76,11 +77,12 @@ export function EditorAutorizacion({
   async function restaurar() {
     if (!confirm('¿Volver al texto que trae la aplicación? Se pierde el texto personalizado guardado.')) return
     setGuardando(true)
-    const res = await restaurarPlantillaAutorizacion({})
+    const res = await restaurarPlantillaAutorizacion({ vinculo })
     setGuardando(false)
     if (res.ok) {
-      setTitulo(AUTORIZACION_POR_DEFECTO.titulo)
-      setContenido(AUTORIZACION_POR_DEFECTO.contenido)
+      const defecto = autorizacionPorDefecto(vinculo)
+      setTitulo(defecto.titulo)
+      setContenido(defecto.contenido)
       toast.success('Se restauró el texto de la aplicación.')
       router.refresh()
     } else toast.error(res.error)
@@ -127,6 +129,8 @@ export function EditorAutorizacion({
             />
             <p className="text-xs text-muted-foreground">
               Cada línea es un párrafo. Para resaltar, escribe <code>**negrita**</code> o <code>__subrayado__</code>.
+              Para listas, empieza la línea con <code>- </code> (viñeta), <code>✓ </code> (casilla) o <code>1. </code> (numeración);
+              con <code>~ </code> la línea va en letra pequeña debajo de la firma.
               Los datos de la persona y de la empresa se llenan solos con las variables; el bloque de firma lo agrega la app.
             </p>
           </div>
@@ -171,13 +175,6 @@ export function EditorAutorizacion({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Vista previa con datos de muestra</span>
-            <Select value={vinculo} onValueChange={(v) => setVinculo(v as 'OPS' | 'LABORAL')}>
-              <SelectTrigger size="sm" className="h-7 w-auto text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="OPS">Contratista OPS</SelectItem>
-                <SelectItem value="LABORAL">Trabajador (laboral)</SelectItem>
-              </SelectContent>
-            </Select>
             <Select value={genero} onValueChange={(v) => setGenero(v as 'FEMENINO' | 'MASCULINO')}>
               <SelectTrigger size="sm" className="h-7 w-auto text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -188,8 +185,8 @@ export function EditorAutorizacion({
           </div>
           {/* El PDF real (texto guardado + datos de muestra) se abre aquí mismo, en el visor embebido. */}
           <VisorPdf
-            url="/api/configuracion/membrete/muestra?tipo=autorizacion"
-            titulo="Muestra · Autorización de tratamiento de datos"
+            url={`/api/configuracion/membrete/muestra?tipo=${vinculo === 'LABORAL' ? 'autorizacion-laboral' : 'autorizacion'}`}
+            titulo={`Muestra · Autorización de datos · ${vinculo === 'LABORAL' ? 'Contrato laboral' : 'Contrato OPS'}`}
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
           >
             <FileText className="size-4" /> PDF de muestra{cambiado ? ' (texto guardado)' : ''}

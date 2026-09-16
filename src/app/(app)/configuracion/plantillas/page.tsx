@@ -3,7 +3,6 @@ import { prisma } from '@/lib/db'
 import { formatFechaCorta } from '@/lib/fechas'
 import { Encabezado } from '@/components/shell/encabezado'
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
-import { CATEGORIA_AUTORIZACION } from '@/lib/plantillas-documento/autorizacion-datos'
 import { plantillaAutorizacionDatos } from '@/server/plantillas-documento'
 import { DocumentosPlantillas } from './documentos-cliente'
 import { EDITORES, type Editor } from './editores'
@@ -20,17 +19,27 @@ export default async function PlantillasPage({ searchParams }: { searchParams: P
   const puedeEditar = tienePermiso(usuario, 'configuracion', 'EDITAR')
   const { abrir } = await searchParams
 
-  const [empresa, autorizacion, autorizacionFila, plantillasCC, plantillasContrato] = await Promise.all([
+  const [empresa, autorizacionOps, autorizacionLaboral, plantillasCC, plantillasContrato] = await Promise.all([
     prisma.configuracionEmpresa.findFirst({
       select: { membreteFondoPath: true, emailContacto: true, nit: true, sitioWeb: true, razonSocial: true, direccion: true },
     }),
-    plantillaAutorizacionDatos(),
-    prisma.plantillaDocumento.findFirst({ where: { categoria: CATEGORIA_AUTORIZACION, activa: true }, select: { actualizadoEn: true } }),
+    plantillaAutorizacionDatos('OPS'),
+    plantillaAutorizacionDatos('LABORAL'),
     prisma.plantillaCuentaCobro.findMany({ orderBy: { creadoEn: 'desc' } }),
     GENERAR_CONTRATOS_DESDE_PLANTILLA ? prisma.plantillaContrato.count({ where: { activa: true } }) : Promise.resolve(0),
   ])
 
   const abrirInicial = EDITORES.includes(abrir as Editor) ? (abrir as Editor) : null
+
+  // Mismo armado que el PDF real: ciudad de la sede + dirección de la empresa.
+  const empresaAutorizacion = {
+    razonSocial: empresa?.razonSocial ?? 'Razón social sin configurar',
+    nit: empresa?.nit ?? '—',
+    domicilio: ['Ciudad de muestra', empresa?.direccion].filter(Boolean).join(', '),
+    emailContacto: empresa?.emailContacto ?? null,
+  }
+  const estadoDe = (a: { personalizada: boolean; actualizadoEn: Date | null }) =>
+    a.actualizadoEn ? `Personalizado · ${formatFechaCorta(a.actualizadoEn)}` : 'Texto de la aplicación'
 
   return (
     <div className="max-w-4xl">
@@ -46,16 +55,16 @@ export default async function PlantillasPage({ searchParams }: { searchParams: P
           pie: [empresa?.emailContacto, empresa?.nit ? `NIT ${empresa.nit}` : null, empresa?.sitioWeb].filter(Boolean).join('     ·     '),
         }}
         autorizacion={{
-          plantilla: { titulo: autorizacion.titulo, contenido: autorizacion.contenido },
-          personalizada: autorizacion.personalizada,
-          estado: autorizacionFila ? `Personalizado · ${formatFechaCorta(autorizacionFila.actualizadoEn)}` : 'Texto de la aplicación',
-          empresa: {
-            razonSocial: empresa?.razonSocial ?? 'Razón social sin configurar',
-            nit: empresa?.nit ?? '—',
-            // Mismo armado que el PDF real: ciudad de la sede + dirección de la empresa.
-            domicilio: ['Ciudad de muestra', empresa?.direccion].filter(Boolean).join(', '),
-            emailContacto: empresa?.emailContacto ?? null,
-          },
+          plantilla: { titulo: autorizacionOps.titulo, contenido: autorizacionOps.contenido },
+          personalizada: autorizacionOps.personalizada,
+          estado: estadoDe(autorizacionOps),
+          empresa: empresaAutorizacion,
+        }}
+        autorizacionLaboral={{
+          plantilla: { titulo: autorizacionLaboral.titulo, contenido: autorizacionLaboral.contenido },
+          personalizada: autorizacionLaboral.personalizada,
+          estado: estadoDe(autorizacionLaboral),
+          empresa: empresaAutorizacion,
         }}
         cuentasCobro={{
           plantillas: plantillasCC.map((p) => ({

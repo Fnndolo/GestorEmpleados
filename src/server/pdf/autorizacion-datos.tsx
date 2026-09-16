@@ -1,11 +1,11 @@
-import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, Svg, Path, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
 import { estilos } from './estilos'
 import { MembreteFondo, type DatosEmpresa } from './membrete'
 import { fondoMembrete } from './fondo-membrete'
 import { registrarBookman } from './fuentes'
 import { plantillaAutorizacionDatos } from '@/server/plantillas-documento'
 import {
-  resolverAutorizacion, rolFirmaAutorizacion, type Parrafo, type PlantillaAutorizacion,
+  resolverAutorizacion, rolFirmaAutorizacion, type Parrafo, type PlantillaAutorizacion, type Tramo,
 } from '@/lib/plantillas-documento/autorizacion-datos'
 
 /**
@@ -13,10 +13,11 @@ import {
  * 2012). Se genera junto con el contrato (OPS o laboral) y SOLO la firma la
  * persona vinculada.
  *
- * El TEXTO ya no vive aquí: lo edita la empresa en Ajustes → Plantillas de
- * documentos (`PlantillaDocumento`, categoría AUTORIZACION_DATOS) y, si nadie lo
- * ha tocado, se usa el de fábrica de `src/lib/plantillas-documento/autorizacion-datos.ts`.
- * Este archivo solo pone la hoja: membrete, fecha, título, párrafos y firma.
+ * El TEXTO ya no vive aquí: hay uno por vínculo (OPS y laboral) y lo edita la
+ * empresa en Ajustes → Plantillas de documentos (`PlantillaDocumento`, categorías
+ * AUTORIZACION_DATOS y AUTORIZACION_DATOS_LABORAL); si nadie lo ha tocado, se usa
+ * el de fábrica de `src/lib/plantillas-documento/autorizacion-datos.ts`. Este
+ * archivo solo pone la hoja: membrete, fecha, título, párrafos, firma y nota.
  */
 
 export type DatosAutorizacionPdf = {
@@ -41,7 +42,16 @@ const s = StyleSheet.create({
   titulo: { fontFamily: 'Bookman Old Style', fontWeight: 'bold', fontSize: 11.5, textAlign: 'center', color: '#0f172a' },
   subtitulo: { fontSize: 10, textAlign: 'center', marginBottom: 12 },
   parrafo: { marginBottom: 10, textAlign: 'justify' },
+  // Ítem de lista: marcador a la izquierda y texto con sangría francesa, más
+  // junto que los párrafos. La vista previa usa estos mismos valores.
+  item: { flexDirection: 'row', marginBottom: 6, paddingLeft: 18 },
+  itemMarca: { width: 18 },
+  // Bookman no trae el glifo ✓: la casilla se dibuja como vector, centrada en la primera línea.
+  itemCheck: { width: 18, paddingTop: 3.5 },
+  itemTexto: { flex: 1, textAlign: 'justify' },
   subrayado: { textDecoration: 'underline' },
+  // Nota bajo la firma (Ley 1581): letra pequeña, gris y centrada.
+  nota: { marginTop: 24, fontSize: 8, color: '#64748b', textAlign: 'center' },
   firmaBloque: { marginTop: 16 },
   // La imagen ocupa 44pt netos (56 − 12), igual que el espacio en blanco sin firma.
   firmaImg: { width: 160, height: 56, objectFit: 'contain', alignSelf: 'flex-start', marginBottom: -12 },
@@ -50,12 +60,34 @@ const s = StyleSheet.create({
   firmaFecha: { fontSize: 7.5, color: '#64748b', marginTop: 2 },
 })
 
+function Marcador({ vineta }: { vineta: string }) {
+  if (vineta !== '✓') return <Text style={s.itemMarca}>{vineta}</Text>
+  return (
+    <View style={s.itemCheck}>
+      <Svg width={9} height={9} viewBox="0 0 24 24">
+        <Path d="M20 6 9 17l-5-5" stroke="#0f172a" strokeWidth={3.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      </Svg>
+    </View>
+  )
+}
+
+function Tramos({ tramos }: { tramos: Tramo[] }) {
+  return (
+    <>
+      {tramos.map((t, j) => (
+        <Text key={j} style={[t.negrita ? s.negrita : {}, t.subrayado ? s.subrayado : {}]}>{t.texto}</Text>
+      ))}
+    </>
+  )
+}
+
 function DocumentoAutorizacion({
-  d, titulo, parrafos, firmaImg, firmaFecha, fondo,
+  d, titulo, parrafos, notas, firmaImg, firmaFecha, fondo,
 }: {
   d: DatosAutorizacionPdf
   titulo: string
   parrafos: Parrafo[]
+  notas: Tramo[][]
   firmaImg?: string | null
   firmaFecha?: string | null
   fondo?: string
@@ -70,13 +102,16 @@ function DocumentoAutorizacion({
         <Text style={s.titulo}>{titulo}</Text>
         <Text style={s.subtitulo}>{d.empresa.razonSocial} - NIT No. {d.empresa.nit}</Text>
 
-        {parrafos.map((p, i) => (
-          <Text key={i} style={s.parrafo}>
-            {p.map((t, j) => (
-              <Text key={j} style={[t.negrita ? s.negrita : {}, t.subrayado ? s.subrayado : {}]}>{t.texto}</Text>
-            ))}
-          </Text>
-        ))}
+        {parrafos.map((p, i) =>
+          p.vineta ? (
+            <View key={i} style={s.item}>
+              <Marcador vineta={p.vineta} />
+              <Text style={s.itemTexto}><Tramos tramos={p.tramos} /></Text>
+            </View>
+          ) : (
+            <Text key={i} style={s.parrafo}><Tramos tramos={p.tramos} /></Text>
+          ),
+        )}
 
         <View style={s.firmaBloque} wrap={false}>
           {firmaImg ? <Image src={firmaImg} style={s.firmaImg} /> : <View style={s.firmaEspacio} />}
@@ -87,6 +122,10 @@ function DocumentoAutorizacion({
             {firmaFecha ? <Text style={s.firmaFecha}>Firmado electrónicamente el {firmaFecha}</Text> : null}
           </View>
         </View>
+
+        {notas.map((n, i) => (
+          <Text key={i} style={s.nota}><Tramos tramos={n} /></Text>
+        ))}
       </Page>
     </Document>
   )
@@ -107,7 +146,7 @@ export async function renderAutorizacionDatos(
   // indefinido y se usa el de fábrica, que ya trae el pie impreso.
   const { src, propio } = await fondoMembrete()
   const fondo = propio ? src : undefined
-  const texto = plantilla ?? (await plantillaAutorizacionDatos())
+  const texto = plantilla ?? (await plantillaAutorizacionDatos(d.vinculo ?? 'OPS'))
   const r = resolverAutorizacion(texto, {
     ciudadFecha: d.ciudadFecha,
     nombre: d.contratistaNombre,
@@ -118,6 +157,6 @@ export async function renderAutorizacionDatos(
     empresa: { razonSocial: d.empresa.razonSocial, nit: d.empresa.nit, domicilio: d.empresa.domicilio, emailContacto: d.empresa.emailContacto },
   })
   return renderToBuffer(
-    <DocumentoAutorizacion d={d} titulo={r.titulo} parrafos={r.parrafos} firmaImg={firmaImg} firmaFecha={firmaFecha} fondo={fondo} />,
+    <DocumentoAutorizacion d={d} titulo={r.titulo} parrafos={r.parrafos} notas={r.notas} firmaImg={firmaImg} firmaFecha={firmaFecha} fondo={fondo} />,
   )
 }

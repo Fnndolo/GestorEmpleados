@@ -19,14 +19,15 @@ import { CUERPO_DEFECTO_CUENTA_COBRO, MUESTRA_CUENTA_COBRO } from '@/lib/plantil
  * el membrete y hay que verlos en su sitio.
  */
 
-export const TIPOS_MUESTRA = ['acuerdo', 'contrato-ops', 'contrato-laboral', 'autorizacion'] as const
+export const TIPOS_MUESTRA = ['acuerdo', 'contrato-ops', 'contrato-laboral', 'autorizacion', 'autorizacion-laboral'] as const
 export type TipoMuestra = (typeof TIPOS_MUESTRA)[number]
 
 export const NOMBRE_MUESTRA: Record<TipoMuestra, string> = {
   acuerdo: 'Acuerdo de evaluación previa',
   'contrato-ops': 'Contrato de prestación de servicios',
   'contrato-laboral': 'Contrato de trabajo',
-  autorizacion: 'Autorización de tratamiento de datos',
+  autorizacion: 'Autorización de datos · Contrato OPS',
+  'autorizacion-laboral': 'Autorización de datos · Contrato laboral',
 }
 
 const ASPIRANTE = 'NOMBRE DE MUESTRA APELLIDO APELLIDO'
@@ -100,7 +101,7 @@ export async function renderMuestra(tipo: TipoMuestra): Promise<Buffer> {
     })
   }
 
-  if (tipo === 'autorizacion') {
+  if (tipo === 'autorizacion' || tipo === 'autorizacion-laboral') {
     // Con la línea "Firmado electrónicamente…" para que la muestra ocupe lo mismo
     // que el documento firmado, que es el que termina en el expediente.
     return renderAutorizacionDatos(
@@ -110,6 +111,7 @@ export async function renderMuestra(tipo: TipoMuestra): Promise<Buffer> {
         contratistaCc: DOCUMENTO,
         cargo: CARGO,
         genero: null,
+        vinculo: tipo === 'autorizacion-laboral' ? 'LABORAL' : 'OPS',
         empresa,
       },
       null,

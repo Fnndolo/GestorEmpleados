@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { HojaCarta } from './hoja-carta'
 import {
-  resolverAutorizacion, rolFirmaAutorizacion, type DatosAutorizacion, type PlantillaAutorizacion,
+  resolverAutorizacion, rolFirmaAutorizacion, type DatosAutorizacion, type PlantillaAutorizacion, type Tramo,
 } from '@/lib/plantillas-documento/autorizacion-datos'
 import { paginar, type BloqueMedido, type Trozo } from '@/lib/plantillas-documento/paginar'
 
@@ -31,9 +31,10 @@ const PX_A_PT = 0.75
 const LINEA_TEXTO = 10.5 * 1.5
 const LINEA_TITULO = 11.5 * 1.5
 const LINEA_SUBTITULO = 10 * 1.5
+const LINEA_NOTA = 8 * 1.5
 
 /** Mismos valores que el StyleSheet del PDF. */
-const M = { fecha: 12, subtitulo: 12, parrafo: 10, firmaArriba: 16, firmaEspacio: 44 }
+const M = { fecha: 12, subtitulo: 12, parrafo: 10, item: 6, itemSangria: 18, itemMarca: 18, firmaArriba: 16, firmaEspacio: 44, notaArriba: 24 }
 
 const ESTILO_TEXTO: React.CSSProperties = {
   fontFamily: "'Bookman Preview', 'Bookman Old Style', Georgia, serif",
@@ -49,6 +50,18 @@ type Bloque = {
   margenAbajo: number
   interlineado: number
   divisible: boolean
+}
+
+function Tramos({ tramos }: { tramos: Tramo[] }) {
+  return (
+    <>
+      {tramos.map((t, j) => (
+        <span key={j} style={{ fontWeight: t.negrita ? 'bold' : undefined, textDecoration: t.subrayado ? 'underline' : undefined }}>
+          {t.texto}
+        </span>
+      ))}
+    </>
+  )
 }
 
 function bloquesDe(plantilla: PlantillaAutorizacion, datos: DatosAutorizacion): Bloque[] {
@@ -67,16 +80,15 @@ function bloquesDe(plantilla: PlantillaAutorizacion, datos: DatosAutorizacion): 
     },
     ...r.parrafos.map((p, i): Bloque => ({
       key: `p${i}`,
-      nodo: (
-        <p style={{ margin: 0, textAlign: 'justify' }}>
-          {p.map((t, j) => (
-            <span key={j} style={{ fontWeight: t.negrita ? 'bold' : undefined, textDecoration: t.subrayado ? 'underline' : undefined }}>
-              {t.texto}
-            </span>
-          ))}
-        </p>
+      nodo: p.vineta ? (
+        <div style={{ display: 'flex', paddingLeft: `${M.itemSangria}pt` }}>
+          <span style={{ width: `${M.itemMarca}pt`, flexShrink: 0 }}>{p.vineta}</span>
+          <p style={{ margin: 0, flex: 1, textAlign: 'justify' }}><Tramos tramos={p.tramos} /></p>
+        </div>
+      ) : (
+        <p style={{ margin: 0, textAlign: 'justify' }}><Tramos tramos={p.tramos} /></p>
       ),
-      margenArriba: 0, margenAbajo: M.parrafo, interlineado: LINEA_TEXTO, divisible: true,
+      margenArriba: 0, margenAbajo: p.vineta ? M.item : M.parrafo, interlineado: LINEA_TEXTO, divisible: true,
     })),
     {
       key: 'firma',
@@ -98,6 +110,13 @@ function bloquesDe(plantilla: PlantillaAutorizacion, datos: DatosAutorizacion): 
       ),
       margenArriba: M.firmaArriba, margenAbajo: 0, interlineado: LINEA_TEXTO, divisible: false,
     },
+    ...r.notas.map((n, i): Bloque => ({
+      key: `n${i}`,
+      nodo: (
+        <p style={{ margin: 0, fontSize: '8pt', color: '#64748b', textAlign: 'center' }}><Tramos tramos={n} /></p>
+      ),
+      margenArriba: M.notaArriba, margenAbajo: 0, interlineado: LINEA_NOTA, divisible: false,
+    })),
   ]
 }
 
