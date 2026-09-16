@@ -3,7 +3,7 @@
 import { useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Paperclip, Scale, Info, TreePalm, TriangleAlert, CalendarDays, X } from 'lucide-react'
+import { Paperclip, Scale, Info, CalendarRange, TriangleAlert, CalendarDays, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -219,7 +219,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
                 </div>
 
                 <div className="flex items-center gap-2 rounded-lg border p-3 text-xs">
-                  <TreePalm className="size-4 shrink-0 text-emerald-600" />
+                  <CalendarRange className="size-4 shrink-0" />
                   <p>
                     Tienes <strong>{saldoVac} día{saldoVac === 1 ? '' : 's'} hábiles</strong> de vacaciones disponibles.
                     {diasVac > 0 && <> Estás pidiendo <strong>{diasVac} día{diasVac === 1 ? '' : 's'} hábiles</strong>.</>}

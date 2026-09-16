@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ChevronDown, Download, TreePalm, Clock, Stethoscope, File, FileCheck, TriangleAlert, Check, X, CircleDashed, CalendarClock, Paperclip, FileUp } from 'lucide-react'
+import { ChevronDown, Download, CalendarRange, Clock, HeartPulse, FileBadge, FileCheck, TriangleAlert, Check, X, CircleDashed, CalendarClock, Paperclip, FileUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
@@ -24,14 +24,14 @@ const TONO_ESTADO: Record<string, PillTone> = {
   CANCELADA: 'muted', REGISTRADA: 'muted',
 }
 
-/** Ícono y color por tipo de solicitud — mismo lenguaje visual que los tiles. */
-const ICONO_SOL: Record<string, { i: React.ElementType; c: string }> = {
-  VACACIONES: { i: TreePalm, c: 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400' },
-  PERMISO: { i: Clock, c: 'bg-sky-500/12 text-sky-600 dark:text-sky-400' },
-  INCAPACIDAD: { i: Stethoscope, c: 'bg-rose-500/12 text-rose-600 dark:text-rose-400' },
-  LICENCIA: { i: File, c: 'bg-violet-500/12 text-violet-600 dark:text-violet-400' },
-  CERTIFICACION_LABORAL: { i: File, c: 'bg-teal-500/12 text-teal-600 dark:text-teal-400' },
-  OTRA: { i: FileCheck, c: 'bg-foreground/8 text-foreground' },
+/** Ícono por tipo de solicitud: los mismos de las tarjetas de trámites, en tinta. El color lo lleva solo el estado. */
+const ICONO_SOL: Record<string, React.ElementType> = {
+  VACACIONES: CalendarRange,
+  PERMISO: Clock,
+  INCAPACIDAD: HeartPulse,
+  LICENCIA: CalendarClock,
+  CERTIFICACION_LABORAL: FileBadge,
+  OTRA: FileCheck,
 }
 
 export type PasoItem = {
@@ -181,7 +181,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
         }}
       />
       {solicitudes.map((s) => {
-        const { i: Icono, c } = ICONO_SOL[s.tipo] ?? ICONO_SOL.OTRA
+        const Icono = ICONO_SOL[s.tipo] ?? ICONO_SOL.OTRA
         const expandida = abierta === s.id
         return (
           <div key={s.id}>
@@ -191,7 +191,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
               aria-expanded={expandida}
               className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             >
-              <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', c)}>
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
                 <Icono className="size-4" />
               </span>
               <div className="min-w-0 flex-1">
@@ -208,7 +208,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
             {s.estado === 'DEVUELTA' && (
               <div className="mx-3 mb-3 space-y-2.5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
                 <div className="flex items-start gap-2">
-                  <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <TriangleAlert className="mt-0.5 size-4 shrink-0" />
                   <div>
                     <p className="text-[13px] font-medium">El soporte no pudo validarse</p>
                     <p className="mt-0.5 text-muted-foreground">
@@ -240,13 +240,13 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
               <div
                 className={cn(
                   'mx-3 mb-3 space-y-2.5 rounded-lg border p-3 text-xs',
-                  s.comprobante.situacion === 'VENCIDO' ? 'border-rose-500/40 bg-rose-500/5' : 'border-sky-500/40 bg-sky-500/5',
+                  s.comprobante.situacion === 'VENCIDO' ? 'border-rose-500/40 bg-rose-500/5' : 'border-foreground/20 bg-muted/40',
                 )}
               >
                 <div className="flex items-start gap-2">
                   {s.comprobante.situacion === 'VENCIDO'
                     ? <TriangleAlert className="mt-0.5 size-4 shrink-0 text-rose-600 dark:text-rose-400" />
-                    : <FileCheck className="mt-0.5 size-4 shrink-0 text-sky-600 dark:text-sky-400" />}
+                    : <FileCheck className="mt-0.5 size-4 shrink-0" />}
                   <div>
                     <p className="text-[13px] font-medium">
                       {s.comprobante.situacion === 'VENCIDO' ? 'Venció el plazo del comprobante de asistencia' : 'Sube el comprobante de asistencia'}
@@ -284,9 +284,9 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
 
             {/* Contrapropuesta del jefe: exige respuesta, así que se ve sin expandir. */}
             {s.estado === 'EN_NEGOCIACION' && s.contrapropuesta && (
-              <div className="mx-3 mb-3 space-y-2.5 rounded-lg border border-violet-500/40 bg-violet-500/5 p-3 text-xs">
+              <div className="mx-3 mb-3 space-y-2.5 rounded-lg border border-foreground/20 bg-muted/40 p-3 text-xs">
                 <div className="flex items-start gap-2">
-                  <CalendarClock className="mt-0.5 size-4 shrink-0 text-violet-600 dark:text-violet-400" />
+                  <CalendarClock className="mt-0.5 size-4 shrink-0" />
                   <div>
                     <p className="text-[13px] font-medium">Tu jefe propone otras fechas</p>
                     <p className="mt-0.5 text-sm">
