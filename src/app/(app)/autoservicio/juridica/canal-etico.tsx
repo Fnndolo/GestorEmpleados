@@ -39,15 +39,23 @@ export function CanalEtico({ mostrar = 'ambos' }: { mostrar?: 'anti-acoso' | 'ha
   return (
     <>
       <div className={mostrar === 'ambos' ? 'grid gap-3 sm:grid-cols-2' : 'grid gap-3'}>
+        {/* Una línea por canal y los botones en fila; el nombre del canal ya
+            está en el título de la página cuando se entra a uno solo. */}
         {verAntiAcoso && (
-          <Card className="transition-colors hover:border-primary/40">
-            <CardContent className="flex flex-col gap-2 py-5">
-              <ShieldAlert className="size-7 text-amber-600" />
-              <h3 className="font-medium">Línea ética</h3>
-              <p className="flex-1 text-sm text-muted-foreground">Reporta acoso laboral o sexual, conductas indebidas, irregularidades o sugerencias. Puede ser anónimo y se maneja con estricta confidencialidad (Ley 2466 de 2025).</p>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" className="w-fit" onClick={() => setDialogo('denuncia')}>Hacer un reporte</Button>
-                <Button size="sm" variant="outline" className="w-fit" onClick={() => setDialogo('seguimiento')}>
+          <Card>
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-foreground text-background">
+                  <ShieldAlert className="size-[18px]" />
+                </span>
+                <div className="min-w-0">
+                  {mostrar === 'ambos' && <p className="text-sm font-bold">Línea ética</p>}
+                  <p className="text-sm text-muted-foreground">Acoso, conductas indebidas o irregularidades. Confidencial y, si quieres, anónimo.</p>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => setDialogo('denuncia')}>Hacer un reporte</Button>
+                <Button size="sm" variant="outline" onClick={() => setDialogo('seguimiento')}>
                   <Search className="size-4" /> Consultar con mi código
                 </Button>
               </div>
@@ -55,12 +63,20 @@ export function CanalEtico({ mostrar = 'ambos' }: { mostrar?: 'anti-acoso' | 'ha
           </Card>
         )}
         {verHabeas && (
-          <Card className="transition-colors hover:border-primary/40">
-            <CardContent className="flex flex-col gap-2 py-5">
-              <FileLock className="size-7 text-blue-600" />
-              <h3 className="font-medium">Habeas data</h3>
-              <p className="flex-1 text-sm text-muted-foreground">Consulta o reclama sobre el tratamiento de tus datos personales (Ley 1581 de 2012). Recibirás respuesta en el plazo legal.</p>
-              <Button size="sm" variant="outline" className="w-fit" onClick={() => setDialogo('habeas')}>Radicar solicitud</Button>
+          <Card>
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-foreground text-background">
+                  <FileLock className="size-[18px]" />
+                </span>
+                <div className="min-w-0">
+                  {mostrar === 'ambos' && <p className="text-sm font-bold">Habeas data</p>}
+                  <p className="text-sm text-muted-foreground">Consulta o reclamo sobre tus datos personales.</p>
+                </div>
+              </div>
+              <div className="mt-3">
+                <Button size="sm" onClick={() => setDialogo('habeas')}>Radicar solicitud</Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -258,8 +274,8 @@ function DialogHabeas({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Consulta o reclamo (habeas data)</DialogTitle>
-          <DialogDescription>Ley 1581 de 2012 — derechos sobre tus datos personales.</DialogDescription>
+          <DialogTitle>Consulta o reclamo sobre tus datos</DialogTitle>
+          <DialogDescription>Recibirás respuesta en el plazo indicado.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <Campo label="Tipo">
