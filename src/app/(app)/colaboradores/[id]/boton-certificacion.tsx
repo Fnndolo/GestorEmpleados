@@ -39,8 +39,8 @@ export function BotonCertificacion({ colaboradorId }: { colaboradorId: string })
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={() => { setAbierto(true); setDocId(null); setCertId(null) }}>
-        <FileBadge className="size-4" /> Certificación
+      <Button size="sm" onClick={() => { setAbierto(true); setDocId(null); setCertId(null) }}>
+        <FileBadge className="size-4" /> <span className="hidden sm:inline">Certificación</span>
       </Button>
       <Dialog open={abierto} onOpenChange={setAbierto}>
         <DialogContent>

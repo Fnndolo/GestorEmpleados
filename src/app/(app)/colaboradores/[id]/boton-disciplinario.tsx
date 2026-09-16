@@ -74,7 +74,7 @@ export function BotonDisciplinario({ colaboradorId, nombre, esOps }: { colaborad
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={abrir}><Gavel className="size-4" /> Disciplinario</Button>
+      <Button size="sm" onClick={abrir}><Gavel className="size-4" /> <span className="hidden sm:inline">Disciplinario</span></Button>
       <Dialog open={abierto} onOpenChange={setAbierto}>
         <DialogContent>
           <DialogHeader>

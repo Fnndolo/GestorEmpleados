@@ -206,17 +206,18 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
     <div className="max-w-6xl">
       <Encabezado
         titulo="Ficha del colaborador"
+        enLinea
         acciones={
           <div className="flex flex-wrap gap-2">
-            <Button asChild size="sm" variant="outline">
-              <Link href={`/colaboradores/${id}/calendario`}><CalendarDays className="size-4" /> Calendario</Link>
+            <Button asChild size="sm">
+              <Link href={`/colaboradores/${id}/calendario`}><CalendarDays className="size-4" /> <span className="hidden sm:inline">Calendario</span></Link>
             </Button>
             {puedeDisciplinar && <BotonDisciplinario colaboradorId={id} nombre={`${c.nombres} ${c.apellidos}`} esOps={esOps(c.tipoVinculo)} />}
             {puedeEditar && (
               <>
                 <BotonCertificacion colaboradorId={id} />
                 <Button asChild size="sm">
-                  <Link href={`/colaboradores/${id}/editar`}><Pencil className="size-4" /> Editar</Link>
+                  <Link href={`/colaboradores/${id}/editar`}><Pencil className="size-4" /> <span className="hidden sm:inline">Editar</span></Link>
                 </Button>
               </>
             )}
@@ -227,7 +228,9 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
       {/* Héroe */}
       <Card className="mb-4 overflow-hidden">
         <CardContent className="py-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          {/* Foto a la izquierda y datos a la derecha también en el celular: apilados,
+              la foto sola ocupaba media pantalla antes de leer el nombre. */}
+          <div className="flex items-start gap-3 sm:items-center sm:gap-4">
             <FotoUploader
               colaboradorId={c.id}
               iniciales={iniciales(c.nombres, c.apellidos)}
@@ -236,7 +239,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
               puedeEditar={puedeEditar}
             />
             <div className="min-w-0 flex-1">
-              <h2 className="text-xl font-bold tracking-tight">{c.nombres} {c.apellidos}</h2>
+              <h2 className="text-lg font-bold leading-tight tracking-tight sm:text-xl">{c.nombres} {c.apellidos}</h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {c.cargo?.nombre ?? 'Sin cargo'}{c.area && ` · ${c.area.nombre}`}
                 {c.jefeInmediato && ` · reporta a ${c.jefeInmediato.nombres} ${c.jefeInmediato.apellidos}`}
@@ -270,7 +273,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
         )}
         <Stat
           icono={FileText}
-          color={docsFaltan > 0 ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-foreground text-background'}
+          color="bg-foreground text-background"
           valor={`${docsAlDia} de ${semaforo.length}`}
           label={`Documentos al día${docsPorVencer > 0 ? ` · ${docsPorVencer} por vencer` : ''}${docsFaltan > 0 ? ` · ${docsFaltan} falta${docsFaltan > 1 ? 'n' : ''}` : ''}`}
         />
