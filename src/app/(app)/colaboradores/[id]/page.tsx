@@ -231,29 +231,33 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
           {/* Foto a la izquierda y datos a la derecha también en el celular: apilados,
               la foto sola ocupaba media pantalla antes de leer el nombre. */}
           <div className="flex items-start gap-3 sm:items-center sm:gap-4">
-            <FotoUploader
-              colaboradorId={c.id}
-              iniciales={iniciales(c.nombres, c.apellidos)}
-              nombreCompleto={`${c.nombres} ${c.apellidos}`}
-              fotoUrl={urlFoto(c.id, c.fotoPath)}
-              puedeEditar={puedeEditar}
-            />
+            <div className="flex shrink-0 flex-col items-center gap-2">
+              <FotoUploader
+                colaboradorId={c.id}
+                iniciales={iniciales(c.nombres, c.apellidos)}
+                nombreCompleto={`${c.nombres} ${c.apellidos}`}
+                fotoUrl={urlFoto(c.id, c.fotoPath)}
+                puedeEditar={puedeEditar}
+              />
+              {/* El estado va bajo la foto: aprovecha ese espacio y deja la fila
+                  de la derecha para vínculo, modalidad y sede. */}
+              <span className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold',
+                c.estado === 'ACTIVO'
+                  ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-foreground/8 text-muted-foreground',
+              )}>
+                <span className={cn('size-1.5 rounded-full', c.estado === 'ACTIVO' ? 'bg-emerald-500' : 'bg-muted-foreground')} />
+                {ESTADO_COLABORADOR[c.estado]}
+              </span>
+            </div>
             <div className="min-w-0 flex-1">
               <h2 className="text-lg font-bold leading-tight tracking-tight sm:text-xl">{c.nombres} {c.apellidos}</h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {c.cargo?.nombre ?? 'Sin cargo'}{c.area && ` · ${c.area.nombre}`}
                 {c.jefeInmediato && ` · reporta a ${c.jefeInmediato.nombres} ${c.jefeInmediato.apellidos}`}
               </p>
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                <span className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold',
-                  c.estado === 'ACTIVO'
-                    ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-400'
-                    : 'bg-foreground/8 text-muted-foreground',
-                )}>
-                  <span className={cn('size-1.5 rounded-full', c.estado === 'ACTIVO' ? 'bg-emerald-500' : 'bg-muted-foreground')} />
-                  {ESTADO_COLABORADOR[c.estado]}
-                </span>
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 <Badge variant="outline">{TIPO_VINCULO[c.tipoVinculo]}</Badge>
                 <Badge variant="outline">{MODALIDAD_TRABAJO[c.modalidadTrabajo]}</Badge>
                 <Badge variant="outline">{c.sede.nombre} · {c.sede.ciudad.nombre}</Badge>
@@ -390,77 +394,6 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             ['Calzado', c.tallaCalzado ?? '—'],
           ]} />
 
-          {/* Semáforo documental: lo que exige acción se ve sin entrar a la pestaña Documentos */}
-          {semaforo.length > 0 && (
-            <Card className="sm:col-span-2">
-              <CardContent className="py-4">
-                <div className="mb-3 flex items-center gap-2.5">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
-                    <FileText className="size-4" />
-                  </span>
-                  <h3 className="text-sm font-bold">Semáforo documental</h3>
-                  <span className="ml-auto text-[11px] font-medium text-muted-foreground">
-                    {docsAlDia} al día{docsPorVencer > 0 ? ` · ${docsPorVencer} por vencer` : ''}{docsFaltan > 0 ? ` · ${docsFaltan} falta${docsFaltan > 1 ? 'n' : ''}` : ''}
-                  </span>
-                </div>
-                <div className="divide-y divide-dashed">
-                  {semaforo.map((s) => (
-                    <div key={s.nombre} className="flex items-center gap-2.5 py-2 text-[13px]">
-                      <span className={cn(
-                        'size-2 shrink-0 rounded-full',
-                        s.estado === 'al_dia' ? 'bg-emerald-500' : s.estado === 'por_vencer' ? 'bg-amber-500' : 'bg-rose-500',
-                      )} />
-                      <span className="min-w-0 flex-1 truncate">{s.nombre}</span>
-                      <span className={cn(
-                        'text-[11px] font-bold',
-                        s.estado === 'al_dia' ? 'text-emerald-600 dark:text-emerald-400'
-                          : s.estado === 'por_vencer' ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-rose-600 dark:text-rose-400',
-                      )}>
-                        {s.estado === 'al_dia' ? 'Al día' : s.estado === 'por_vencer' ? 'Por vencer' : s.estado === 'vencido' ? 'Vencido' : s.obligatorio ? 'Falta (obligatorio)' : 'Falta'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Contrato vigente, sin salir del resumen */}
-          {(contratoActivo || opsActivo) && (
-            <Card className="sm:col-span-2">
-              <CardContent className="py-4">
-                <div className="flex items-center gap-3">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-foreground text-background">
-                    <FileText className="size-[18px]" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-2 text-sm font-bold">
-                      {contratoActivo ? contratoActivo.numero : opsActivo!.numero}
-                      <Badge variant="outline">{contratoActivo ? TIPO_VINCULO[contratoActivo.tipo as keyof typeof TIPO_VINCULO] ?? contratoActivo.tipo : 'OPS'}</Badge>
-                      <Badge variant={(contratoActivo?.estado ?? opsActivo!.estado) === 'ACTIVO' ? 'default' : 'secondary'}>
-                        {contratoActivo?.estado ?? opsActivo!.estado}
-                      </Badge>
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {contratoActivo
-                        ? `${fmtCOP(Number(contratoActivo.salarioBase))}${contratoActivo.tieneAuxTransporte ? ' · con aux. transporte' : ''} · desde ${formatFechaLarga(contratoActivo.fechaInicio)}`
-                        : `${opsActivo!.valorMensual ? `${fmtCOP(Number(opsActivo!.valorMensual))}/mes · ` : ''}desde ${formatFechaLarga(opsActivo!.fechaInicio)} hasta ${formatFechaLarga(opsActivo!.fechaFin)}`}
-                    </p>
-                  </div>
-                  {puedeVerContratos ? (
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={contratoActivo ? `/contratos/${contratoActivo.id}` : `/contratos/ops/${opsActivo!.id}`}>Ver contrato</Link>
-                    </Button>
-                  ) : !contratoActivo && opsActivo ? (
-                    <Button asChild size="sm" variant="outline">
-                      <Link href="/autoservicio/contratos">Ver mi contrato</Link>
-                    </Button>
-                  ) : null}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
 
         {/* Contrato */}
