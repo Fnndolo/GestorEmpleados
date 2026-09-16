@@ -21,6 +21,8 @@ import { Stat, BloqueDatos } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
+import { historialSolicitudes } from '@/server/solicitudes-historial'
+import { HistorialSolicitudes } from '@/components/solicitudes/historial-solicitudes'
 import { documentosDeOtroModulo } from '@/server/documentos'
 import { valorParametroVigente } from '@/server/nomina/parametros'
 import { SubirContratoExistente } from './subir-contrato-existente'
@@ -63,6 +65,8 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   // (p. ej. un empleado viendo su propia ficha) daría "sin permiso": se
   // reemplaza por el enlace de autoservicio (OPS) o se oculta (laboral).
   const puedeVerContratos = tienePermiso(usuario, 'contratos', 'VER')
+  // El historial de solicitudes lo ve quien aprueba (jefes, Talento Humano, administración).
+  const puedeAprobar = tienePermiso(usuario, 'autoservicio', 'APROBAR')
 
   // Seguridad: intersecta el id con el ALCANCE del usuario (PROPIO/EQUIPO/SEDES/
   // TODAS). Sin esto, un empleado podía abrir la ficha de cualquiera por la URL
@@ -193,6 +197,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   })
 
   const edad = calcularEdad(c.fechaNacimiento)
+  const solicitudes = puedeAprobar ? await historialSolicitudes({ colaboradorId: id, take: 100 }) : []
 
   // Datos clave del héroe: antigüedad, salario vigente, semáforo y vacaciones.
   const saldoVac = await saldoVacaciones(id)
@@ -306,6 +311,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
           { valor: 'contrato', label: 'Contrato' },
           { valor: 'documentos', label: 'Documentos', alerta: semaforo.some((s) => s.obligatorio && s.estado === 'falta') },
           { valor: 'educacion', label: 'Educación' },
+          ...(puedeAprobar ? [{ valor: 'solicitudes', label: 'Solicitudes' }] : []),
           ...(verDisciplinario ? [{ valor: 'disciplinario', label: 'Disciplinario' }] : []),
           ...(mostrarPagos ? [{ valor: 'pagos', label: 'Pagos' }] : []),
         ]}
@@ -574,6 +580,13 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             )}
           </CardContent></Card>
         </TabsContent>
+
+        {/* Solicitudes de autoservicio: todas, con quién las decidió. */}
+        {puedeAprobar && (
+          <TabsContent value="solicitudes">
+            <HistorialSolicitudes items={solicitudes} vacio="Esta persona no ha hecho solicitudes." />
+          </TabsContent>
+        )}
 
         {/* Historial disciplinario: llamados de atención + procesos, en una sola línea de tiempo */}
         {verDisciplinario && (

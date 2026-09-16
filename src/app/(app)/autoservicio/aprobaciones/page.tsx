@@ -1,18 +1,25 @@
+import Link from 'next/link'
 import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
+import { cn } from '@/lib/utils'
+import { historialSolicitudes, filtrarHistorialPara } from '@/server/solicitudes-historial'
+import { HistorialSolicitudes } from '@/components/solicitudes/historial-solicitudes'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { BandejaAprobaciones } from './bandeja'
 import { defLicencia } from '@/lib/licencias'
-import { fechaBreve, rangoBreve, dias as diasTexto } from '@/lib/notificaciones/texto'
+import { fechaBreve } from '@/lib/notificaciones/texto'
+import { cuandoSolicitud } from '@/lib/solicitudes-texto'
 import { urlFoto } from '@/lib/foto'
 import { iniciales } from '@/lib/etiquetas'
 import { plazoComprobanteDias } from '@/server/comprobante-permiso'
 
 export const metadata = { title: 'Aprobaciones · Smart Gadgets RH' }
 
-export default async function AprobacionesPage() {
+export default async function AprobacionesPage({ searchParams }: { searchParams: Promise<{ vista?: string }> }) {
   const usuario = await requerirPermiso('autoservicio', 'APROBAR')
+  const { vista } = await searchParams
+  const enHistorial = vista === 'historial'
   // Plazo del comprobante de asistencia (Ajustes → Empresa), para mostrarlo al aprobar un permiso.
   const plazoComprobante = await plazoComprobanteDias()
 
@@ -52,10 +59,35 @@ export default async function AprobacionesPage() {
     docsPorSolicitud.set(d.entidadId, arr)
   }
 
+  // Archivo: lo ya resuelto (aprobado, rechazado, cancelado), lo que el usuario pudo resolver.
+  const historial = enHistorial
+    ? filtrarHistorialPara(usuario, await historialSolicitudes({ estados: ['APROBADA', 'RECHAZADA', 'CANCELADA'], take: 200 }))
+    : []
+
   return (
     <div className="max-w-5xl">
-      <Encabezado enLinea titulo="Solicitudes por aprobar" />
-      {visibles.length === 0 ? (
+      <Encabezado enLinea titulo="Aprobaciones" />
+      {/* Dos vistas: lo pendiente y el archivo de lo ya decidido. */}
+      <div className="mb-4 flex gap-1.5">
+        {[
+          { href: '/autoservicio/aprobaciones', label: `Por aprobar${visibles.length ? ` (${visibles.length})` : ''}`, activa: !enHistorial },
+          { href: '/autoservicio/aprobaciones?vista=historial', label: 'Historial', activa: enHistorial },
+        ].map((v) => (
+          <Link
+            key={v.href}
+            href={v.href}
+            className={cn(
+              'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
+              v.activa ? 'bg-foreground text-background' : 'border bg-card text-muted-foreground hover:bg-accent',
+            )}
+          >
+            {v.label}
+          </Link>
+        ))}
+      </div>
+      {enHistorial ? (
+        <HistorialSolicitudes items={historial} conColaborador vacio="Todavía no hay solicitudes resueltas." />
+      ) : visibles.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No tienes solicitudes pendientes.</CardContent></Card>
       ) : (
         <BandejaAprobaciones
@@ -108,28 +140,3 @@ export default async function AprobacionesPage() {
   )
 }
 
-const TIPO_INCAP: Record<string, string> = {
-  ENFERMEDAD_GENERAL: 'Enfermedad general', ACCIDENTE_TRABAJO: 'Accidente de trabajo',
-  ENFERMEDAD_LABORAL: 'Enfermedad laboral', LICENCIA_MATERNIDAD: 'Lic. maternidad', LICENCIA_PATERNIDAD: 'Lic. paternidad',
-}
-
-const TIPO_CERT: Record<string, string> = {
-  SIMPLE: 'Simple', CON_SALARIO: 'Con salario', CON_FUNCIONES: 'Con funciones', ENTIDAD_FINANCIERA: 'Para entidad financiera',
-}
-
-/** Una línea con lo que se pide: fechas cortas, horas, tipo. El motivo va aparte. */
-function cuandoSolicitud(tipo: string, datos: Record<string, string>, diasHabiles: number | null): string {
-  if (tipo === 'VACACIONES') return `${rangoBreve(datos.fechaInicio, datos.fechaFin)}${diasHabiles ? ` · ${diasTexto(diasHabiles, true)}` : ''}`
-  if (tipo === 'PERMISO') {
-    return datos.permisoTipo === 'HORAS' && datos.horaInicio
-      ? `${fechaBreve(datos.fechaInicio)} · ${datos.horaInicio}–${datos.horaFin}`
-      : `${fechaBreve(datos.fechaInicio)} · día completo`
-  }
-  if (tipo === 'INCAPACIDAD') return `${TIPO_INCAP[datos.incapacidadTipo] ?? 'Incapacidad'} · ${rangoBreve(datos.fechaInicio, datos.fechaFin)}${datos.entidad ? ` · ${datos.entidad}` : ''}`
-  if (tipo === 'CERTIFICACION_LABORAL') return `${TIPO_CERT[datos.tipoCertificacion] ?? 'Simple'}${datos.dirigidaA ? ` · para ${datos.dirigidaA}` : ''}`
-  if (tipo === 'LICENCIA' && datos.licenciaTipo) {
-    const def = defLicencia(datos.licenciaTipo)
-    return `${def.label} · ${rangoBreve(datos.fechaInicio, datos.fechaFin)} · ${def.remunerada ? 'remunerada' : 'no remunerada'}`
-  }
-  return ''
-}
