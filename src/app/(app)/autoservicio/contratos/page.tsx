@@ -4,6 +4,7 @@ import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { FilePenLine } from 'lucide-react'
 import { formatFechaLarga } from '@/lib/fechas'
+import { fechaBreve, rangoBreve } from '@/lib/notificaciones/texto'
 import { fmtCOP } from '@/lib/moneda'
 import { resumenOtrosi, type ValoresOtrosi } from '@/lib/otrosi'
 import { MisContratos } from './mis-contratos'
@@ -81,9 +82,9 @@ export default async function MisContratosPage() {
     docsPorContrato.get(id)?.[0]?.id ??
     null
 
-  const TIPO_LABORAL: Record<string, string> = {
-    TERMINO_FIJO: 'Contrato de trabajo a término fijo', TERMINO_INDEFINIDO: 'Contrato de trabajo a término indefinido',
-    OBRA_LABOR: 'Contrato por obra o labor', APRENDIZAJE_SENA: 'Contrato de aprendizaje SENA', PRACTICA: 'Contrato de práctica',
+  const TIPO_LABORAL_CORTO: Record<string, string> = {
+    TERMINO_FIJO: 'Término fijo', TERMINO_INDEFINIDO: 'Término indefinido',
+    OBRA_LABOR: 'Obra o labor', APRENDIZAJE_SENA: 'Aprendizaje SENA', PRACTICA: 'Práctica',
   }
 
   const items = [
@@ -93,11 +94,12 @@ export default async function MisContratosPage() {
       fechaInicioMs: c.fechaInicio.getTime(),
       creadoMs: c.creadoEn.getTime(),
       numero: c.numero,
-      objeto: `${TIPO_LABORAL[c.tipo] ?? c.tipo}${c.cargo ? ` — ${c.cargo.nombre}` : ''}`,
+      // Para la tarjeta plegada: cargo y tipo en una línea, vigencia corta en la otra.
+      resumen: [c.cargo?.nombre, TIPO_LABORAL_CORTO[c.tipo] ?? c.tipo].filter(Boolean).join(' · '),
+      vigenciaCorta: c.fechaFin ? rangoBreve(c.fechaInicio, c.fechaFin) : `Desde ${fechaBreve(c.fechaInicio)}`,
       // El empleador puede haber firmado en el PDF aportado en vez de en la app.
       estado: c.firmaEmpleadoPath && (c.firmaEmpleadorPath || c.firmaEmpleadorEnPdf) ? 'FIRMADO' : c.estado,
       valorTotal: `${fmtCOP(Number(c.salarioBase))}/mes`,
-      vigencia: c.fechaFin ? `${formatFechaLarga(c.fechaInicio)} — ${formatFechaLarga(c.fechaFin)}` : `Desde ${formatFechaLarga(c.fechaInicio)}`,
       documentoId: contratoDocId(c.id),
       documentos: docsPorContrato.get(c.id) ?? [],
       firmadoPorMi: !!c.firmaEmpleadoPath,
@@ -122,10 +124,10 @@ export default async function MisContratosPage() {
       fechaInicioMs: c.fechaInicio.getTime(),
       creadoMs: c.creadoEn.getTime(),
       numero: c.numero,
-      objeto: c.objeto,
+      resumen: c.objeto.replace(/^Prestación de servicios como\s+/i, ''),
+      vigenciaCorta: rangoBreve(c.fechaInicio, c.fechaFin),
       estado: c.estado,
       valorTotal: fmtCOP(Number(c.valorTotal)),
-      vigencia: `${formatFechaLarga(c.fechaInicio)} — ${formatFechaLarga(c.fechaFin)}`,
       documentoId: contratoDocId(c.id),
       documentos: docsPorContrato.get(c.id) ?? [],
       firmadoPorMi: !!c.firmaContratistaPath,
@@ -142,10 +144,7 @@ export default async function MisContratosPage() {
 
   return (
     <div className="max-w-5xl">
-      <Encabezado
-        titulo="Mis contratos"
-        descripcion="Revisa tus contratos (laborales y de prestación de servicios) y fírmalos digitalmente."
-      />
+      <Encabezado enLinea titulo="Mis contratos" />
       {items.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground"><FilePenLine className="size-8" /><p>No tienes contratos registrados.</p></CardContent></Card>
       ) : (
