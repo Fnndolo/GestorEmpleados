@@ -4,7 +4,11 @@ import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CalendarPlus, FilePen, CirclePause, CirclePlay, UserMinus, Paperclip } from 'lucide-react'
+import { CalendarPlus, FilePen, CirclePause, CirclePlay, UserMinus, Paperclip, Trash2 } from 'lucide-react'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,18 +18,29 @@ import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { agregarProrroga, agregarOtrosi, analizarPdfOtrosi, registrarSuspension, reactivarContrato } from '../acciones'
+import { agregarProrroga, agregarOtrosi, analizarPdfOtrosi, registrarSuspension, reactivarContrato, eliminarContratoLaboral } from '../acciones'
 import { SelectorFirmasPdf, ETIQUETAS_LABORAL, type Posicion } from '@/components/contratos/selector-firmas-pdf'
 import { TIPOS_CAMBIO_OTROSI, ETIQUETA_CAMBIO_OTROSI } from '@/lib/otrosi'
 
 type Cat = { cargos: { id: string; nombre: string }[]; sedes: { id: string; nombre: string; ciudad: string }[] }
 
 export function AccionesContrato({
-  contratoId, colaboradorId, tipo, estado, cargos, sedes,
-}: { contratoId: string; colaboradorId: string; tipo: string; estado: string } & Cat) {
+  contratoId, colaboradorId, tipo, estado, numero, puedeEliminar, cargos, sedes,
+}: { contratoId: string; colaboradorId: string; tipo: string; estado: string; numero: string; puedeEliminar: boolean } & Cat) {
   const router = useRouter()
   const [dialogo, setDialogo] = useState<'prorroga' | 'otrosi' | 'suspension' | null>(null)
   const [cargando, setCargando] = useState(false)
+  const [confirmarBorrado, setConfirmarBorrado] = useState(false)
+
+  async function eliminar() {
+    setCargando(true)
+    const res = await eliminarContratoLaboral({ id: contratoId })
+    setCargando(false)
+    if (res.ok) {
+      toast.success(`Contrato ${res.datos.numero} eliminado.`)
+      router.push(`/colaboradores/${res.datos.colaboradorId}`)
+    } else toast.error(res.error)
+  }
 
   async function reactivar() {
     setCargando(true)
@@ -62,6 +77,33 @@ export function AccionesContrato({
           </Link>
         )}
       </div>
+
+      {/* Borrar es para el error de registro —PDF a la persona equivocada,
+          duplicado—, no para cerrar un contrato: eso va por Terminaciones. Por
+          eso queda aparte, abajo, y con confirmación. */}
+      {puedeEliminar && (
+        <div className="mt-4 border-t pt-3">
+          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmarBorrado(true)} disabled={cargando}>
+            <Trash2 className="size-4" /> Eliminar contrato
+          </Button>
+          <p className="mt-1 text-xs text-muted-foreground">Solo si se registró por error. Un contrato real se termina desde Terminaciones.</p>
+          <AlertDialog open={confirmarBorrado} onOpenChange={setConfirmarBorrado}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Eliminar el contrato {numero}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Se borran el registro, su PDF y su autorización de datos, y sus alertas de vencimiento. La ficha
+                  del colaborador vuelve al vínculo de los contratos que le queden. No se puede deshacer.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={eliminar} className="bg-destructive text-white hover:bg-destructive/90">Eliminar</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      )}
 
       {dialogo === 'prorroga' && <DialogProrroga contratoId={contratoId} onClose={() => setDialogo(null)} onDone={() => { setDialogo(null); router.refresh() }} />}
       {dialogo === 'otrosi' && <DialogOtrosi contratoId={contratoId} cargos={cargos} sedes={sedes} onClose={() => setDialogo(null)} onDone={() => { setDialogo(null); router.refresh() }} />}

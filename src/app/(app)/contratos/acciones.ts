@@ -12,7 +12,8 @@ import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema, subirContratoLaboralSchema, subirContratoLaboralParaFirmaSchema, type SubirContratoLaboralInput } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
-import { publicarVencimiento, resolverVencimiento } from '@/server/vencimientos/servicio'
+import { publicarVencimiento, resolverVencimiento, cancelarVencimiento } from '@/server/vencimientos/servicio'
+import { eliminarDocumento } from '@/server/documentos'
 import { valorParametroVigente } from '@/server/nomina/parametros'
 import { construirDatosPdfContratoLaboral, generarPdfContratoLaboral, generarPdfAutorizacionDatosLaboral } from '@/server/contratos-laboral-pdf'
 import { construirDatosAutorizacion } from '@/server/contratos-ops-pdf'
@@ -938,6 +939,53 @@ export const registrarSuspension = accion(
     })
     await dbAuditado.contrato.update({ where: { id: d.contratoId }, data: { estado: 'SUSPENDIDO' } })
     revalidatePath(`/contratos/${d.contratoId}`)
+  },
+)
+
+/**
+ * Borra un contrato laboral que se registró por error (p. ej. se subió el PDF
+ * a la persona equivocada o por duplicado). Solo para eso: un contrato con
+ * historia —firmado por el trabajador en la app, con prórrogas, otrosíes o
+ * suspensiones— no se borra, se termina por el módulo de Terminaciones.
+ *
+ * Se lleva su PDF y su autorización de datos, sus alertas de vencimiento y sus
+ * evidencias de firma, y deja la ficha con el vínculo que le corresponde por
+ * los contratos que le quedan. Queda en la auditoría quién lo borró.
+ */
+export const eliminarContratoLaboral = accion(
+  { modulo: 'contratos', accion: 'ELIMINAR', schema: z.object({ id: z.uuid() }) },
+  async ({ id }) => {
+    const c = await prisma.contrato.findUniqueOrThrow({
+      where: { id },
+      include: { _count: { select: { prorrogas: true, otrosis: true, suspensiones: true } } },
+    })
+    if (c.firmaEmpleadoPath) {
+      throw new ErrorNegocio('Este contrato ya lo firmó el trabajador en la app: no se borra, se termina desde Terminaciones.')
+    }
+    const historia = c._count.prorrogas + c._count.otrosis + c._count.suspensiones
+    if (historia > 0) {
+      throw new ErrorNegocio('Este contrato tiene prórrogas, otrosíes o suspensiones: no se borra, se termina desde Terminaciones.')
+    }
+
+    // Sus documentos (contrato, autorización de datos) y sus alertas.
+    const docs = await prisma.documento.findMany({ where: { entidadTipo: 'Contrato', entidadId: id }, select: { id: true } })
+    for (const d of docs) await eliminarDocumento(d.id)
+    await cancelarVencimiento('Contrato', id)
+    // Las evidencias de firma caen en cascada con el contrato.
+    await dbAuditado.contrato.delete({ where: { id } })
+
+    // La ficha vuelve al vínculo de lo que le queda: otro laboral activo, o su OPS.
+    const [otroLaboral, ops] = await Promise.all([
+      prisma.contrato.findFirst({ where: { colaboradorId: c.colaboradorId, estado: 'ACTIVO' }, orderBy: { fechaInicio: 'desc' }, select: { tipo: true } }),
+      prisma.contratoOps.findFirst({ where: { colaboradorId: c.colaboradorId, estado: 'ACTIVO' }, select: { id: true } }),
+    ])
+    const vinculo: TipoVinculo | null = otroLaboral ? vinculoDeContrato(otroLaboral.tipo as TipoContratoLaboral) : ops ? 'OPS' : null
+    if (vinculo) await dbAuditado.colaborador.update({ where: { id: c.colaboradorId }, data: { tipoVinculo: vinculo } })
+
+    revalidatePath('/contratos')
+    revalidatePath(`/colaboradores/${c.colaboradorId}`)
+    revalidatePath('/autoservicio/contratos')
+    return { colaboradorId: c.colaboradorId, numero: c.numero }
   },
 )
 

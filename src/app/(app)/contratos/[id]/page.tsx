@@ -34,6 +34,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
   const { id } = await params
   const usuario = await requerirPermiso('contratos', 'VER')
   const puedeEditar = tienePermiso(usuario, 'contratos', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'contratos', 'ELIMINAR')
 
   const c = await prisma.contrato.findUnique({
     where: { id },
@@ -307,6 +308,8 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
           colaboradorId={c.colaboradorId}
           tipo={c.tipo}
           estado={c.estado}
+          numero={c.numero}
+          puedeEliminar={puedeEliminar}
           cargos={cargos.map((x) => ({ id: x.id, nombre: x.nombre }))}
           sedes={sedes.map((x) => ({ id: x.id, nombre: x.nombre, ciudad: x.ciudad.nombre }))}
         />
