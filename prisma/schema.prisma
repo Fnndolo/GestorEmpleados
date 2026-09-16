@@ -2582,6 +2582,8 @@ model ConsultaReclamoDatos {
   fechaLimite     DateTime?             @map("fecha_limite") @db.Date
   estado          EstadoConsultaReclamo @default(ABIERTO)
   respuesta       String?
+  // Cuándo se respondió: es lo que prueba que se cumplió el plazo legal.
+  respondidaEn    DateTime?             @map("respondida_en")
   creadoEn        DateTime              @default(now()) @map("creado_en")
 
   @@map("consulta_reclamo_datos")

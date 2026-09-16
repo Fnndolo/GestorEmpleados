@@ -18,7 +18,7 @@ import { SelectorColaborador } from '@/components/colaboradores/selector-colabor
 import { FiltroTabs } from '@/components/shell/filtro-tabs'
 import { etiquetaReporte } from '@/lib/linea-etica'
 import { formatFechaCorta } from '@/lib/fechas'
-import { crearDocumentoLegal, vincularVersionDocumentoLegal, crearProcesoDisciplinario, crearConsultaReclamo } from './acciones'
+import { crearDocumentoLegal, vincularVersionDocumentoLegal, crearProcesoDisciplinario, crearConsultaReclamo, responderConsultaReclamo } from './acciones'
 import { ZonaArchivos } from './_ui'
 
 /** Sube un archivo asociado a una entidad usando el endpoint existente y devuelve el id del Documento. */
@@ -53,16 +53,25 @@ const EST_DEN: Record<string, string> = { RECIBIDA: 'Recibida', EN_INVESTIGACION
 type VersionDoc = { version: number; vigente: boolean; archivoDocId: string | null; cambios: string | null; creadoEn: string }
 type DocLegal = { id: string; categoria: string; titulo: string; vigenciaFin: string | null; documentoId: string | null; versiones: VersionDoc[] }
 
+type Consulta = {
+  id: string; tipo: string; titular: string; estado: string; descripcion: string
+  fechaRadicacion: string; fechaLimite: string | null; respuesta: string | null; respondidaEn: string | null
+}
+const ESTADO_HABEAS: Record<string, { label: string; tone: PillTone }> = {
+  ABIERTO: { label: 'Por responder', tone: 'warn' }, EN_TRAMITE: { label: 'En trámite', tone: 'info' }, RESUELTO: { label: 'Respondida', tone: 'ok' },
+}
+
 type Props = {
   tab: string; puedeCrear: boolean; puedeEditar: boolean
   documentos: DocLegal[]
   disciplinarios: { id: string; colaborador: string; asunto: string; etapa: string; cerrado: boolean }[]
   denuncias: { id: string; codigo: string; tipo: string; anonima: boolean; estado: string; fecha: string }[]
-  consultas: { id: string; tipo: string; titular: string; estado: string; fechaLimite: string | null }[]
+  consultas: Consulta[]
 }
 
 export function JuridicaCliente(p: Props) {
   const [dialogo, setDialogo] = useState<string | null>(null)
+  const [consulta, setConsulta] = useState<Consulta | null>(null)
 
   return (
     <div className="space-y-4">
@@ -105,12 +114,30 @@ export function JuridicaCliente(p: Props) {
         </>
       )}
       {p.tab === 'habeas' && (
-        <Lista
-          vacio="Sin consultas ni reclamos."
-          chip={{ icono: FileLock, color: 'indigo' }}
-          items={p.consultas.map((c) => ({ id: c.id, titulo: `${c.tipo} — ${c.titular}`, sub: `${c.estado}${c.fechaLimite ? ` · límite ${formatFechaCorta(new Date(c.fechaLimite))} (días hábiles)` : ''}` }))}
-        />
+        p.consultas.length === 0 ? (
+          <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Sin consultas ni reclamos.</CardContent></Card>
+        ) : (
+          <Card><CardContent className="p-0 divide-y">
+            {p.consultas.map((c) => {
+              const est = ESTADO_HABEAS[c.estado] ?? { label: c.estado, tone: 'muted' as PillTone }
+              return (
+                <button key={c.id} type="button" onClick={() => setConsulta(c)} className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-accent/40">
+                  <Chip icono={FileLock} color="indigo" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{c.tipo === 'CONSULTA' ? 'Consulta' : 'Reclamo'} — {c.titular}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      Radicada {formatFechaCorta(new Date(c.fechaRadicacion))}
+                      {c.estado === 'RESUELTO' && c.respondidaEn ? ` · respondida ${formatFechaCorta(new Date(c.respondidaEn))}` : c.fechaLimite ? ` · responder antes del ${formatFechaCorta(new Date(c.fechaLimite))}` : ''}
+                    </p>
+                  </div>
+                  <Pill tone={est.tone}>{est.label}</Pill>
+                </button>
+              )
+            })}
+          </CardContent></Card>
+        )
       )}
+      {consulta && <DialogRespuesta consulta={consulta} puedeEditar={p.puedeEditar} onClose={() => setConsulta(null)} />}
 
       {dialogo === 'documentos' && <DialogDocumento onClose={() => setDialogo(null)} />}
       {dialogo === 'disciplinarios' && <DialogDisciplinario onClose={() => setDialogo(null)} />}
@@ -121,22 +148,6 @@ export function JuridicaCliente(p: Props) {
 
 type ChipDef = { icono: LucideIcon; color: ChipColor }
 
-function Lista({ items, vacio, chip }: { items: { id: string; titulo: string; sub: string }[]; vacio: string; chip?: ChipDef }) {
-  if (items.length === 0) return <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">{vacio}</CardContent></Card>
-  return (
-    <Card><CardContent className="p-0 divide-y">
-      {items.map((i) => (
-        <div key={i.id} className="flex items-center gap-3 p-3">
-          {chip && <Chip icono={chip.icono} color={chip.color} />}
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{i.titulo}</p>
-            <p className="truncate text-xs text-muted-foreground">{i.sub}</p>
-          </div>
-        </div>
-      ))}
-    </CardContent></Card>
-  )
-}
 function ListaLink({ items, vacio, chip }: { items: { id: string; href: string; titulo: string; sub: string; badge: string; tone: PillTone }[]; vacio: string; chip?: ChipDef }) {
   if (items.length === 0) return <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">{vacio}</CardContent></Card>
   return (
@@ -157,6 +168,60 @@ function ListaLink({ items, vacio, chip }: { items: { id: string; href: string; 
 
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>
+}
+
+/** Leer una consulta o reclamo y responderla; respondida, muestra la respuesta y su fecha. */
+function DialogRespuesta({ consulta, puedeEditar, onClose }: { consulta: Consulta; puedeEditar: boolean; onClose: () => void }) {
+  const router = useRouter()
+  const [respuesta, setRespuesta] = useState('')
+  const [g, setG] = useState(false)
+  const respondida = consulta.estado === 'RESUELTO'
+
+  async function responder() {
+    if (respuesta.trim().length < 5) { toast.error('Escribe la respuesta.'); return }
+    setG(true)
+    const res = await responderConsultaReclamo({ id: consulta.id, respuesta })
+    setG(false)
+    if (res.ok) { toast.success('Respuesta enviada. El colaborador la verá en su autoservicio.'); onClose(); router.refresh() }
+    else toast.error(res.error)
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[88vh] overflow-y-auto" aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle>{consulta.tipo === 'CONSULTA' ? 'Consulta' : 'Reclamo'} de {consulta.titular}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <p className="text-xs text-muted-foreground">
+            Radicada {formatFechaCorta(new Date(consulta.fechaRadicacion))}
+            {consulta.fechaLimite ? ` · plazo hasta el ${formatFechaCorta(new Date(consulta.fechaLimite))}` : ''}
+          </p>
+          <div className="rounded-lg border bg-muted/30 p-3 whitespace-pre-wrap">{consulta.descripcion}</div>
+          {respondida ? (
+            <div>
+              <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Respuesta{consulta.respondidaEn ? ` · ${formatFechaCorta(new Date(consulta.respondidaEn))}` : ''}
+              </p>
+              <div className="rounded-lg border p-3 whitespace-pre-wrap">{consulta.respuesta}</div>
+            </div>
+          ) : puedeEditar ? (
+            <Campo label="Respuesta">
+              <Textarea rows={5} value={respuesta} onChange={(e) => setRespuesta(e.target.value)} placeholder="Qué datos se tienen, qué se corrigió o eliminó, o por qué no procede." />
+            </Campo>
+          ) : (
+            <p className="text-xs text-muted-foreground">Pendiente de respuesta.</p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>{respondida || !puedeEditar ? 'Cerrar' : 'Cancelar'}</Button>
+          {!respondida && puedeEditar && (
+            <Button onClick={responder} disabled={g}>{g && <Spinner />}Enviar respuesta</Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 function DocumentosLegales({ items, puedeCrear }: { items: DocLegal[]; puedeCrear: boolean }) {

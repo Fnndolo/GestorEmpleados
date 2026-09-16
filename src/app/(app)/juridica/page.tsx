@@ -41,7 +41,12 @@ export default async function JuridicaPage({ searchParams }: { searchParams: Pro
         }))}
         disciplinarios={disciplinarios.map((p) => ({ id: p.id, colaborador: `${p.colaborador.nombres} ${p.colaborador.apellidos}`, asunto: p.asunto, etapa: p.etapa, cerrado: p.cerrado }))}
         denuncias={denuncias.map((d) => ({ id: d.id, codigo: d.codigo, tipo: d.tipo, anonima: d.anonima, estado: d.estado, fecha: formatFechaISO(d.creadoEn) }))}
-        consultas={consultas.map((c) => ({ id: c.id, tipo: c.tipo, titular: c.titular, estado: c.estado, fechaLimite: c.fechaLimite ? formatFechaISO(c.fechaLimite) : null }))}
+        consultas={consultas.map((c) => ({
+          id: c.id, tipo: c.tipo, titular: c.titular, estado: c.estado, descripcion: c.descripcion,
+          fechaRadicacion: formatFechaISO(c.fechaRadicacion),
+          fechaLimite: c.fechaLimite ? formatFechaISO(c.fechaLimite) : null,
+          respuesta: c.respuesta, respondidaEn: c.respondidaEn ? formatFechaISO(c.respondidaEn) : null,
+        }))}
       />
     </div>
   )

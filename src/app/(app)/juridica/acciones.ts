@@ -376,6 +376,42 @@ export const crearConsultaReclamo = accion(
 )
 
 /**
+ * Jurídica responde una consulta o reclamo de habeas data. La respuesta queda
+ * escrita en la solicitud con su fecha (prueba del plazo) y, si la radicó un
+ * colaborador desde su autoservicio, se le avisa y la puede leer allí mismo.
+ */
+export const responderConsultaReclamo = accion(
+  {
+    modulo: 'juridica',
+    accion: 'EDITAR',
+    schema: z.object({ id: z.uuid(), respuesta: z.string().trim().min(5, 'Escribe la respuesta.').max(3000) }),
+  },
+  async (d) => {
+    const c = await prisma.consultaReclamoDatos.findUniqueOrThrow({ where: { id: d.id } })
+    if (c.estado === 'RESUELTO') throw new ErrorNegocio('Esta solicitud ya fue respondida.')
+    await dbAuditado.consultaReclamoDatos.update({
+      where: { id: d.id },
+      data: { respuesta: d.respuesta, estado: 'RESUELTO', respondidaEn: new Date() },
+    })
+    if (c.colaboradorId) {
+      const uid = await usuarioDeColaborador(c.colaboradorId)
+      if (uid) {
+        await avisar(uid, {
+          titulo: `Respondieron tu ${c.tipo === 'CONSULTA' ? 'consulta' : 'reclamo'} de habeas data`,
+          mensaje: d.respuesta.length > 160 ? `${d.respuesta.slice(0, 157)}…` : d.respuesta,
+          enlace: '/autoservicio/juridica?vista=habeas-data',
+          llamadoAccion: 'Leer la respuesta',
+          evento: 'habeas_data_respuesta',
+        }).catch(() => {})
+      }
+    }
+    revalidatePath('/juridica')
+    revalidatePath('/autoservicio/juridica')
+    return { ok: true }
+  },
+)
+
+/**
  * Registra un llamado de atención: medida correctiva, no una sanción.
  *
  * No abre descargos ni plazos —eso es lo que lo distingue del proceso
