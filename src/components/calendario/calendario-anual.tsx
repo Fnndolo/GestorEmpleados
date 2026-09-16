@@ -148,8 +148,8 @@ export function CalendarioAnual({
                       const Icono = T.icono
                       return (
                         <li key={t} className="flex items-center gap-1.5 text-xs sm:gap-2 sm:text-sm">
-                          <span className={cn('flex size-5 shrink-0 items-center justify-center rounded-md sm:size-6', T.soft)}>
-                            <Icono className={cn('size-3 sm:size-3.5', T.text)} />
+                          <span className="grid size-5 shrink-0 place-items-center rounded-md bg-foreground text-background sm:size-6">
+                            <Icono className="size-3 sm:size-3.5" />
                           </span>
                           <span className="min-w-0 text-foreground">{etiquetaResumen(t, r.conteos.get(t)!)}</span>
                         </li>
@@ -158,9 +158,6 @@ export function CalendarioAnual({
                   </ul>
                 )}
 
-                <span className="mt-2 hidden text-xs font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 sm:mt-3 sm:block">
-                  Ver mes →
-                </span>
               </button>
             )
           })}
@@ -176,7 +173,9 @@ export function CalendarioAnual({
         />
       )}
 
-      <Leyenda eventos={eventos} />
+      {mesExpandido === null
+        ? eventos.length === 0 && <p className="pt-2 text-center text-sm text-muted-foreground">Sin novedades registradas este año.</p>
+        : <Leyenda eventos={eventos} />}
     </div>
   )
 }
@@ -328,9 +327,7 @@ function DiaDialog({
 
 function Leyenda({ eventos }: { eventos: EventoAnio[] }) {
   const tipos = ORDEN.filter((t) => eventos.some((e) => e.tipo === t))
-  if (tipos.length === 0) {
-    return <p className="pt-2 text-center text-sm text-muted-foreground">Sin novedades registradas este año.</p>
-  }
+  if (tipos.length === 0) return null
   return (
     <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 border-t pt-4">
       {tipos.map((t) => (

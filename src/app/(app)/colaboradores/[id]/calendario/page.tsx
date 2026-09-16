@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation'
 import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
-import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import { eventosDelAnio } from '@/server/consultas/eventos-colaborador'
 import { CalendarioAnual } from '@/components/calendario/calendario-anual'
@@ -32,15 +31,12 @@ export default async function CalendarioColaboradorPage({
 
   return (
     <div className="max-w-7xl">
-      <Encabezado
-        titulo={`Calendario · ${colab.nombres} ${colab.apellidos}`}
-        descripcion="Vacaciones, permisos, licencias, día de la familia, compensatorios, incapacidades y suspensiones. Haz clic en un mes para verlo en detalle."
-        acciones={
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/colaboradores/${id}`}><ArrowLeft className="size-4" /> Volver a la ficha</Link>
-          </Button>
-        }
-      />
+      {/* El regreso va arriba y el nombre debajo del título: en el celular el
+          título largo más el párrafo explicativo ocupaban media pantalla. */}
+      <Link href={`/colaboradores/${id}`} className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-4" /> Volver a la ficha
+      </Link>
+      <Encabezado enLinea titulo="Calendario" descripcion={`${colab.nombres} ${colab.apellidos}`} />
       <CalendarioAnual anio={anio} eventos={eventos} hoy={hoy} baseHref={`/colaboradores/${id}/calendario`} />
     </div>
   )
