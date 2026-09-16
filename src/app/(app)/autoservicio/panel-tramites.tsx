@@ -75,8 +75,10 @@ function TileCompacto({ item, onSolicitar }: { item: Item; onSolicitar: (t: Tipo
     <>
       <span className="relative">
         <span className={cn('grid size-16 place-items-center rounded-2xl border bg-card', 'transition-colors group-active/t:bg-accent')}>
-          <span className="grid size-9 place-items-center rounded-[10px] bg-foreground text-background">
-            <Icono className="size-[18px]" />
+          {/* Chip e icono algo más grandes que en escritorio: a este tamaño el
+              icono se leía chico y el recuadro de 64 px lo aguanta sin apretar. */}
+          <span className="grid size-11 place-items-center rounded-xl bg-foreground text-background">
+            <Icono className="size-[22px]" />
           </span>
         </span>
         {/* Lo pendiente se marca sobre el ícono, como una notificación: en este
