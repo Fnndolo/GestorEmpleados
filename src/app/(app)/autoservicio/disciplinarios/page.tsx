@@ -100,7 +100,6 @@ export default async function MisDisciplinariosPage() {
                 key={p.id}
                 asunto={p.asunto}
                 clase={p.clase}
-                etapa={p.etapa}
                 etapaEtiqueta={ETAPA[p.etapa] ?? p.etapa}
                 cerrado={p.cerrado}
                 descripcion={p.descripcion}

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { ChevronDown, CircleCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
-import { Pill, type PillTone } from '@/components/ui-kit'
+import { Pill } from '@/components/ui-kit'
 import { SoportesLista, type SoporteDoc } from '@/app/(app)/juridica/_ui'
 
 /**
@@ -16,24 +16,24 @@ import { SoportesLista, type SoporteDoc } from '@/app/(app)/juridica/_ui'
  */
 export type EtapaItem = { id: string; etapa: string; etiqueta: string; fecha: string; detalle: string | null; soportes: SoporteDoc[] }
 
-const TONO_ETAPA: Record<string, PillTone> = {
-  CITACION_DESCARGOS: 'warn', DESCARGOS: 'info', DECISION: 'accent', RECURSO: 'bad', CERRADO: 'muted',
-}
-/** Color del borde izquierdo por etapa — paleta del sistema. */
+/**
+ * Las etapas van en una sola escala de grises, de claro a negro según avanza el
+ * proceso: la citación apenas marcada y el cierre en tinta. Sin colores por
+ * etapa —el color en esta app queda para lo que exige atención—.
+ */
 const BORDE_ETAPA: Record<string, string> = {
-  CITACION_DESCARGOS: 'border-l-amber-500',
-  DESCARGOS: 'border-l-sky-500',
-  DECISION: 'border-l-violet-500',
-  RECURSO: 'border-l-rose-500',
-  CERRADO: 'border-l-emerald-500',
+  CITACION_DESCARGOS: 'border-l-foreground/20',
+  DESCARGOS: 'border-l-foreground/40',
+  DECISION: 'border-l-foreground/60',
+  RECURSO: 'border-l-foreground/80',
+  CERRADO: 'border-l-foreground',
 }
 
 export function ProcesoPlegable({
-  asunto, clase, etapa, etapaEtiqueta, cerrado, descripcion, etapas, plazo, children,
+  asunto, clase, etapaEtiqueta, cerrado, descripcion, etapas, plazo, children,
 }: {
   asunto: string
   clase: string
-  etapa: string
   etapaEtiqueta: string
   cerrado: boolean
   descripcion: string | null
@@ -57,7 +57,8 @@ export function ProcesoPlegable({
             <span className="block truncate text-sm font-bold">{asunto}</span>
             <span className="mt-1 flex flex-wrap items-center gap-1.5">
               <Pill tone="muted">{clase === 'LLAMADO_ATENCION' ? 'Llamado de atención' : 'Proceso disciplinario'}</Pill>
-              <Pill tone={cerrado ? 'muted' : TONO_ETAPA[etapa] ?? 'info'}>{etapaEtiqueta}</Pill>
+              {/* La etapa actual en tinta; la clase, en gris claro. */}
+              <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold', cerrado ? 'bg-foreground/8 text-muted-foreground' : 'bg-foreground text-background')}>{etapaEtiqueta}</span>
               <span className="text-[11px] text-muted-foreground">· {etapas.length} actuaci{etapas.length === 1 ? 'ón' : 'ones'}</span>
             </span>
           </span>
@@ -72,9 +73,9 @@ export function ProcesoPlegable({
             {descripcion && <p className="text-sm text-muted-foreground">{descripcion}</p>}
             {etapas.length > 0 && (
               <ol>
-                {/* Bloques cuadrados contiguos; solo el borde izquierdo lleva el color de la etapa. */}
+                {/* Bloques cuadrados contiguos; solo el borde izquierdo lleva el gris de la etapa. */}
                 {etapas.map((e) => (
-                  <li key={e.id} className={cn('border border-l-4 bg-card px-3.5 py-2.5 text-sm [&+li]:-mt-px', BORDE_ETAPA[e.etapa] ?? 'border-l-primary')}>
+                  <li key={e.id} className={cn('border border-l-4 bg-card px-3.5 py-2.5 text-sm [&+li]:-mt-px', BORDE_ETAPA[e.etapa] ?? 'border-l-foreground/40')}>
                     <div className="flex flex-wrap items-center gap-2">
                       <CircleCheck className="size-4 shrink-0 text-muted-foreground" />
                       <span className="font-semibold">{e.etiqueta}</span>
