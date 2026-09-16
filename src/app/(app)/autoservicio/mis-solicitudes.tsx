@@ -88,6 +88,26 @@ const ESTADO_PASO: Record<string, { label: string; icono: React.ElementType; cla
  * Lista de solicitudes del colaborador con detalle expandible (acordeón):
  * al presionar una fila se abre su detalle y se cierra la que estuviera abierta.
  */
+/** Etiquetas de texto libre: van a lo ancho y recortadas, no en media columna. */
+const CAMPOS_LARGOS = new Set(['Motivo', 'Observaciones', 'Dirigida a', 'Entidad'])
+
+function CampoLargo({ label, valor }: { label: string; valor: string }) {
+  const [abierto, setAbierto] = useState(false)
+  // Por debajo de esto cabe en dos líneas de móvil: no vale la pena el botón.
+  const largo = valor.length > 90
+  return (
+    <div className="col-span-full min-w-0">
+      <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className={cn('text-sm', largo && !abierto && 'line-clamp-2')}>{valor}</dd>
+      {largo && (
+        <button type="button" onClick={() => setAbierto((v) => !v)} className="mt-0.5 text-xs font-medium text-primary hover:underline">
+          {abierto ? 'Ver menos' : 'Ver más'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }) {
   const router = useRouter()
   const [abierta, setAbierta] = useState<string | null>(null)
@@ -343,7 +363,9 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                 )}
                 {s.campos.length > 0 && (
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-                    {s.campos.map((cpo) => (
+                    {s.campos.map((cpo) => CAMPOS_LARGOS.has(cpo.label) ? (
+                      <CampoLargo key={cpo.label} label={cpo.label} valor={cpo.valor} />
+                    ) : (
                       <div key={cpo.label} className="min-w-0">
                         <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{cpo.label}</dt>
                         <dd className="text-sm">{cpo.valor}</dd>
