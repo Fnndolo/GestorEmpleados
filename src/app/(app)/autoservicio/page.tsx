@@ -263,6 +263,17 @@ export default async function AutoservicioPage() {
           ? { fechaInicio: fechaLegible(cp.fechaInicio), fechaFin: fechaLegible(cp.fechaFin), comentario: cp.comentario ?? null }
           : null,
         comprobante: s.tipo === 'PERMISO' && permisoPorSolicitud.has(s.id) ? comprobanteDe(permisoPorSolicitud.get(s.id)!) : null,
+        // Un permiso se puede corregir mientras siga en aprobación y nadie lo haya decidido.
+        edicion: s.tipo === 'PERMISO' && s.estado === 'EN_APROBACION' && s.pasos.every((p) => p.estado === 'PENDIENTE')
+          ? {
+              solicitudId: s.id,
+              fechaInicio: String(datos.fechaInicio ?? ''),
+              permisoTipo: datos.permisoTipo === 'HORAS' ? 'HORAS' as const : 'DIA' as const,
+              horaInicio: typeof datos.horaInicio === 'string' ? datos.horaInicio : undefined,
+              horaFin: typeof datos.horaFin === 'string' ? datos.horaFin : undefined,
+              motivo: typeof datos.motivo === 'string' ? datos.motivo : '',
+            }
+          : null,
       },
     })
   }

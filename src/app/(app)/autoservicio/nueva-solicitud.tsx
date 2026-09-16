@@ -19,7 +19,17 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { LICENCIAS, defLicencia, type TipoLicencia } from '@/lib/licencias'
 import { festivosDeRango, esDiaHabil } from '@/lib/dias-habiles'
 import { parseFechaISO } from '@/lib/fechas'
-import { crearSolicitud } from './acciones'
+import { crearSolicitud, editarMiPermiso } from './acciones'
+
+/** Lo que hace falta para abrir el diálogo con un permiso ya pedido y corregirlo. */
+export type EdicionPermiso = {
+  solicitudId: string
+  fechaInicio: string
+  permisoTipo: 'DIA' | 'HORAS'
+  horaInicio?: string
+  horaFin?: string
+  motivo?: string
+}
 
 export type TipoSol = 'VACACIONES' | 'PERMISO' | 'INCAPACIDAD' | 'CERTIFICACION_LABORAL' | 'LICENCIA'
 
@@ -73,7 +83,13 @@ function diasHabilesTexto(n: number): string {
  * colaborador desde su tile; el padre lo desmonta al cerrar, así el formulario
  * arranca limpio en cada trámite sin necesidad de resetear a mano.
  */
-export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipoInicial: TipoSol; saldoVacaciones?: number; onClose: () => void }) {
+export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose }: {
+  tipoInicial: TipoSol
+  saldoVacaciones?: number
+  /** Con esto el diálogo edita un permiso ya pedido en vez de crear uno. */
+  edicion?: EdicionPermiso
+  onClose: () => void
+}) {
   const router = useRouter()
   const inputArchivo = useRef<HTMLInputElement>(null)
   const tipo = tipoInicial
@@ -87,11 +103,14 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
   const saldoVac = saldoVacaciones ?? 0
   const vacAnticipadas = tipo === 'VACACIONES' && diasVac > 0 && diasVac > saldoVac
   // Permiso (un solo día)
-  const [permFecha, setPermFecha] = useState<Date | undefined>()
+  const [permFecha, setPermFecha] = useState<Date | undefined>(() => {
+    const m = edicion && /^(\d{4})-(\d{2})-(\d{2})$/.exec(edicion.fechaInicio)
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : undefined
+  })
   const [permCalAbierto, setPermCalAbierto] = useState(false)
-  const [permModo, setPermModo] = useState<'DIA' | 'HORAS'>('DIA')
-  const [permIni, setPermIni] = useState('08:00')
-  const [permFin, setPermFin] = useState('12:00')
+  const [permModo, setPermModo] = useState<'DIA' | 'HORAS'>(edicion?.permisoTipo ?? 'DIA')
+  const [permIni, setPermIni] = useState(edicion?.horaInicio ?? '08:00')
+  const [permFin, setPermFin] = useState(edicion?.horaFin ?? '12:00')
   // Incapacidad (rango)
   const [incaIni, setIncaIni] = useState('')
   const [incaFin, setIncaFin] = useState('')
@@ -102,7 +121,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
   const [licIni, setLicIni] = useState('')
   const [licFin, setLicFin] = useState('')
   // Comunes
-  const [motivo, setMotivo] = useState('')
+  const [motivo, setMotivo] = useState(edicion?.motivo ?? '')
   const [certTipo, setCertTipo] = useState('')
   const [dirigidaA, setDirigidaA] = useState('')
   // Varios soportes: un permiso puede llevar la cita y la constancia, una
@@ -163,8 +182,15 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
     const err = validar()
     if (err) { toast.error(err); return }
     setG(true)
-    const res = await crearSolicitud(payload())
+    // Editar guarda sobre la misma solicitud; los soportes nuevos se le adjuntan igual.
+    const res = edicion
+      ? await editarMiPermiso({
+          solicitudId: edicion.solicitudId, fechaInicio: toISO(permFecha), permisoTipo: permModo, motivo: motivo || undefined,
+          ...(permModo === 'HORAS' ? { horaInicio: permIni, horaFin: permFin } : {}),
+        })
+      : await crearSolicitud(payload())
     if (!res.ok) { setG(false); toast.error(res.error); return }
+    const solicitudId = edicion ? edicion.solicitudId : (res.datos as { id: string }).id
     if (archivos.length > 0) {
       let fallidos = 0
       for (const archivo of archivos) {
@@ -172,7 +198,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
           const fd = new FormData()
           fd.append('archivo', archivo)
           fd.append('entidadTipo', 'Solicitud')
-          fd.append('entidadId', (res.datos as { id: string }).id)
+          fd.append('entidadId', solicitudId)
           fd.append('nombre', `Soporte solicitud — ${archivo.name}`)
           const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
           if (!up.ok) fallidos++
@@ -190,7 +216,8 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
     }
     setG(false)
     toast.success(
-      tipo === 'INCAPACIDAD' ? 'Incapacidad enviada a Talento Humano.'
+      edicion ? 'Permiso actualizado. Le avisamos a quien lo aprueba.'
+        : tipo === 'INCAPACIDAD' ? 'Incapacidad enviada a Talento Humano.'
         : lic?.derecho ? 'Licencia reportada. Talento Humano valida el soporte y la registra; no requiere aprobación.'
         : 'Solicitud enviada. Quedó en aprobación de tu jefe inmediato.',
     )
@@ -207,7 +234,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
             aviso al enviar; aquí solo estorbaba antes de llegar a los campos. */}
         <DialogContent aria-describedby={undefined}>
           <DialogHeader>
-            <DialogTitle>Nueva solicitud — {ETIQUETA_TIPO[tipo]}</DialogTitle>
+            <DialogTitle>{edicion ? 'Editar permiso' : `Nueva solicitud — ${ETIQUETA_TIPO[tipo]}`}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 max-h-[70vh] overflow-y-auto px-0.5">
@@ -414,7 +441,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, onClose }: { tipo
 
           <DialogFooter>
             <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-            <Button onClick={enviar} disabled={g}>{g && <Spinner />}Enviar solicitud</Button>
+            <Button onClick={enviar} disabled={g}>{g && <Spinner />}{edicion ? 'Guardar cambios' : 'Enviar solicitud'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

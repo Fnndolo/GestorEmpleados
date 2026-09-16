@@ -256,7 +256,7 @@ export const crearSolicitud = accion(
   },
 )
 
-async function avisarAprobadoresDelPaso(solicitudId: string, orden: number) {
+async function avisarAprobadoresDelPaso(solicitudId: string, orden: number, modo: 'nueva' | 'cambio' = 'nueva') {
   const paso = await prisma.pasoAprobacion.findFirst({ where: { solicitudId, orden } })
   if (!paso) return
   const solicitud = await prisma.solicitud.findUniqueOrThrow({
@@ -277,7 +277,7 @@ async function avisarAprobadoresDelPaso(solicitudId: string, orden: number) {
         colaboradorId: solicitud.colaboradorId,
       }
     : {
-        titulo: `${quien} pidió ${etiquetaTipo(solicitud.tipo)}`,
+        titulo: modo === 'cambio' ? `${quien} cambió su solicitud de ${etiquetaTipo(solicitud.tipo)}` : `${quien} pidió ${etiquetaTipo(solicitud.tipo)}`,
         mensaje: detalle,
         enlace: '/autoservicio/aprobaciones', llamadoAccion: 'Revisar la solicitud', evento: 'solicitud_creada',
         colaboradorId: solicitud.colaboradorId,
@@ -738,6 +738,56 @@ export const responderContrapropuesta = accion(
 async function avisarUsuario(usuarioId: string, titulo: string, mensaje: string, colaboradorId?: string) {
   await avisar(usuarioId, { titulo, mensaje, enlace: '/autoservicio/aprobaciones', evento: 'solicitud_resuelta', colaboradorId })
 }
+
+/**
+ * El colaborador corrige su permiso (día, horas, motivo) mientras siga en
+ * aprobación y ningún paso se haya decidido: cambiarlo después de que el jefe
+ * lo aprobó dejaría aprobado algo distinto de lo que él vio. Los aprobadores
+ * pendientes reciben el aviso con los datos nuevos.
+ */
+export const editarMiPermiso = accion(
+  {
+    modulo: 'autoservicio',
+    accion: 'CREAR',
+    schema: z.object({
+      solicitudId: z.uuid(),
+      fechaInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      permisoTipo: z.enum(['DIA', 'HORAS']),
+      horaInicio: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      horaFin: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      motivo: z.string().max(500).optional(),
+    }),
+  },
+  async (d, usuario) => {
+    const s = await prisma.solicitud.findUniqueOrThrow({
+      where: { id: d.solicitudId },
+      include: { pasos: { orderBy: { orden: 'asc' } } },
+    })
+    if (s.colaboradorId !== usuario.colaboradorId) throw new ErrorNegocio('Esta solicitud no es tuya.')
+    if (s.tipo !== 'PERMISO') throw new ErrorNegocio('Solo se pueden editar los permisos.')
+    if (s.estado !== 'EN_APROBACION') throw new ErrorNegocio('Este permiso ya no está en aprobación.')
+    if (s.pasos.some((p) => p.estado !== 'PENDIENTE')) throw new ErrorNegocio('Ya alguien decidió sobre este permiso; no se puede editar. Puedes crear uno nuevo.')
+    if (!parseFechaISO(d.fechaInicio)) throw new ErrorNegocio('La fecha no es válida.')
+    const porHoras = d.permisoTipo === 'HORAS'
+    if (porHoras && (!d.horaInicio || !d.horaFin)) throw new ErrorNegocio('Indica la hora de inicio y de fin.')
+    if (porHoras && d.horaInicio! >= d.horaFin!) throw new ErrorNegocio('La hora de inicio debe ser anterior a la hora de fin.')
+
+    const datos = { ...(s.datos as Record<string, unknown>) }
+    datos.fechaInicio = d.fechaInicio
+    datos.permisoTipo = d.permisoTipo
+    datos.motivo = d.motivo ?? ''
+    if (porHoras) { datos.horaInicio = d.horaInicio; datos.horaFin = d.horaFin }
+    else { delete datos.horaInicio; delete datos.horaFin }
+    datos.editadoEn = new Date().toISOString()
+    await dbAuditado.solicitud.update({ where: { id: s.id }, data: { datos: datos as object } })
+
+    const paso = s.pasos.find((p) => p.estado === 'PENDIENTE')
+    if (paso) await avisarAprobadoresDelPaso(s.id, paso.orden, 'cambio')
+    revalidatePath('/autoservicio')
+    revalidatePath('/autoservicio/aprobaciones')
+    return { ok: true }
+  },
+)
 
 export const cancelarSolicitud = accion(
   { modulo: 'autoservicio', accion: 'CREAR', schema: z.object({ id: z.uuid() }) },

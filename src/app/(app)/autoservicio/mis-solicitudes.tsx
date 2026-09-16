@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ChevronDown, Download, CalendarRange, Clock, HeartPulse, FileBadge, FileCheck, TriangleAlert, Check, X, CircleDashed, CalendarClock, Paperclip, FileUp } from 'lucide-react'
+import { ChevronDown, Download, CalendarRange, Clock, HeartPulse, FileBadge, FileCheck, TriangleAlert, Check, X, CircleDashed, CalendarClock, Paperclip, FileUp, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { Pill, type PillTone } from '@/components/ui-kit'
 import type { SituacionComprobante } from '@/lib/comprobante-permiso'
 import { responderContrapropuesta, corregirMiSoporte, entregarComprobantePermiso } from './acciones'
+import { NuevaSolicitud, type EdicionPermiso } from './nueva-solicitud'
 
 /** El estado se lee de un vistazo por color, no solo por texto. */
 const TONO_ESTADO: Record<string, PillTone> = {
@@ -62,6 +63,8 @@ export type SolicitudItem = {
   comprobante?: ComprobanteItem | null
   /** "Programada por la empresa" cuando la novedad no nació de una solicitud propia. */
   origen?: string | null
+  /** Datos para corregir el permiso; null cuando ya no se puede (alguien decidió o no es permiso). */
+  edicion?: EdicionPermiso | null
 }
 
 export type ComprobanteItem = {
@@ -148,6 +151,8 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
       setCorrigiendo(null)
     }
   }
+
+  const [editando, setEditando] = useState<EdicionPermiso | null>(null)
 
   async function responder(solicitudId: string, aceptar: boolean) {
     setRespondiendo(solicitudId)
@@ -328,6 +333,14 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
 
             {expandida && (
               <div className="space-y-3 border-t border-dashed bg-muted/20 px-4 py-3 animate-in fade-in slide-in-from-top-1 duration-150">
+                {/* Mientras nadie decida, el permiso se corrige aquí mismo. */}
+                {s.edicion && (
+                  <div className="flex justify-end">
+                    <Button size="sm" variant="outline" onClick={() => setEditando(s.edicion!)}>
+                      <Pencil className="size-4" /> Editar permiso
+                    </Button>
+                  </div>
+                )}
                 {s.campos.length > 0 && (
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
                     {s.campos.map((cpo) => (
@@ -429,6 +442,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
           </div>
         )
       })}
+      {editando && <NuevaSolicitud tipoInicial="PERMISO" edicion={editando} onClose={() => setEditando(null)} />}
     </CardContent></Card>
   )
 }
