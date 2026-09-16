@@ -746,7 +746,9 @@ model Documento {
   fechaVencimiento DateTime?            @map("fecha_vencimiento") @db.Date
   nivelAcceso      NivelAccesoDocumento @default(GENERAL) @map("nivel_acceso")
   sedeId           String?              @map("sede_id") @db.Uuid
-  subidoPorId      String               @map("subido_por_id") @db.Uuid
+  // Nulo solo en las evidencias de la línea ética: el canal es confidencial y
+  // no se guarda quién las aportó.
+  subidoPorId      String?              @map("subido_por_id") @db.Uuid
   creadoEn         DateTime             @default(now()) @map("creado_en")
 
   @@index([entidadTipo, entidadId])

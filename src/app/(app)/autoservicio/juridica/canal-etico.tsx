@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ShieldAlert, FileLock, Lock, Copy, Search } from 'lucide-react'
+import { ShieldAlert, FileLock, Lock, Copy, Search, Paperclip, X } from 'lucide-react'
 import { Pill, type PillTone } from '@/components/ui-kit'
 import { formatFechaCorta } from '@/lib/fechas'
 import { Button } from '@/components/ui/button'
@@ -186,20 +186,35 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
   const [nombre, setNombre] = useState('')
   const [hechos, setHechos] = useState('')
   const [fechaHechos, setFechaHechos] = useState('')
+  // Evidencias: capturas, fotos, audios, PDF… varias, se suben tras crear el reporte.
+  const [archivos, setArchivos] = useState<File[]>([])
+  const inputArchivo = useRef<HTMLInputElement>(null)
   const [g, setG] = useState(false)
 
   async function enviar() {
     if (hechos.trim().length < 10) { toast.error('Describe los hechos (mínimo 10 caracteres).'); return }
     setG(true)
     const res = await crearMiDenuncia({ tipo, anonima, denuncianteNombre: anonima ? undefined : nombre, hechos, fechaHechos: fechaHechos || undefined })
-    setG(false)
-    if (res.ok) {
-      // El código se muestra en un diálogo persistente (con copiar), no en un toast efímero.
-      onCreada(res.datos.codigo)
-      router.refresh()
-    } else {
-      toast.error(res.error)
+    if (!res.ok) { setG(false); toast.error(res.error); return }
+    // Las evidencias van por su propio endpoint, que no registra quién las sube;
+    // la prueba de que son de este reporte es el código.
+    let fallidos = 0
+    for (const archivo of archivos) {
+      try {
+        const fd = new FormData()
+        fd.append('archivo', archivo)
+        fd.append('codigo', res.datos.codigo)
+        const up = await fetch('/api/linea-etica/soporte', { method: 'POST', body: fd })
+        if (!up.ok) fallidos++
+      } catch {
+        fallidos++
+      }
     }
+    setG(false)
+    if (fallidos > 0) toast.warning(`El reporte se envió, pero ${fallidos} de ${archivos.length} archivos no se pudieron adjuntar.`)
+    // El código se muestra en un diálogo persistente (con copiar), no en un toast efímero.
+    onCreada(res.datos.codigo)
+    router.refresh()
   }
 
   return (
@@ -240,6 +255,33 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
           {!anonima && <Campo label="Tu nombre (opcional)"><Input value={nombre} onChange={(e) => setNombre(e.target.value)} /></Campo>}
           <Campo label="¿Qué ocurrió?"><Textarea rows={5} value={hechos} onChange={(e) => setHechos(e.target.value)} placeholder="Describe los hechos, personas involucradas, lugar y contexto." /></Campo>
           <Campo label="Fecha de los hechos (opcional)"><Input type="date" value={fechaHechos} onChange={(e) => setFechaHechos(e.target.value)} /></Campo>
+          <Campo label="Evidencias (opcional)">
+            <input
+              ref={inputArchivo}
+              type="file"
+              multiple
+              accept="image/*,application/pdf,audio/*,video/*"
+              className="hidden"
+              onChange={(e) => { setArchivos((prev) => [...prev, ...Array.from(e.target.files ?? [])]); e.target.value = '' }}
+            />
+            {archivos.length > 0 && (
+              <ul className="space-y-1 rounded-lg border p-2">
+                {archivos.map((a, i) => (
+                  <li key={`${a.name}-${i}`} className="flex items-center gap-2 text-xs">
+                    <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">{a.name}</span>
+                    <span className="shrink-0 text-muted-foreground">{(a.size / 1024 / 1024).toFixed(1)} MB</span>
+                    <button type="button" onClick={() => setArchivos((prev) => prev.filter((_, j) => j !== i))} className="shrink-0 text-destructive" aria-label={`Quitar ${a.name}`}>
+                      <X className="size-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
+              <Paperclip className="size-4" /> {archivos.length > 0 ? 'Agregar otro archivo' : 'Adjuntar capturas, fotos, audios o PDF'}
+            </Button>
+          </Campo>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
