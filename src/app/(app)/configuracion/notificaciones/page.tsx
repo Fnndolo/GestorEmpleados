@@ -24,7 +24,7 @@ export default async function NotificacionesConfigPage() {
     <div className="max-w-5xl">
       <Encabezado
         titulo="Notificaciones"
-        descripcion="Elige cómo avisa cada evento. Todos llegan siempre a la campana y al celular; aquí decides cuáles además muestran un pop-up en pantalla y cuáles mandan correo. El correo viene apagado salvo donde corre un plazo legal, para que la bandeja no se llene de confirmaciones."
+        descripcion="Todos los eventos llegan a la campana y al celular. Aquí decides cuáles además muestran un pop-up y cuáles mandan correo. El correo viene apagado en todos: enciéndelo solo donde haga falta. Por correo salen siempre los códigos de firma, las contraseñas y lo que va al aspirante de una evaluación previa."
       />
       <div className="mb-6">
         <BroadcastPrueba />

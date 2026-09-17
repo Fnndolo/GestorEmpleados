@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { enviarCorreo } from '@/server/notificaciones/correo'
 import { hoyBogota, hoyBogotaISO } from '@/lib/fechas'
 import { fechaBreve } from '@/lib/notificaciones/texto'
+import { mandaCorreo } from '@/lib/notificaciones/catalogo'
 
 /**
  * Texto del aviso: primero la persona, luego qué vence, y la fecha en la
@@ -84,6 +85,9 @@ export async function procesarAlertas(): Promise<{ vencidos: number; alertas: nu
   let notificaciones = 0
   let correos = 0
 
+  const prefs = await prisma.preferenciaNotificacion.findMany({ select: { evento: true, correo: true } })
+  const conCorreo = mandaCorreo('vencimiento_alerta', Object.fromEntries(prefs.map((p) => [p.evento, p.correo])))
+
   for (const alerta of pendientes) {
     const v = alerta.vencimiento
     if (v.estado === 'RESUELTO' || v.estado === 'CANCELADO') {
@@ -107,7 +111,10 @@ export async function procesarAlertas(): Promise<{ vencidos: number; alertas: nu
       } catch {
         /* ya existe (P2002) → idempotente */
       }
-      // Correo en outbox (idempotente)
+      // Correo en outbox (idempotente), solo si el evento lo tiene encendido en
+      // Ajustes: antes salía siempre, saltándose la preferencia que sí respetan
+      // los demás avisos.
+      if (!conCorreo) continue
       try {
         await prisma.mensajeSaliente.create({
           data: {

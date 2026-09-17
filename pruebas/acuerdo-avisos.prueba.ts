@@ -92,8 +92,8 @@ describe('Evaluación previa · avisos', () => {
     const aviso = avisos.find((n) => n.userId === quienEnvio.id)!
     expect(aviso.titulo).toContain('Aspirante De Prueba devolvió firmado el acuerdo')
     expect(aviso.enlace).toBe('/contratos/acuerdos')
-    // El evento manda correo por defecto: queda en el outbox de cada destinatario.
-    expect(await prisma.mensajeSaliente.count({ where: { asunto: { contains: MARCA } } })).toBe(porUsuario.size)
+    // Sin correo mientras el evento no se encienda en Ajustes: nada en el outbox.
+    expect(await prisma.mensajeSaliente.count({ where: { asunto: { contains: MARCA } } })).toBe(0)
   })
 
   it('al decidir, el aspirante recibe la decisión por correo (sin observaciones internas)', async () => {

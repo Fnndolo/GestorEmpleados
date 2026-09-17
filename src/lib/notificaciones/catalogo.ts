@@ -67,9 +67,12 @@ export type EventoNotif = {
   modulo: string
   /**
    * Si además del aviso en la app se manda correo, mientras nadie lo cambie en
-   * Ajustes. Solo va en `true` donde hay un plazo legal corriendo o la persona
-   * tiene que hacer algo fuera de la plataforma: un correo por cada movimiento
-   * llena la bandeja y termina consiguiendo que no se lea ninguno.
+   * Ajustes. Hoy ningún evento lo trae en `true` (decisión del 2026-09-17): las
+   * cuentas de muchas personas comparten un mismo buzón, así que un correo de
+   * "tu permiso fue aprobado" lo leería medio equipo. Todo vive en la campana y
+   * el push; por correo solo sale lo que no puede ir por otro lado (códigos de
+   * firma, contraseñas, el aspirante sin cuenta). Se enciende evento por evento
+   * en Ajustes → Notificaciones si algún día hace falta.
    */
   correoPorDefecto?: boolean
 }
@@ -91,20 +94,18 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
   { clave: 'expediente_pendiente', etiqueta: 'Documentos del expediente pendientes', descripcion: 'Al quedar con contrato de trabajo se le dice al colaborador qué documentos le faltan por entregar.', modulo: 'Autoservicio' },
 
   // Bienestar
-  { clave: 'cumpleanos_encargado_asignado', etiqueta: 'Cumpleaños a cargo', descripcion: 'Talento Humano le encarga a un colaborador la celebración del cumpleaños de otro.', modulo: 'Bienestar', correoPorDefecto: true },
-  { clave: 'cumpleanos_recordatorio', etiqueta: 'Recordatorio de cumpleaños', descripcion: 'Aviso automático al encargado unos días antes del cumpleaños que tiene a cargo.', modulo: 'Bienestar', correoPorDefecto: true },
+  { clave: 'cumpleanos_encargado_asignado', etiqueta: 'Cumpleaños a cargo', descripcion: 'Talento Humano le encarga a un colaborador la celebración del cumpleaños de otro.', modulo: 'Bienestar' },
+  { clave: 'cumpleanos_recordatorio', etiqueta: 'Recordatorio de cumpleaños', descripcion: 'Aviso automático al encargado unos días antes del cumpleaños que tiene a cargo.', modulo: 'Bienestar' },
   { clave: 'cumpleanos_facturas_entregadas', etiqueta: 'Facturas de cumpleaños entregadas', descripcion: 'El encargado sube las facturas de la celebración y Talento Humano debe revisarlas.', modulo: 'Bienestar' },
   { clave: 'cumpleanos_facturas_revisadas', etiqueta: 'Facturas de cumpleaños revisadas', descripcion: 'Talento Humano acepta las facturas o las devuelve para que el encargado las corrija.', modulo: 'Bienestar' },
 
   // Contratos
-  { clave: 'contrato_pendiente_firma', etiqueta: 'Contrato pendiente de firma', descripcion: 'Se crea un contrato que el colaborador debe firmar.', modulo: 'Contratos', correoPorDefecto: true },
+  { clave: 'contrato_pendiente_firma', etiqueta: 'Contrato pendiente de firma', descripcion: 'Se crea un contrato que el colaborador debe firmar.', modulo: 'Contratos' },
   { clave: 'contrato_cerrado', etiqueta: 'Contrato OPS cerrado', descripcion: 'Talento Humano cierra un contrato de prestación de servicios (vencimiento del plazo, anticipado o mutuo acuerdo).', modulo: 'Contratos' },
-  { clave: 'contrato_por_firmar', etiqueta: 'Falta tu firma en el contrato', descripcion: 'Una parte firmó y falta la otra.', modulo: 'Contratos', correoPorDefecto: true },
+  { clave: 'contrato_por_firmar', etiqueta: 'Falta tu firma en el contrato', descripcion: 'Una parte firmó y falta la otra.', modulo: 'Contratos' },
   { clave: 'contrato_firmado', etiqueta: 'Contrato firmado', descripcion: 'Se completan las firmas del contrato.', modulo: 'Contratos' },
   { clave: 'contrato_actualizado', etiqueta: 'Contrato actualizado', descripcion: 'Se modifica un contrato ya existente.', modulo: 'Contratos' },
-  // Correo por defecto: el aspirante no es usuario, así que la evaluación
-  // sigue fuera de la app y hay que decidirla antes de que venza su periodo.
-  { clave: 'evaluacion_firmada', etiqueta: 'Acuerdo de evaluación firmado', descripcion: 'El aspirante devuelve firmado el acuerdo de evaluación previa: hay que evaluarlo y decidir.', modulo: 'Contratos', correoPorDefecto: true },
+  { clave: 'evaluacion_firmada', etiqueta: 'Acuerdo de evaluación firmado', descripcion: 'El aspirante devuelve firmado el acuerdo de evaluación previa: hay que evaluarlo y decidir.', modulo: 'Contratos' },
 
   // Cuentas de cobro
   { clave: 'cuenta_cobro_radicada', etiqueta: 'Cuenta de cobro radicada', descripcion: 'Se radica una cuenta de cobro.', modulo: 'Cuentas de cobro' },
@@ -129,13 +130,13 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
   { clave: 'capacitacion_convocatoria', etiqueta: 'Convocatoria a capacitación', descripcion: 'Se cita a los colaboradores a una capacitación.', modulo: 'Capacitaciones' },
 
   // Jurídica
-  { clave: 'denuncia_acoso', etiqueta: 'Reporte de la línea ética', descripcion: 'Llega un reporte por la línea ética (acoso, irregularidad o sugerencia).', modulo: 'Jurídica', correoPorDefecto: true },
-  { clave: 'habeas_data', etiqueta: 'Consulta / reclamo de habeas data', descripcion: 'Un colaborador presenta una consulta o reclamo (Ley 1581): corre plazo de 10 o 15 días hábiles.', modulo: 'Jurídica', correoPorDefecto: true },
+  { clave: 'denuncia_acoso', etiqueta: 'Reporte de la línea ética', descripcion: 'Llega un reporte por la línea ética (acoso, irregularidad o sugerencia).', modulo: 'Jurídica' },
+  { clave: 'habeas_data', etiqueta: 'Consulta / reclamo de habeas data', descripcion: 'Un colaborador presenta una consulta o reclamo (Ley 1581): corre plazo de 10 o 15 días hábiles.', modulo: 'Jurídica' },
   { clave: 'llamado_atencion', etiqueta: 'Llamado de atención', descripcion: 'Se registra un llamado de atención.', modulo: 'Jurídica' },
-  { clave: 'disciplinario_citacion', etiqueta: 'Citación a descargos', descripcion: 'Se cita al colaborador a descargos: corre el plazo de 5 días hábiles de su derecho de defensa.', modulo: 'Jurídica', correoPorDefecto: true },
+  { clave: 'disciplinario_citacion', etiqueta: 'Citación a descargos', descripcion: 'Se cita al colaborador a descargos: corre el plazo de 5 días hábiles de su derecho de defensa.', modulo: 'Jurídica' },
   { clave: 'disciplinario_descargos', etiqueta: 'Descargos presentados', descripcion: 'El colaborador presenta sus descargos.', modulo: 'Jurídica' },
   { clave: 'disciplinario_avance', etiqueta: 'Avance de proceso disciplinario', descripcion: 'El proceso disciplinario cambia de etapa.', modulo: 'Jurídica' },
-  { clave: 'disciplinario_decision', etiqueta: 'Decisión del proceso', descripcion: 'Se toma una decisión: corre el plazo de 5 días hábiles para apelar.', modulo: 'Jurídica', correoPorDefecto: true },
+  { clave: 'disciplinario_decision', etiqueta: 'Decisión del proceso', descripcion: 'Se toma una decisión: corre el plazo de 5 días hábiles para apelar.', modulo: 'Jurídica' },
   { clave: 'disciplinario_apelacion', etiqueta: 'Recurso de apelación', descripcion: 'El colaborador presenta un recurso de apelación.', modulo: 'Jurídica' },
   { clave: 'disciplinario_cerrado', etiqueta: 'Proceso disciplinario cerrado', descripcion: 'Se cierra el proceso disciplinario.', modulo: 'Jurídica' },
 

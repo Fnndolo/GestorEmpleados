@@ -2,20 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { EVENTOS_NOTIF, CORREO_POR_DEFECTO, mandaCorreo } from './catalogo'
 
 describe('CORREO_POR_DEFECTO', () => {
-  it('solo manda correo donde corre un plazo o hay que actuar fuera de la app', () => {
-    expect([...CORREO_POR_DEFECTO].sort()).toEqual([
-      'contrato_pendiente_firma',
-      'contrato_por_firmar',
-      // Organizar un cumpleaños se hace fuera de la app, y el recordatorio
-      // llega justo cuando la persona no está mirando la plataforma.
-      'cumpleanos_encargado_asignado',
-      'cumpleanos_recordatorio',
-      'denuncia_acoso',
-      'disciplinario_citacion',
-      'disciplinario_decision',
-      'evaluacion_firmada',
-      'habeas_data',
-    ])
+  it('ningún evento manda correo mientras nadie lo encienda en Ajustes', () => {
+    // Las cuentas comparten buzón: el correo de los eventos se enciende a mano,
+    // uno por uno, y solo si de verdad hace falta.
+    expect([...CORREO_POR_DEFECTO]).toEqual([])
   })
 
   it('deja sin correo las confirmaciones de lo que la persona acaba de hacer', () => {
@@ -27,14 +17,14 @@ describe('CORREO_POR_DEFECTO', () => {
 })
 
 describe('mandaCorreo', () => {
-  it('sin preferencia guardada, usa el valor por defecto del catálogo', () => {
-    expect(mandaCorreo('disciplinario_citacion', {})).toBe(true)
+  it('sin preferencia guardada, usa el valor por defecto del catálogo (apagado)', () => {
+    expect(mandaCorreo('disciplinario_citacion', {})).toBe(false)
     expect(mandaCorreo('contrato_firmado', {})).toBe(false)
   })
 
-  it('la preferencia guardada manda sobre el valor por defecto, en los dos sentidos', () => {
-    expect(mandaCorreo('disciplinario_citacion', { disciplinario_citacion: false })).toBe(false)
-    expect(mandaCorreo('contrato_firmado', { contrato_firmado: true })).toBe(true)
+  it('la preferencia guardada manda sobre el valor por defecto', () => {
+    expect(mandaCorreo('disciplinario_citacion', { disciplinario_citacion: true })).toBe(true)
+    expect(mandaCorreo('contrato_firmado', { contrato_firmado: false })).toBe(false)
   })
 
   it('un aviso sin evento o sin catalogar no manda correo', () => {
