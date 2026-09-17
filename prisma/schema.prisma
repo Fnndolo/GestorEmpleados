@@ -1431,6 +1431,9 @@ model EvidenciaFirmaContrato {
   contrato      Contrato?        @relation(fields: [contratoId], references: [id], onDelete: Cascade)
   otrosiId      String?          @map("otrosi_id") @db.Uuid
   otrosi        OtrosiContrato?  @relation(fields: [otrosiId], references: [id], onDelete: Cascade)
+  // O la firma fue de una orden de pago de horas extra (aparte de la nómina).
+  pagoHorasExtraId String?       @map("pago_horas_extra_id") @db.Uuid
+  pagoHorasExtra   PagoHorasExtra? @relation(fields: [pagoHorasExtraId], references: [id], onDelete: Cascade)
   rol           RolFirmaContrato
   userId        String?          @map("user_id") @db.Uuid
   userEmail     String?          @map("user_email")
@@ -1450,6 +1453,7 @@ enum PropositoCodigoFirma {
   FIRMA_CONTRATO_OPS
   FIRMA_CONTRATO_LABORAL
   FIRMA_OTROSI
+  FIRMA_PAGO_HORAS_EXTRA
 
   @@map("proposito_codigo_firma")
 }
@@ -2077,19 +2081,34 @@ model PagoHorasExtra {
   // { HED, HEN, HEDDF, HENDF } en horas, para el detalle de la orden de pago.
   detalleHoras     Json?                @map("detalle_horas")
   estado           EstadoPagoHorasExtra @default(PENDIENTE)
-  ordenDocId       String?              @map("orden_doc_id") @db.Uuid // orden de pago (la arma la app o se sube la propia)
+  ordenDocId       String?              @map("orden_doc_id") @db.Uuid // orden de pago (la arma la app; se re-arma firmada)
+  // Firma electrónica del colaborador aceptando el monto (Ley 527), paso
+  // obligatorio antes de poder marcar el pago: espejo simplificado de la firma
+  // de contratos (sin las dos partes: aquí solo firma quien recibe el pago).
+  firmaPath        String?              @map("firma_path")
+  firmaFecha       DateTime?            @map("firma_fecha")
+  firmaPorId       String?              @map("firma_por_id") @db.Uuid
   comprobanteDocId String?              @map("comprobante_doc_id") @db.Uuid // soporte de que ya se pagó (siempre se sube)
   pagadoEn         DateTime?            @map("pagado_en")
   pagadoPorId      String?              @map("pagado_por_id") @db.Uuid
   creadoEn         DateTime             @default(now()) @map("creado_en")
   actualizadoEn    DateTime             @updatedAt @map("actualizado_en")
+  evidenciasFirma  EvidenciaFirmaContrato[]
 
   @@unique([colaboradorId, desde, hasta])
   @@map("pago_horas_extra")
 }
 
+/**
+ * PENDIENTE: sin orden generada, o generada pero no enviada a firmar.
+ * ENVIADA_A_FIRMA: el colaborador ya la puede firmar desde su autoservicio.
+ * FIRMADA: firmada; ya se puede marcar como pagada.
+ * PAGADO: pagada (siempre después de FIRMADA — no se paga sin firma).
+ */
 enum EstadoPagoHorasExtra {
   PENDIENTE
+  ENVIADA_A_FIRMA
+  FIRMADA
   PAGADO
 
   @@map("estado_pago_horas_extra")

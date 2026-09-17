@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Timer, RefreshCw, Download, KeyRound, FileText } from 'lucide-react'
+import { Timer, RefreshCw, Download, KeyRound, FileText, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 import { Chip, Pill } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import {
-  consultarHorasAsistencia, traerHorasAsistencia, previsualizarOrdenPago, generarOrdenPago, marcarPagoPagado, marcarPagoPendiente,
+  consultarHorasAsistencia, traerHorasAsistencia, previsualizarOrdenPago, generarOrdenPago, enviarOrdenAFirma, marcarPagoPagado, marcarPagoPendiente,
   type ResumenPantalla, type FilaAsistencia,
 } from './asistencia-acciones'
 
@@ -173,20 +173,22 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
                   <p className="mt-3 py-4 text-center text-sm text-muted-foreground">Sin horas extra del {datos.desde} al {datos.hasta}.</p>
                 ) : (
                   <div className="mt-3 overflow-x-auto">
-                    <table className="w-full min-w-[640px] text-sm">
+                    <table className="w-full text-sm">
                       <thead>
                         <tr className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">
-                          <th className="py-1.5 pr-2 text-left font-bold">Empleado</th>
-                          {CODIGOS.map((c) => <th key={c} className="py-1.5 px-2 text-right font-bold" title={ETIQUETA[c]}>{c}</th>)}
-                          <th className="py-1.5 px-2 text-right font-bold">Total</th>
-                          <th className="py-1.5 px-2 text-right font-bold">Valor</th>
-                          <th className="py-1.5 pl-2 text-right font-bold" title="En esta empresa las horas extra se pagan aparte de la nómina">Pago (aparte)</th>
+                          <th className="py-1.5 pr-1.5 text-left font-bold sm:pr-2">Empleado</th>
+                          {/* El detalle por tipo de hora solo cabe cómodo desde tablet; en el
+                              teléfono va resumido en la segunda línea del nombre. */}
+                          {CODIGOS.map((c) => <th key={c} className="hidden py-1.5 px-2 text-right font-bold sm:table-cell" title={ETIQUETA[c]}>{c}</th>)}
+                          <th className="py-1.5 px-1.5 text-right font-bold sm:px-2">Total</th>
+                          <th className="py-1.5 px-1.5 text-right font-bold sm:px-2">Valor</th>
+                          <th className="py-1.5 pl-1.5 text-right font-bold sm:pl-2" title="En esta empresa las horas extra se pagan aparte de la nómina">Pago (aparte)</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
                         {datos.filas.map((f) => (
                           <tr key={f.documento} className="align-middle">
-                            <td className="py-2 pr-2">
+                            <td className="py-2 pr-1.5 sm:pr-2">
                               <p className="font-semibold">{f.nombre}</p>
                               <p className="text-xs text-muted-foreground">
                                 {f.documento}{f.sede ? ` · ${f.sede}` : ''}
@@ -194,14 +196,19 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
                                   ? ` · ${f.registrados}/${f.tramos} en nómina${f.periodos.length ? ` (${f.periodos.join(', ')})` : ''}`
                                   : ''}
                               </p>
+                              {/* Mismo detalle que las columnas HED/HEN/HEDDF/HENDF, resumido: en
+                                  el teléfono esas columnas están ocultas (arriba). */}
+                              <p className="text-xs text-muted-foreground sm:hidden">
+                                {CODIGOS.filter((c) => f.horas[c]).map((c) => `${ETIQUETA[c]} ${horas(f.horas[c])}`).join(' · ')}
+                              </p>
                               {!f.colaboradorId && <Pill tone="bad" className="mt-1">Sin ficha activa aquí</Pill>}
                             </td>
                             {CODIGOS.map((c) => (
-                              <td key={c} className={cn('py-2 px-2 text-right tabular-nums', f.horas[c] ? 'font-semibold' : 'text-muted-foreground')}>{horas(f.horas[c])}</td>
+                              <td key={c} className={cn('hidden py-2 px-2 text-right tabular-nums sm:table-cell', f.horas[c] ? 'font-semibold' : 'text-muted-foreground')}>{horas(f.horas[c])}</td>
                             ))}
-                            <td className="py-2 px-2 text-right tabular-nums">{horas(f.horasExtra)}</td>
-                            <td className="py-2 px-2 text-right font-semibold tabular-nums">{f.valor == null ? <span className="font-normal text-muted-foreground" title="Sin salario en AsistencIA">—</span> : fmtCOP(f.valor)}</td>
-                            <td className="py-2 pl-2 text-right">
+                            <td className="py-2 px-1.5 text-right tabular-nums sm:px-2">{horas(f.horasExtra)}</td>
+                            <td className="py-2 px-1.5 text-right font-semibold tabular-nums sm:px-2">{f.valor == null ? <span className="font-normal text-muted-foreground" title="Sin salario en AsistencIA">—</span> : fmtCOP(f.valor)}</td>
+                            <td className="py-2 pl-1.5 text-right sm:pl-2">
                               {f.colaboradorId && (
                                 <AccionesPago colaboradorId={f.colaboradorId} mes={mes} quincena={quincena} nombre={f.nombre} pagoLocal={f.pagoLocal} sinHoras={f.horasExtra <= 0 || f.valor == null} />
                               )}
@@ -212,10 +219,10 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
                       {t && (
                         <tfoot>
                           <tr className="border-t font-bold">
-                            <td className="py-2 pr-2">Total · {datos.filas.length} persona{datos.filas.length === 1 ? '' : 's'}</td>
-                            {CODIGOS.map((c) => <td key={c} className="py-2 px-2 text-right tabular-nums">{horas(t.horas[c] ?? 0)}</td>)}
-                            <td className="py-2 px-2 text-right tabular-nums">{horas(t.horasExtra)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums">{fmtCOP(t.valor)}</td>
+                            <td className="py-2 pr-1.5 sm:pr-2">Total · {datos.filas.length} persona{datos.filas.length === 1 ? '' : 's'}</td>
+                            {CODIGOS.map((c) => <td key={c} className="hidden py-2 px-2 text-right tabular-nums sm:table-cell">{horas(t.horas[c] ?? 0)}</td>)}
+                            <td className="py-2 px-1.5 text-right tabular-nums sm:px-2">{horas(t.horasExtra)}</td>
+                            <td className="py-2 px-1.5 text-right tabular-nums sm:px-2">{fmtCOP(t.valor)}</td>
                             <td />
                           </tr>
                         </tfoot>
@@ -271,17 +278,14 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
   sinHoras: boolean
 }) {
   const router = useRouter()
-  const [ocupado, setOcupado] = useState<'previa' | 'guardar' | 'pagar' | 'deshacer' | null>(null)
-  const [previa, setPrevia] = useState<string | null>(null) // URL de objeto del PDF en vista previa
+  const [ocupado, setOcupado] = useState<'previa' | 'guardar' | 'enviar' | 'pagar' | 'deshacer' | null>(null)
+  const [previa, setPrevia] = useState<Blob | null>(null)
   const [dialogoPago, setDialogoPago] = useState(false)
   const [dialogoDeshacer, setDialogoDeshacer] = useState(false)
   const [comprobante, setComprobante] = useState<File | null>(null)
-  const pagado = pagoLocal?.estado === 'PAGADO'
-
-  function cerrarPrevia() {
-    if (previa) URL.revokeObjectURL(previa)
-    setPrevia(null)
-  }
+  const estado = pagoLocal?.estado
+  const pagado = estado === 'PAGADO'
+  const firmada = estado === 'FIRMADA' || pagado
 
   async function verOrden() {
     setOcupado('previa')
@@ -292,7 +296,7 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
     const bin = atob(base64)
     const bytes = new Uint8Array(bin.length)
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-    setPrevia(URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })))
+    setPrevia(new Blob([bytes], { type: 'application/pdf' }))
   }
 
   async function guardarOrden() {
@@ -301,11 +305,22 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
     setOcupado(null)
     if (!res.ok) { toast.error(res.error); return }
     toast.success('Orden de pago guardada.')
-    cerrarPrevia()
+    setPrevia(null)
+    router.refresh()
+  }
+
+  async function enviarAFirmar() {
+    if (!pagoLocal) return
+    setOcupado('enviar')
+    const res = await enviarOrdenAFirma({ pagoId: pagoLocal.id })
+    setOcupado(null)
+    if (!res.ok) { toast.error(res.error); return }
+    toast.success('Enviada a firmar. Se avisó al colaborador en su autoservicio.')
     router.refresh()
   }
 
   async function confirmarPago() {
+    if (!pagoLocal) return
     setOcupado('pagar')
     let pdfBase64: string | undefined
     if (comprobante) {
@@ -315,7 +330,7 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
         setOcupado(null); toast.error('No se pudo leer el archivo.'); return
       }
     }
-    const res = await marcarPagoPagado({ colaboradorId, mes, quincena, pdfBase64, nombreArchivo: comprobante?.name })
+    const res = await marcarPagoPagado({ pagoId: pagoLocal.id, pdfBase64, nombreArchivo: comprobante?.name })
     setOcupado(null)
     if (!res.ok) { toast.error(res.error); return }
     toast.success('Marcado como pagado.')
@@ -325,11 +340,12 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
   }
 
   async function confirmarDeshacer() {
+    if (!pagoLocal) return
     setOcupado('deshacer')
-    const res = await marcarPagoPendiente({ colaboradorId, mes, quincena })
+    const res = await marcarPagoPendiente({ pagoId: pagoLocal.id })
     setOcupado(null)
     if (!res.ok) { toast.error(res.error); return }
-    toast.success('Vuelto a pendiente.')
+    toast.success('Corregido: vuelve a "firmada".')
     setDialogoDeshacer(false)
     router.refresh()
   }
@@ -338,22 +354,29 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
     return <span className="text-xs text-muted-foreground">—</span>
   }
 
+  const ETIQUETA_ESTADO: Record<string, string> = {
+    PENDIENTE: 'Sin firmar', ENVIADA_A_FIRMA: 'Esperando firma', FIRMADA: 'Firmada · pendiente de pago', PAGADO: 'Pagado',
+  }
+
   return (
     <div className="flex flex-col items-end gap-1">
-      <label className="flex cursor-pointer items-center gap-1.5">
+      <label
+        className={cn('flex items-center gap-1.5', firmada ? 'cursor-pointer' : 'cursor-not-allowed')}
+        title={firmada ? undefined : 'La orden debe estar firmada por el colaborador antes de poder marcar el pago'}
+      >
         <Checkbox
           checked={pagado}
           onCheckedChange={(v) => (v === true ? setDialogoPago(true) : setDialogoDeshacer(true))}
-          disabled={ocupado !== null}
+          disabled={ocupado !== null || !firmada}
         />
         <span className={cn('text-xs font-semibold', pagado ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400')}>
-          {pagado ? 'Pagado' : 'Pendiente'}
+          {pagoLocal ? ETIQUETA_ESTADO[pagoLocal.estado] : 'Pendiente'}
         </span>
       </label>
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex flex-wrap justify-end items-center gap-x-2 gap-y-0.5 text-xs">
         {pagoLocal?.ordenDocId ? (
           <VisorPdf documentoId={pagoLocal.ordenDocId} titulo={`Orden de pago de horas extra · ${nombre}`} className="inline-flex items-center gap-1 text-primary hover:underline">
-            <FileText className="size-3" /> Orden
+            <FileText className="size-3" /> {firmada ? 'Orden firmada' : 'Orden'}
           </VisorPdf>
         ) : (
           !pagado && (
@@ -362,6 +385,12 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
             </button>
           )
         )}
+        {/* Solo se puede enviar mientras está PENDIENTE (orden generada, sin enviar). */}
+        {estado === 'PENDIENTE' && (
+          <button type="button" onClick={enviarAFirmar} disabled={ocupado !== null} className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50">
+            {ocupado === 'enviar' ? <Spinner className="size-3" /> : <Send className="size-3" />} Enviar a firmar
+          </button>
+        )}
         {pagado && pagoLocal?.comprobanteDocId && (
           <VisorPdf documentoId={pagoLocal.comprobanteDocId} titulo={`Comprobante de pago de horas extra · ${nombre}`} className="inline-flex items-center gap-1 text-primary hover:underline">
             <Download className="size-3" /> Comprobante
@@ -369,25 +398,30 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
         )}
       </div>
 
-      {/* Vista previa de la orden: no queda nada guardado hasta que se confirme. */}
-      <Dialog open={previa !== null} onOpenChange={(o) => !o && cerrarPrevia()}>
-        <DialogContent className="flex h-[85dvh] w-full flex-col gap-3 sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Vista previa · Orden de pago</DialogTitle>
-            <DialogDescription>
-              De {nombre}. Esto no se envía a nadie: es un PDF para descargarlo y compartirlo tú, por donde uses siempre
-              (correo, WhatsApp…), con quien vaya a hacer el pago.
-            </DialogDescription>
-          </DialogHeader>
-          {previa && <iframe src={previa} title="Vista previa de la orden de pago" className="min-h-0 flex-1 rounded-md border bg-white" />}
-          <DialogFooter>
-            <Button variant="ghost" onClick={cerrarPrevia}>Cerrar sin guardar</Button>
-            <Button onClick={guardarOrden} disabled={ocupado !== null}>
-              {ocupado === 'guardar' && <Spinner />} Guardar esta orden
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Vista previa de la orden: no queda nada guardado hasta que se confirme. Mismo
+          visor que "Ver orden" (con su respaldo para móvil), pero sin botón propio: se
+          abre solo apenas el PDF está listo. */}
+      {previa && (
+        <VisorPdf
+          archivo={previa}
+          titulo={`Vista previa · Orden de pago · ${nombre}`}
+          abierto
+          onAbiertoChange={(v) => !v && setPrevia(null)}
+          pie={
+            <div className="space-y-2 border-t pt-2">
+              <p className="text-xs text-muted-foreground">
+                Esto no se envía a nadie: descárgala y compártela tú, por donde uses siempre (correo, WhatsApp…), con quien vaya a hacer el pago.
+              </p>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setPrevia(null)}>Cerrar sin guardar</Button>
+                <Button size="sm" onClick={guardarOrden} disabled={ocupado !== null}>
+                  {ocupado === 'guardar' && <Spinner />} Guardar esta orden
+                </Button>
+              </div>
+            </div>
+          }
+        />
+      )}
 
       {/* Confirmar que ya se pagó (comprobante opcional: se puede confirmar sin tenerlo a la mano). */}
       <Dialog open={dialogoPago} onOpenChange={(o) => { setDialogoPago(o); if (!o) setComprobante(null) }}>
@@ -414,7 +448,7 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>¿Quitar la marca de pagado?</DialogTitle>
-            <DialogDescription>Vuelve a pendiente y retira el comprobante, si había uno.</DialogDescription>
+            <DialogDescription>Vuelve a &quot;firmada&quot; (la firma del colaborador no se toca) y retira el comprobante, si había uno.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogoDeshacer(false)}>Cancelar</Button>

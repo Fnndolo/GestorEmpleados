@@ -1,13 +1,17 @@
-import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
 import { MembreteFondo, type DatosEmpresa } from './membrete'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaLarga } from '@/lib/fechas'
 
 /**
  * Orden de pago de horas extra: en esta empresa se pagan APARTE de la nómina,
- * así que no hay desprendible que las cubra. Este PDF es el resumen que se
- * envía a quien paga (tesorería/banco) para llegar al total; el comprobante de
- * que ya se pagó es un documento aparte, que se sube después.
+ * así que no hay desprendible que las cubra. Este PDF resume el monto y lo deja
+ * firmar por el colaborador (Ley 527) antes de pagarse; el comprobante de que
+ * ya se pagó es un documento aparte, que se sube después.
+ *
+ * El recuadro de firma tiene una posición FIJA (a diferencia de un PDF subido,
+ * este lo arma la app): no hace falta detectar dónde va, solo dejar el espacio
+ * reservado y, cuando ya está firmada, dibujar el PNG ahí encima al re-renderizar.
  */
 
 const s = StyleSheet.create({
@@ -30,6 +34,8 @@ const s = StyleSheet.create({
   totalTexto: { color: '#ffffff', fontFamily: 'Helvetica-Bold', fontSize: 11 },
   banco: { marginTop: 16, fontSize: 9.5 },
   firma: { marginTop: 56, borderTopWidth: 1, borderTopColor: '#1e293b', paddingTop: 4, width: 220 },
+  firmaImg: { width: 150, height: 52, objectFit: 'contain', marginBottom: -6 },
+  firmaFecha: { fontSize: 7.5, color: '#64748b', marginTop: 1 },
 })
 
 const ETIQUETA_HORA: Record<string, string> = { HED: 'Diurna', HEN: 'Nocturna', HEDDF: 'Dom/fest. diurna', HENDF: 'Dom/fest. nocturna' }
@@ -43,6 +49,8 @@ export type DatosOrdenPagoHorasExtra = {
   detalleHoras: Record<string, number>
   horasExtra: number
   valor: number
+  /** Firma electrónica del colaborador aceptando el monto; null si todavía no ha firmado. */
+  firma?: { dataUri: string; fecha: string } | null
 }
 
 function Doc({ d, fondo }: { d: DatosOrdenPagoHorasExtra; fondo?: string }) {
@@ -93,8 +101,10 @@ function Doc({ d, fondo }: { d: DatosOrdenPagoHorasExtra; fondo?: string }) {
         )}
 
         <View style={s.firma}>
+          {d.firma && <Image src={d.firma.dataUri} style={s.firmaImg} />}
           <Text style={s.negrita}>{d.colaborador.nombre}</Text>
           <Text style={{ fontSize: 8.5, color: '#64748b' }}>{d.colaborador.documento}</Text>
+          {d.firma && <Text style={s.firmaFecha}>Firmado electrónicamente el {d.firma.fecha}</Text>}
         </View>
       </Page>
     </Document>

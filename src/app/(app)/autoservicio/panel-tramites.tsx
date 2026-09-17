@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
   CalendarRange, Clock, IdCard, FileText, FolderUp, FileBadge, CalendarClock, HeartPulse,
-  PenLine, Receipt, GraduationCap, Package, Scale, ShieldAlert, Lock, Inbox,
+  PenLine, Receipt, GraduationCap, Package, Scale, ShieldAlert, Lock, Inbox, Timer,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CarruselMovil, Casilla, CasillaCompacta } from '@/components/shell/carrusel-movil'
@@ -103,7 +103,7 @@ function Seccion({
 
 
 export function PanelTramites({
-  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, documentosFaltantes, dotacionPorFirmar,
+  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, documentosFaltantes, dotacionPorFirmar, horasExtraPorFirmar,
 }: {
   /** Colaborador con vínculo activo: solo entonces se ofrecen los trámites operativos. */
   activo: boolean
@@ -117,6 +117,8 @@ export function PanelTramites({
   saldoVacaciones: number
   documentosFaltantes: number
   dotacionPorFirmar: number
+  /** Órdenes de pago de horas extra (se pagan aparte de la nómina) esperando su firma. */
+  horasExtraPorFirmar: number
 }) {
   const [solicitar, setSolicitar] = useState<TipoSol | null>(null)
   /** Atajo local: `aplica('vacaciones')` en vez de repetir el tipo de vínculo. */
@@ -185,6 +187,13 @@ export function PanelTramites({
       clave: 'cuentas', icono: Receipt,
       titulo: 'Cuenta de cobro', corto: 'Cuenta de cobro',
       desc: 'Servicios, comisiones o saldos a tu favor', href: '/autoservicio/cuentas-cobro',
+    },
+    // Se pagan aparte de la nómina: solo aparece cuando hay algo que ver.
+    horasExtraPorFirmar > 0 && {
+      clave: 'horas-extra', icono: Timer,
+      titulo: 'Mis horas extra', corto: 'Horas extra', desc: 'Firma la orden de pago',
+      aviso: plural(horasExtraPorFirmar, 'por firmar'),
+      href: '/autoservicio/horas-extra',
     },
     aplica('capacitaciones') && {
       clave: 'capacitaciones', icono: GraduationCap,

@@ -10,7 +10,8 @@ import {
 } from '@/server/asistencia/cliente'
 import { sincronizarHorasAsistencia } from '@/server/asistencia/horas-asistencia'
 import {
-  generarOrdenPagoHorasExtra, previsualizarOrdenPagoHorasExtra, marcarPagoHorasExtraPagado, marcarPagoHorasExtraPendiente,
+  generarOrdenPagoHorasExtra, previsualizarOrdenPagoHorasExtra, enviarOrdenHorasExtraAFirma,
+  marcarPagoHorasExtraPagado, marcarPagoHorasExtraPendiente,
 } from '@/server/pago-horas-extra'
 import { parseFechaISO } from '@/lib/fechas'
 
@@ -48,7 +49,12 @@ export type FilaAsistencia = {
    * que de verdad importa aquí, porque las horas extra no se pagan con la
    * nómina.
    */
-  pagoLocal: { id: string; estado: 'PENDIENTE' | 'PAGADO'; ordenDocId: string | null; comprobanteDocId: string | null } | null
+  pagoLocal: {
+    id: string
+    estado: 'PENDIENTE' | 'ENVIADA_A_FIRMA' | 'FIRMADA' | 'PAGADO'
+    ordenDocId: string | null
+    comprobanteDocId: string | null
+  } | null
 }
 
 export type ResumenPantalla = {
@@ -176,33 +182,44 @@ export const generarOrdenPago = accion(
   },
 )
 
+const pagoIdSchema = z.object({ pagoId: z.uuid() })
+
+/** Envía la orden ya guardada al autoservicio del colaborador para que la firme (acepta el monto). */
+export const enviarOrdenAFirma = accion(
+  { modulo: 'nomina', accion: 'EDITAR', schema: pagoIdSchema },
+  async (d) => {
+    await enviarOrdenHorasExtraAFirma(d.pagoId)
+    await auditar('EDITAR', 'PagoHorasExtra', { registroId: d.pagoId, descripcion: 'Orden de pago de horas extra enviada a firmar' })
+    revalidatePath('/nomina/novedades')
+  },
+)
+
 /** Marca la persona como pagada; el comprobante es opcional (se puede confirmar sin él y adjuntarlo después). */
 export const marcarPagoPagado = accion(
   {
     modulo: 'nomina',
     accion: 'EDITAR',
-    schema: pagoSchema.extend({
+    schema: pagoIdSchema.extend({
       pdfBase64: z.string().optional(),
       nombreArchivo: z.string().trim().max(200).optional().or(z.literal('')),
     }),
   },
   async (d, usuario) => {
     const r = await marcarPagoHorasExtraPagado({
-      colaboradorId: d.colaboradorId, mes: d.mes, quincena: d.quincena,
-      pdfBase64: d.pdfBase64 || null, nombreArchivo: d.nombreArchivo, usuarioId: usuario.id,
+      pagoId: d.pagoId, pdfBase64: d.pdfBase64 || null, nombreArchivo: d.nombreArchivo, usuarioId: usuario.id,
     })
-    await auditar('EDITAR', 'PagoHorasExtra', { registroId: r.pagoId, descripcion: `Marcado como pagado${d.pdfBase64 ? ' (con comprobante)' : ' (sin comprobante)'} (${d.mes}${d.quincena ? ` Q${d.quincena}` : ''})` })
+    await auditar('EDITAR', 'PagoHorasExtra', { registroId: d.pagoId, descripcion: `Marcado como pagado${d.pdfBase64 ? ' (con comprobante)' : ' (sin comprobante)'}` })
     revalidatePath('/nomina/novedades')
     return r
   },
 )
 
-/** Corrige un comprobante subido por error: vuelve el pago a pendiente y lo retira. */
+/** Corrige un pago marcado por error: vuelve a firmada y retira el comprobante. */
 export const marcarPagoPendiente = accion(
-  { modulo: 'nomina', accion: 'EDITAR', schema: pagoSchema },
+  { modulo: 'nomina', accion: 'EDITAR', schema: pagoIdSchema },
   async (d) => {
-    await marcarPagoHorasExtraPendiente({ colaboradorId: d.colaboradorId, mes: d.mes, quincena: d.quincena })
-    await auditar('EDITAR', 'PagoHorasExtra', { descripcion: `Pago de horas extra vuelto a pendiente (${d.mes}${d.quincena ? ` Q${d.quincena}` : ''})` })
+    await marcarPagoHorasExtraPendiente(d.pagoId)
+    await auditar('EDITAR', 'PagoHorasExtra', { registroId: d.pagoId, descripcion: 'Pago de horas extra corregido (vuelto a firmada)' })
     revalidatePath('/nomina/novedades')
   },
 )

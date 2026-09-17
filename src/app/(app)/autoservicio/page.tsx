@@ -117,7 +117,7 @@ export default async function AutoservicioPage() {
     )
   }
 
-  const [colab, saldo, solicitudes, disciplinariosAbiertos, opsPorFirmar, ultimoPago, otrosisPorFirmar] = await Promise.all([
+  const [colab, saldo, solicitudes, disciplinariosAbiertos, opsPorFirmar, ultimoPago, otrosisPorFirmar, horasExtraPorFirmar] = await Promise.all([
     prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { nombres: true, tipoVinculo: true, estado: true, fechaNacimiento: true, direccion: true, emergenciaNombre: true, epsId: true, afpId: true, bancoId: true, numeroCuenta: true } }),
     saldoVacaciones(usuario.colaboradorId),
     prisma.solicitud.findMany({
@@ -138,6 +138,10 @@ export default async function AutoservicioPage() {
     // Otrosíes de sus contratos laborales que aún debe firmar en la app.
     prisma.otrosiContrato.count({
       where: { contrato: { colaboradorId: usuario.colaboradorId }, requiereFirma: true, firmaEmpleadoPath: null },
+    }),
+    // Órdenes de pago de horas extra (aparte de la nómina) esperando su firma.
+    prisma.pagoHorasExtra.count({
+      where: { colaboradorId: usuario.colaboradorId, estado: 'ENVIADA_A_FIRMA' },
     }),
   ])
   // Documentos por firmar: contratos OPS y otrosíes (la tarjeta los muestra juntos).
@@ -423,6 +427,7 @@ export default async function AutoservicioPage() {
         puedeAprobar={puedeAprobar}
         saldoVacaciones={saldo.saldoEntero}
         documentosFaltantes={documentosFaltantes}
+        horasExtraPorFirmar={horasExtraPorFirmar}
         dotacionPorFirmar={dotacionPorFirmar}
       />
 

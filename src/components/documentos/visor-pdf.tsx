@@ -23,6 +23,9 @@ export function VisorPdf({
   className,
   children,
   mimeType,
+  abierto: abiertoControlado,
+  onAbiertoChange,
+  pie,
 }: {
   /** Documento guardado (se sirve por /api/documentos/:id). */
   documentoId?: string
@@ -39,15 +42,30 @@ export function VisorPdf({
   archivo?: Blob
   titulo: string
   className?: string
-  children: ReactNode
+  /** Botón que abre el visor. Se omite cuando se controla `abierto` desde afuera (sin trigger propio). */
+  children?: ReactNode
   /**
    * Tipo del archivo. Las listas de documentos mezclan PDF con fotos de cédulas
    * y soportes escaneados: una imagen se muestra tal cual, porque pdf.js no
    * sabría abrirla y el iframe la dejaría a tamaño original.
    */
   mimeType?: string
+  /**
+   * Abrir sin botón propio: para vistas previas que arrancan solas apenas el
+   * PDF está listo (p. ej. "Generar orden"). Sin esto, el visor maneja su
+   * propio estado con el botón de `children`.
+   */
+  abierto?: boolean
+  onAbiertoChange?: (v: boolean) => void
+  /**
+   * Contenido extra debajo del documento (p. ej. "Guardar"/"Cancelar" de una
+   * vista previa que todavía no se archivó). El visor normal no lo necesita.
+   */
+  pie?: ReactNode
 }) {
-  const [abierto, setAbierto] = useState(false)
+  const [abiertoPropio, setAbiertoPropio] = useState(false)
+  const controlado = abiertoControlado !== undefined
+  const abierto = controlado ? abiertoControlado : abiertoPropio
   const [amplio, setAmplio] = useState(false)
   // URL de objeto del archivo local: se crea al abrir y se libera al cerrar,
   // que es lo que dura la ventana. Un archivo distinto la vuelve a crear.
@@ -58,30 +76,48 @@ export function VisorPdf({
   const urlDescarga = archivo ? url : `${url}${url.includes('?') ? '&' : '?'}descargar=1`
   const nombreDescarga = archivo && 'name' in archivo ? (archivo as File).name : 'documento.pdf'
   // Pantalla táctil o angosta → el iframe no muestra PDFs: usar pdf.js.
-  // Se evalúa al abrir (evento de usuario), no en un efecto.
+  // Se evalúa al abrir (evento de usuario o efecto controlado), no antes.
   const [movil, setMovil] = useState(false)
+  const evaluarMovil = () => window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768
   const alAbrir = () => {
-    setMovil(window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768)
+    setMovil(evaluarMovil())
     if (archivo) setUrlArchivo(URL.createObjectURL(archivo))
-    setAbierto(true)
+    if (controlado) onAbiertoChange?.(true)
+    else setAbiertoPropio(true)
   }
   const alCambiar = (v: boolean) => {
-    setAbierto(v)
+    if (controlado) onAbiertoChange?.(v)
+    else setAbiertoPropio(v)
     if (v) return
     setAmplio(false)
     if (urlArchivo) { URL.revokeObjectURL(urlArchivo); setUrlArchivo(null) }
   }
+  // Cuando lo abre quien controla el estado (sin pasar por `alAbrir`), igual hace
+  // falta la URL de objeto y saber si el dispositivo es móvil. Se ajusta durante
+  // el render, no en un efecto (evita el repinte extra de sincronizar con un
+  // efecto): React permite fijar estado en el render mismo cuando reacciona a un
+  // cambio de props, siempre que la condición evite el bucle.
+  const [seguiaAbierto, setSeguiaAbierto] = useState(false)
+  if (controlado && abiertoControlado && !seguiaAbierto) {
+    setMovil(evaluarMovil())
+    if (archivo && !urlArchivo) setUrlArchivo(URL.createObjectURL(archivo))
+    setSeguiaAbierto(true)
+  } else if (controlado && !abiertoControlado && seguiaAbierto) {
+    setSeguiaAbierto(false)
+  }
 
   return (
     <>
-      <button type="button" onClick={alAbrir} className={className}>
-        {children}
-      </button>
+      {children && (
+        <button type="button" onClick={alAbrir} className={className}>
+          {children}
+        </button>
+      )}
       <Dialog open={abierto} onOpenChange={alCambiar}>
         <DialogContent
           className={cn(
             'flex flex-col gap-2 p-3 transition-all sm:p-4',
-            amplio ? 'h-[96dvh] w-[98vw] max-w-none sm:max-w-none' : 'h-[80dvh] w-full sm:max-w-3xl',
+            amplio ? 'h-[96dvh] w-[98vw] max-w-none sm:max-w-none' : 'h-[85dvh] w-full sm:max-w-3xl',
           )}
         >
           <DialogHeader className="flex-row items-center gap-1 space-y-0 pr-8">
@@ -106,6 +142,7 @@ export function VisorPdf({
           ) : (
             <iframe src={url} title={titulo} className="min-h-0 w-full flex-1 rounded-md border bg-white" />
           )}
+          {pie}
         </DialogContent>
       </Dialog>
     </>
