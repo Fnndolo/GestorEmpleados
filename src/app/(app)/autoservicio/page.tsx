@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { documentosFaltantesDe } from '@/server/expediente'
 import { Prisma } from '@/generated/prisma/client'
 import { saldoVacaciones } from '@/server/vacaciones'
+import { MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO } from '@/lib/vacaciones-config'
 import { liquidarVacaciones } from '@/server/vacaciones-liquidacion'
 import { Card, CardContent } from '@/components/ui/card'
 import { CalendarRange, Clock, CreditCard } from 'lucide-react'
@@ -393,9 +394,16 @@ export default async function AutoservicioPage() {
       {/* Etiquetas de una palabra: con "Días de vacaciones disponibles" el texto
           se partía en tres renglones y estiraba los recuadros de más. La cifra
           grande y el ícono ya dicen de qué se trata. */}
+      {/* Mientras se terminan de subir los datos históricos de vacaciones, el saldo
+          calculado no es confiable: se oculta el número aquí (ver vacaciones-config.ts). */}
+      {!esOps(colab.tipoVinculo) && !MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO && (
+        <p className="mb-2.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CalendarRange className="size-3.5 shrink-0" /> Saldo de vacaciones en actualización: pronto lo verás aquí.
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {/* El OPS no causa vacaciones: mostrarle "0 días disponibles" confunde más que omitirlo. */}
-        {!esOps(colab.tipoVinculo) && (
+        {!esOps(colab.tipoVinculo) && MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO && (
           <Stat icono={CalendarRange} color="bg-foreground text-background" valor={`${saldo.saldoEntero} día${saldo.saldoEntero === 1 ? "" : "s"}`} label="Vacaciones" />
         )}
         <Stat icono={Clock} color="bg-foreground text-background" valor={String(enTramite)} label="En trámite" />

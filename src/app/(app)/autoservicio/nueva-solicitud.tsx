@@ -20,6 +20,7 @@ import { LICENCIAS, defLicencia, type TipoLicencia } from '@/lib/licencias'
 import { festivosDeRango, esDiaHabil } from '@/lib/dias-habiles'
 import { parseFechaISO } from '@/lib/fechas'
 import { crearSolicitud, editarMiPermiso } from './acciones'
+import { MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO } from '@/lib/vacaciones-config'
 
 /** Lo que hace falta para abrir el diálogo con un permiso ya pedido y corregirlo. */
 export type EdicionPermiso = {
@@ -101,7 +102,10 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose 
   const [autorizaAnticipadas, setAutorizaAnticipadas] = useState(false)
   const diasVac = useMemo(() => diasHabilesInclusivo(vacIni, vacFin), [vacIni, vacFin])
   const saldoVac = saldoVacaciones ?? 0
-  const vacAnticipadas = tipo === 'VACACIONES' && diasVac > 0 && diasVac > saldoVac
+  // Mientras se terminan de subir los datos históricos, el saldo no es
+  // confiable: no se compara contra él (ni se pide autorizar "anticipadas"
+  // que en realidad no lo son). Ver vacaciones-config.ts.
+  const vacAnticipadas = MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO && tipo === 'VACACIONES' && diasVac > 0 && diasVac > saldoVac
   // Permiso (un solo día)
   const [permFecha, setPermFecha] = useState<Date | undefined>(() => {
     const m = edicion && /^(\d{4})-(\d{2})-(\d{2})$/.exec(edicion.fechaInicio)
@@ -247,10 +251,17 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose 
 
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
                   <CalendarRange className="size-4 shrink-0" />
-                  <span>
-                    Disponibles: <strong className="text-foreground">{diasHabilesTexto(saldoVac)}</strong>
-                    {diasVac > 0 && <> · Pides <strong className="text-foreground">{diasHabilesTexto(diasVac)}</strong></>}
-                  </span>
+                  {MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO ? (
+                    <span>
+                      Disponibles: <strong className="text-foreground">{diasHabilesTexto(saldoVac)}</strong>
+                      {diasVac > 0 && <> · Pides <strong className="text-foreground">{diasHabilesTexto(diasVac)}</strong></>}
+                    </span>
+                  ) : (
+                    <span>
+                      Saldo en actualización
+                      {diasVac > 0 && <> · Pides <strong className="text-foreground">{diasHabilesTexto(diasVac)}</strong></>}
+                    </span>
+                  )}
                 </p>
 
                 {vacAnticipadas && (
