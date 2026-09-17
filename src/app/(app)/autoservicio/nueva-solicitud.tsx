@@ -251,17 +251,10 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose 
 
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
                   <CalendarRange className="size-4 shrink-0" />
-                  {MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO ? (
-                    <span>
-                      Disponibles: <strong className="text-foreground">{diasHabilesTexto(saldoVac)}</strong>
-                      {diasVac > 0 && <> · Pides <strong className="text-foreground">{diasHabilesTexto(diasVac)}</strong></>}
-                    </span>
-                  ) : (
-                    <span>
-                      Saldo en actualización
-                      {diasVac > 0 && <> · Pides <strong className="text-foreground">{diasHabilesTexto(diasVac)}</strong></>}
-                    </span>
-                  )}
+                  <span>
+                    Disponibles: <strong className="text-foreground">{MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO ? diasHabilesTexto(saldoVac) : "—"}</strong>
+                    {diasVac > 0 && <> · Pides <strong className="text-foreground">{diasHabilesTexto(diasVac)}</strong></>}
+                  </span>
                 </p>
 
                 {vacAnticipadas && (
