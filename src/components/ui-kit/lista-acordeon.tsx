@@ -3,10 +3,8 @@
 import { useState } from 'react'
 import { ChevronDown, type LucideIcon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { colorAvatar, iniciales } from '@/lib/etiquetas'
 import { cn } from '@/lib/utils'
-import { Chip, type ChipColor } from './index'
+import { Chip, AvatarColaborador, type ChipColor } from './index'
 
 export type ItemAcordeon = {
   id: string
@@ -22,12 +20,6 @@ export type ItemAcordeon = {
   derecha?: React.ReactNode
   /** Contenido extra dentro del panel expandido, debajo de los campos. */
   extra?: React.ReactNode
-}
-
-/** Iniciales a partir del nombre completo ("Ana María Pérez" → "AP"). */
-function inicialesDeNombre(nombre: string): string {
-  const partes = nombre.trim().split(/\s+/)
-  return iniciales(partes[0] ?? '', partes.length > 1 ? partes[partes.length - 1] : '')
 }
 
 /**
@@ -48,21 +40,19 @@ export function ListaAcordeon({ items, chip }: {
         const c = x.chip ?? chip
         return (
           <div key={x.id}>
-            <div className="flex items-center gap-3 pr-3">
+            <div className="flex flex-wrap items-center gap-2 pr-3">
               <button
                 type="button"
                 onClick={() => setAbierta(expandida ? null : x.id)}
                 aria-expanded={expandida}
                 className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
-                {c && <Chip icono={c.icono} color={c.color} />}
-                {x.avatar && (
-                  <Avatar className="size-8 shrink-0">
-                    {x.avatar.fotoUrl && <AvatarImage src={x.avatar.fotoUrl} alt="" />}
-                    <AvatarFallback className="text-[10px] font-semibold text-white" style={{ backgroundColor: colorAvatar(x.avatar.nombre) }}>
-                      {inicialesDeNombre(x.avatar.nombre)}
-                    </AvatarFallback>
-                  </Avatar>
+                {/* La foto identifica a la persona mejor que el ícono de categoría: con
+                    avatar, el chip de color sobra (y compite por el mismo espacio). */}
+                {x.avatar ? (
+                  <AvatarColaborador nombre={x.avatar.nombre} fotoUrl={x.avatar.fotoUrl} />
+                ) : (
+                  c && <Chip icono={c.icono} color={c.color} />
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{x.titulo}</p>
@@ -70,7 +60,10 @@ export function ListaAcordeon({ items, chip }: {
                 </div>
                 <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expandida && 'rotate-180')} />
               </button>
-              {x.derecha}
+              {/* Envuelve en su propia fila si no cabe: la Card recorta lo que se
+                  sale (overflow-hidden por las esquinas redondeadas), así que sin
+                  esto las píldoras de la derecha quedaban cortadas a mitad de palabra. */}
+              {x.derecha && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 py-1">{x.derecha}</div>}
             </div>
             {expandida && (
               <div className="space-y-3 border-t border-dashed bg-muted/20 px-4 py-3 animate-in fade-in slide-in-from-top-1 duration-150">

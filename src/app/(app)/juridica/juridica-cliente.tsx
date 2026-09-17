@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus, FileText, Gavel, ShieldAlert, FileLock, History, Upload, Eye, ExternalLink, Lock, type LucideIcon } from 'lucide-react'
-import { Chip, Pill, type ChipColor, type PillTone } from '@/components/ui-kit'
+import { Chip, Pill, AvatarColaborador, type ChipColor, type PillTone } from '@/components/ui-kit'
+import { urlFoto } from '@/lib/foto'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -64,7 +65,7 @@ const ESTADO_HABEAS: Record<string, { label: string; tone: PillTone }> = {
 type Props = {
   tab: string; puedeCrear: boolean; puedeEditar: boolean
   documentos: DocLegal[]
-  disciplinarios: { id: string; colaborador: string; asunto: string; etapa: string; cerrado: boolean }[]
+  disciplinarios: { id: string; colaborador: string; colaboradorId: string; fotoPath: string | null; asunto: string; etapa: string; cerrado: boolean }[]
   denuncias: { id: string; codigo: string; tipo: string; asunto: string | null; anonima: boolean; estado: string; fecha: string }[]
   consultas: Consulta[]
 }
@@ -88,7 +89,11 @@ export function JuridicaCliente(p: Props) {
         <ListaLink
           vacio="Sin procesos disciplinarios."
           chip={{ icono: Gavel, color: 'violet' }}
-          items={p.disciplinarios.map((d) => ({ id: d.id, href: `/juridica/disciplinarios/${d.id}`, titulo: d.colaborador, sub: d.asunto, badge: ETAPA[d.etapa], tone: d.cerrado ? 'muted' : 'warn' }))}
+          items={p.disciplinarios.map((d) => ({
+            id: d.id, href: `/juridica/disciplinarios/${d.id}`, titulo: d.colaborador, sub: d.asunto,
+            badge: ETAPA[d.etapa], tone: d.cerrado ? 'muted' as PillTone : 'warn' as PillTone,
+            avatar: { nombre: d.colaborador, fotoUrl: urlFoto(d.colaboradorId, d.fotoPath, true) },
+          }))}
         />
       )}
       {p.tab === 'denuncias' && (
@@ -121,7 +126,7 @@ export function JuridicaCliente(p: Props) {
             {p.consultas.map((c) => {
               const est = ESTADO_HABEAS[c.estado] ?? { label: c.estado, tone: 'muted' as PillTone }
               return (
-                <button key={c.id} type="button" onClick={() => setConsulta(c)} className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-accent/40">
+                <button key={c.id} type="button" onClick={() => setConsulta(c)} className="flex w-full flex-wrap items-center gap-3 p-3 text-left transition-colors hover:bg-accent/40">
                   <Chip icono={FileLock} color="indigo" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{c.tipo === 'CONSULTA' ? 'Consulta' : 'Reclamo'} — {c.titular}</p>
@@ -148,13 +153,26 @@ export function JuridicaCliente(p: Props) {
 
 type ChipDef = { icono: LucideIcon; color: ChipColor }
 
-function ListaLink({ items, vacio, chip }: { items: { id: string; href: string; titulo: string; sub: string; badge: string; tone: PillTone }[]; vacio: string; chip?: ChipDef }) {
+function ListaLink({ items, vacio, chip }: {
+  items: {
+    id: string; href: string; titulo: string; sub: string; badge: string; tone: PillTone
+    /** Foto del colaborador dueño del registro, cuando lo hay (p. ej. disciplinarios: NO en
+     * denuncias, que son confidenciales y no llevan a nadie asociado). */
+    avatar?: { nombre: string; fotoUrl: string | null }
+  }[]
+  vacio: string
+  chip?: ChipDef
+}) {
   if (items.length === 0) return <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">{vacio}</CardContent></Card>
   return (
     <Card><CardContent className="p-0 divide-y">
       {items.map((i) => (
-        <Link key={i.id} href={i.href} className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/40">
-          {chip && <Chip icono={chip.icono} color={chip.color} />}
+        <Link key={i.id} href={i.href} className="flex flex-wrap items-center gap-3 p-3 transition-colors hover:bg-accent/40">
+          {i.avatar ? (
+            <AvatarColaborador nombre={i.avatar.nombre} fotoUrl={i.avatar.fotoUrl} />
+          ) : (
+            chip && <Chip icono={chip.icono} color={chip.color} />
+          )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{i.titulo}</p>
             <p className="truncate text-xs text-muted-foreground">{i.sub}</p>

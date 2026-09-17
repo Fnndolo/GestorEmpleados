@@ -18,7 +18,7 @@ export default async function JuridicaPage({ searchParams }: { searchParams: Pro
       take: 100,
       include: { versiones: { orderBy: { version: 'desc' } } },
     }),
-    prisma.procesoDisciplinario.findMany({ include: { colaborador: { select: { nombres: true, apellidos: true } } }, orderBy: { creadoEn: 'desc' }, take: 100 }),
+    prisma.procesoDisciplinario.findMany({ include: { colaborador: { select: { id: true, nombres: true, apellidos: true, fotoPath: true } } }, orderBy: { creadoEn: 'desc' }, take: 100 }),
     prisma.denunciaAcoso.findMany({ orderBy: { creadoEn: 'desc' }, take: 100 }),
     prisma.consultaReclamoDatos.findMany({ orderBy: { fechaRadicacion: 'desc' }, take: 100 }),
   ])
@@ -39,7 +39,13 @@ export default async function JuridicaPage({ searchParams }: { searchParams: Pro
             cambios: ver.cambios, creadoEn: formatFechaISO(ver.creadoEn),
           })),
         }))}
-        disciplinarios={disciplinarios.map((p) => ({ id: p.id, colaborador: `${p.colaborador.nombres} ${p.colaborador.apellidos}`, asunto: p.asunto, etapa: p.etapa, cerrado: p.cerrado }))}
+        disciplinarios={disciplinarios.map((p) => ({
+          id: p.id,
+          colaborador: `${p.colaborador.nombres} ${p.colaborador.apellidos}`,
+          colaboradorId: p.colaborador.id,
+          fotoPath: p.colaborador.fotoPath,
+          asunto: p.asunto, etapa: p.etapa, cerrado: p.cerrado,
+        }))}
         denuncias={denuncias.map((d) => ({ id: d.id, codigo: d.codigo, tipo: d.tipo, asunto: d.asunto, anonima: d.anonima, estado: d.estado, fecha: formatFechaISO(d.creadoEn) }))}
         consultas={consultas.map((c) => ({
           id: c.id, tipo: c.tipo, titular: c.titular, estado: c.estado, descripcion: c.descripcion,

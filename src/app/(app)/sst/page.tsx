@@ -52,10 +52,10 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
         reuniones: { orderBy: { fecha: 'desc' } },
       },
     }),
-    prisma.examenMedico.findMany({ where: fColab, include: { colaborador: { select: { nombres: true, apellidos: true } }, seguimientos: { orderBy: { fecha: 'desc' } } }, orderBy: { fecha: 'desc' }, take: 80 }),
-    prisma.accidenteTrabajo.findMany({ where: fSede, include: { colaborador: { select: { nombres: true, apellidos: true } } }, orderBy: { fecha: 'desc' }, take: 80 }),
+    prisma.examenMedico.findMany({ where: fColab, include: { colaborador: { select: { id: true, nombres: true, apellidos: true, fotoPath: true } }, seguimientos: { orderBy: { fecha: 'desc' } } }, orderBy: { fecha: 'desc' }, take: 80 }),
+    prisma.accidenteTrabajo.findMany({ where: fSede, include: { colaborador: { select: { id: true, nombres: true, apellidos: true, fotoPath: true } } }, orderBy: { fecha: 'desc' }, take: 80 }),
     prisma.elementoEpp.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
-    prisma.entregaEpp.findMany({ where: fColab, include: { elementoEpp: true, colaborador: { select: { nombres: true, apellidos: true } } }, orderBy: { fechaEntrega: 'desc' }, take: 60 }),
+    prisma.entregaEpp.findMany({ where: fColab, include: { elementoEpp: true, colaborador: { select: { id: true, nombres: true, apellidos: true, fotoPath: true } } }, orderBy: { fechaEntrega: 'desc' }, take: 60 }),
     prisma.peligroIpevr.findMany({ where: fSede, orderBy: { creadoEn: 'desc' }, take: 80 }),
     prisma.profesiograma.findMany({ orderBy: { actualizadoEn: 'desc' } }),
     prisma.cargo.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' }, select: { id: true, nombre: true } }),
@@ -70,7 +70,7 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
     prisma.planTrabajoSst.findUnique({ where: { anio } }),
     prisma.normaMatrizLegal.findMany({ where: { activo: true }, orderBy: { norma: 'asc' } }),
     prisma.indicadorSst.findMany({ orderBy: [{ anio: 'desc' }, { mes: 'desc' }], take: 12 }),
-    prisma.novedadArl.findMany({ where: fColab, include: { colaborador: { select: { nombres: true, apellidos: true } } }, orderBy: { fecha: 'desc' }, take: 60 }),
+    prisma.novedadArl.findMany({ where: fColab, include: { colaborador: { select: { id: true, nombres: true, apellidos: true, fotoPath: true } } }, orderBy: { fecha: 'desc' }, take: 60 }),
   ])
 
   const verSalud = tienePermiso(usuario, 'colaboradores_salud', 'VER')
@@ -177,6 +177,7 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
         }))}
         examenes={examenes.map((e) => ({
           id: e.id, colaboradorId: e.colaboradorId, colaborador: `${e.colaborador.nombres} ${e.colaborador.apellidos}`,
+          fotoPath: e.colaborador.fotoPath,
           tipo: e.tipo, fecha: formatFechaISO(e.fecha), concepto: e.concepto,
           vencimiento: e.fechaVencimiento ? formatFechaISO(e.fechaVencimiento) : null,
           vencido: !!e.fechaVencimiento && e.fechaVencimiento < hoy,
@@ -189,13 +190,14 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
           seguimientos: verSalud ? e.seguimientos.map((s) => ({ id: s.id, fecha: formatFechaISO(s.fecha), nota: s.nota })) : [],
         }))}
         accidentes={accidentes.map((a) => ({
-          id: a.id, colaborador: `${a.colaborador.nombres} ${a.colaborador.apellidos}`, fecha: formatFechaISO(a.fecha),
+          id: a.id, colaboradorId: a.colaboradorId, colaborador: `${a.colaborador.nombres} ${a.colaborador.apellidos}`,
+          fotoPath: a.colaborador.fotoPath, fecha: formatFechaISO(a.fecha),
           descripcion: a.descripcion, parteCuerpo: a.parteCuerpo, diasIncapacidad: a.diasIncapacidad,
           estado: a.estado, furat: a.furatReportado, investigacion: a.investigacion, esIncidente: a.esIncidente,
           documentos: docsAccidentes.filter((d) => d.entidadId === a.id).map((d) => ({ id: d.id, nombre: d.nombre })),
         }))}
         epps={epps.map((e) => ({ id: e.id, nombre: e.nombre }))}
-        entregasEpp={entregasEpp.map((e) => ({ id: e.id, colaborador: `${e.colaborador.nombres} ${e.colaborador.apellidos}`, elemento: e.elementoEpp.nombre, cantidad: e.cantidad, fecha: formatFechaISO(e.fechaEntrega), firmado: Boolean(e.firmadoEn), soporteDocId: e.soporteDocId }))}
+        entregasEpp={entregasEpp.map((e) => ({ id: e.id, colaboradorId: e.colaboradorId, colaborador: `${e.colaborador.nombres} ${e.colaborador.apellidos}`, fotoPath: e.colaborador.fotoPath, elemento: e.elementoEpp.nombre, cantidad: e.cantidad, fecha: formatFechaISO(e.fechaEntrega), firmado: Boolean(e.firmadoEn), soporteDocId: e.soporteDocId }))}
         peligros={peligros.map((p) => ({
           id: p.id, proceso: p.proceso, peligro: p.peligro, riesgo: p.riesgo, nivel: p.nivel, controles: p.controles,
           rutinaria: p.rutinaria, controlFuente: p.controlFuente, controlMedio: p.controlMedio, controlIndividuo: p.controlIndividuo,
@@ -236,7 +238,8 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
         }))}
         semaforo={semaforo}
         novedadesArl={novedadesArl.map((n) => ({
-          id: n.id, colaborador: `${n.colaborador.nombres} ${n.colaborador.apellidos}`, tipo: n.tipo,
+          id: n.id, colaboradorId: n.colaboradorId, colaborador: `${n.colaborador.nombres} ${n.colaborador.apellidos}`,
+          fotoPath: n.colaborador.fotoPath, tipo: n.tipo,
           fecha: formatFechaISO(n.fecha), detalle: n.detalle, claseRiesgo: n.claseRiesgo, soporteDocId: n.soporteDocId,
         }))}
         estructura={{

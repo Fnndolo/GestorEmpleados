@@ -6,12 +6,10 @@ import { catalogosNuevoContrato } from '@/server/contratos-catalogos'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { FileText, ChevronRight, FileExclamationPoint, Receipt, ClipboardCheck, UserMinus } from 'lucide-react'
 import { NuevoContrato, type ClaseNuevo } from './nuevo-contrato'
 import { CerrarContratoOps } from './ops/[id]/cerrar-contrato'
-import { Chip, Pill, type PillTone } from '@/components/ui-kit'
-import { colorAvatar, iniciales } from '@/lib/etiquetas'
+import { Chip, Pill, AvatarColaborador, type PillTone } from '@/components/ui-kit'
 import { FiltroTabs } from '@/components/shell/filtro-tabs'
 import { formatFechaCorta, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { fmtCOP } from '@/lib/moneda'
@@ -24,14 +22,7 @@ const TONO_CONTRATO: Record<string, PillTone> = {
 }
 
 function AvatarColab({ c }: { c: { id: string; nombres: string; apellidos: string; fotoPath: string | null } }) {
-  return (
-    <Avatar className="size-8 shrink-0">
-      {c.fotoPath && <AvatarImage src={urlFoto(c.id, c.fotoPath, true)!} alt="" />}
-      <AvatarFallback className="text-[10px] font-semibold text-white" style={{ backgroundColor: colorAvatar(`${c.nombres} ${c.apellidos}`) }}>
-        {iniciales(c.nombres, c.apellidos)}
-      </AvatarFallback>
-    </Avatar>
-  )
+  return <AvatarColaborador nombre={`${c.nombres} ${c.apellidos}`} fotoUrl={urlFoto(c.id, c.fotoPath, true)} />
 }
 
 const TABS = [
@@ -127,8 +118,7 @@ export default async function ContratosPage({
             {contratosOps.map((c) => {
               const vigente = c.estado === 'ACTIVO' || c.estado === 'FIRMADO'
               return (
-                <div key={c.id} data-contrato={c.numero} className="relative flex items-center gap-3 p-3 transition-colors hover:bg-accent/40">
-                  <Chip icono={Receipt} color="teal" />
+                <div key={c.id} data-contrato={c.numero} className="relative flex flex-wrap items-center gap-3 p-3 transition-colors hover:bg-accent/40">
                   {c.colaborador ? <AvatarColab c={c.colaborador} /> : <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">?</div>}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
@@ -158,8 +148,7 @@ export default async function ContratosPage({
         contratosLaboral.length === 0 ? <Vacio /> : (
           <Card><CardContent className="p-0 divide-y">
             {contratosLaboral.map((c) => (
-              <div key={c.id} data-contrato={c.numero} className="relative flex items-center gap-3 p-3 transition-colors hover:bg-accent/40">
-                <Chip icono={FileText} color="indigo" />
+              <div key={c.id} data-contrato={c.numero} className="relative flex flex-wrap items-center gap-3 p-3 transition-colors hover:bg-accent/40">
                 <AvatarColab c={c.colaborador} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">

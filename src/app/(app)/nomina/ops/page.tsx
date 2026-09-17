@@ -3,10 +3,11 @@ import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Chip, Pill, type PillTone } from '@/components/ui-kit'
+import { Pill, AvatarColaborador, type PillTone } from '@/components/ui-kit'
 import { Receipt, Landmark, Paperclip, ShieldCheck, ShieldAlert, ChevronLeft, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { fmtCOP } from '@/lib/moneda'
+import { urlFoto } from '@/lib/foto'
 import { formatFechaCorta } from '@/lib/fechas'
 import { TIPO_CUENTA } from '@/lib/etiquetas'
 import type { Prisma } from '@/generated/prisma/client'
@@ -47,7 +48,7 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
   const estados = VISTAS[vista].estados
 
   const where: Prisma.CuentaCobroOpsWhereInput = estados.length ? { estado: { in: estados as EstadoCuentaCobro[] } } : {}
-  const bankSelect = { select: { nombres: true, apellidos: true, banco: { select: { nombre: true } }, tipoCuenta: true, numeroCuenta: true } }
+  const bankSelect = { select: { id: true, nombres: true, apellidos: true, fotoPath: true, banco: { select: { nombre: true } }, tipoCuenta: true, numeroCuenta: true } }
 
   const cuentas = await prisma.cuentaCobroOps.findMany({
     where,
@@ -73,6 +74,8 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
     return {
       id: c.id,
       nombre: owner ? `${owner.nombres} ${owner.apellidos}` : '—',
+      colaboradorId: owner?.id ?? null,
+      fotoPath: owner?.fotoPath ?? null,
       numero: c.numero,
       concepto: c.concepto,
       valor: Number(c.valor),
@@ -154,7 +157,7 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
                 <Card><CardContent className="p-0 divide-y">
                   {grupo.map((f) => (
                     <div key={f.id} className="flex flex-wrap items-center gap-3 p-3">
-                      <Chip icono={Receipt} color={f.esOps ? 'teal' : 'sky'} />
+                      <AvatarColaborador nombre={f.nombre} fotoUrl={f.colaboradorId ? urlFoto(f.colaboradorId, f.fotoPath, true) : null} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{f.nombre}</p>
                         <p className="truncate text-xs text-muted-foreground">

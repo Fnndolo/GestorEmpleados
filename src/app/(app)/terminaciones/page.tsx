@@ -4,8 +4,9 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { UserMinus, ChevronRight } from 'lucide-react'
-import { Chip, Pill } from '@/components/ui-kit'
+import { Pill, AvatarColaborador } from '@/components/ui-kit'
 import { formatFechaCorta } from '@/lib/fechas'
+import { urlFoto } from '@/lib/foto'
 import { NuevaTerminacion } from './nueva-terminacion'
 
 export const metadata = { title: 'Terminaciones · Smart Gadgets RH' }
@@ -27,7 +28,7 @@ export default async function TerminacionesPage({
   const puedeCrear = tienePermiso(usuario, 'terminaciones', 'CREAR')
 
   const terminaciones = await prisma.terminacion.findMany({
-    include: { colaborador: { select: { nombres: true, apellidos: true } }, pazYSalvo: { include: { items: true } } },
+    include: { colaborador: { select: { id: true, nombres: true, apellidos: true, fotoPath: true } }, pazYSalvo: { include: { items: true } } },
     orderBy: { creadoEn: 'desc' },
     take: 100,
   })
@@ -48,8 +49,11 @@ export default async function TerminacionesPage({
           {terminaciones.map((t) => {
             const pendientes = t.pazYSalvo?.items.filter((i) => !i.cumplido).length ?? 0
             return (
-              <Link key={t.id} href={`/terminaciones/${t.id}`} className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/40">
-                <Chip icono={UserMinus} color="rose" />
+              <Link key={t.id} href={`/terminaciones/${t.id}`} className="flex flex-wrap items-center gap-3 p-3 transition-colors hover:bg-accent/40">
+                <AvatarColaborador
+                  nombre={`${t.colaborador.nombres} ${t.colaborador.apellidos}`}
+                  fotoUrl={urlFoto(t.colaborador.id, t.colaborador.fotoPath, true)}
+                />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{t.colaborador.nombres} {t.colaborador.apellidos}</p>
                   <p className="text-xs text-muted-foreground">{TIPO[t.tipo]} · {formatFechaCorta(t.fechaRetiro)}</p>

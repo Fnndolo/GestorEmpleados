@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import type { LucideIcon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { colorAvatar, iniciales } from '@/lib/etiquetas'
 import { cn } from '@/lib/utils'
 
 /**
@@ -33,6 +35,28 @@ export function Chip({ icono: Icono, color, className, iconClassName }: {
     <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', clase, className)}>
       <Icono className={cn('size-4', iconClassName)} />
     </span>
+  )
+}
+
+/**
+ * Foto de perfil de un colaborador, con iniciales de respaldo — para usar en
+ * CUALQUIER lista o fila donde aparezca su nombre (listas, tablas, encabezados
+ * de detalle). Mismo color determinístico por nombre en toda la app.
+ */
+export function AvatarColaborador({ nombre, fotoUrl, className }: {
+  nombre: string
+  fotoUrl?: string | null
+  className?: string
+}) {
+  const partes = nombre.trim().split(/\s+/)
+  const ini = iniciales(partes[0] ?? '', partes.length > 1 ? partes[partes.length - 1] : '')
+  return (
+    <Avatar className={cn('size-8 shrink-0', className)}>
+      {fotoUrl && <AvatarImage src={fotoUrl} alt="" />}
+      <AvatarFallback className="text-[10px] font-semibold text-white" style={{ backgroundColor: colorAvatar(nombre) }}>
+        {ini}
+      </AvatarFallback>
+    </Avatar>
   )
 }
 

@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Paperclip, OctagonAlert, Flame, ClipboardCheck, IdCard, Landmark, Scale, CircleCheck, CircleAlert, CircleX, FileWarning, LayoutGrid, ChartLine, ChevronLeft } from 'lucide-react'
-import { Chip, Pill, Stat, type PillTone } from '@/components/ui-kit'
+import { Chip, Pill, Stat, AvatarColaborador, type PillTone } from '@/components/ui-kit'
+import { urlFoto } from '@/lib/foto'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,22 +60,22 @@ type Props = {
     reuniones: { id: string; fecha: string; temas: string; compromisos: string | null; actaDocId: string | null }[]
   }[]
   examenes: {
-    id: string; colaboradorId: string; colaborador: string; tipo: string; fecha: string; concepto: string
+    id: string; colaboradorId: string; colaborador: string; fotoPath: string | null; tipo: string; fecha: string; concepto: string
     vencimiento: string | null; vencido: boolean; tieneRestricciones: boolean; documentoId: string | null
     recomendaciones: string | null; restricciones: string | null; seguimientoCerrado: boolean
     seguimientos: { id: string; fecha: string; nota: string }[]
   }[]
   novedadesArl: {
-    id: string; colaborador: string; tipo: string; fecha: string; detalle: string | null
+    id: string; colaboradorId: string; colaborador: string; fotoPath: string | null; tipo: string; fecha: string; detalle: string | null
     claseRiesgo: string | null; soporteDocId: string | null
   }[]
   accidentes: {
-    id: string; colaborador: string; fecha: string; descripcion: string; parteCuerpo: string | null
+    id: string; colaboradorId: string; colaborador: string; fotoPath: string | null; fecha: string; descripcion: string; parteCuerpo: string | null
     diasIncapacidad: number | null; estado: string; furat: boolean; investigacion: string | null; esIncidente: boolean
     documentos: { id: string; nombre: string }[]
   }[]
   epps: { id: string; nombre: string }[]
-  entregasEpp: { id: string; colaborador: string; elemento: string; cantidad: number; fecha: string; firmado: boolean; soporteDocId: string | null }[]
+  entregasEpp: { id: string; colaboradorId: string; colaborador: string; fotoPath: string | null; elemento: string; cantidad: number; fecha: string; firmado: boolean; soporteDocId: string | null }[]
   peligros: {
     id: string; proceso: string; peligro: string; riesgo: string; nivel: string; controles: string | null
     rutinaria: boolean; controlFuente: string | null; controlMedio: string | null; controlIndividuo: string | null
@@ -449,8 +450,8 @@ export function SstCliente(p: Props) {
 
       {tab === 'examenes' && (p.examenes.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.examenes.map((e) => (
-          <div key={e.id} className="flex items-center gap-3 p-3">
-            <Chip icono={Stethoscope} color="rose" />
+          <div key={e.id} className="flex flex-wrap items-center gap-3 p-3">
+            <AvatarColaborador nombre={e.colaborador} fotoUrl={urlFoto(e.colaboradorId, e.fotoPath, true)} />
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm truncate">
                 <Link href={`/colaboradores/${e.colaboradorId}`} className="hover:underline">{e.colaborador}</Link>
@@ -487,8 +488,8 @@ export function SstCliente(p: Props) {
 
       {tab === 'arl' && (p.novedadesArl.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.novedadesArl.map((n) => (
-          <div key={n.id} className="flex items-center gap-3 p-3">
-            <Chip icono={ShieldAlert} color="emerald" />
+          <div key={n.id} className="flex flex-wrap items-center gap-3 p-3">
+            <AvatarColaborador nombre={n.colaborador} fotoUrl={urlFoto(n.colaboradorId, n.fotoPath, true)} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">{n.colaborador}</p>
               <p className="text-xs text-muted-foreground">
@@ -509,8 +510,8 @@ export function SstCliente(p: Props) {
 
       {tab === 'accidentes' && (p.accidentes.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.accidentes.map((a) => (
-          <button key={a.id} type="button" onClick={() => setAccidenteAbierto(a)} className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent/40">
-            <Chip icono={TriangleAlert} color={a.esIncidente ? 'sky' : 'amber'} />
+          <button key={a.id} type="button" onClick={() => setAccidenteAbierto(a)} className="flex w-full flex-wrap items-center gap-3 p-3 text-left hover:bg-accent/40">
+            <AvatarColaborador nombre={a.colaborador} fotoUrl={urlFoto(a.colaboradorId, a.fotoPath, true)} />
             <div className="flex-1 min-w-0"><p className="font-medium text-sm truncate">{a.colaborador}</p><p className="text-xs text-muted-foreground">{formatFechaCorta(new Date(a.fecha))} · {a.descripcion}</p></div>
             {a.documentos.length > 0 && <Paperclip className="size-4 shrink-0 text-muted-foreground" />}
             {a.esIncidente && <Pill tone="info">Incidente</Pill>}
@@ -538,8 +539,8 @@ export function SstCliente(p: Props) {
           <div className="flex flex-wrap gap-2">{p.epps.map((e) => <Badge key={e.id} variant="outline">{e.nombre}</Badge>)}</div>
           {p.entregasEpp.length === 0 ? <Vacio /> : (
             <Card><CardContent className="p-0 divide-y">{p.entregasEpp.map((e) => (
-              <div key={e.id} className="flex items-center gap-3 p-3">
-                <Chip icono={HardHat} color="indigo" />
+              <div key={e.id} className="flex flex-wrap items-center gap-3 p-3">
+                <AvatarColaborador nombre={e.colaborador} fotoUrl={urlFoto(e.colaboradorId, e.fotoPath, true)} />
                 <div className="min-w-0 flex-1"><p className="text-sm font-medium">{e.colaborador}</p><p className="text-xs text-muted-foreground">{e.cantidad}× {e.elemento} · {formatFechaCorta(new Date(e.fecha))}</p></div>
                 {e.soporteDocId && (
                   <a href={`/api/documentos/${e.soporteDocId}`} target="_blank" rel="noreferrer" className="whitespace-nowrap text-xs text-primary hover:underline">Recibido</a>

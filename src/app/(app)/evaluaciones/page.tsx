@@ -3,8 +3,9 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { ClipboardCheck } from 'lucide-react'
-import { Chip, Pill } from '@/components/ui-kit'
+import { Pill, AvatarColaborador } from '@/components/ui-kit'
 import { formatFechaCorta } from '@/lib/fechas'
+import { urlFoto } from '@/lib/foto'
 import { CrearEvaluacion } from './crear-evaluacion'
 
 export const metadata = { title: 'Evaluaciones · Smart Gadgets RH' }
@@ -14,7 +15,7 @@ export default async function EvaluacionesPage() {
   const puedeCrear = tienePermiso(usuario, 'evaluaciones', 'CREAR')
 
   const evaluaciones = await prisma.evaluacionDesempeno.findMany({
-    include: { colaborador: { select: { nombres: true, apellidos: true } } },
+    include: { colaborador: { select: { id: true, nombres: true, apellidos: true, fotoPath: true } } },
     orderBy: { fecha: 'desc' },
     take: 100,
   })
@@ -27,8 +28,11 @@ export default async function EvaluacionesPage() {
       ) : (
         <Card><CardContent className="p-0 divide-y">
           {evaluaciones.map((e) => (
-            <div key={e.id} className="flex items-center gap-3 p-3">
-              <Chip icono={ClipboardCheck} color="indigo" />
+            <div key={e.id} className="flex flex-wrap items-center gap-3 p-3">
+              <AvatarColaborador
+                nombre={`${e.colaborador.nombres} ${e.colaborador.apellidos}`}
+                fotoUrl={urlFoto(e.colaborador.id, e.colaborador.fotoPath, true)}
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{e.colaborador.nombres} {e.colaborador.apellidos}</p>
                 <p className="text-xs text-muted-foreground">{e.periodo} · {formatFechaCorta(e.fecha)}</p>
