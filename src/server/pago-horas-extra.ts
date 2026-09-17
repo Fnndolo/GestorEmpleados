@@ -74,19 +74,18 @@ async function upsertPago(colaboradorId: string, mes: string, quincena: 1 | 2 | 
   })
 }
 
-/** Arma (o rehace) el PDF de la orden de pago y lo deja como Documento del colaborador. */
-export async function generarOrdenPagoHorasExtra(opts: {
-  colaboradorId: string
-  mes: string
-  quincena: 1 | 2 | null
-  usuarioId: string
-}): Promise<{ documentoId: string; pagoId: string }> {
-  const pago = await upsertPago(opts.colaboradorId, opts.mes, opts.quincena)
+/**
+ * Arma el PDF de la orden de pago con los datos vigentes. Lo usan tanto la
+ * vista previa (no guarda nada) como el guardado (sí lo deja como Documento):
+ * así el PDF que se ve antes de guardar es EXACTAMENTE el que queda archivado.
+ */
+async function construirPdfOrden(colaboradorId: string, mes: string, quincena: 1 | 2 | null) {
+  const pago = await upsertPago(colaboradorId, mes, quincena)
   if (pago.estado === 'PAGADO') throw new ErrorNegocio('Este pago ya está marcado como pagado: desmárcalo antes de rehacer la orden.')
 
   const [colaborador, empresa, { src, propio }] = await Promise.all([
     prisma.colaborador.findUniqueOrThrow({
-      where: { id: opts.colaboradorId },
+      where: { id: colaboradorId },
       include: { banco: true },
     }),
     prisma.configuracionEmpresa.findFirstOrThrow(),
@@ -112,6 +111,36 @@ export async function generarOrdenPagoHorasExtra(opts: {
     },
     propio ? src : undefined,
   )
+
+  return { pago, pdf }
+}
+
+/**
+ * Arma el PDF SIN guardar nada: es solo para mirarlo antes de decidir. No toca
+ * el documento archivado ni cambia ningún estado (el snapshot de horas/valor sí
+ * se deja al día, porque es lo mismo que se vería si se guarda).
+ */
+export async function previsualizarOrdenPagoHorasExtra(opts: {
+  colaboradorId: string
+  mes: string
+  quincena: 1 | 2 | null
+}): Promise<{ pdfBase64: string }> {
+  const { pdf } = await construirPdfOrden(opts.colaboradorId, opts.mes, opts.quincena)
+  return { pdfBase64: `data:application/pdf;base64,${pdf.toString('base64')}` }
+}
+
+/**
+ * Deja la orden de pago guardada como Documento del colaborador: el PDF que se
+ * ve en "Ver orden" desde ahora en adelante. No se envía a nadie: es un PDF
+ * para descargar y compartir por donde se use siempre (correo, WhatsApp…).
+ */
+export async function generarOrdenPagoHorasExtra(opts: {
+  colaboradorId: string
+  mes: string
+  quincena: 1 | 2 | null
+  usuarioId: string
+}): Promise<{ documentoId: string; pagoId: string }> {
+  const { pago, pdf } = await construirPdfOrden(opts.colaboradorId, opts.mes, opts.quincena)
 
   const sha256 = createHash('sha256').update(pdf).digest('hex')
   const archivo = await subirArchivo(`colaboradores/${opts.colaboradorId}/pagos-horas-extra`, `orden-pago-${pago.id}.pdf`, pdf, 'application/pdf')
@@ -139,27 +168,35 @@ export async function generarOrdenPagoHorasExtra(opts: {
 }
 
 /**
- * Sube el soporte de que el pago ya se hizo (transferencia, consignación…) y
- * marca el registro como PAGADO. Si el pago no existía todavía —se subió el
- * comprobante sin pasar por "Generar orden" primero—, se crea con el valor que
- * AsistencIA reporta en ese momento.
+ * Marca el registro como PAGADO. El comprobante (soporte de la transferencia o
+ * consignación) es OPCIONAL: se puede confirmar el pago sin tenerlo a la mano y
+ * corregirlo después (desmarcar y volver a marcar con el archivo). Si el pago
+ * no existía todavía —se marcó sin pasar por "Generar orden" primero—, se crea
+ * con el valor que AsistencIA reporta en ese momento.
  */
-export async function subirComprobantePagoHorasExtra(opts: {
+export async function marcarPagoHorasExtraPagado(opts: {
   colaboradorId: string
   mes: string
   quincena: 1 | 2 | null
-  pdfBase64: string
+  /** Data URI del comprobante; sin él, queda pagado pero sin soporte adjunto. */
+  pdfBase64?: string | null
   nombreArchivo?: string | null
   usuarioId: string
-}): Promise<{ documentoId: string; pagoId: string }> {
+}): Promise<{ documentoId: string | null; pagoId: string }> {
+  const pago = await upsertPago(opts.colaboradorId, opts.mes, opts.quincena)
+
+  if (!opts.pdfBase64) {
+    await dbAuditado.pagoHorasExtra.update({
+      where: { id: pago.id },
+      data: { estado: 'PAGADO', pagadoEn: new Date(), pagadoPorId: opts.usuarioId },
+    })
+    return { documentoId: pago.comprobanteDocId, pagoId: pago.id }
+  }
+
   const base64 = opts.pdfBase64.split(',')[1] ?? ''
   const archivo = Buffer.from(base64, 'base64')
   if (archivo.byteLength === 0) throw new ErrorNegocio('El comprobante está vacío.')
   const mimeType = opts.pdfBase64.startsWith('data:image/') ? opts.pdfBase64.slice(5, opts.pdfBase64.indexOf(';')) : 'application/pdf'
-
-  const pago = await upsertPago(opts.colaboradorId, opts.mes, opts.quincena)
-  // Ya pagado: el nuevo comprobante reemplaza al anterior (corrección), pero no
-  // vuelve a recalcular el valor (upsertPago ya lo protege).
 
   const sha256 = createHash('sha256').update(archivo).digest('hex')
   const ext = mimeType === 'application/pdf' ? 'pdf' : mimeType.split('/')[1] || 'jpg'

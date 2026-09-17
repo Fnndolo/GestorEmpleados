@@ -9,7 +9,9 @@ import {
   CODIGOS_ASISTENCIA, ErrorAsistencia, normalizarCedula, rangoDePeriodo, resumenAsistencia,
 } from '@/server/asistencia/cliente'
 import { sincronizarHorasAsistencia } from '@/server/asistencia/horas-asistencia'
-import { generarOrdenPagoHorasExtra, subirComprobantePagoHorasExtra, marcarPagoHorasExtraPendiente } from '@/server/pago-horas-extra'
+import {
+  generarOrdenPagoHorasExtra, previsualizarOrdenPagoHorasExtra, marcarPagoHorasExtraPagado, marcarPagoHorasExtraPendiente,
+} from '@/server/pago-horas-extra'
 import { parseFechaISO } from '@/lib/fechas'
 
 /**
@@ -148,9 +150,21 @@ export const traerHorasAsistencia = accion(
 const pagoSchema = periodoSchema.extend({ colaboradorId: z.uuid() })
 
 /**
- * Arma (o rehace) la orden de pago de horas extra de una persona para el
- * período consultado. En esta empresa las horas extra se pagan APARTE de la
- * nómina: este PDF es el resumen que se envía a quien paga, no un desprendible.
+ * Arma el PDF de la orden de pago SIN guardar nada: para mirarlo antes de
+ * decidir. Nada se envía a nadie —es un PDF para descargar y compartir por
+ * donde se use siempre—, así que previsualizar cuantas veces haga falta no
+ * tiene efecto ninguno.
+ */
+export const previsualizarOrdenPago = accion(
+  { modulo: 'nomina', accion: 'EDITAR', schema: pagoSchema },
+  async (d) => previsualizarOrdenPagoHorasExtra({ colaboradorId: d.colaboradorId, mes: d.mes, quincena: d.quincena }),
+)
+
+/**
+ * Deja la orden de pago vista en la previsualización como Documento del
+ * colaborador ("Ver orden" desde ahora). En esta empresa las horas extra se
+ * pagan APARTE de la nómina: este PDF es el resumen que se envía a quien paga,
+ * no un desprendible.
  */
 export const generarOrdenPago = accion(
   { modulo: 'nomina', accion: 'EDITAR', schema: pagoSchema },
@@ -162,22 +176,22 @@ export const generarOrdenPago = accion(
   },
 )
 
-/** Sube el soporte de que el pago ya se hizo y marca la persona como pagada. */
-export const subirComprobantePago = accion(
+/** Marca la persona como pagada; el comprobante es opcional (se puede confirmar sin él y adjuntarlo después). */
+export const marcarPagoPagado = accion(
   {
     modulo: 'nomina',
     accion: 'EDITAR',
     schema: pagoSchema.extend({
-      pdfBase64: z.string().min(1, 'Adjunta el comprobante'),
+      pdfBase64: z.string().optional(),
       nombreArchivo: z.string().trim().max(200).optional().or(z.literal('')),
     }),
   },
   async (d, usuario) => {
-    const r = await subirComprobantePagoHorasExtra({
+    const r = await marcarPagoHorasExtraPagado({
       colaboradorId: d.colaboradorId, mes: d.mes, quincena: d.quincena,
-      pdfBase64: d.pdfBase64, nombreArchivo: d.nombreArchivo, usuarioId: usuario.id,
+      pdfBase64: d.pdfBase64 || null, nombreArchivo: d.nombreArchivo, usuarioId: usuario.id,
     })
-    await auditar('EDITAR', 'PagoHorasExtra', { registroId: r.pagoId, descripcion: `Marcado como pagado (${d.mes}${d.quincena ? ` Q${d.quincena}` : ''})` })
+    await auditar('EDITAR', 'PagoHorasExtra', { registroId: r.pagoId, descripcion: `Marcado como pagado${d.pdfBase64 ? ' (con comprobante)' : ' (sin comprobante)'} (${d.mes}${d.quincena ? ` Q${d.quincena}` : ''})` })
     revalidatePath('/nomina/novedades')
     return r
   },
