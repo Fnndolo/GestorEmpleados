@@ -69,7 +69,7 @@ export function AccionesDisciplinario({ procesoId, etapa, clase, plazoVencido, f
             no compareció, no que renunció a defenderse.
           </p>
           <div className="flex justify-end">
-            <Button size="sm" variant="outline" onClick={constanciaVencimiento} disabled={g}>
+            <Button size="sm" onClick={constanciaVencimiento} disabled={g}>
               {g ? <Spinner /> : <CalendarX className="size-4" />} Dejar constancia y continuar
             </Button>
           </div>
@@ -86,7 +86,7 @@ export function AccionesDisciplinario({ procesoId, etapa, clase, plazoVencido, f
               : 'Venció el plazo y el colaborador no respondió. Un llamado de atención termina aquí.'}
           </p>
           <div className="flex flex-wrap justify-end gap-2">
-            <Button size="sm" variant="outline" onClick={() => setEscalar(true)}>
+            <Button size="sm" onClick={() => setEscalar(true)}>
               <ArrowUpRight className="size-4" /> Escalar a proceso disciplinario
             </Button>
             <Button size="sm" onClick={() => setCerrar(true)}>

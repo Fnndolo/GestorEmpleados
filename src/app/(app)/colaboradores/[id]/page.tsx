@@ -465,7 +465,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
                         )
                       })()}
                     </div>
-                    {puedeVerContratos && <Button asChild size="sm" variant="outline"><Link href={`/contratos/${ct.id}`}>Ver contrato</Link></Button>}
+                    {puedeVerContratos && <Button asChild size="sm"><Link href={`/contratos/${ct.id}`}>Ver contrato</Link></Button>}
                   </div>
                 </CardContent></Card>
               ))}
@@ -480,7 +480,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">{ct.valorMensual ? `${fmtCOP(Number(ct.valorMensual))}/mes · ` : ''}{ct.sede.nombre} · desde {formatFechaLarga(ct.fechaInicio)} hasta {formatFechaLarga(ct.fechaFin)}</p>
                     </div>
-                    <Button asChild size="sm" variant="outline">
+                    <Button asChild size="sm">
                       <Link href={puedeVerContratos ? `/contratos/ops/${ct.id}` : '/autoservicio/contratos'}>
                         {puedeVerContratos ? 'Ver contrato' : 'Ver mi contrato'}
                       </Link>
@@ -617,7 +617,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
                     <VisorPdf
                       documentoId={l.documentoId}
                       titulo={`Desprendible ${l.periodo.nombre}`}
-                      className={buttonVariants({ size: 'sm', variant: 'outline' })}
+                      className={buttonVariants({ size: 'sm' })}
                     >
                       <Eye className="size-4" /> Desprendible
                     </VisorPdf>

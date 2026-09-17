@@ -124,7 +124,7 @@ function DialogPlantilla({ plantilla, empresa, onClose }: { plantilla: Plantilla
           <div className="space-y-1.5">
             <Label>Logo (opcional)</Label>
             <input ref={inputLogo} type="file" accept="image/*" className="hidden" onChange={(e) => setLogo(e.target.files?.[0] ?? null)} />
-            <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputLogo.current?.click()}>
+            <Button type="button" size="sm" className="w-full justify-start" onClick={() => inputLogo.current?.click()}>
               <ImagePlus className="size-4" /> {logo ? logo.name : plantilla?.tieneLogo ? 'Cambiar logo' : 'Subir logo'}
             </Button>
           </div>

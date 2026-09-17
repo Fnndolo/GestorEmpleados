@@ -88,7 +88,7 @@ export function MembretePanel({
 
           {puedeEditar && (
             <div className="mt-3 flex flex-wrap gap-2">
-              <label className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' cursor-pointer gap-2'}>
+              <label className={buttonVariants({ size: 'sm' }) + ' cursor-pointer gap-2'}>
                 {subiendo ? <Spinner /> : <Upload className="size-4" />}
                 {tieneMembrete ? 'Cambiar' : 'Subir'}
                 <input
@@ -145,7 +145,7 @@ export function MembretePanel({
                   key={m.tipo}
                   url={`/api/configuracion/membrete/muestra?tipo=${m.tipo}&v=${version}`}
                   titulo={`Muestra · ${m.nombre}`}
-                  className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' justify-start gap-2'}
+                  className={buttonVariants({ size: 'sm' }) + ' justify-start gap-2'}
                 >
                   <FileText className="size-4 shrink-0 text-primary" />
                   <span className="truncate">{m.nombre}</span>

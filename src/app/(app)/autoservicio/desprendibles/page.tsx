@@ -43,7 +43,7 @@ export default async function MisDesprendiblesPage() {
         titulo="Mis desprendibles de pago"
         descripcion="Descarga la colilla de cada periodo de nómina. Solo tú y Talento Humano pueden verlas."
         acciones={
-          <Button variant="outline" size="sm" asChild>
+          <Button size="sm" asChild>
             <Link href="/autoservicio"><ArrowLeft className="size-4" /> Volver</Link>
           </Button>
         }

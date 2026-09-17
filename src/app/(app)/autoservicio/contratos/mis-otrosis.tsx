@@ -94,7 +94,7 @@ function OtrosiFila({ o, contratoNumero }: { o: OtrosiItem; contratoNumero: stri
         <span className="text-xs text-muted-foreground">{o.fecha}</span>
         <span className="flex-1" />
         {o.documentoId && (
-          <VisorPdf documentoId={o.documentoId} titulo={titulo} className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' gap-2'}>
+          <VisorPdf documentoId={o.documentoId} titulo={titulo} className={buttonVariants({ size: 'sm' }) + ' gap-2'}>
             <FileText className="size-4 shrink-0 text-primary" /> Ver PDF
           </VisorPdf>
         )}

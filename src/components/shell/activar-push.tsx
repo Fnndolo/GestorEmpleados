@@ -105,7 +105,7 @@ export function ActivarPush() {
       {trabajando ? <Spinner /> : <BellOff className="size-4" />} Desactivar notificaciones aquí
     </Button>
   ) : (
-    <Button variant="outline" size="sm" className="w-full" onClick={activar} disabled={trabajando}>
+    <Button size="sm" className="w-full" onClick={activar} disabled={trabajando}>
       {trabajando ? <Spinner /> : <BellRing className="size-4" />} Activar notificaciones en este dispositivo
     </Button>
   )

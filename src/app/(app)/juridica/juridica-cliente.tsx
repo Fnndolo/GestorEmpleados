@@ -247,13 +247,13 @@ function DocumentoLegalItem({ d, puedeCrear }: { d: DocLegal; puedeCrear: boolea
           </p>
         </div>
         {d.documentoId && (
-          <Button variant="outline" size="sm" onClick={() => setVerDoc({ id: d.documentoId as string, titulo: d.titulo })}><Eye className="size-4" /> Ver</Button>
+          <Button size="sm" onClick={() => setVerDoc({ id: d.documentoId as string, titulo: d.titulo })}><Eye className="size-4" /> Ver</Button>
         )}
         {d.versiones.length > 1 && (
           <Button variant="ghost" size="icon" onClick={() => setVerVersiones((v) => !v)} aria-label="Historial de versiones"><History className="size-4" /></Button>
         )}
         {puedeCrear && (
-          <Button variant="outline" size="sm" onClick={() => setNuevaVersion(true)}><Upload className="size-4" /> Nueva versión</Button>
+          <Button size="sm" onClick={() => setNuevaVersion(true)}><Upload className="size-4" /> Nueva versión</Button>
         )}
       </div>
       {verVersiones && d.versiones.length > 0 && (
@@ -281,7 +281,7 @@ function VisorDocumento({ documentoId, titulo, onClose }: { documentoId: string;
         <DialogHeader><DialogTitle className="truncate pr-6">{titulo}</DialogTitle></DialogHeader>
         <iframe src={url} title={titulo} className="w-full h-[70vh] rounded-md border bg-muted" />
         <DialogFooter>
-          <Button variant="outline" asChild>
+          <Button asChild>
             <a href={url} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /> Abrir en pestaña</a>
           </Button>
           <Button variant="ghost" onClick={onClose}>Cerrar</Button>

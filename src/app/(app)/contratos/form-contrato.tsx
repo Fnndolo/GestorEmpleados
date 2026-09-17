@@ -599,7 +599,7 @@ export function FormContrato({
             titulo={`Cláusulas (${clausulas.length})`}
             open={secOpen.has('clausulas')}
             onToggle={() => toggleSec('clausulas')}
-            extra={<Button type="button" size="sm" variant="outline" onClick={agregarClausula}><Plus className="size-4" /> Añadir</Button>}
+            extra={<Button type="button" size="sm" onClick={agregarClausula}><Plus className="size-4" /> Añadir</Button>}
           >
             {clausulas.map((c, i) => {
               const open = abiertas.has(c.key)

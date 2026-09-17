@@ -84,7 +84,7 @@ function ParteFirma({
           <CircleCheck className="size-4" /> Firmado{estado.fecha ? ` · ${estado.fecha}` : ''}
         </div>
       ) : puedeFirmar ? (
-        <Button size="sm" variant="outline" className="mt-2" onClick={() => setAbierto(true)}>
+        <Button size="sm" className="mt-2" onClick={() => setAbierto(true)}>
           <PenLine className="size-4" /> Firmar
         </Button>
       ) : (

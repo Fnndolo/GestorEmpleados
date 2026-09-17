@@ -280,22 +280,22 @@ export function AcuerdosCliente({
 
           // Botones sueltos, para armar con ellos la fila y el panel sin repetir.
           const bEditar = puedeEditar && enEvaluacion && (
-            <Button size="icon" variant="outline" disabled={trabajando} onClick={() => abrirEditar(a)} aria-label="Editar" title="Editar">
+            <Button size="icon" disabled={trabajando} onClick={() => abrirEditar(a)} aria-label="Editar" title="Editar">
               <Pencil className="size-4" />
             </Button>
           )
           const bRegenerar = puedeEditar && (
-            <Button size="icon" variant="outline" disabled={trabajando} onClick={() => regenerar(a)} aria-label="Regenerar PDF" title="Regenerar el PDF con el formato vigente">
+            <Button size="icon" disabled={trabajando} onClick={() => regenerar(a)} aria-label="Regenerar PDF" title="Regenerar el PDF con el formato vigente">
               <RefreshCw className="size-4" />
             </Button>
           )
           const bEnviar = puedeEditar && enEvaluacion && (
-            <Button size="sm" variant="outline" disabled={trabajando} onClick={() => enviar(a)} title={a.enviado ? 'Reenviar al correo del aspirante' : 'Enviar al correo del aspirante'}>
+            <Button size="sm" disabled={trabajando} onClick={() => enviar(a)} title={a.enviado ? 'Reenviar al correo del aspirante' : 'Enviar al correo del aspirante'}>
               {trabajando ? <Spinner /> : <Mail className="size-4" />} {a.enviado ? 'Reenviar' : 'Enviar'}
             </Button>
           )
           const bSubir = puedeEditar && enEvaluacion && (
-            <Button size="sm" variant="outline" asChild disabled={trabajando}>
+            <Button size="sm" asChild disabled={trabajando}>
               <label className="cursor-pointer" title="Subir el acuerdo firmado (PDF)">
                 <Upload className="size-4" /> {a.firmado ? 'Subir otro' : 'Subir firmado'}
                 <input
@@ -309,7 +309,7 @@ export function AcuerdosCliente({
           )
           const bDecidir = puedeAprobar && enEvaluacion && (
             <>
-              <Button size="sm" variant="outline" disabled={trabajando} onClick={() => decidir(a, false)}>
+              <Button size="sm" disabled={trabajando} onClick={() => decidir(a, false)}>
                 <X className="size-4" /> No aprobar
               </Button>
               <Button size="sm" disabled={trabajando} onClick={() => decidir(a, true)}>

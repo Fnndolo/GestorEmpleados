@@ -51,7 +51,7 @@ export default async function EditarContratoPage({ params }: { params: Promise<{
         titulo={`Editar contrato ${c.numero}`}
         descripcion={`${c.colaborador.nombres} ${c.colaborador.apellidos} — editable hasta que alguna de las partes firme; al guardar se regenera el documento.`}
         acciones={
-          <Button variant="outline" size="sm" asChild>
+          <Button size="sm" asChild>
             <Link href={`/contratos/${id}`}><ArrowLeft className="size-4" /> Volver al contrato</Link>
           </Button>
         }

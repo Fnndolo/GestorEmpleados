@@ -124,7 +124,7 @@ export function Organigrama({ nodos }: { nodos: NodoOrg[] }) {
         onReady={() => setListo(true)}
       />
       <div className="flex justify-end">
-        <Button size="sm" variant="outline" onClick={exportarPDF} disabled={!listo}>
+        <Button size="sm" onClick={exportarPDF} disabled={!listo}>
           <Download className="size-4" /> Exportar (PDF)
         </Button>
       </div>

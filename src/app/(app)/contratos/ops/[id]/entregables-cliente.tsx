@@ -86,7 +86,7 @@ export function Entregables({ contratoOpsId, entregables, puedeEditar }: {
           )}
         </h2>
         {puedeEditar && !agregando && (
-          <Button type="button" size="sm" variant="outline" onClick={abrirNuevo}><Plus className="size-4" /> Añadir</Button>
+          <Button type="button" size="sm" onClick={abrirNuevo}><Plus className="size-4" /> Añadir</Button>
         )}
       </div>
 

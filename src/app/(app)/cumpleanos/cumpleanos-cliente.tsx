@@ -179,7 +179,7 @@ function Lista({ filas, hoy, permisos, onAsignar, onRevisar }: {
                 </Button>
               )}
               {c?.estado === 'ASIGNADA' && permisos.crear && (
-                <Button size="sm" variant="outline" onClick={() => onAsignar(f)}>Cambiar</Button>
+                <Button size="sm" onClick={() => onAsignar(f)}>Cambiar</Button>
               )}
               {c?.estado === 'ASIGNADA' && permisos.eliminar && (
                 <Button size="sm" variant="ghost" onClick={() => cancelar(f)} disabled={cancelando === f.clave} aria-label="Cancelar el encargo">
@@ -190,7 +190,7 @@ function Lista({ filas, hoy, permisos, onAsignar, onRevisar }: {
                 <Button size="sm" onClick={() => onRevisar(f)}><Eye className="size-4" /> Revisar facturas</Button>
               )}
               {c?.estado === 'CERRADA' && (
-                <Button size="sm" variant="outline" onClick={() => onRevisar(f)}><Eye className="size-4" /> Ver facturas</Button>
+                <Button size="sm" onClick={() => onRevisar(f)}><Eye className="size-4" /> Ver facturas</Button>
               )}
             </div>
           </div>
@@ -293,11 +293,11 @@ function RevisarDialogo({ fila, permisos, onClose }: { fila: FilaCumpleanos; per
         <DialogFooter>
           {porRevisar ? (
             <>
-              <Button variant="outline" onClick={() => decidir('DEVOLVER')} disabled={guardando}><Undo2 className="size-4" /> Devolver</Button>
+              <Button onClick={() => decidir('DEVOLVER')} disabled={guardando}><Undo2 className="size-4" /> Devolver</Button>
               <Button onClick={() => decidir('ACEPTAR')} disabled={guardando}>{guardando ? <Spinner className="size-4" /> : <CircleCheck className="size-4" />} Aceptar y cerrar</Button>
             </>
           ) : (
-            <Button variant="outline" onClick={onClose}>Cerrar</Button>
+            <Button onClick={onClose}>Cerrar</Button>
           )}
         </DialogFooter>
       </DialogContent>

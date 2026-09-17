@@ -126,7 +126,7 @@ export function GestorDocumentos({
                       )}
                     </span>
                     {doc && (
-                      <VisorPdf documentoId={doc.id} titulo={doc.nombre} mimeType={doc.mimeType} className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' shrink-0'}>
+                      <VisorPdf documentoId={doc.id} titulo={doc.nombre} mimeType={doc.mimeType} className={buttonVariants({ size: 'sm' }) + ' shrink-0'}>
                         <Eye className="size-3.5" /> Ver
                       </VisorPdf>
                     )}

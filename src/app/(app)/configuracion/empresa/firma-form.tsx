@@ -89,7 +89,7 @@ export function FirmaRepLegalForm({
 
           {puedeEditar && (
             <div className="flex shrink-0 items-center gap-2">
-              <label className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' cursor-pointer gap-2'}>
+              <label className={buttonVariants({ size: 'sm' }) + ' cursor-pointer gap-2'}>
                 {ocupado ? <Spinner /> : <Upload className="size-4" />}
                 {tieneFirma ? 'Reemplazar' : 'Cargar firma'}
                 <input

@@ -390,7 +390,7 @@ export function SstCliente(p: Props) {
           <Card><CardContent className="py-5 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium">Semáforo de accidentalidad y ausentismo</p>
-              {p.puedeCrear && <Button size="sm" variant="outline" onClick={() => setIndicadorAbierto(true)}><Plus className="size-4" /> Registrar mes</Button>}
+              {p.puedeCrear && <Button size="sm" onClick={() => setIndicadorAbierto(true)}><Plus className="size-4" /> Registrar mes</Button>}
             </div>
             {p.indicadores.length === 0 ? (
               <p className="text-xs text-muted-foreground">Sin indicadores mensuales registrados. Frecuencia, severidad y ausentismo se calculan a partir de trabajadores/horas-hombre que digita RRHH cada mes (los accidentes y días perdidos se toman automáticamente de lo reportado en Accidentes).</p>
@@ -1010,7 +1010,7 @@ function DialogSeguimientoInspeccion({ inspeccion, onClose }: { inspeccion: Prop
           <Campo label="Adjuntar soporte (fotos, checklist)">
             <div className="flex gap-2">
               <input type="file" accept="image/*,application/pdf" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground" />
-              <Button size="sm" variant="outline" onClick={adjuntar} disabled={!archivo || g}>Subir</Button>
+              <Button size="sm" onClick={adjuntar} disabled={!archivo || g}>Subir</Button>
             </div>
           </Campo>
           <Campo label="Fecha de cierre (al resolver los hallazgos)"><Input type="date" value={fechaCierre} onChange={(e) => setFechaCierre(e.target.value)} /></Campo>
@@ -1054,7 +1054,7 @@ function SeccionEmergencia({ titulo, puedeCrear, sedes, planes }: { titulo: stri
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between"><p className="text-sm font-medium">{titulo}</p>{puedeCrear && <Button size="sm" variant="outline" onClick={() => setAbierto((v) => !v)}><Plus className="size-4" /> Nuevo</Button>}</div>
+      <div className="mb-2 flex items-center justify-between"><p className="text-sm font-medium">{titulo}</p>{puedeCrear && <Button size="sm" onClick={() => setAbierto((v) => !v)}><Plus className="size-4" /> Nuevo</Button>}</div>
       {planes.length === 0 ? <p className="text-xs text-muted-foreground">Sin plan de emergencias registrado.</p> : (
         <ul className="mb-3 space-y-2">{planes.map((pl) => (
           <li key={pl.id} className="flex items-center gap-2 rounded-md border p-2 text-sm">
@@ -1157,7 +1157,7 @@ function SeccionSimulacros({ puedeCrear, sedes, simulacros }: { puedeCrear: bool
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between"><p className="text-sm font-medium">Simulacros</p>{puedeCrear && <Button size="sm" variant="outline" onClick={() => setAbierto((v) => !v)}><Plus className="size-4" /> Nuevo</Button>}</div>
+      <div className="mb-2 flex items-center justify-between"><p className="text-sm font-medium">Simulacros</p>{puedeCrear && <Button size="sm" onClick={() => setAbierto((v) => !v)}><Plus className="size-4" /> Nuevo</Button>}</div>
       {simulacros.length === 0 ? <p className="mb-3 text-xs text-muted-foreground">Sin simulacros registrados.</p> : (
         <ul className="mb-3 space-y-1">{simulacros.map((s) => (
           <li key={s.id} className="flex items-center gap-2 text-sm">
@@ -1263,7 +1263,7 @@ function EstructuraSgsst({ estructura, puedeEditar }: { estructura: Props['estru
           ) : <p className="text-xs text-muted-foreground">Sube la política en Jurídica (categoría Política) y vincúlala aquí como la del SG-SST.</p>}
         </div>
         <Pill tone={e.politica?.firmadaEn ? 'ok' : e.politica ? 'warn' : 'bad'}>{e.politica?.firmadaEn ? 'Firmada' : e.politica ? 'Sin firma' : 'Falta'}</Pill>
-        {puedeEditar && <Button size="sm" variant="outline" onClick={() => setDialogo('politica')}>{e.politica ? 'Cambiar' : 'Vincular'}</Button>}
+        {puedeEditar && <Button size="sm" onClick={() => setDialogo('politica')}>{e.politica ? 'Cambiar' : 'Vincular'}</Button>}
       </CardContent></Card>
 
       <Card><CardContent className="flex flex-wrap items-center gap-3 py-4">
@@ -1282,7 +1282,7 @@ function EstructuraSgsst({ estructura, puedeEditar }: { estructura: Props['estru
           )}
         </div>
         <Pill tone={e.responsable ? (e.responsable.cartaDocId ? 'ok' : 'warn') : 'bad'}>{e.responsable ? (e.responsable.cartaDocId ? 'Designado' : 'Sin carta') : 'Falta'}</Pill>
-        {puedeEditar && <Button size="sm" variant="outline" onClick={() => setDialogo('responsable')}>{e.responsable ? 'Cambiar' : 'Designar'}</Button>}
+        {puedeEditar && <Button size="sm" onClick={() => setDialogo('responsable')}>{e.responsable ? 'Cambiar' : 'Designar'}</Button>}
       </CardContent></Card>
 
       <Card><CardContent className="flex flex-wrap items-center gap-3 py-4">
@@ -1300,7 +1300,7 @@ function EstructuraSgsst({ estructura, puedeEditar }: { estructura: Props['estru
           )}
         </div>
         <Pill tone={e.plan ? (e.plan.documentoId ? 'ok' : 'warn') : 'bad'}>{e.plan ? (e.plan.documentoId ? 'Registrado' : 'Sin PDF') : 'Falta'}</Pill>
-        {puedeEditar && <Button size="sm" variant="outline" onClick={() => setDialogo('plan')}>{e.plan ? 'Actualizar' : 'Registrar'}</Button>}
+        {puedeEditar && <Button size="sm" onClick={() => setDialogo('plan')}>{e.plan ? 'Actualizar' : 'Registrar'}</Button>}
       </CardContent></Card>
 
       {dialogo === 'politica' && <DialogPolitica politicas={e.politicasDisponibles} onClose={() => setDialogo(null)} />}
@@ -1535,7 +1535,7 @@ function PanelAutoeval({ autoeval, puedeEditar }: { autoeval: Props['autoeval'];
 
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">Acciones de mejora {autoeval.acciones.length > 0 && <span className="text-muted-foreground font-normal">— {cumplidas} de {autoeval.acciones.length} cumplidas</span>}</p>
-        {puedeEditar && <Button size="sm" variant="outline" onClick={() => setDialogoAccion(true)}><Plus className="size-4" /> Acción</Button>}
+        {puedeEditar && <Button size="sm" onClick={() => setDialogoAccion(true)}><Plus className="size-4" /> Acción</Button>}
       </div>
 
       {autoeval.acciones.length === 0 ? (
@@ -1700,8 +1700,8 @@ function DialogSeguimientoRecomendaciones({ examen, onClose }: { examen: Props['
     </div>
     <DialogFooter className="gap-2">
       {examen.seguimientoCerrado
-        ? <Button variant="outline" onClick={() => cerrar(false)}>Reabrir seguimiento</Button>
-        : <Button variant="outline" onClick={() => cerrar(true)}>Cerrar seguimiento</Button>}
+        ? <Button onClick={() => cerrar(false)}>Reabrir seguimiento</Button>
+        : <Button onClick={() => cerrar(true)}>Cerrar seguimiento</Button>}
       <Button variant="ghost" onClick={onClose}>Cerrar</Button>
     </DialogFooter></DialogContent></Dialog>)
 }

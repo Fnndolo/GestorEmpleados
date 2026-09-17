@@ -347,7 +347,7 @@ export function ContratoOpsSplit({
         >
           <div className="space-y-2">
             <div className="flex justify-end">
-              <Button type="button" size="sm" variant="outline" onClick={() => setEntregables((es) => [...es, { key: nuevaKey(), descripcion: '', fechaEntrega: '' }])}>
+              <Button type="button" size="sm" onClick={() => setEntregables((es) => [...es, { key: nuevaKey(), descripcion: '', fechaEntrega: '' }])}>
                 <Plus className="size-4" /> Añadir
               </Button>
             </div>
@@ -395,7 +395,7 @@ export function ContratoOpsSplit({
               titulo={`Cláusulas (${clausulas.length})`}
               open={secOpen.has('clausulas')}
               onToggle={() => toggleSec('clausulas')}
-              extra={<Button type="button" size="sm" variant="outline" onClick={agregar}><Plus className="size-4" /> Añadir</Button>}
+              extra={<Button type="button" size="sm" onClick={agregar}><Plus className="size-4" /> Añadir</Button>}
             >
               {clausulas.map((c, i) => {
                 const open = abiertas.has(c.key)

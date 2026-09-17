@@ -92,7 +92,7 @@ export function BannerPush() {
       <p className="min-w-0 flex-1 truncate">
         Activa las notificaciones para recibir los avisos en este dispositivo.
       </p>
-      <Button size="sm" variant="outline" className="h-7 shrink-0 px-2.5 text-xs" onClick={activar} disabled={trabajando}>
+      <Button size="sm" className="h-7 shrink-0 px-2.5 text-xs" onClick={activar} disabled={trabajando}>
         {trabajando ? <Spinner /> : null} Activar
       </Button>
       <Button

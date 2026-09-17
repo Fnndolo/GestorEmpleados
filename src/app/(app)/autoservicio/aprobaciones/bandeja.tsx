@@ -288,14 +288,14 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
                 <Textarea rows={2} placeholder="¿Qué falta o qué no acredita el soporte?" value={comentario} onChange={(e) => setComentario(e.target.value)} />
                 <div className="flex justify-end gap-2">
                   <Button size="sm" variant="ghost" onClick={() => { setSoporteInvalido(null); setComentario('') }}>Cancelar</Button>
-                  <Button size="sm" variant="outline" onClick={() => devolverPorSoporte(s.pasoId)} disabled={procesando === s.pasoId || !comentario.trim()}>
+                  <Button size="sm" onClick={() => devolverPorSoporte(s.pasoId)} disabled={procesando === s.pasoId || !comentario.trim()}>
                     {procesando === s.pasoId ? <Spinner /> : <X className="size-4" />} Devolver
                   </Button>
                 </div>
               </div>
             ) : s.licenciaDerecho ? (
               <div className="mt-3 flex flex-wrap justify-end gap-2">
-                <Button size="sm" variant="outline" onClick={() => { setSoporteInvalido(s.pasoId); setComentario('') }} disabled={procesando === s.pasoId}>
+                <Button size="sm" onClick={() => { setSoporteInvalido(s.pasoId); setComentario('') }} disabled={procesando === s.pasoId}>
                   <X className="size-4" /> Soporte no válido
                 </Button>
                 <Button size="sm" onClick={() => registrarLicencia(s.pasoId)} disabled={procesando === s.pasoId}>
@@ -304,14 +304,14 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
               </div>
             ) : (
               <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                <Button size="sm" variant="outline" onClick={() => resolver(s.pasoId, false)} disabled={procesando === s.pasoId}>
+                <Button size="sm" onClick={() => resolver(s.pasoId, false)} disabled={procesando === s.pasoId}>
                   <X className="size-4" /> Rechazar
                 </Button>
                 {/* Permiso: solo el jefe cambia el día. Vacaciones: cualquier aprobador
                     del paso puede contraproponer fechas (el backend valida quién puede). */}
                 {(s.tipo === 'VACACIONES' || (s.esPasoJefe && s.tipo === 'PERMISO')) && (
                   <Button
-                    size="sm" variant="outline" disabled={procesando === s.pasoId}
+                    size="sm" disabled={procesando === s.pasoId}
                     onClick={() => { setCambioFechas(s.pasoId); setNuevaIni(s.fechaInicio); setNuevaFin(s.fechaFin) }}
                     aria-label={s.tipo === 'VACACIONES' ? 'Proponer otras fechas' : 'Aprobar con otro día'}
                     title={s.tipo === 'VACACIONES' ? 'Proponer otras fechas' : 'Aprobar con otro día'}

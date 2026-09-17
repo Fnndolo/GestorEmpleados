@@ -87,7 +87,7 @@ export function Constructor() {
                   </div>
                 </div>
               ))}
-              <Button variant="outline" size="sm" onClick={() => setCampos((c) => [...c, { etiqueta: '', tipo: 'TEXTO', requerido: false, opciones: '', generaAlerta: false }])}>
+              <Button size="sm" onClick={() => setCampos((c) => [...c, { etiqueta: '', tipo: 'TEXTO', requerido: false, opciones: '', generaAlerta: false }])}>
                 <Plus className="size-4" /> Agregar campo
               </Button>
             </div>

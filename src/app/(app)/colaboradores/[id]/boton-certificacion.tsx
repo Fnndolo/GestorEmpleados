@@ -64,7 +64,7 @@ export function BotonCertificacion({ colaboradorId }: { colaboradorId: string })
             <div className="space-y-1.5"><Label>Dirigida a (opcional)</Label><Input value={dirigidaA} onChange={(e) => setDirigidaA(e.target.value)} /></div>
             {docId && (
               <div className="space-y-2">
-                <Button variant="outline" className="w-full" asChild>
+                <Button className="w-full" asChild>
                   <a href={`/api/documentos/${docId}`} target="_blank" rel="noreferrer"><Download className="size-4" /> Descargar PDF</a>
                 </Button>
                 {/* Si la plantilla no dice lo que este caso necesita, se sustituye

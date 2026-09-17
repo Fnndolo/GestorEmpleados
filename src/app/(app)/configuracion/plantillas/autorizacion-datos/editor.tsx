@@ -187,7 +187,7 @@ export function EditorAutorizacion({
           <VisorPdf
             url={`/api/configuracion/membrete/muestra?tipo=${vinculo === 'LABORAL' ? 'autorizacion-laboral' : 'autorizacion'}`}
             titulo={`Muestra · Autorización de datos · ${vinculo === 'LABORAL' ? 'Contrato laboral' : 'Contrato OPS'}`}
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            className={buttonVariants({ size: 'sm' })}
           >
             <FileText className="size-4" /> PDF de muestra{cambiado ? ' (texto guardado)' : ''}
           </VisorPdf>

@@ -55,13 +55,13 @@ export function AccionesContrato({
       <h3 className="text-sm font-medium mb-3">Acciones</h3>
       <div className="flex flex-wrap gap-2">
         {tipo === 'TERMINO_FIJO' && (
-          <Button size="sm" variant="outline" onClick={() => setDialogo('prorroga')}><CalendarPlus className="size-4" /> Prórroga</Button>
+          <Button size="sm" onClick={() => setDialogo('prorroga')}><CalendarPlus className="size-4" /> Prórroga</Button>
         )}
-        <Button size="sm" variant="outline" onClick={() => setDialogo('otrosi')}><FilePen className="size-4" /> Otrosí</Button>
+        <Button size="sm" onClick={() => setDialogo('otrosi')}><FilePen className="size-4" /> Otrosí</Button>
         {estado !== 'SUSPENDIDO' ? (
-          <Button size="sm" variant="outline" onClick={() => setDialogo('suspension')}><CirclePause className="size-4" /> Suspender</Button>
+          <Button size="sm" onClick={() => setDialogo('suspension')}><CirclePause className="size-4" /> Suspender</Button>
         ) : (
-          <Button size="sm" variant="outline" onClick={reactivar} disabled={cargando}>
+          <Button size="sm" onClick={reactivar} disabled={cargando}>
             {cargando ? <Spinner /> : <CirclePlay className="size-4" />} Reactivar
           </Button>
         )}
@@ -71,7 +71,7 @@ export function AccionesContrato({
         {estado === 'ACTIVO' && (
           <Link
             href={`/terminaciones?colaborador=${colaboradorId}`}
-            className={buttonVariants({ size: 'sm', variant: 'outline' })}
+            className={buttonVariants({ size: 'sm' })}
           >
             <UserMinus className="size-4" /> Terminar contrato
           </Link>
@@ -300,7 +300,7 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) alElegirPdf(f); e.target.value = '' }}
             />
-            <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputPdf.current?.click()} disabled={analizando}>
+            <Button type="button" size="sm" className="w-full justify-start" onClick={() => inputPdf.current?.click()} disabled={analizando}>
               <Paperclip className="size-4" />
               <span className="truncate">{nombrePdf || 'Seleccionar el PDF (ya firmado por la empresa)'}</span>
             </Button>

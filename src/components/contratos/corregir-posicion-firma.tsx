@@ -125,7 +125,7 @@ export function CorregirPosicionFirma({ contratoId, vinculo }: { contratoId: str
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={abrir} disabled={cargando}>
+      <Button size="sm" onClick={abrir} disabled={cargando}>
         {cargando ? <Spinner /> : <MoveVertical className="size-4" />} Corregir posición de la firma
       </Button>
 

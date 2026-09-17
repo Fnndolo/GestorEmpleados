@@ -124,7 +124,7 @@ export function AreasCliente({
             {puedeEditar && (
               <>
                 <Switch checked={a.activa} onCheckedChange={() => alternar(a)} />
-                <Button size="sm" variant="outline" onClick={() => abrirEditar(a)}>
+                <Button size="sm" onClick={() => abrirEditar(a)}>
                   <Pencil className="size-4" /> Editar
                 </Button>
               </>

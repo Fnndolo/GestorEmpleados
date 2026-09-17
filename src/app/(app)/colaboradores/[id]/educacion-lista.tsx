@@ -36,7 +36,7 @@ export function EducacionLista({
     <div className="space-y-3">
       {puedeEditar && (
         <div className="flex justify-end">
-          <Button size="sm" variant="outline" onClick={() => setNuevo(true)}>
+          <Button size="sm" onClick={() => setNuevo(true)}>
             <Plus className="size-4" /> Agregar estudio
           </Button>
         </div>
@@ -149,7 +149,7 @@ function DialogEducacion({
           <div className="space-y-1.5">
             <Label>Certificado (opcional)</Label>
             <input ref={inputArchivo} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />
-            <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
+            <Button type="button" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
               <Paperclip className="size-4" /> {archivo ? archivo.name : 'Adjuntar certificado o diploma'}
             </Button>
           </div>

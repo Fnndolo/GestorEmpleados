@@ -93,10 +93,10 @@ export function CalendarioLegalAnual({
           )}
           {puedeGenerar && (
             <>
-              <Button size="sm" variant="outline" asChild>
+              <Button size="sm" asChild>
                 <Link href="/calendario-legal/obligaciones"><Settings2 className="size-4" /> Gestionar obligaciones</Link>
               </Button>
-              <Button size="sm" variant="outline" onClick={generar} disabled={generando}>
+              <Button size="sm" onClick={generar} disabled={generando}>
                 {generando ? <Spinner /> : <RefreshCw className="size-4" />} Generar próximas fechas
               </Button>
             </>

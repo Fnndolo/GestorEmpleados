@@ -77,7 +77,7 @@ export function RolesCliente({
                 </div>
               </div>
               <div className="flex items-center gap-1 mt-3">
-                <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditandoMatriz(r)}>
+                <Button size="sm" className="flex-1" onClick={() => setEditandoMatriz(r)}>
                   Permisos <ChevronRight className="size-4" />
                 </Button>
                 {puedeEditar && (

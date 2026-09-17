@@ -129,7 +129,7 @@ export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, b
     <>
       <div className="flex flex-wrap gap-2">
         {puedeEditar && (
-          <Button size="sm" variant="outline" onClick={() => { setFecha(fechaRetiro); setDialogo('recalcular') }}>
+          <Button size="sm" onClick={() => { setFecha(fechaRetiro); setDialogo('recalcular') }}>
             <RefreshCw className="size-4" /> Rehacer el cálculo
           </Button>
         )}

@@ -271,7 +271,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                   onChange={(e) => setArchivoSoporte(e.target.files?.[0] ?? null)}
                 />
                 <div className="flex flex-wrap justify-end gap-2">
-                  <Button size="sm" variant="outline" onClick={() => inputSoporte.current?.click()} disabled={corrigiendo !== null}>
+                  <Button size="sm" onClick={() => inputSoporte.current?.click()} disabled={corrigiendo !== null}>
                     <Paperclip className="size-4" /> {archivoSoporte ? archivoSoporte.name : 'Adjuntar soporte'}
                   </Button>
                   <Button size="sm" onClick={() => enviarSoporteCorregido(s.id)} disabled={corrigiendo !== null || !archivoSoporte}>
@@ -329,7 +329,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                 )}
                 <div className="flex items-center justify-end gap-2">
                   <Button
-                    size="sm" variant="outline" disabled={enviandoComprobante !== null}
+                    size="sm" disabled={enviandoComprobante !== null}
                     aria-label="Adjuntar comprobante" title="Adjuntar comprobante (puedes elegir varios)"
                     onClick={() => { setComprobantePara(s.comprobante!.permisoId); inputComprobante.current?.click() }}
                   >
@@ -372,14 +372,14 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                     />
                     <div className="flex justify-end gap-2">
                       <Button size="sm" variant="ghost" onClick={() => { setRechazando(null); setMotivoRechazo('') }}>Cancelar</Button>
-                      <Button size="sm" variant="outline" onClick={() => responder(s.id, false)} disabled={respondiendo === s.id}>
+                      <Button size="sm" onClick={() => responder(s.id, false)} disabled={respondiendo === s.id}>
                         {respondiendo === s.id ? <Spinner /> : <X className="size-4" />} Rechazar contrapropuesta
                       </Button>
                     </div>
                   </div>
                 ) : (
                   <div className="flex justify-end gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setRechazando(s.id)} disabled={respondiendo === s.id}>
+                    <Button size="sm" onClick={() => setRechazando(s.id)} disabled={respondiendo === s.id}>
                       <X className="size-4" /> Rechazar
                     </Button>
                     <Button size="sm" onClick={() => responder(s.id, true)} disabled={respondiendo === s.id}>
@@ -395,7 +395,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                 {/* Mientras nadie decida, el permiso se corrige aquí mismo. */}
                 {s.edicion && (
                   <div className="flex justify-end">
-                    <Button size="sm" variant="outline" onClick={() => setEditando(s.edicion!)}>
+                    <Button size="sm" onClick={() => setEditando(s.edicion!)}>
                       <Pencil className="size-4" /> Editar permiso
                     </Button>
                   </div>
@@ -478,7 +478,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                         <li key={d.id} className="flex items-center gap-2.5 py-1.5 text-sm">
                           <Paperclip className="size-4 shrink-0 text-muted-foreground" />
                           <span className="min-w-0 flex-1 truncate">{d.nombre}</span>
-                          <VisorPdf documentoId={d.id} titulo={d.nombre} mimeType={d.esImagen ? 'image/*' : 'application/pdf'} className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' shrink-0'}>
+                          <VisorPdf documentoId={d.id} titulo={d.nombre} mimeType={d.esImagen ? 'image/*' : 'application/pdf'} className={buttonVariants({ size: 'sm' }) + ' shrink-0'}>
                             Ver
                           </VisorPdf>
                         </li>
@@ -513,7 +513,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                 )}
 
                 {s.certId && (
-                  <Button size="sm" variant="outline" asChild>
+                  <Button size="sm" asChild>
                     <a href={`/api/documentos/${s.certId}`} target="_blank" rel="noreferrer">
                       <Download className="size-4" /> Descargar certificación (PDF)
                     </a>

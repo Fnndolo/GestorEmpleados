@@ -39,6 +39,15 @@ export function AccionesPeriodo({
         { duration: 10000 },
       )
     }
+    // Al cerrar o reabrir, AsistencIA queda enterada de lo pagado; si no
+    // respondió, se dice: allá seguirán saliendo como pendientes hasta que
+    // se vuelva a anotar.
+    const asistencia = (res.datos as { asistencia?: { anotados: number; omitido?: boolean; error?: string } } | undefined)?.asistencia
+    if (asistencia?.error) {
+      toast.warning(`El periodo quedó listo, pero no se pudo anotar el pago en AsistencIA: ${asistencia.error}`, { duration: 10000 })
+    } else if (asistencia && asistencia.anotados > 0) {
+      toast.message(`${asistencia.anotados} tramo(s) de horas extra anotados en AsistencIA.`)
+    }
     router.refresh()
   }
 
@@ -54,28 +63,28 @@ export function AccionesPeriodo({
         </Button>
       )}
       {puedeAprobar && estado === 'CALCULADA' && (
-        <Button size="sm" variant="outline" onClick={() => ejecutar('apr', () => aprobarPeriodo({ periodoId }), 'Periodo aprobado.')} disabled={cargando !== null}>
+        <Button size="sm" onClick={() => ejecutar('apr', () => aprobarPeriodo({ periodoId }), 'Periodo aprobado.')} disabled={cargando !== null}>
           {cargando === 'apr' ? <Spinner /> : <CircleCheck className="size-4" />} Aprobar
         </Button>
       )}
       {puedeAprobar && estado === 'APROBADA' && (
-        <Button size="sm" variant="outline" onClick={() => ejecutar('cer', () => cerrarPeriodo({ periodoId }), 'Periodo cerrado.')} disabled={cargando !== null}>
+        <Button size="sm" onClick={() => ejecutar('cer', () => cerrarPeriodo({ periodoId }), 'Periodo cerrado.')} disabled={cargando !== null}>
           {cargando === 'cer' ? <Spinner /> : <Lock className="size-4" />} Cerrar
         </Button>
       )}
       {puedeExportar && tieneLiquidaciones && (
         <>
-          <Button size="sm" variant="outline" onClick={() => ejecutar('pdf', () => generarPdfDesprendibles({ periodoId }), 'Desprendibles generados.')} disabled={cargando !== null}>
+          <Button size="sm" onClick={() => ejecutar('pdf', () => generarPdfDesprendibles({ periodoId }), 'Desprendibles generados.')} disabled={cargando !== null}>
             {cargando === 'pdf' ? <Spinner /> : <FileText className="size-4" />} Desprendibles PDF
           </Button>
-          <Button size="sm" variant="outline" asChild>
+          <Button size="sm" asChild>
             <a href={`/api/nomina/${periodoId}/pila`}><FileSpreadsheet className="size-4" /> Resumen PILA</a>
           </Button>
         </>
       )}
       {/* Correcciones: reabrir para rehacer, o eliminar si el periodo se creó por error. */}
       {puedeAprobar && puedeReabrir && (
-        <Button size="sm" variant="outline" onClick={() => setConfirmar('reabrir')} disabled={cargando !== null}>
+        <Button size="sm" onClick={() => setConfirmar('reabrir')} disabled={cargando !== null}>
           {cargando === 'rea' ? <Spinner /> : <LockOpen className="size-4" />} Reabrir
         </Button>
       )}
@@ -100,7 +109,7 @@ export function AccionesPeriodo({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <Button variant="outline" disabled={cargando !== null} onClick={() => setConfirmar(null)}>Cancelar</Button>
+            <Button disabled={cargando !== null} onClick={() => setConfirmar(null)}>Cancelar</Button>
             <Button
               variant={confirmar === 'eliminar' ? 'destructive' : 'default'}
               disabled={cargando !== null}

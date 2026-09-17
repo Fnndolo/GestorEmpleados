@@ -57,12 +57,12 @@ export default async function ColaboradoresPage({
         enLinea
         acciones={
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" asChild>
+            <Button size="sm" asChild>
               <Link href="/colaboradores/organigrama"><Network className="size-4" /> <span className="hidden sm:inline">Organigrama</span></Link>
             </Button>
             {puedeCrear && (
               <>
-                <Button variant="outline" size="sm" asChild>
+                <Button size="sm" asChild>
                   <Link href="/colaboradores/importar"><Upload className="size-4" /> <span className="hidden sm:inline">Importar</span></Link>
                 </Button>
                 <Button size="sm" asChild>

@@ -163,7 +163,7 @@ export function EditorPlantilla({ valores, puedeGuardar }: { valores: Valores | 
               Cláusulas
               <Ayuda texto="Una línea que empiece con «- » se imprime como viñeta. El orden es el que ves aquí." />
             </Label>
-            <Button size="sm" variant="outline" onClick={agregar}><Plus className="size-4" /> Agregar cláusula</Button>
+            <Button size="sm" onClick={agregar}><Plus className="size-4" /> Agregar cláusula</Button>
           </div>
 
           {f.clausulas.map((c, i) => (
@@ -220,7 +220,7 @@ export function EditorPlantilla({ valores, puedeGuardar }: { valores: Valores | 
           <VisorPdf
             url={`/api/configuracion/membrete/muestra?tipo=plantilla&plantillaId=${valores.id}`}
             titulo={`Muestra · ${valores.nombre}`}
-            className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' gap-2'}
+            className={buttonVariants({ size: 'sm' }) + ' gap-2'}
           >
             <FileText className="size-4" /> Ver muestra en PDF
           </VisorPdf>

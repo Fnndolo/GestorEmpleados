@@ -41,7 +41,7 @@ export function PasosFirma({
                 <li key={d.id} className="flex items-center gap-2.5 py-2 text-sm">
                   <Icono className="size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate">{d.etiqueta ?? d.titulo}</span>
-                  <VisorPdf documentoId={d.id} titulo={d.titulo} className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' shrink-0'}>
+                  <VisorPdf documentoId={d.id} titulo={d.titulo} className={buttonVariants({ size: 'sm' }) + ' shrink-0'}>
                     <Eye className="size-3.5" /> Ver
                   </VisorPdf>
                 </li>
@@ -54,7 +54,7 @@ export function PasosFirma({
       <section>
         <Paso n={documentos.length > 0 ? 2 : 1} titulo="Código de verificación" />
         {!correoEnviado ? (
-          <Button size="sm" variant="outline" className="mt-2" onClick={onEnviarCodigo} disabled={enviando}>
+          <Button size="sm" className="mt-2" onClick={onEnviarCodigo} disabled={enviando}>
             {enviando ? <Spinner /> : <Mail className="size-4" />} Enviar código a mi correo
           </Button>
         ) : (

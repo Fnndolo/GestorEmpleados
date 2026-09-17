@@ -57,7 +57,7 @@ export function SelectorColaborador({
   return (
     <Popover open={abierto} onOpenChange={setAbierto}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
+        <Button role="combobox" className="w-full justify-between font-normal">
           <span className="flex items-center gap-2 truncate">
             <User className="size-4 text-muted-foreground" />
             {seleccionado ? seleccionado.nombre : value ? 'Colaborador seleccionado' : placeholder}

@@ -110,7 +110,7 @@ export function PlanillaPila({
                 className="hidden"
                 onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
               />
-              <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
+              <Button type="button" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
                 <Paperclip className="size-4" /> {archivo ? archivo.name : 'Adjuntar imagen o PDF'}
               </Button>
             </div>

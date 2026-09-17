@@ -66,7 +66,7 @@ export function EditorFunciones({ value, onChange }: { value: FuncionesCargo; on
           </div>
         </div>
       ))}
-      <Button type="button" size="sm" variant="outline" onClick={addGrupo}><Plus className="size-4" /> Añadir grupo de funciones</Button>
+      <Button type="button" size="sm" onClick={addGrupo}><Plus className="size-4" /> Añadir grupo de funciones</Button>
       {grupos.length === 0 && <p className="text-xs text-muted-foreground">Sin funciones. Añade un grupo.</p>}
     </div>
   )

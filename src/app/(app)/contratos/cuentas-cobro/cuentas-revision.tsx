@@ -71,15 +71,15 @@ export function CuentasRevision({ puedeAprobar, cuentas, plantillas }: {
                 <ShieldAlert className="size-4 shrink-0" />
                 <span className="flex-1">Contratista OPS: requiere verificar el soporte de seguridad social antes de aprobar/pagar.</span>
                 {c.contratoOpsId && (
-                  <Button size="sm" variant="outline" asChild><Link href={`/contratos/ops/${c.contratoOpsId}`}><ExternalLink className="size-3.5" /> Gestionar</Link></Button>
+                  <Button size="sm" asChild><Link href={`/contratos/ops/${c.contratoOpsId}`}><ExternalLink className="size-3.5" /> Gestionar</Link></Button>
                 )}
               </div>
             )}
 
             {puedeAprobar && c.estado !== 'PAGADA' && c.estado !== 'RECHAZADA' && (
               <div className="flex flex-wrap justify-end gap-2">
-                <Button size="sm" variant="outline" onClick={() => cambiar(c.id, 'RECHAZADA')} disabled={proc === c.id}><CircleX className="size-4" /> Rechazar</Button>
-                <Button size="sm" variant="outline" onClick={() => cambiar(c.id, 'APROBADA')} disabled={proc === c.id}>{proc === c.id ? <Spinner /> : <CircleCheck className="size-4" />} Aprobar</Button>
+                <Button size="sm" onClick={() => cambiar(c.id, 'RECHAZADA')} disabled={proc === c.id}><CircleX className="size-4" /> Rechazar</Button>
+                <Button size="sm" onClick={() => cambiar(c.id, 'APROBADA')} disabled={proc === c.id}>{proc === c.id ? <Spinner /> : <CircleCheck className="size-4" />} Aprobar</Button>
                 <Button size="sm" onClick={() => cambiar(c.id, 'PAGADA', true)} disabled={proc === c.id}><CircleCheck className="size-4" /> Marcar pagada</Button>
               </div>
             )}

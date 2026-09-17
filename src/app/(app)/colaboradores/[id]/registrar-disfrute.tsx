@@ -47,7 +47,7 @@ export function RegistrarDisfrute({ colaboradorId, hoyISO }: { colaboradorId: st
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={() => setAbierto(true)}>
+      <Button size="sm" onClick={() => setAbierto(true)}>
         <CalendarCheck className="size-4" /> Registrar vacaciones ya tomadas
       </Button>
       <Dialog open={abierto} onOpenChange={(o) => (o ? setAbierto(true) : cerrar())}>

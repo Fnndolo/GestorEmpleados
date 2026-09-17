@@ -156,7 +156,7 @@ export function TiposDocumentoCliente({
             {puedeEditar && (
               <>
                 <Switch checked={t.activo} onCheckedChange={() => alternar(t)} />
-                <Button size="sm" variant="outline" onClick={() => abrirEditar(t)}>
+                <Button size="sm" onClick={() => abrirEditar(t)}>
                   <Pencil className="size-4" /> Editar
                 </Button>
               </>

@@ -84,7 +84,7 @@ export function CargosCliente({ puedeCrear, puedeEditar, areas, roles, cargos }:
             {puedeEditar && (
               <>
                 <Switch checked={c.activo} onCheckedChange={() => alternar(c)} />
-                <Button size="sm" variant="outline" onClick={() => abrirEditar(c)}><Pencil className="size-4" /> Editar</Button>
+                <Button size="sm" onClick={() => abrirEditar(c)}><Pencil className="size-4" /> Editar</Button>
               </>
             )}
           </div>

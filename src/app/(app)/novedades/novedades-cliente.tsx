@@ -202,7 +202,7 @@ function ListaBonificaciones({ items, puedeEditar }: { items: Datos['bonificacio
         derecha: x.estadoPago === 'PAGADO' ? (
           <Pill tone="ok">Pagado {x.fechaPago ? formatFechaCorta(new Date(x.fechaPago)) : ''}</Pill>
         ) : puedeEditar ? (
-          <Button size="sm" variant="outline" onClick={async () => {
+          <Button size="sm" onClick={async () => {
             const res = await marcarBonificacionPagada({ id: x.id })
             if (res.ok) { toast.success('Marcada como pagada.'); router.refresh() } else toast.error(res.error)
           }}><CircleCheck className="size-4" /> Marcar pagada</Button>
@@ -291,7 +291,7 @@ function ComprobantePermiso({ permisoId, c, puedeEditar }: { permisoId: string; 
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" onClick={() => { setDevolviendo(false); setNota('') }}>Cancelar</Button>
             <Button
-              size="sm" variant="outline" disabled={g || !nota.trim()}
+              size="sm" disabled={g || !nota.trim()}
               onClick={() => correr(() => verificarComprobantePermiso({ permisoId, valido: false, nota: nota.trim() }), 'Comprobante devuelto al colaborador.')}
             >
               {g ? <Spinner /> : <X className="size-4" />} Devolver
@@ -301,18 +301,18 @@ function ComprobantePermiso({ permisoId, c, puedeEditar }: { permisoId: string; 
       ) : (
         <div className="mt-2 flex flex-wrap justify-end gap-2">
           {c.situacion === 'NO_REQUERIDO' && (
-            <Button size="sm" variant="outline" disabled={g} onClick={() => correr(() => cambiarExigenciaComprobante({ permisoId, exigir: true }), 'Se le pidió el comprobante al colaborador.')}>
+            <Button size="sm" disabled={g} onClick={() => correr(() => cambiarExigenciaComprobante({ permisoId, exigir: true }), 'Se le pidió el comprobante al colaborador.')}>
               {g ? <Spinner /> : <FileCheck className="size-4" />} Pedir comprobante
             </Button>
           )}
           {(c.situacion === 'PENDIENTE' || c.situacion === 'VENCIDO') && (
-            <Button size="sm" variant="outline" disabled={g} onClick={() => correr(() => cambiarExigenciaComprobante({ permisoId, exigir: false }), 'Ya no se exige el comprobante.')}>
+            <Button size="sm" disabled={g} onClick={() => correr(() => cambiarExigenciaComprobante({ permisoId, exigir: false }), 'Ya no se exige el comprobante.')}>
               {g ? <Spinner /> : <X className="size-4" />} Dejar de exigir
             </Button>
           )}
           {c.situacion === 'ENTREGADO' && (
             <>
-              <Button size="sm" variant="outline" disabled={g} onClick={() => setDevolviendo(true)}>
+              <Button size="sm" disabled={g} onClick={() => setDevolviendo(true)}>
                 <X className="size-4" /> No sirve
               </Button>
               <Button size="sm" disabled={g} onClick={() => correr(() => verificarComprobantePermiso({ permisoId, valido: true }), 'Comprobante verificado.')}>

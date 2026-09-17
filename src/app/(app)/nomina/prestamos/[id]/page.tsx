@@ -41,7 +41,7 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
         titulo={`Préstamo · ${prestamo.colaborador.nombres} ${prestamo.colaborador.apellidos}`}
         descripcion={prestamo.descripcion ?? 'Detalle de cuotas y saldo.'}
         acciones={
-          <Button variant="outline" size="sm" asChild>
+          <Button size="sm" asChild>
             <Link href="/nomina/prestamos"><ArrowLeft className="size-4" /> Volver</Link>
           </Button>
         }
@@ -67,7 +67,7 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
         {prestamo.estado === 'PAGADO' && (
           <div className="flex items-center gap-2 pt-1">
             {pazSalvo ? (
-              <Button size="sm" variant="outline" asChild>
+              <Button size="sm" asChild>
                 <a href={`/api/documentos/${pazSalvo.id}`} target="_blank" rel="noreferrer"><Download className="size-4" /> Ver paz y salvo</a>
               </Button>
             ) : puedeExportar ? (

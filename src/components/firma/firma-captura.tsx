@@ -139,7 +139,7 @@ export function FirmaCaptura({ onChange }: { onChange: (dataUri: string | null) 
               </div>
             </>
           ) : (
-            <Button type="button" size="sm" variant="outline" className="w-full justify-start" onClick={() => inputRef.current?.click()} disabled={procesando}>
+            <Button type="button" size="sm" className="w-full justify-start" onClick={() => inputRef.current?.click()} disabled={procesando}>
               {procesando ? <Spinner /> : <ImageUp className="size-4" />} Elegir imagen de mi firma
             </Button>
           )}

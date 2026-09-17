@@ -66,7 +66,7 @@ export function CerrarContratoOps({ contratoId, numero, fechaFin, vencido, hoy, 
           <CircleX className="size-4" /> <span className="hidden sm:inline">Cerrar</span>
         </Button>
       ) : (
-        <Button size="sm" variant="outline" onClick={() => setAbierto(true)}>
+        <Button size="sm" onClick={() => setAbierto(true)}>
           <CircleX className="size-4" /> Cerrar contrato
         </Button>
       )}

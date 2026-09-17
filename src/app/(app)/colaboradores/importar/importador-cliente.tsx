@@ -101,7 +101,7 @@ export function ImportadorCliente() {
               Incluye una hoja con los nombres válidos de sedes, áreas, cargos y entidades.
             </p>
           </div>
-          <Button variant="outline" asChild>
+          <Button asChild>
             <a href="/api/colaboradores/plantilla"><Download className="size-4" /> Descargar plantilla</a>
           </Button>
         </CardContent>
@@ -219,7 +219,7 @@ export function ImportadorCliente() {
               </div>
             )}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setFilas(null); setResultado(null) }}>Importar otro archivo</Button>
+              <Button onClick={() => { setFilas(null); setResultado(null) }}>Importar otro archivo</Button>
               <Button onClick={() => router.push('/colaboradores')}>Ver colaboradores</Button>
             </div>
           </CardContent>

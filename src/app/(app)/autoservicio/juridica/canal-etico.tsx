@@ -54,7 +54,7 @@ export function CanalEtico({ mostrar = 'ambos' }: { mostrar?: 'anti-acoso' | 'ha
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" onClick={() => setDialogo('denuncia')}>Hacer un reporte</Button>
-                <Button size="sm" variant="outline" onClick={() => setDialogo('seguimiento')}>
+                <Button size="sm" onClick={() => setDialogo('seguimiento')}>
                   <Search className="size-4" /> Consultar con mi código
                 </Button>
               </div>
@@ -111,7 +111,7 @@ function DialogCodigo({ codigo, onClose }: { codigo: string; onClose: () => void
         </DialogHeader>
         <div className="flex items-center justify-center gap-3 rounded-lg border bg-muted/40 py-5">
           <span className="font-mono text-2xl font-bold tracking-widest">{codigo}</span>
-          <Button size="sm" variant="outline" onClick={copiar}><Copy className="size-4" /> Copiar</Button>
+          <Button size="sm" onClick={copiar}><Copy className="size-4" /> Copiar</Button>
         </div>
         <DialogFooter>
           <Button onClick={onClose}>Ya lo guardé</Button>
@@ -274,7 +274,7 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
                 ))}
               </ul>
             )}
-            <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
+            <Button type="button" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
               <Paperclip className="size-4" /> {archivos.length > 0 ? 'Agregar otro archivo' : 'Adjuntar capturas, fotos, audios o PDF'}
             </Button>
           </Campo>

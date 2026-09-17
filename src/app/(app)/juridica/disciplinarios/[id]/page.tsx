@@ -71,7 +71,7 @@ export default async function DisciplinarioPage({ params }: { params: Promise<{ 
         <Card className="mb-4"><CardContent className="py-3 flex items-center gap-3">
           <FileText className="size-5 text-muted-foreground shrink-0" />
           <span className="text-sm flex-1 truncate">Acta / acuerdo final: {acta.nombre}</span>
-          <Button size="sm" variant="outline" asChild><a href={`/api/documentos/${acta.id}`} target="_blank" rel="noreferrer">Abrir</a></Button>
+          <Button size="sm" asChild><a href={`/api/documentos/${acta.id}`} target="_blank" rel="noreferrer">Abrir</a></Button>
         </CardContent></Card>
       )}
 

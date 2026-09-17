@@ -77,7 +77,7 @@ export function ParametrosForm({ puedeEditar, parametros, tiposHora, aplicaRetef
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="text-[13px] font-bold">Parámetros legales</h2>
           {puedeEditar && (
-            <Button size="sm" variant="outline" onClick={() => setCreando(true)}>
+            <Button size="sm" onClick={() => setCreando(true)}>
               <Plus className="size-4" /> Nuevo parámetro
             </Button>
           )}
@@ -112,7 +112,7 @@ export function ParametrosForm({ puedeEditar, parametros, tiposHora, aplicaRetef
               </div>
               <p className="text-sm font-bold tabular-nums">{Math.round(t.factor * 100)}%</p>
               {puedeEditar && (
-                <Button size="sm" variant="outline" onClick={() => setEditandoHora(t)}>
+                <Button size="sm" onClick={() => setEditandoHora(t)}>
                   <CalendarPlus className="size-4" /> Nueva vigencia
                 </Button>
               )}

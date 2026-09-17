@@ -26,7 +26,7 @@ export default async function ObligacionesPage() {
         titulo="Catálogo de obligaciones"
         descripcion="Las reglas de recurrencia que alimentan el calendario legal. Al editar una regla se recalculan sus próximas fechas."
         acciones={
-          <Button variant="outline" size="sm" asChild>
+          <Button size="sm" asChild>
             <Link href="/calendario-legal"><ArrowLeft className="size-4" /> Volver al calendario</Link>
           </Button>
         }

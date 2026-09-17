@@ -75,7 +75,7 @@ export function CuentasCobro({
                 {/* Archivo de la planilla adjuntada por el contratista: se ve en la app. */}
                 {cc.planilla && (
                   cc.planilla.esImagen ? (
-                    <Button variant="outline" size="sm" onClick={() => setImagen(cc.planilla)}>
+                    <Button size="sm" onClick={() => setImagen(cc.planilla)}>
                       <Eye className="size-4" /> Ver planilla
                     </Button>
                   ) : (
@@ -87,7 +87,7 @@ export function CuentasCobro({
                   )
                 )}
                 {puedeEditar && (
-                  <Button variant="outline" size="sm" onClick={() => setSoporteDe(cc)}>
+                  <Button size="sm" onClick={() => setSoporteDe(cc)}>
                     {cc.soporte ? 'Editar SS' : 'Registrar SS'}
                   </Button>
                 )}
@@ -98,8 +98,8 @@ export function CuentasCobro({
                 <div className="flex flex-wrap gap-2">
                   <AccionEstado id={cc.id} estado="APROBADA" label="Aprobar" icono={CircleCheck} onDone={() => router.refresh()} />
                   <AccionEstado id={cc.id} estado="PAGADA" label="Marcar pagada" icono={CircleCheck} onDone={() => router.refresh()} requiereFecha />
-                  <AccionEstado id={cc.id} estado="BLOQUEADA_SS" label="Bloquear (SS)" icono={Ban} variant="outline" onDone={() => router.refresh()} />
-                  <AccionEstado id={cc.id} estado="RECHAZADA" label="Rechazar" icono={CircleX} variant="outline" onDone={() => router.refresh()} />
+                  <AccionEstado id={cc.id} estado="BLOQUEADA_SS" label="Bloquear (SS)" icono={Ban} onDone={() => router.refresh()} />
+                  <AccionEstado id={cc.id} estado="RECHAZADA" label="Rechazar" icono={CircleX} onDone={() => router.refresh()} />
                 </div>
               )}
             </CardContent>

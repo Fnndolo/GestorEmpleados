@@ -285,7 +285,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose 
                       todo el formulario y escondía el resto de los campos. */}
                   <Popover open={permCalAbierto} onOpenChange={setPermCalAbierto}>
                     <PopoverTrigger asChild>
-                      <Button id="perm-dia" type="button" variant="outline" className="w-full justify-start font-normal">
+                      <Button id="perm-dia" type="button" className="w-full justify-start font-normal">
                         <CalendarDays className="size-4 text-muted-foreground" />
                         {permFecha ? fechaLargaLocal(permFecha) : <span className="text-muted-foreground">Elige el día</span>}
                       </Button>
@@ -427,7 +427,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose 
                     ))}
                   </ul>
                 )}
-                <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
+                <Button type="button" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
                   <Paperclip className="size-4" /> {archivos.length > 0 ? 'Agregar otro archivo' : 'Adjuntar imagen o PDF'}
                 </Button>
                 {adjuntoObligatorio && archivos.length === 0 && (

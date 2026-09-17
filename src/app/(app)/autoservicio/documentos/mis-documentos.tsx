@@ -105,8 +105,8 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, exigidos }: {
                       {e.docFecha && <span className="block truncate text-xs text-muted-foreground">{e.docFecha}{e.estado === 'vencido' ? ' · vencido' : ''}</span>}
                     </span>
                     {doc && (doc.esImagen
-                      ? <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => setImagen(doc)}><Eye className="size-3.5" /> Ver</Button>
-                      : <VisorPdf documentoId={doc.id} titulo={doc.nombre} className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' shrink-0'}><Eye className="size-3.5" /> Ver</VisorPdf>)}
+                      ? <Button type="button" size="sm" className="shrink-0" onClick={() => setImagen(doc)}><Eye className="size-3.5" /> Ver</Button>
+                      : <VisorPdf documentoId={doc.id} titulo={doc.nombre} className={buttonVariants({ size: 'sm' }) + ' shrink-0'}><Eye className="size-3.5" /> Ver</VisorPdf>)}
                     <Button size="sm" variant={pendiente ? 'default' : 'ghost'} className="shrink-0" onClick={() => setAbierto({ tipo: e })} aria-label={`${doc ? 'Reemplazar' : 'Subir'} ${e.nombre}`}>
                       <CloudUpload className="size-3.5" /> {e.estado === 'falta' ? 'Subir' : e.estado === 'vencido' ? 'Renovar' : 'Reemplazar'}
                     </Button>
@@ -323,7 +323,7 @@ function DialogSubir({ colaboradorId, tipos, tipoInicial, onClose, onDone }: {
           <div className="space-y-1.5">
             <Label>Archivo (imagen o PDF)</Label>
             <input ref={inputArchivo} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />
-            <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
+            <Button type="button" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
               <Paperclip className="size-4" /> {archivo ? archivo.name : 'Seleccionar archivo'}
             </Button>
           </div>
@@ -434,7 +434,7 @@ function DialogEditar({ doc, colaboradorId, tipos, onClose, onDone }: {
           <div className="space-y-1.5">
             <Label>Reemplazar archivo (opcional)</Label>
             <input ref={inputArchivo} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />
-            <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
+            <Button type="button" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
               <Paperclip className="size-4" /> {archivo ? archivo.name : 'Mantener el archivo actual'}
             </Button>
           </div>

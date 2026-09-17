@@ -147,7 +147,7 @@ export function SubirContratoExistente({
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={() => setAbierto(true)}>
+      <Button size="sm" onClick={() => setAbierto(true)}>
         <Upload className="size-4" /> Subir contrato existente
       </Button>
 

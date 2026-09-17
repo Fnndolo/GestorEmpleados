@@ -134,7 +134,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
               <span className="text-sm text-muted-foreground">Firmado en físico (documento externo al sistema).</span>
             </div>
             {docContrato ? (
-              <VisorPdf documentoId={docContrato.id} titulo={`Contrato ${c.numero}`} className={`mt-3 ${buttonVariants({ variant: 'outline', size: 'sm' })}`}>
+              <VisorPdf documentoId={docContrato.id} titulo={`Contrato ${c.numero}`} className={`mt-3 ${buttonVariants({ size: 'sm' })}`}>
                 <FileText className="size-4" /> Ver documento
               </VisorPdf>
             ) : (

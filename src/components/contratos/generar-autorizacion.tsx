@@ -33,7 +33,7 @@ export function GenerarAutorizacion({ generar, onGenerar, vistaPreviaUrl, firman
       </label>
       {generar && (
         vistaPreviaUrl ? (
-          <VisorPdf url={vistaPreviaUrl} titulo="Autorización de datos · vista previa" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          <VisorPdf url={vistaPreviaUrl} titulo="Autorización de datos · vista previa" className={buttonVariants({ size: 'sm' })}>
             <Eye className="size-4" /> Ver cómo queda
           </VisorPdf>
         ) : (

@@ -51,7 +51,7 @@ export default async function DenunciaPage({ params }: { params: Promise<{ id: s
         <Card className="mb-4"><CardContent className="py-3 flex items-center gap-3">
           <FileText className="size-5 text-muted-foreground shrink-0" />
           <span className="text-sm flex-1 truncate">Acuerdo / resolución final: {acuerdo.nombre}</span>
-          <Button size="sm" variant="outline" asChild><a href={`/api/documentos/${acuerdo.id}`} target="_blank" rel="noreferrer">Abrir</a></Button>
+          <Button size="sm" asChild><a href={`/api/documentos/${acuerdo.id}`} target="_blank" rel="noreferrer">Abrir</a></Button>
         </CardContent></Card>
       )}
 

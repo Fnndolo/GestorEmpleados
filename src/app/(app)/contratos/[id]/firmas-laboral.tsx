@@ -52,12 +52,12 @@ export function FirmasLaboral({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         {documentoId && (
-          <VisorPdf documentoId={documentoId} titulo={`Contrato ${numero}`} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          <VisorPdf documentoId={documentoId} titulo={`Contrato ${numero}`} className={buttonVariants({ size: 'sm' })}>
             Ver contrato (PDF)
           </VisorPdf>
         )}
         {autorizacionId && (
-          <VisorPdf documentoId={autorizacionId} titulo={`Autorización de datos ${numero}`} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          <VisorPdf documentoId={autorizacionId} titulo={`Autorización de datos ${numero}`} className={buttonVariants({ size: 'sm' })}>
             Autorización de datos
           </VisorPdf>
         )}
@@ -67,11 +67,11 @@ export function FirmasLaboral({
         {GENERAR_CONTRATOS_DESDE_PLANTILLA && !subido && puedeFirmar && !empleador.firmado && !empleado.firmado && (
           <>
             {tieneDocumento && (
-              <Button size="sm" variant="outline" asChild>
+              <Button size="sm" asChild>
                 <Link href={`/contratos/${contratoId}/documento`}><FilePenLine className="size-4" /> Editar contrato</Link>
               </Button>
             )}
-            <Button size="sm" variant="outline" onClick={regenerar} disabled={regen}>
+            <Button size="sm" onClick={regenerar} disabled={regen}>
               {regen ? <Spinner /> : <RefreshCw className="size-4" />} {tieneDocumento ? 'Regenerar PDF' : 'Generar documento desde la plantilla'}
             </Button>
           </>
@@ -144,7 +144,7 @@ function ParteFirma({
           <CircleCheck className="size-4" /> Firmado{estado.fecha ? ` · ${estado.fecha}` : ''}
         </div>
       ) : puedeFirmar ? (
-        <Button size="sm" variant="outline" className="mt-2" onClick={() => setAbierto(true)}>
+        <Button size="sm" className="mt-2" onClick={() => setAbierto(true)}>
           <PenLine className="size-4" /> Firmar
         </Button>
       ) : (

@@ -78,7 +78,7 @@ function Lista({
               {puedeEditar && (
                 <>
                   <Switch checked={activo} onCheckedChange={() => onAlternar(item)} />
-                  <Button size="sm" variant="outline" onClick={() => onEditar(item)}>
+                  <Button size="sm" onClick={() => onEditar(item)}>
                     <Pencil className="size-4" /> Editar
                   </Button>
                 </>

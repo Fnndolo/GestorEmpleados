@@ -24,7 +24,7 @@ export function GenerarAutorizacion({ contratoId }: { contratoId: string }) {
   }
 
   return (
-    <Button size="sm" variant="outline" onClick={generar} disabled={g}>
+    <Button size="sm" onClick={generar} disabled={g}>
       {g ? <Spinner /> : <FilePlusCorner className="size-4" />} Generar autorización de datos
     </Button>
   )
@@ -46,7 +46,7 @@ export function RegenerarDocumentos({ contratoId }: { contratoId: string }) {
   }
 
   return (
-    <Button size="sm" variant="outline" onClick={regenerar} disabled={g}>
+    <Button size="sm" onClick={regenerar} disabled={g}>
       {g ? <Spinner /> : <RefreshCw className="size-4" />} Regenerar documentos
     </Button>
   )

@@ -64,7 +64,7 @@ function DocFila({ documentoId, titulo, etiqueta, Icono }: { documentoId: string
       <Icono className="size-4 shrink-0 text-muted-foreground" />
       {/* Los nombres heredados de archivos escaneados son largos: se recortan. */}
       <span className="min-w-0 flex-1 truncate">{etiqueta}</span>
-      <VisorPdf documentoId={documentoId} titulo={titulo} className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' shrink-0'}>
+      <VisorPdf documentoId={documentoId} titulo={titulo} className={buttonVariants({ size: 'sm' }) + ' shrink-0'}>
         <Eye className="size-3.5" /> Ver
       </VisorPdf>
     </li>

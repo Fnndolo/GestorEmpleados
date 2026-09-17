@@ -83,7 +83,7 @@ export function HabilitarFirma({ contratoId }: { contratoId: string }) {
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={abrir} disabled={cargando}>
+      <Button size="sm" onClick={abrir} disabled={cargando}>
         {cargando ? <Spinner /> : <PenLine className="size-4" />} Habilitar firma en la app
       </Button>
 

@@ -42,7 +42,7 @@ const GENERABLES = new Set<string>([
  * subida, y se dice por qué.
  */
 export function AdjuntarDocumento({
-  destino, id, etiqueta = 'Documento', tieneDocumento = false, plantillas, variante = 'outline', tamano = 'sm', className,
+  destino, id, etiqueta = 'Documento', tieneDocumento = false, plantillas, variante = 'default', tamano = 'sm', className,
 }: {
   destino: DestinoAdjunto
   /** Id del registro (la liquidación, el otrosí, el acta…). */
@@ -56,7 +56,7 @@ export function AdjuntarDocumento({
    * de por defecto. Sin plantillas, no se muestra el selector.
    */
   plantillas?: { id: string; nombre: string }[]
-  variante?: 'outline' | 'ghost' | 'secondary'
+  variante?: 'default' | 'outline' | 'ghost' | 'secondary'
   tamano?: 'sm' | 'icon'
   className?: string
 }) {
@@ -197,7 +197,7 @@ export function AdjuntarDocumento({
                 onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
               />
               <Button
-                type="button" variant="outline" size="sm"
+                type="button" size="sm"
                 className="mt-3 w-full justify-start"
                 onClick={() => inputArchivo.current?.click()}
                 disabled={ocupado !== null}

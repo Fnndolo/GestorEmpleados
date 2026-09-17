@@ -55,7 +55,7 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
           {/* Entrega desde el inventario: se eligen los activos y luego a quién van.
               El botón por fila sigue existiendo como atajo cuando ya sabes cuál. */}
           {tab === 'activos' && puedeEditar && hayDisponibles && (
-            <Button size="sm" variant="outline" onClick={() => { setAsignarActivoId(''); setDialogo('asignar') }}>
+            <Button size="sm" onClick={() => { setAsignarActivoId(''); setDialogo('asignar') }}>
               <UserPlus className="size-4" /> Asignar
             </Button>
           )}
@@ -96,7 +96,7 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
                   />
                 )}
                 {puedeEditar && a.estado === 'DISPONIBLE' && (
-                  <Button variant="outline" size="sm" onClick={() => { setAsignarActivoId(a.id); setDialogo('asignar') }}><UserPlus className="size-4" /> Entregar</Button>
+                  <Button size="sm" onClick={() => { setAsignarActivoId(a.id); setDialogo('asignar') }}><UserPlus className="size-4" /> Entregar</Button>
                 )}
                 {puedeEditar && a.asignacion && (
                   <DevolverBoton asignacionId={a.asignacion.id} />
@@ -274,7 +274,7 @@ function DialogActivo({ sedes, sedeActual, onClose }: { sedes: Sede[]; sedeActua
             )
           })}
 
-          <Button type="button" variant="outline" size="sm" className="w-full" onClick={añadir}>
+          <Button type="button" size="sm" className="w-full" onClick={añadir}>
             <Plus className="size-4" /> Añadir otro activo
           </Button>
         </div>

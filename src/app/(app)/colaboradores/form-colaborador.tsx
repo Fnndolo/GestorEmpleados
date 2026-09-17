@@ -399,7 +399,7 @@ export function FormColaborador({ catalogos, valores, puedeEditarSalud }: Props)
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <Button variant="outline" disabled={sincronizando} onClick={descartarSugerencia}>Ahora no</Button>
+          <Button disabled={sincronizando} onClick={descartarSugerencia}>Ahora no</Button>
           <Button disabled={sincronizando} onClick={aplicarSugerencia}>
             {sincronizando ? <Spinner /> : null}
             {sugerencia?.tipo === 'rol' ? 'Actualizar rol' : 'Crear acceso'}

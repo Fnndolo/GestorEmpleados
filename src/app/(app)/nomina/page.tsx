@@ -33,14 +33,14 @@ export default async function NominaPage() {
             {/* Antes del periodo: las comisiones y horas se registran cuando
                 ocurren, no cuando alguien abre la nómina del mes. */}
             {puedeCrear && (
-              <Button variant="outline" size="sm" asChild>
+              <Button size="sm" asChild>
                 <Link href="/nomina/novedades"><Coins className="size-4" /> Novedades</Link>
               </Button>
             )}
-            <Button variant="outline" size="sm" asChild>
+            <Button size="sm" asChild>
               <Link href="/nomina/ops"><Receipt className="size-4" /> Pagos OPS</Link>
             </Button>
-            <Button variant="outline" size="sm" asChild>
+            <Button size="sm" asChild>
               <Link href="/nomina/prestamos"><HandCoins className="size-4" /> Préstamos</Link>
             </Button>
             {puedeCrear && <CrearPeriodo />}

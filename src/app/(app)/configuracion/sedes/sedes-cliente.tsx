@@ -116,7 +116,7 @@ export function SedesCliente({
             <MapPin className="size-5 text-muted-foreground" /> Ciudades
           </h2>
           {puedeCrear && (
-            <Button size="sm" variant="outline" onClick={() => setNuevaCiudad(true)}>
+            <Button size="sm" onClick={() => setNuevaCiudad(true)}>
               <Plus className="size-4" /> Nueva ciudad
             </Button>
           )}

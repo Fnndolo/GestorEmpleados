@@ -104,7 +104,7 @@ export function DocumentosPlantillas({ abrirInicial, puedeEditar, membrete, auto
             </div>
             <div className="flex shrink-0 gap-2 sm:justify-end">
               {f.muestra && (
-                <VisorPdf url={f.muestra} titulo={`Muestra · ${f.titulo}`} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                <VisorPdf url={f.muestra} titulo={`Muestra · ${f.titulo}`} className={buttonVariants({ size: 'sm' })}>
                   <Eye className="size-4" /> Muestra PDF
                 </VisorPdf>
               )}
@@ -130,7 +130,7 @@ export function DocumentosPlantillas({ abrirInicial, puedeEditar, membrete, auto
               </div>
             </div>
             <div className="flex shrink-0 gap-2 sm:justify-end">
-              <VisorPdf url="/api/configuracion/membrete/muestra?tipo=contrato-ops" titulo="Muestra · Contrato OPS" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              <VisorPdf url="/api/configuracion/membrete/muestra?tipo=contrato-ops" titulo="Muestra · Contrato OPS" className={buttonVariants({ size: 'sm' })}>
                 <Eye className="size-4" /> Muestra PDF
               </VisorPdf>
               <Link href="/configuracion/plantillas/contratos" className={buttonVariants({ size: 'sm' })}>

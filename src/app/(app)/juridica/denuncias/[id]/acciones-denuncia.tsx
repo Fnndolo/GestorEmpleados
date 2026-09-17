@@ -33,7 +33,7 @@ export function AccionesDenuncia({ id, estado }: { id: string; estado: string })
           <p className="text-sm text-muted-foreground">Denuncia recibida. Inicia la investigación para continuar, o archívala si no procede.</p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={iniciar} disabled={g}>{g ? <Spinner /> : <Search className="size-4" />} Iniciar investigación</Button>
-            <Button size="sm" variant="outline" onClick={() => setDialogo('archivar')}><Archive className="size-4" /> Archivar</Button>
+            <Button size="sm" onClick={() => setDialogo('archivar')}><Archive className="size-4" /> Archivar</Button>
           </div>
         </>
       )}
@@ -42,7 +42,7 @@ export function AccionesDenuncia({ id, estado }: { id: string; estado: string })
           <p className="text-sm text-muted-foreground">En investigación. Al terminar, resuélvela con una conclusión (y el acuerdo final si aplica) o archívala.</p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => setDialogo('resolver')}><CircleCheck className="size-4" /> Resolver</Button>
-            <Button size="sm" variant="outline" onClick={() => setDialogo('archivar')}><Archive className="size-4" /> Archivar</Button>
+            <Button size="sm" onClick={() => setDialogo('archivar')}><Archive className="size-4" /> Archivar</Button>
           </div>
         </>
       )}

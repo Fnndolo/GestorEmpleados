@@ -82,7 +82,7 @@ export function FilaParametro({
         <p className="shrink-0 text-sm font-bold tabular-nums">{fmtValor(p.valor)}</p>
         {puedeEditar && (
           <div className="flex shrink-0 items-center gap-1">
-            <Button size="sm" variant="outline" onClick={onNuevaVigencia}>
+            <Button size="sm" onClick={onNuevaVigencia}>
               <CalendarPlus className="size-4" /> Nueva vigencia
             </Button>
             <BotonEliminar
