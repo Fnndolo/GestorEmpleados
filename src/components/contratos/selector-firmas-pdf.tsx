@@ -58,6 +58,7 @@ export function SelectorFirmasPdf({
   onChange,
   partes = ['contratante', 'contratista'],
   etiquetas = ETIQUETA_OPS,
+  imagenes,
 }: {
   pdfDataUri: string
   paginas: number
@@ -67,6 +68,12 @@ export function SelectorFirmasPdf({
   partes?: Parte[]
   /** Rótulo de cada firma; por defecto los de OPS. */
   etiquetas?: Record<Parte, string>
+  /**
+   * Trazo real de cada firma (PNG en data URI), cuando ya existe: al corregir
+   * la posición de un contrato firmado se ve la firma tal cual va a quedar, no
+   * un recuadro vacío que obliga a imaginarla.
+   */
+  imagenes?: Partial<Record<Parte, string | null>>
 }) {
   // Arranca en la pagina de la firma ya propuesta. Al elegir otro PDF el padre
   // remonta este componente (key), asi que no hace falta sincronizar nada.
@@ -239,7 +246,14 @@ export function SelectorFirmasPdf({
                 arrastrando === parte ? 'cursor-grabbing opacity-90 shadow-lg' : 'cursor-grab'
               }`}
             >
-              {etiquetas[parte]}
+              {imagenes?.[parte] ? (
+                // Misma regla que el estampado: cabe en el recuadro sin deformarse y
+                // pegada a la esquina inferior izquierda, que es donde pdf-lib la ancla.
+                // eslint-disable-next-line @next/next/no-img-element -- data URI, no pasa por el optimizador
+                <img src={imagenes[parte]!} alt={etiquetas[parte]} draggable={false} className="pointer-events-none h-full w-full object-contain object-left-bottom" />
+              ) : (
+                etiquetas[parte]
+              )}
             </div>
           )
         })}

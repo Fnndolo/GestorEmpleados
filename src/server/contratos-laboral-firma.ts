@@ -7,7 +7,9 @@ import { contextoActual } from '@/server/contexto'
 import { subirArchivo } from '@/server/storage'
 import { leerFirmaComoDataUri } from '@/server/contratos-ops-pdf'
 import { generarPdfContratoLaboral, generarPdfAutorizacionDatosLaboral, type SnapshotContratoLaboral } from '@/server/contratos-laboral-pdf'
-import { generarPdfContratoLaboralEstampado, leerDatosFirmaSubidoLaboral } from '@/server/contratos-laboral-estampar'
+import { generarPdfContratoLaboralEstampado, leerDatosFirmaSubidoLaboral, type DatosFirmaSubidoLaboral } from '@/server/contratos-laboral-estampar'
+import { cerrarCorreccionPosicion } from '@/server/contratos-estampar'
+import type { PosicionFirma } from '@/server/pdf/firma-en-pdf'
 import { fechaLarga } from '@/lib/numero-letras'
 import { avisar, avisarPorRol } from '@/server/notificaciones/avisar'
 import { nombreCorto } from '@/lib/notificaciones/texto'
@@ -171,3 +173,66 @@ export async function aplicarFirmaContratoLaboral(opts: {
 
   return { firmado, numero: c.numero }
 }
+
+/**
+ * Corrige DÓNDE quedó dibujada la firma en un contrato laboral subido, sin
+ * pedirle a nadie que firme otra vez.
+ *
+ * El caso real: se marcó mal el recuadro al subir el PDF y el trazo del
+ * trabajador quedó lejos de su línea de firma. Lo que él aceptó —el contenido
+ * del PDF— no cambia; solo cambia el punto donde la app dibuja su PNG. Como el
+ * original sin firmar y la imagen de cada firma se guardan aparte, basta con
+ * anotar la nueva posición y volver a estampar (`cerrarCorreccionPosicion`
+ * retira el firmado viejo y lo anota en el rastro).
+ */
+export async function corregirPosicionFirmaLaboral(opts: {
+  contratoId: string
+  posicionEmpleado: PosicionFirma
+  /** Se ignora cuando el empleador firmó en el PDF aportado: no se le estampa nada. */
+  posicionEmpleador?: PosicionFirma | null
+  usuarioId: string
+}): Promise<{ reestampado: boolean; numero: string }> {
+  const c = await prisma.contrato.findUniqueOrThrow({ where: { id: opts.contratoId } })
+  if (c.origenPdf !== 'SUBIDO_PARA_FIRMA') {
+    throw new ErrorNegocio('Solo se corrige la posición en contratos cuyo PDF se subió para firmarse en la app.')
+  }
+  const previo = leerDatosFirmaSubidoLaboral(c.posicionFirmas)
+  if (!c.firmaEmpleadorEnPdf && !opts.posicionEmpleador) {
+    throw new ErrorNegocio('Indica dónde va la firma del empleador dentro del PDF.')
+  }
+
+  const datos: DatosFirmaSubidoLaboral = {
+    empleado: opts.posicionEmpleado,
+    empleador: c.firmaEmpleadorEnPdf ? null : (opts.posicionEmpleador ?? null),
+    documentoOriginalId: previo.documentoOriginalId,
+  }
+  await dbAuditado.contrato.update({ where: { id: c.id }, data: { posicionFirmas: datos as object } })
+
+  // Si todavía falta una firma no hay nada estampado: la nueva posición se
+  // usará cuando el contrato se cierre.
+  const empleadorListo = !!c.firmaEmpleadorPath || c.firmaEmpleadorEnPdf
+  if (!c.firmaEmpleadoPath || !empleadorListo) return { reestampado: false, numero: c.numero }
+
+  const [imgEmpleador, imgEmpleado] = await Promise.all([
+    c.firmaEmpleadorPath ? leerFirmaComoDataUri(c.firmaEmpleadorPath) : Promise.resolve(null),
+    leerFirmaComoDataUri(c.firmaEmpleadoPath),
+  ])
+  const r = await generarPdfContratoLaboralEstampado({
+    contratoId: c.id,
+    numero: c.numero,
+    sedeId: c.sedeId,
+    usuarioId: opts.usuarioId,
+    datos,
+    firmaEmpleadoImg: imgEmpleado,
+    firmaEmpleadorImg: imgEmpleador,
+    nombreDocumento: `Contrato laboral ${c.numero} (firmado)`,
+  })
+
+  await cerrarCorreccionPosicion({
+    entidadTipo: 'Contrato', contratoId: c.id, documentoOriginalId: previo.documentoOriginalId,
+    nuevo: r, rol: 'EMPLEADO', usuarioId: opts.usuarioId,
+  })
+
+  return { reestampado: true, numero: c.numero }
+}
+

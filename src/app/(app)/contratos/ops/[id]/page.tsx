@@ -16,6 +16,7 @@ import { FirmasContrato } from './firmas-contrato'
 import { GenerarAutorizacion, RegenerarDocumentos } from './generar-autorizacion'
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import { HabilitarFirma } from './habilitar-firma'
+import { CorregirPosicionFirma } from '@/components/contratos/corregir-posicion-firma'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 
 export const metadata = { title: 'Contrato OPS · Smart Gadgets RH' }
@@ -208,6 +209,12 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
               fecha: c.firmaContratistaFecha ? formatFechaLarga(c.firmaContratistaFecha) : null,
             }}
           />
+        )}
+        {/* Firma estampada donde no era: se mueve sin volver a firmar. */}
+        {c.origenPdf === 'SUBIDO_PARA_FIRMA' && puedeEditar && (
+          <div className="mt-3">
+            <CorregirPosicionFirma contratoId={c.id} vinculo="OPS" />
+          </div>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
           La autorización de tratamiento de datos (Ley 1581) la firma únicamente el contratista, junto con el contrato, desde su autoservicio.

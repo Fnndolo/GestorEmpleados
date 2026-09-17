@@ -6,7 +6,9 @@ import { ErrorNegocio } from '@/server/accion'
 import { contextoActual } from '@/server/contexto'
 import { subirArchivo } from '@/server/storage'
 import { generarPdfContratoOps, generarPdfAutorizacionDatos, leerFirmaComoDataUri, type SnapshotContratoOps } from '@/server/contratos-ops-pdf'
-import { generarPdfContratoOpsEstampado, leerDatosFirmaSubido } from '@/server/contratos-ops-estampar'
+import { generarPdfContratoOpsEstampado, leerDatosFirmaSubido, type DatosFirmaSubido } from '@/server/contratos-ops-estampar'
+import { cerrarCorreccionPosicion } from '@/server/contratos-estampar'
+import type { PosicionFirma } from '@/server/pdf/firma-en-pdf'
 import { fechaLarga } from '@/lib/numero-letras'
 import { avisar, avisarPorRol } from '@/server/notificaciones/avisar'
 import { nombreCorto } from '@/lib/notificaciones/texto'
@@ -181,4 +183,65 @@ export async function aplicarFirmaContratoOps(opts: {
   }
 
   return { firmado, numero: c.numero }
+}
+
+/**
+ * Corrige DÓNDE quedó dibujada la firma en un contrato OPS subido, sin pedirle
+ * a nadie que firme otra vez: espejo de `corregirPosicionFirmaLaboral`.
+ *
+ * Lo que el contratista aceptó —el contenido del PDF— no cambia; solo cambia el
+ * punto donde la app dibuja su PNG. Como el original sin firmar y la imagen de
+ * cada firma se guardan aparte, basta con anotar la nueva posición y volver a
+ * estampar (`cerrarCorreccionPosicion` retira el firmado viejo y lo anota en el
+ * rastro).
+ */
+export async function corregirPosicionFirmaContratoOps(opts: {
+  contratoId: string
+  posicionContratista: PosicionFirma
+  /** Se ignora cuando el contratante firmó en el PDF aportado: no se le estampa nada. */
+  posicionContratante?: PosicionFirma | null
+  usuarioId: string
+}): Promise<{ reestampado: boolean; numero: string }> {
+  const c = await prisma.contratoOps.findUniqueOrThrow({ where: { id: opts.contratoId } })
+  if (c.origenPdf !== 'SUBIDO_PARA_FIRMA') {
+    throw new ErrorNegocio('Solo se corrige la posición en contratos cuyo PDF se subió para firmarse en la app.')
+  }
+  const previo = leerDatosFirmaSubido(c.posicionFirmas)
+  if (!c.firmaContratanteEnPdf && !opts.posicionContratante) {
+    throw new ErrorNegocio('Indica dónde va la firma de la empresa dentro del PDF.')
+  }
+
+  const datos: DatosFirmaSubido = {
+    contratista: opts.posicionContratista,
+    contratante: c.firmaContratanteEnPdf ? null : (opts.posicionContratante ?? null),
+    documentoOriginalId: previo.documentoOriginalId,
+  }
+  await dbAuditado.contratoOps.update({ where: { id: c.id }, data: { posicionFirmas: datos as object } })
+
+  // Si todavía falta una firma no hay nada estampado: la nueva posición se
+  // usará cuando el contrato se cierre.
+  const contratanteListo = !!c.firmaContratantePath || c.firmaContratanteEnPdf
+  if (!c.firmaContratistaPath || !contratanteListo) return { reestampado: false, numero: c.numero }
+
+  const [imgContratante, imgContratista] = await Promise.all([
+    c.firmaContratantePath ? leerFirmaComoDataUri(c.firmaContratantePath) : Promise.resolve(null),
+    leerFirmaComoDataUri(c.firmaContratistaPath),
+  ])
+  const r = await generarPdfContratoOpsEstampado({
+    contratoId: c.id,
+    numero: c.numero,
+    sedeId: c.sedeId,
+    usuarioId: opts.usuarioId,
+    datos,
+    firmaContratistaImg: imgContratista,
+    firmaContratanteImg: imgContratante,
+    nombreDocumento: `Contrato OPS ${c.numero} (firmado)`,
+  })
+
+  await cerrarCorreccionPosicion({
+    entidadTipo: 'ContratoOps', contratoId: c.id, documentoOriginalId: previo.documentoOriginalId,
+    nuevo: r, rol: 'CONTRATISTA', usuarioId: opts.usuarioId,
+  })
+
+  return { reestampado: true, numero: c.numero }
 }

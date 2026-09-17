@@ -4,7 +4,7 @@ import { instalarSesionFalsa, actuarComo } from './sesion-falsa'
 instalarSesionFalsa()
 
 const { prisma } = await import('@/lib/db')
-const { subirContratoParaFirma, analizarPdfContratoLaboral, firmarContratoLaboral } =
+const { subirContratoParaFirma, analizarPdfContratoLaboral, firmarContratoLaboral, prepararCorreccionFirmaLaboral, corregirPosicionFirmaLaboral } =
   await import('@/app/(app)/contratos/acciones')
 import type { UsuarioSesion } from '@/lib/permisos/tipos'
 
@@ -205,6 +205,50 @@ describe('Laboral · subir PDF y enviar a firma', () => {
     expect(r.firmado).toBe(true)
     const docs = await prisma.documento.findMany({ where: { entidadTipo: 'Contrato', entidadId: id } })
     expect(docs.some((d) => d.nombre.includes('(firmado)') && !d.nombre.startsWith('Autorización'))).toBe(true)
+  })
+
+  it('corrige la posición de una firma ya estampada sin volver a firmar: reemplaza el PDF firmado y lo anota en el rastro', async () => {
+    actuarComo(admin)
+    const { id } = datosDe(await subir({ empleadorFirmoEnPdf: true, posicionEmpleador: undefined }))
+    const { aplicarFirmaContratoLaboral } = await import('@/server/contratos-laboral-firma')
+    const { METODO_CORRECCION_POSICION } = await import('@/server/contratos-estampar')
+    await aplicarFirmaContratoLaboral({ contratoId: id, rol: 'EMPLEADO', firmaDataUri: FIRMA_PNG, usuarioId: admin.id })
+
+    const esFirmado = (d: { nombre: string }) => d.nombre.includes('(firmado)') && !d.nombre.startsWith('Autorización')
+    const antes = (await prisma.documento.findMany({ where: { entidadTipo: 'Contrato', entidadId: id } })).find(esFirmado)!
+    expect(antes).toBeTruthy()
+
+    // Al abrir la corrección se ve el ORIGINAL sin estampar, con la firma real.
+    const prep = datosDe(await prepararCorreccionFirmaLaboral({ contratoId: id }))
+    expect(prep.empleadorEnPdf).toBe(true)
+    expect(prep.empleado.y).toBe(150)
+    expect(prep.firmaEmpleado).toBe(FIRMA_PNG)
+    expect(prep.firmaEmpleador).toBeNull()
+
+    // La firma quedó muy abajo: se sube 300 puntos.
+    const r = datosDe(await corregirPosicionFirmaLaboral({ contratoId: id, posicionEmpleado: { ...prep.empleado, y: 450 } }))
+    expect(r.reestampado).toBe(true)
+
+    const c = await prisma.contrato.findUniqueOrThrow({ where: { id } })
+    const pos = c.posicionFirmas as { empleado: { y: number }; empleador: unknown; documentoOriginalId: string }
+    expect(pos.empleado.y).toBe(450)
+    expect(pos.empleador).toBeNull()
+    // Nadie firmó de nuevo: la firma y su fecha son las mismas.
+    expect(c.firmaEmpleadoPath).toBeTruthy()
+
+    const docs = await prisma.documento.findMany({ where: { entidadTipo: 'Contrato', entidadId: id } })
+    const firmados = docs.filter(esFirmado)
+    expect(firmados, 'un solo PDF firmado: el corregido reemplaza al anterior').toHaveLength(1)
+    expect(firmados[0].id).not.toBe(antes.id)
+    expect(firmados[0].sha256).not.toBe(antes.sha256)
+    expect(docs.some((d) => d.id === pos.documentoOriginalId), 'el original sigue intacto').toBe(true)
+
+    // El rastro conserva la firma original y suma la corrección con el hash nuevo.
+    const ev = await prisma.evidenciaFirmaContrato.findMany({ where: { contratoId: id }, orderBy: { firmadoEn: 'asc' } })
+    expect(ev.map((e) => e.metodoAuth)).toEqual(['SESION', METODO_CORRECCION_POSICION])
+    const docsEv = ev[1].documentos as { documentoId: string; sha256: string }[]
+    expect(docsEv[0].documentoId).toBe(firmados[0].id)
+    expect(docsEv[0].sha256).toBe(firmados[0].sha256)
   })
 
   it('exige la posición del empleador cuando el PDF no viene firmado por él', async () => {

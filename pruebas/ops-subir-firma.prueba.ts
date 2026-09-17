@@ -4,7 +4,7 @@ import { instalarSesionFalsa, actuarComo } from './sesion-falsa'
 instalarSesionFalsa()
 
 const { prisma } = await import('@/lib/db')
-const { subirContratoOpsParaFirma, analizarPdfContratoOps, regenerarDocumentosContrato, firmarContratoOps } =
+const { subirContratoOpsParaFirma, analizarPdfContratoOps, regenerarDocumentosContrato, firmarContratoOps, prepararCorreccionFirmaOps, corregirPosicionFirmaOps } =
   await import('@/app/(app)/contratos/ops-acciones')
 import type { UsuarioSesion } from '@/lib/permisos/tipos'
 
@@ -201,6 +201,55 @@ describe('OPS · subir PDF y enviar a firma', () => {
     const pos = c.posicionFirmas as { documentoOriginalId: string }
     expect(firmado!.id).not.toBe(pos.documentoOriginalId)
     expect(docs.some((doc) => doc.id === pos.documentoOriginalId)).toBe(true)
+  })
+
+  it('corrige la posición de las firmas ya estampadas sin volver a firmar: reemplaza el PDF firmado y lo anota en el rastro', async () => {
+    actuarComo(admin)
+    const { id } = datosDe(await subir())
+    const { aplicarFirmaContratoOps } = await import('@/server/contratos-ops-firma')
+    const { METODO_CORRECCION_POSICION } = await import('@/server/contratos-estampar')
+    await aplicarFirmaContratoOps({ contratoId: id, rol: 'CONTRATISTA', firmaDataUri: FIRMA_PNG, usuarioId: admin.id })
+    expect((await firmarContratoOps({ contratoId: id, rol: 'CONTRATANTE', firmaDataUri: FIRMA_PNG })).ok).toBe(true)
+
+    const esFirmado = (d: { nombre: string }) => d.nombre.includes('(firmado)') && !d.nombre.startsWith('Autorización')
+    const antes = (await prisma.documento.findMany({ where: { entidadTipo: 'ContratoOps', entidadId: id } })).find(esFirmado)!
+    expect(antes).toBeTruthy()
+
+    // Al abrir la corrección se ve el ORIGINAL sin estampar, con las firmas reales.
+    const prep = datosDe(await prepararCorreccionFirmaOps({ contratoId: id }))
+    expect(prep.contratanteEnPdf).toBe(false)
+    expect(prep.contratista.y).toBe(150)
+    expect(prep.firmaContratista).toBe(FIRMA_PNG)
+    expect(prep.firmaContratante).toBe(FIRMA_PNG)
+
+    // Las dos quedaron muy abajo: se suben 300 puntos.
+    const r = datosDe(await corregirPosicionFirmaOps({
+      contratoId: id,
+      posicionContratista: { ...prep.contratista, y: 450 },
+      posicionContratante: { ...prep.contratante!, y: 450 },
+    }))
+    expect(r.reestampado).toBe(true)
+
+    const c = await prisma.contratoOps.findUniqueOrThrow({ where: { id } })
+    const pos = c.posicionFirmas as { contratista: { y: number }; contratante: { y: number }; documentoOriginalId: string }
+    expect(pos.contratista.y).toBe(450)
+    expect(pos.contratante.y).toBe(450)
+    // Nadie firmó de nuevo y el contrato sigue FIRMADO.
+    expect(c.estado).toBe('FIRMADO')
+
+    const docs = await prisma.documento.findMany({ where: { entidadTipo: 'ContratoOps', entidadId: id } })
+    const firmados = docs.filter(esFirmado)
+    expect(firmados, 'un solo PDF firmado: el corregido reemplaza al anterior').toHaveLength(1)
+    expect(firmados[0].id).not.toBe(antes.id)
+    expect(firmados[0].sha256).not.toBe(antes.sha256)
+    expect(docs.some((d) => d.id === pos.documentoOriginalId), 'el original sigue intacto').toBe(true)
+
+    // El rastro conserva las firmas y suma la corrección con el hash nuevo.
+    const ev = await prisma.evidenciaFirmaContrato.findMany({ where: { contratoOpsId: id }, orderBy: { firmadoEn: 'asc' } })
+    expect(ev.map((e) => e.metodoAuth)).toEqual(['SESION', 'SESION', METODO_CORRECCION_POSICION])
+    const docsEv = ev[2].documentos as { documentoId: string; sha256: string }[]
+    expect(docsEv[0].documentoId).toBe(firmados[0].id)
+    expect(docsEv[0].sha256).toBe(firmados[0].sha256)
   })
 
   it('no deja regenerar un contrato subido: no hay plantilla que regenerar', async () => {

@@ -16,6 +16,8 @@ import { TIPO_VINCULO, MODALIDAD_TRABAJO } from '@/lib/etiquetas'
 import { AccionesContrato } from './acciones-cliente'
 import { discrepanciaVinculo, type TipoContratoLaboral, type TipoVinculo } from '@/lib/vinculo-contrato'
 import { FirmasLaboral } from './firmas-laboral'
+import { CorregirPosicionFirma } from '@/components/contratos/corregir-posicion-firma'
+import { METODO_CORRECCION_POSICION } from '@/server/contratos-estampar'
 import { resumenOtrosi, ETIQUETA_CAMBIO_OTROSI, type ValoresOtrosi, type TipoCambioOtrosi } from '@/lib/otrosi'
 
 export const metadata = { title: 'Contrato · Smart Gadgets RH' }
@@ -172,14 +174,24 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
             fecha: c.firmaEmpleadoFecha ? formatFechaCorta(c.firmaEmpleadoFecha) : null,
           }}
         />
+        {/* Firma estampada donde no era: se mueve sin volver a firmar. */}
+        {c.origenPdf === 'SUBIDO_PARA_FIRMA' && puedeEditar && (
+          <div className="mt-3">
+            <CorregirPosicionFirma contratoId={c.id} vinculo="LABORAL" />
+          </div>
+        )}
         {evidencias.length > 0 && (
           <div className="mt-4 border-t pt-3">
             <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Rastro de firma</h4>
             <ul className="space-y-1">
               {evidencias.map((e) => (
                 <li key={e.id} className="text-xs text-muted-foreground">
-                  {e.rol === 'EMPLEADO' ? 'Empleado' : 'Empleador'} · {formatFechaCorta(e.firmadoEn)}
-                  {e.userEmail ? ` · ${e.userEmail}` : ''}{e.ip ? ` · IP ${e.ip}` : ''} · {e.metodoAuth === 'CODIGO_EMAIL' ? 'código al correo' : 'sesión'}
+                  {e.metodoAuth === METODO_CORRECCION_POSICION
+                    // No es una firma: alguien de TH movió el trazo a su sitio y se regeneró el PDF.
+                    ? 'Posición de la firma corregida (PDF regenerado)'
+                    : e.rol === 'EMPLEADO' ? 'Empleado' : 'Empleador'} · {formatFechaCorta(e.firmadoEn)}
+                  {e.userEmail ? ` · ${e.userEmail}` : ''}{e.ip ? ` · IP ${e.ip}` : ''}
+                  {e.metodoAuth === METODO_CORRECCION_POSICION ? '' : e.metodoAuth === 'CODIGO_EMAIL' ? ' · código al correo' : ' · sesión'}
                 </li>
               ))}
             </ul>

@@ -10,12 +10,13 @@ import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subid
 import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
 import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema, cerrarContratoOpsSchema } from '@/lib/validaciones/contrato'
+import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, corregirPosicionFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema, cerrarContratoOpsSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { publicarVencimiento, resolverVencimiento } from '@/server/vencimientos/servicio'
 import { construirDatosPdfContratoOps, construirDatosAutorizacion, generarPdfContratoOps, generarPdfAutorizacionDatos, leerFirmaComoDataUri, type SnapshotContratoOps } from '@/server/contratos-ops-pdf'
 import { fechaLarga } from '@/lib/numero-letras'
-import { aplicarFirmaContratoOps } from '@/server/contratos-ops-firma'
+import { aplicarFirmaContratoOps, corregirPosicionFirmaContratoOps as corregirPosicionFirmaOpsServidor } from '@/server/contratos-ops-firma'
+import { leerDatosFirmaSubido } from '@/server/contratos-ops-estampar'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { fechaBreve } from '@/lib/notificaciones/texto'
 import { generarPdfCuentaCobro } from '@/server/cuentas-cobro'
@@ -890,6 +891,64 @@ export const prepararFirmaContratoOps = accion(
       pdfBase64: `data:application/pdf;base64,${pdf.toString('base64')}`,
       ...posiciones,
     }
+  },
+)
+
+/**
+ * Abre la corrección de la posición de las firmas de un contrato OPS subido:
+ * devuelve el PDF ORIGINAL (sin estampar), las posiciones vigentes y la imagen
+ * de cada firma ya dibujada, para que quien corrige vea el trazo real donde va a
+ * quedar. No guarda nada. Espejo de `prepararCorreccionFirmaLaboral`.
+ */
+export const prepararCorreccionFirmaOps = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: z.object({ contratoId: z.uuid() }) },
+  async (d) => {
+    const c = await prisma.contratoOps.findUniqueOrThrow({
+      where: { id: d.contratoId },
+      select: { origenPdf: true, posicionFirmas: true, firmaContratistaPath: true, firmaContratantePath: true, firmaContratanteEnPdf: true },
+    })
+    if (c.origenPdf !== 'SUBIDO_PARA_FIRMA') {
+      throw new ErrorNegocio('Solo se corrige la posición en contratos cuyo PDF se subió para firmarse en la app.')
+    }
+    const datos = leerDatosFirmaSubido(c.posicionFirmas)
+    const original = await prisma.documento.findUnique({ where: { id: datos.documentoOriginalId }, select: { nombre: true, storagePath: true } })
+    if (!original) throw new ErrorNegocio('No se encontró el PDF original del contrato.')
+    const [pdf, firmaContratista, firmaContratante] = await Promise.all([
+      leerArchivo(original.storagePath),
+      c.firmaContratistaPath ? leerFirmaComoDataUri(c.firmaContratistaPath) : Promise.resolve(null),
+      c.firmaContratantePath ? leerFirmaComoDataUri(c.firmaContratantePath) : Promise.resolve(null),
+    ])
+    const paginas = await contarPaginas(pdf)
+    return {
+      nombre: original.nombre,
+      paginas,
+      pdfBase64: `data:application/pdf;base64,${pdf.toString('base64')}`,
+      contratista: datos.contratista,
+      contratante: datos.contratante,
+      contratanteEnPdf: c.firmaContratanteEnPdf,
+      firmaContratista,
+      firmaContratante,
+    }
+  },
+)
+
+/**
+ * Guarda la posición corregida y, si el contrato ya estaba firmado, vuelve a
+ * estampar las firmas sobre el original y reemplaza el PDF "(firmado)". Nadie
+ * vuelve a firmar: solo cambia dónde se dibuja el trazo.
+ */
+export const corregirPosicionFirmaOps = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: corregirPosicionFirmaOpsSchema },
+  async (d, usuario) => {
+    const r = await corregirPosicionFirmaOpsServidor({
+      contratoId: d.contratoId,
+      posicionContratista: d.posicionContratista,
+      posicionContratante: d.posicionContratante ?? null,
+      usuarioId: usuario.id,
+    })
+    revalidatePath(`/contratos/ops/${d.contratoId}`)
+    revalidatePath('/autoservicio/contratos')
+    return r
   },
 )
 

@@ -266,6 +266,27 @@ export const habilitarFirmaOpsSchema = z.object({
 })
 export type HabilitarFirmaOpsInput = z.infer<typeof habilitarFirmaOpsSchema>
 
+/**
+ * Corregir dónde se dibuja la firma en un contrato laboral subido, ya firmado.
+ * Solo posiciones: el PDF original y las imágenes de firma ya están guardados.
+ */
+export const corregirPosicionFirmaLaboralSchema = z.object({
+  contratoId: z.uuid(),
+  posicionEmpleado: posicionFirmaSchema,
+  // Puede faltar cuando el PDF ya venía firmado por el empleador.
+  posicionEmpleador: posicionFirmaSchema.optional(),
+})
+export type CorregirPosicionFirmaLaboralInput = z.infer<typeof corregirPosicionFirmaLaboralSchema>
+
+/** Lo mismo para un contrato OPS subido. */
+export const corregirPosicionFirmaOpsSchema = z.object({
+  contratoId: z.uuid(),
+  posicionContratista: posicionFirmaSchema,
+  // Puede faltar cuando el PDF ya venía firmado por el contratante.
+  posicionContratante: posicionFirmaSchema.optional(),
+})
+export type CorregirPosicionFirmaOpsInput = z.infer<typeof corregirPosicionFirmaOpsSchema>
+
 export const entregableOpsSchema = z.object({
   contratoOpsId: z.uuid(),
   descripcion: z.string().trim().min(3, 'Describe el entregable').max(500),

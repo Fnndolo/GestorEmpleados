@@ -5,19 +5,20 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
-import { subirArchivo } from '@/server/storage'
+import { subirArchivo, leerArchivo } from '@/server/storage'
 import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subida'
 import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
 import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema, subirContratoLaboralSchema, subirContratoLaboralParaFirmaSchema, type SubirContratoLaboralInput } from '@/lib/validaciones/contrato'
+import { contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema, subirContratoLaboralSchema, subirContratoLaboralParaFirmaSchema, corregirPosicionFirmaLaboralSchema, type SubirContratoLaboralInput } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { publicarVencimiento, resolverVencimiento, cancelarVencimiento } from '@/server/vencimientos/servicio'
 import { eliminarDocumento } from '@/server/documentos'
 import { valorParametroVigente } from '@/server/nomina/parametros'
 import { construirDatosPdfContratoLaboral, generarPdfContratoLaboral, generarPdfAutorizacionDatosLaboral } from '@/server/contratos-laboral-pdf'
-import { construirDatosAutorizacion } from '@/server/contratos-ops-pdf'
-import { aplicarFirmaContratoLaboral } from '@/server/contratos-laboral-firma'
+import { construirDatosAutorizacion, leerFirmaComoDataUri } from '@/server/contratos-ops-pdf'
+import { aplicarFirmaContratoLaboral, corregirPosicionFirmaLaboral as corregirPosicionFirmaLaboralServidor } from '@/server/contratos-laboral-firma'
+import { leerDatosFirmaSubidoLaboral } from '@/server/contratos-laboral-estampar'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { ubicarFirmasEnPdf, contarPaginas } from '@/server/pdf/firma-en-pdf'
 import { resumenOtrosi, type ValoresOtrosi } from '@/lib/otrosi'
@@ -451,6 +452,64 @@ export const analizarPdfContratoLaboral = accion(
     if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
     const [posiciones, paginas] = await Promise.all([ubicarFirmasEnPdf(pdf, 'LABORAL'), contarPaginas(pdf)])
     return { paginas, ...posiciones }
+  },
+)
+
+/**
+ * Abre la corrección de la posición de las firmas de un contrato laboral subido:
+ * devuelve el PDF ORIGINAL (sin estampar), las posiciones vigentes y la imagen
+ * de cada firma ya dibujada, para que quien corrige vea el trazo real donde va a
+ * quedar. No guarda nada.
+ */
+export const prepararCorreccionFirmaLaboral = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: z.object({ contratoId: z.uuid() }) },
+  async (d) => {
+    const c = await prisma.contrato.findUniqueOrThrow({
+      where: { id: d.contratoId },
+      select: { origenPdf: true, posicionFirmas: true, firmaEmpleadoPath: true, firmaEmpleadorPath: true, firmaEmpleadorEnPdf: true },
+    })
+    if (c.origenPdf !== 'SUBIDO_PARA_FIRMA') {
+      throw new ErrorNegocio('Solo se corrige la posición en contratos cuyo PDF se subió para firmarse en la app.')
+    }
+    const datos = leerDatosFirmaSubidoLaboral(c.posicionFirmas)
+    const original = await prisma.documento.findUnique({ where: { id: datos.documentoOriginalId }, select: { nombre: true, storagePath: true } })
+    if (!original) throw new ErrorNegocio('No se encontró el PDF original del contrato.')
+    const [pdf, firmaEmpleado, firmaEmpleador] = await Promise.all([
+      leerArchivo(original.storagePath),
+      c.firmaEmpleadoPath ? leerFirmaComoDataUri(c.firmaEmpleadoPath) : Promise.resolve(null),
+      c.firmaEmpleadorPath ? leerFirmaComoDataUri(c.firmaEmpleadorPath) : Promise.resolve(null),
+    ])
+    const paginas = await contarPaginas(pdf)
+    return {
+      nombre: original.nombre,
+      paginas,
+      pdfBase64: `data:application/pdf;base64,${pdf.toString('base64')}`,
+      empleado: datos.empleado,
+      empleador: datos.empleador,
+      empleadorEnPdf: c.firmaEmpleadorEnPdf,
+      firmaEmpleado,
+      firmaEmpleador,
+    }
+  },
+)
+
+/**
+ * Guarda la posición corregida y, si el contrato ya estaba firmado, vuelve a
+ * estampar las firmas sobre el original y reemplaza el PDF "(firmado)". Nadie
+ * vuelve a firmar: solo cambia dónde se dibuja el trazo.
+ */
+export const corregirPosicionFirmaLaboral = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: corregirPosicionFirmaLaboralSchema },
+  async (d, usuario) => {
+    const r = await corregirPosicionFirmaLaboralServidor({
+      contratoId: d.contratoId,
+      posicionEmpleado: d.posicionEmpleado,
+      posicionEmpleador: d.posicionEmpleador ?? null,
+      usuarioId: usuario.id,
+    })
+    revalidatePath(`/contratos/${d.contratoId}`)
+    revalidatePath('/autoservicio/contratos')
+    return r
   },
 )
 
