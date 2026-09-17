@@ -53,7 +53,7 @@ export default async function NovedadesNominaPage({ searchParams }: { searchPara
     `${c.colaborador.nombres} ${c.colaborador.apellidos}`
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-6xl">
       <Link href="/nomina" className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" /> Nómina
       </Link>
