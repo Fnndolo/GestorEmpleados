@@ -1,11 +1,11 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { requerirPermiso } from '@/server/sesion'
+import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { formatFechaISO, hoyBogotaISO } from '@/lib/fechas'
 import { CONTRATOS_DE_NOMINA } from '@/lib/vinculo-contrato'
-import { urlPanelAsistencia } from '@/server/asistencia/horas-asistencia'
+import { conexionAsistencia } from '@/server/asistencia/cliente'
 import { NovedadesNomina } from './novedades-cliente'
 
 export const metadata = { title: 'Novedades de nómina · Smart Gadgets RH' }
@@ -22,7 +22,8 @@ const LIMITE = 200
  * y el periodo las recoge por rango.
  */
 export default async function NovedadesNominaPage() {
-  await requerirPermiso('nomina', 'CREAR')
+  const usuario = await requerirPermiso('nomina', 'CREAR')
+  const conexion = await conexionAsistencia()
 
   const nomColab = { colaborador: { select: { nombres: true, apellidos: true } } }
   const conPeriodo = { periodo: { select: { nombre: true } } }
@@ -54,10 +55,7 @@ export default async function NovedadesNominaPage() {
       <Link href="/nomina" className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" /> Nómina
       </Link>
-      <Encabezado
-        titulo="Novedades"
-        descripcion="Comisiones, horas extra y conceptos aplicados. Se registran cuando ocurren; el periodo de nómina los recoge por fecha."
-      />
+      <Encabezado enLinea titulo="Novedades" />
 
       <NovedadesNomina
         hoy={hoyBogotaISO()}
@@ -84,7 +82,8 @@ export default async function NovedadesNominaPage() {
           concepto: n.concepto.nombre, tipo: n.concepto.tipo, valor: Number(n.valor),
           pagadaEn: n.periodo?.nombre ?? null,
         }))}
-        urlAsistencia={urlPanelAsistencia()}
+        asistencia={{ conectada: Boolean(conexion), url: conexion ? `${conexion.url}/admin?tab=equipo` : null }}
+        puedeConfigurar={tienePermiso(usuario, 'configuracion', 'EDITAR')}
       />
     </div>
   )

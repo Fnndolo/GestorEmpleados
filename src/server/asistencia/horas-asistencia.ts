@@ -1,87 +1,93 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
 import { dividirDiurnoNocturno, PAREJA_TIPO_HORA } from '@/server/nomina/horas'
+import {
+  conexionAsistencia, tramosAsistencia, normalizarCedula, TIPO_HORA_DESDE_ASISTENCIA, type TramoAsistencia,
+} from '@/server/asistencia/cliente'
 
 /**
- * Horas con recargo provenientes del sistema de asistencia (ArriveControl).
+ * Horas con recargo provenientes del sistema de asistencia (AsistencIA).
  *
  * Reparto de responsabilidades (contrato en docs/integraciones/):
  *  - ASISTENCIA calcula QUÉ horas son extra: conoce el turno, la jornada
  *    pactada de cada empleado y el calendario. Aquí NO se recalcula nada.
  *  - ESTA PLATAFORMA decide cómo se clasifican (corte diurno/nocturno de las
- *    7 p.m., Ley 2466) y las liquida.
+ *    7 p.m., Ley 2466) y las liquida con su propio salario y factores.
  *
- * Se piden por HTTP, no leyendo su base de datos: son dos sistemas separados
- * y cada uno es dueño de sus tablas. Al liquidar (o recalcular) se piden de
- * nuevo, así que corregir una marcación en asistencia se refleja sola en el
- * siguiente cálculo, sin copias que se desactualicen.
- *
- * Si `ARRIVECONTROL_URL` no está configurada, esta plataforma asume que el
- * cliente no tiene el módulo de asistencia y liquida sin horas de marcaciones.
+ * Se piden por HTTP con la clave de API de la empresa (ver cliente.ts). Al
+ * liquidar (o recalcular) se piden de nuevo, así que corregir una marcación en
+ * asistencia se refleja sola en el siguiente cálculo, sin copias que se
+ * desactualicen. Sin clave, la plataforma liquida sin horas de marcaciones.
  */
 
-type TramoAsistencia = {
-  documento: string
-  fecha: string // YYYY-MM-DD (día Bogotá)
-  horaInicio: string // HH:MM
-  horaFin: string // HH:MM
-  tipoHora: string // HED | HEDD | …
-  horas: number
-  referenciaExterna: string
-  observaciones?: string
-}
+export { urlPanelAsistencia } from '@/server/asistencia/cliente'
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
 
-/** ¿Está configurado el módulo de asistencia para este cliente? */
-export function asistenciaConfigurada(): boolean {
-  return Boolean(process.env.ARRIVECONTROL_URL)
+/** ¿Está conectada AsistencIA para esta empresa? */
+export async function asistenciaConfigurada(): Promise<boolean> {
+  return (await conexionAsistencia()) !== null
+}
+
+export type NovedadDesdeTramo = {
+  colaboradorId: string; fecha: Date; tipoHora: string; horas: number
+  horaInicio: string; horaFin: string; referenciaExterna: string; observaciones: string
 }
 
 /**
- * Enlace al panel de ArriveControl para revisar las marcaciones a mano.
+ * Convierte los tramos de AsistencIA en filas de `NovedadHoras`, cruzando por
+ * cédula y aplicando el corte diurno/nocturno de las 7 p.m. Un tramo que cruza
+ * esa hora se parte en dos filas (diurna + nocturna) con la misma referencia.
  *
- * Sale del MISMO `ARRIVECONTROL_URL` que usa la API: antes había una segunda
- * variable (`ASISTENCIA_URL`) con el enlace completo escrito aparte, así que
- * mudarse de dominio obligaba a acordarse de las dos y podían quedar apuntando
- * a servidores distintos sin que nadie lo notara.
+ * Devuelve también las cédulas que no están en esta plataforma (o están
+ * retiradas): se reportan, no se descartan en silencio.
  */
-export function urlPanelAsistencia(): string | null {
-  const base = process.env.ARRIVECONTROL_URL?.replace(/\/+$/, '')
-  return base ? `${base}/admin?tab=equipo` : null
-}
+export async function novedadesDesdeTramos(tramos: TramoAsistencia[]): Promise<{
+  novedades: NovedadDesdeTramo[]
+  sinColaborador: { documento: string; nombre: string | null }[]
+}> {
+  // Todas las fichas, comparadas por cédula normalizada: las de aquí pueden
+  // traer puntos y las de allá no. Son pocas filas; cruzar en memoria es más
+  // simple y seguro que adivinar el formato en la consulta.
+  const colaboradores = tramos.length
+    ? await prisma.colaborador.findMany({ select: { id: true, numeroDocumento: true, estado: true } })
+    : []
+  const porCedula = new Map(colaboradores.map((c) => [normalizarCedula(c.numeroDocumento), c]))
 
-/**
- * Pide a ArriveControl los tramos de un rango. Lanza si está configurado pero
- * no responde: preferimos que la liquidación falle a producir una nómina sin
- * las horas extra de la gente.
- */
-async function pedirTramos(desdeISO: string, hastaISO: string): Promise<TramoAsistencia[]> {
-  const base = process.env.ARRIVECONTROL_URL!.replace(/\/$/, '')
-  const url = `${base}/api/horas?desde=${desdeISO}&hasta=${hastaISO}`
-  const clave = process.env.ARRIVECONTROL_API_KEY ?? process.env.INTEGRACION_HORAS_API_KEY ?? ''
+  const sinColaborador = new Map<string, string | null>()
+  const novedades: NovedadDesdeTramo[] = []
 
-  let res: Response
-  try {
-    res = await fetch(url, { headers: { 'X-API-Key': clave }, cache: 'no-store' })
-  } catch (e) {
-    throw new Error(
-      `No se pudo consultar las horas en el sistema de asistencia (${base}). ` +
-        `Verifica que esté disponible e inténtalo de nuevo. Detalle: ${String(e)}`,
-    )
+  for (const t of tramos) {
+    const cedula = normalizarCedula(t.documento)
+    const colab = porCedula.get(cedula)
+    if (!colab || colab.estado === 'RETIRADO') {
+      if (!sinColaborador.has(cedula)) sinColaborador.set(cedula, t.nombre ?? null)
+      continue
+    }
+    // Los dominicales/festivos llegan como HEDDF/HENDF; aquí son HEDD/HEND.
+    const tipo = TIPO_HORA_DESDE_ASISTENCIA[t.tipoHora] ?? t.tipoHora
+    const pareja = PAREJA_TIPO_HORA[tipo]
+    if (!pareja) continue // código desconocido: se ignora, no se adivina
+    // Corte diurno/nocturno de las 7 p.m. (Ley 2466): responsabilidad nuestra.
+    const { diurnas, nocturnas } = dividirDiurnoNocturno(t.horaInicio, t.horaFin)
+    const partes = [
+      ...(diurnas > 0 && pareja.diurno ? [{ tipoHora: pareja.diurno, horas: diurnas }] : []),
+      ...(nocturnas > 0 ? [{ tipoHora: pareja.nocturno, horas: nocturnas }] : []),
+    ]
+    for (const parte of partes) {
+      novedades.push({
+        colaboradorId: colab.id,
+        fecha: new Date(`${t.fecha}T00:00:00.000Z`),
+        tipoHora: parte.tipoHora,
+        horas: parte.horas,
+        horaInicio: t.horaInicio,
+        horaFin: t.horaFin,
+        referenciaExterna: t.referenciaExterna,
+        observaciones: t.observaciones ?? 'Calculada de las marcaciones de asistencia.',
+      })
+    }
   }
-
-  const texto = await res.text()
-  let datos: { ok?: boolean; error?: string; registros?: TramoAsistencia[] } | null = null
-  try {
-    datos = JSON.parse(texto)
-  } catch {
-    throw new Error(`El sistema de asistencia respondió ${res.status} con algo que no es JSON.`)
-  }
-  if (!res.ok || !datos?.ok) {
-    throw new Error(`El sistema de asistencia rechazó la consulta (${res.status}): ${datos?.error ?? 'sin detalle'}`)
-  }
-  return datos.registros ?? []
+  return { novedades, sinColaborador: [...sinColaborador].map(([documento, nombre]) => ({ documento, nombre })) }
 }
 
 /**
@@ -97,21 +103,16 @@ export async function regenerarNovedadesAsistencia(periodo: {
 }): Promise<{
   generadas: number
   sinColaborador: string[]
-  /** No se consultó el sistema de asistencia (no está configurado). */
+  /** No se consultó el sistema de asistencia (no está conectado). */
   omitido?: boolean
   /** Horas ya registradas que se liquidan sin refrescar, al estar omitido. */
   sinRefrescar?: number
 }> {
-  if (!asistenciaConfigurada()) {
-    // Sin el sistema de asistencia no se refrescan las horas, pero tampoco se
-    // pierden: el borrado ocurre más abajo, después de traerlas, y aquí se sale
-    // antes. Las que ya estén registradas se liquidan tal como están.
-    //
-    // Antes esto lanzaba un error y dejaba la nómina sin poder liquidar, con el
-    // argumento de que se perderían las horas extra. No se perdían; lo que pasa
-    // es que quedan sin actualizar, y eso se avisa en vez de bloquear: obligar a
-    // levantar otro sistema para poder pagar la nómina es peor que liquidar con
-    // las horas que ya se registraron.
+  if (!(await asistenciaConfigurada())) {
+    // Sin conexión no se refrescan las horas, pero tampoco se pierden: el
+    // borrado ocurre más abajo, después de traerlas, y aquí se sale antes. Las
+    // que ya estén registradas se liquidan tal como están. Bloquear la nómina
+    // por otro sistema sería peor que liquidar con las horas ya registradas.
     const sinRefrescar = await prisma.novedadHoras.count({
       where: { periodoId: periodo.id, referenciaExterna: { startsWith: 'arrive-' } },
     })
@@ -119,54 +120,13 @@ export async function regenerarNovedadesAsistencia(periodo: {
   }
 
   // Se piden ANTES de tocar la base: si falla, no se borró nada todavía.
-  const tramos = await pedirTramos(iso(periodo.fechaInicio), iso(periodo.fechaFin))
+  const tramos = await tramosAsistencia({ desde: iso(periodo.fechaInicio), hasta: iso(periodo.fechaFin) })
+  const { novedades, sinColaborador } = await novedadesDesdeTramos(tramos)
+  const datos = novedades.map((n) => ({ ...n, periodoId: periodo.id }))
 
-  // Colaboradores por cédula (una sola consulta).
-  const cedulas = [...new Set(tramos.map((t) => t.documento))]
-  const colaboradores = cedulas.length
-    ? await prisma.colaborador.findMany({
-        where: { numeroDocumento: { in: cedulas } },
-        select: { id: true, numeroDocumento: true, estado: true },
-      })
-    : []
-  const porCedula = new Map(colaboradores.map((c) => [c.numeroDocumento, c]))
-
-  const sinColaborador: string[] = []
-  const datos: {
-    colaboradorId: string; periodoId: string; fecha: Date; tipoHora: string; horas: number
-    horaInicio: string; horaFin: string; referenciaExterna: string; observaciones: string
-  }[] = []
-
-  for (const t of tramos) {
-    const colab = porCedula.get(t.documento)
-    if (!colab || colab.estado === 'RETIRADO') {
-      if (!sinColaborador.includes(t.documento)) sinColaborador.push(t.documento)
-      continue
-    }
-    // Corte diurno/nocturno de las 7 p.m. (Ley 2466): responsabilidad nuestra.
-    const { diurnas, nocturnas } = dividirDiurnoNocturno(t.horaInicio, t.horaFin)
-    const pareja = PAREJA_TIPO_HORA[t.tipoHora]
-    if (!pareja) continue // código de hora desconocido: se ignora, no se adivina
-    const partes = [
-      ...(diurnas > 0 && pareja.diurno ? [{ tipoHora: pareja.diurno, horas: diurnas }] : []),
-      ...(nocturnas > 0 ? [{ tipoHora: pareja.nocturno, horas: nocturnas }] : []),
-    ]
-    for (const parte of partes) {
-      datos.push({
-        colaboradorId: colab.id,
-        periodoId: periodo.id,
-        fecha: new Date(`${t.fecha}T00:00:00.000Z`),
-        tipoHora: parte.tipoHora,
-        horas: parte.horas,
-        horaInicio: t.horaInicio,
-        horaFin: t.horaFin,
-        referenciaExterna: t.referenciaExterna,
-        observaciones: t.observaciones ?? 'Calculada de las marcaciones de asistencia.',
-      })
-    }
-  }
-
-  // Borrar y recrear en una transacción: nunca queda un periodo a medias.
+  // Borrar y recrear en una transacción: nunca queda un periodo a medias. Un
+  // tramo ya pagado en un periodo cerrado conserva su fila (índice único por
+  // referencia + tipo): no se vuelve a pagar.
   await prisma.$transaction([
     prisma.novedadHoras.deleteMany({
       where: { periodoId: periodo.id, referenciaExterna: { startsWith: 'arrive-' } },
@@ -174,5 +134,50 @@ export async function regenerarNovedadesAsistencia(periodo: {
     ...(datos.length ? [prisma.novedadHoras.createMany({ data: datos, skipDuplicates: true })] : []),
   ])
 
-  return { generadas: datos.length, sinColaborador }
+  return { generadas: datos.length, sinColaborador: sinColaborador.map((s) => s.documento) }
+}
+
+/**
+ * Sincroniza las horas de un rango FUERA de un periodo: lo que AsistencIA
+ * reporta y aún nadie ha pagado queda registrado como novedad pendiente, para
+ * verlo aquí antes de liquidar. Idempotente: lo que ya estaba se deja; lo que
+ * AsistencIA ya no reporta (una marcación corregida) se quita, siempre que
+ * ningún periodo lo haya recogido.
+ */
+export async function sincronizarHorasAsistencia(rango: { desde: string; hasta: string }): Promise<{
+  creadas: number
+  yaEstaban: number
+  quitadas: number
+  sinColaborador: { documento: string; nombre: string | null }[]
+}> {
+  const tramos = await tramosAsistencia(rango)
+  const { novedades, sinColaborador } = await novedadesDesdeTramos(tramos)
+
+  const referencias = new Set(novedades.map((n) => n.referenciaExterna))
+  const sueltas = await prisma.novedadHoras.findMany({
+    where: {
+      periodoId: null,
+      referenciaExterna: { startsWith: 'arrive-' },
+      fecha: { gte: new Date(`${rango.desde}T00:00:00.000Z`), lte: new Date(`${rango.hasta}T00:00:00.000Z`) },
+    },
+    select: { id: true, referenciaExterna: true, tipoHora: true },
+  })
+  // Lo ya registrado, esté suelto o recogido por un periodo (incluso cerrado):
+  // un tramo pagado no se vuelve a crear ni a contar como nuevo.
+  const existentes = referencias.size
+    ? await prisma.novedadHoras.findMany({
+        where: { referenciaExterna: { in: [...referencias] } },
+        select: { referenciaExterna: true, tipoHora: true },
+      })
+    : []
+  const yaEstan = new Set(existentes.map((s) => `${s.referenciaExterna}|${s.tipoHora}`))
+  const quitar = sueltas.filter((s) => !referencias.has(s.referenciaExterna!)).map((s) => s.id)
+  const nuevas = novedades.filter((n) => !yaEstan.has(`${n.referenciaExterna}|${n.tipoHora}`))
+
+  await prisma.$transaction([
+    ...(quitar.length ? [prisma.novedadHoras.deleteMany({ where: { id: { in: quitar } } })] : []),
+    ...(nuevas.length ? [prisma.novedadHoras.createMany({ data: nuevas, skipDuplicates: true })] : []),
+  ])
+
+  return { creadas: nuevas.length, yaEstaban: novedades.length - nuevas.length, quitadas: quitar.length, sinColaborador }
 }

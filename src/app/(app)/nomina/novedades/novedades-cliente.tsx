@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { Chip, Pill } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import { registrarComision, registrarHoras, registrarNovedadConcepto, eliminarNovedadConcepto } from '../acciones'
+import { PanelAsistencia } from './asistencia-panel'
 
 export type ColaboradorOpcion = { id: string; nombre: string }
 export type ConceptoOpcion = { id: string; nombre: string; tipo: string; valorFijo: number | null }
@@ -47,12 +48,10 @@ type Props = {
   comisiones: ComisionItem[]
   horas: HoraItem[]
   conceptosNovedades: ConceptoNovedadItem[]
-  /**
-   * URL del panel del sistema de control de asistencia (ArriveControl), de donde
-   * llegan las horas por la integración. Null si no está configurado, en cuyo
-   * caso no se muestra el enlace.
-   */
-  urlAsistencia: string | null
+  /** Conexión con AsistencIA (control de asistencia): de ahí llegan las horas. */
+  asistencia: { conectada: boolean; url: string | null }
+  /** Quien puede pegar o cambiar la clave de API (Ajustes). */
+  puedeConfigurar: boolean
 }
 
 const GRUPOS = [
@@ -104,7 +103,7 @@ export function NovedadesNomina(p: Props) {
             ? 'Todo lo registrado ya se pagó en algún periodo.'
             : `${pendientes} sin pagar · las recogerá el próximo periodo que cubra su fecha.`}
         </p>
-        <Button size="sm" variant="outline" onClick={() => setDialogo(grupo)}>
+        <Button size="sm" onClick={() => setDialogo(grupo)}>
           <Plus className="size-4" /> Agregar
         </Button>
       </div>
@@ -116,8 +115,8 @@ export function NovedadesNomina(p: Props) {
             type="button"
             onClick={() => setGrupo(g.v)}
             className={cn(
-              'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-              grupo === g.v ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent',
+              'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
+              grupo === g.v ? 'bg-foreground text-background' : 'border bg-card text-muted-foreground hover:bg-accent',
             )}
           >
             {g.l}
@@ -130,7 +129,7 @@ export function NovedadesNomina(p: Props) {
           <Card><CardContent className="divide-y p-0">
             {p.comisiones.map((c) => (
               <div key={c.id} className="flex items-center gap-3 p-3">
-                <Chip icono={BadgeDollarSign} color="emerald" />
+                <Chip icono={BadgeDollarSign} color="bg-foreground text-background" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{c.colaborador}</p>
                   <p className="truncate text-xs text-muted-foreground">
@@ -148,11 +147,14 @@ export function NovedadesNomina(p: Props) {
 
       {grupo === 'horas' && (
         <>
+          <PanelAsistencia conectada={p.asistencia.conectada} url={p.asistencia.url} puedeConfigurar={p.puedeConfigurar} hoy={p.hoy} />
+
+          <h2 className="mb-2 text-[13px] font-bold">Registradas en la nómina</h2>
           {p.horas.length === 0 ? <Vacia texto="Aún no hay horas extra ni recargos registrados." /> : (
             <Card><CardContent className="divide-y p-0">
               {p.horas.map((h) => (
                 <div key={h.id} className="flex items-center gap-3 p-3">
-                  <Chip icono={Clock} color="sky" />
+                  <Chip icono={Clock} color="bg-foreground text-background" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{h.colaborador}</p>
                     <p className="truncate text-xs text-muted-foreground">
@@ -169,11 +171,11 @@ export function NovedadesNomina(p: Props) {
 
           {/* Trazabilidad: de dónde salen estas horas. Se abre en otra pestaña
               porque es una aplicación distinta (control de asistencia). */}
-          {p.urlAsistencia && (
+          {p.asistencia.url && (
             <p className="mt-3 text-xs text-muted-foreground">
               Las horas marcadas llegan del sistema de control de asistencia.{' '}
               <a
-                href={p.urlAsistencia}
+                href={p.asistencia.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 font-medium text-primary underline underline-offset-2 hover:no-underline"
@@ -192,7 +194,7 @@ export function NovedadesNomina(p: Props) {
           <Card><CardContent className="divide-y p-0">
             {p.conceptosNovedades.map((n) => (
               <div key={n.id} className="flex items-center gap-3 p-3">
-                <Chip icono={Coins} color={n.tipo === 'DEVENGADO' ? 'emerald' : 'rose'} />
+                <Chip icono={Coins} color="bg-foreground text-background" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{n.colaborador}</p>
                   <p className="truncate text-xs text-muted-foreground">{n.fecha} · {n.concepto} · {fmtCOP(n.valor)}</p>

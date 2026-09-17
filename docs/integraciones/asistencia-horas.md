@@ -300,3 +300,23 @@ y **antes del cierre de nómina**. Reenviar el mismo lote es seguro gracias a la
 2. **Festivos entre semana** → aún sin definir cómo se tratan (los domingos ya están definidos en §2.1).
 3. **Clave de API** → la genera el administrador de la plataforma RH.
 4. **Ambiente de pruebas** → recomendado probar contra la base local antes de producción.
+
+
+---
+
+## Anexo (2026-09-17) — Lectura desde la plataforma con la clave de API de AsistencIA
+
+Además del envío descrito arriba, la plataforma **lee** las horas directamente de
+AsistencIA (`https://arrivecontrol.vercel.app`) con la **clave de API de la empresa**
+(AsistencIA → Ajustes → Mi empresa → Clave de API), que se pega en
+**Nómina → Novedades → Horas extra y recargos → Conectar**. Va en cada petición como
+`X-API-Key`; si allá la regeneran, responde 401 y hay que volver a conectar.
+
+| Cuándo | Petición | Qué hace la plataforma |
+|---|---|---|
+| Al abrir Horas extra (por período: mes + quincena) | `GET /api/horas/resumen?mes=AAAA-MM&quincena=1|2` | Muestra la tabla por persona, cruzada por **cédula sin puntos**; señala las cédulas sin ficha activa. |
+| «Traer a la nómina» y en cada liquidación/recalculo | `GET /api/horas?…` (tramo a tramo) | Registra cada tramo como `NovedadHoras` con su `referenciaExterna`; HEDDF/HENDF → HEDD/HEND; corte de las 7 p.m. Idempotente por (referencia, tipo). Un tramo corregido allá trae otra referencia: el viejo se retira si nadie lo pagó. |
+| Al **cerrar** el periodo de nómina | `POST /api/horas/pagadas { referencias }` | Anota allá lo pagado; al **reabrir**, `pagado: false`. De mejor esfuerzo: el periodo cierra igual y se avisa si no respondió. |
+
+El **valor** en pesos que muestra AsistencIA es de referencia (sale de su salario
+registrado); la nómina liquida con el salario y los factores de esta plataforma.

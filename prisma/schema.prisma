@@ -273,6 +273,13 @@ model ConfiguracionEmpresa {
   plazoComprobantePermisoDias Int      @default(3) @map("plazo_comprobante_permiso_dias")
   // Con cuántos días de anticipación se le recuerda al encargado un cumpleaños.
   diasRecordatorioCumpleanos  Int      @default(3) @map("dias_recordatorio_cumpleanos")
+  // Conexión con AsistencIA (control de asistencia): la clave de API que el
+  // administrador copia de AsistencIA → Ajustes → Mi empresa. Con ella se leen
+  // las horas extra de cada período y se anotan como pagadas al cerrar la
+  // nómina. Sin clave, la plataforma liquida sin horas de marcaciones.
+  asistenciaApiKey            String?  @map("asistencia_api_key")
+  // Solo si la empresa usa una instalación distinta a la pública.
+  asistenciaUrl               String?  @map("asistencia_url")
   actualizadoEn               DateTime @updatedAt @map("actualizado_en")
 
   @@map("configuracion_empresa")

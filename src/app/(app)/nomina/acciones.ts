@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { anotarPagoPeriodoEnAsistencia } from '@/server/asistencia/pagos-asistencia'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
@@ -77,8 +78,11 @@ export const cerrarPeriodo = accion(
     // aplica el LIQUIDADOR, de forma idempotente y atada al periodo. Cerrar solo congela el
     // estado: no debe volver a aplicarlos o se descontarían/pagarían dos veces.
     await dbAuditado.periodoNomina.update({ where: { id: periodoId }, data: { estado: 'CERRADA' } })
+    // Las horas de asistencia que este periodo pagó quedan anotadas allá.
+    const asistencia = await anotarPagoPeriodoEnAsistencia(periodoId, true)
     revalidatePath('/nomina')
     revalidatePath(`/nomina/${periodoId}`)
+    return { asistencia }
   },
 )
 
@@ -97,9 +101,11 @@ export const reabrirPeriodo = accion(
 
     await revertirEfectosPeriodo(periodoId)
     await dbAuditado.periodoNomina.update({ where: { id: periodoId }, data: { estado: 'BORRADOR' } })
+    // Si estaba cerrado, sus horas de asistencia ya no cuentan como pagadas.
+    const asistencia = p.estado === 'CERRADA' ? await anotarPagoPeriodoEnAsistencia(periodoId, false) : undefined
     revalidatePath('/nomina')
     revalidatePath(`/nomina/${periodoId}`)
-    return { estadoAnterior: p.estado }
+    return { estadoAnterior: p.estado, asistencia }
   },
 )
 
