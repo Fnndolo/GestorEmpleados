@@ -1,4 +1,5 @@
 import { requerirSesion, tienePermiso } from '@/server/sesion'
+import { esAdministrador } from '@/lib/permisos/tipos'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { CabeceraAjustes } from './cabecera'
@@ -18,8 +19,10 @@ export default async function ConfiguracionLayout({ children }: { children: Reac
   const verUsuarios = tienePermiso(usuario, 'usuarios', 'VER')
   if (!verConfig && !verUsuarios) redirect('/')
 
+  const admin = esAdministrador(usuario)
   const hrefsVisibles = GRUPOS.flatMap((g) => g.secciones)
     .filter((s) => (s.modulo === 'usuarios' ? verUsuarios : verConfig))
+    .filter((s) => !s.soloAdministrador || admin)
     .map((s) => s.href)
 
   // Contadores del menú. Son `count`, no lecturas completas: sirven para decir

@@ -60,6 +60,15 @@ export function tienePermiso(
   return usuario.permisos.some((p) => p.modulo === modulo && p.accion === accion)
 }
 
+/**
+ * ¿Es administrador? Reservado para lo que va más allá de un permiso de
+ * módulo: los secretos de la empresa (claves de API de otros sistemas). Vale
+ * tanto el rol principal como uno adicional.
+ */
+export function esAdministrador(usuario: Pick<UsuarioSesion, 'rolNombre' | 'rolNombres'>): boolean {
+  return usuario.rolNombre === 'Administrador' || usuario.rolNombres.includes('Administrador')
+}
+
 export function alcanceDe(
   usuario: UsuarioSesion,
   modulo: ModuloClave,

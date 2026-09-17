@@ -1,6 +1,6 @@
 import {
   Building2, Users, ShieldCheck, MapPin, Bell, BellRing, FileStack, Layers,
-  Receipt, Briefcase, Coins, Landmark, Network, FileImage, FileSignature, type LucideIcon,
+  Receipt, Briefcase, Coins, Landmark, Network, FileImage, FileSignature, Cable, type LucideIcon,
 } from 'lucide-react'
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 
@@ -19,6 +19,8 @@ export type SeccionConfig = {
   icono: LucideIcon
   /** Permiso que hace falta para verla. */
   modulo: 'configuracion' | 'usuarios'
+  /** Además del permiso, exige el rol Administrador (secretos de la empresa). */
+  soloAdministrador?: boolean
   /** Clave del contador que se muestra a la derecha, si aplica. */
   contador?: ContadorClave
 }
@@ -81,6 +83,7 @@ export const GRUPOS: { titulo: string; secciones: SeccionConfig[] }[] = [
         ...(GENERAR_CONTRATOS_DESDE_PLANTILLA ? { contador: 'plantillasContrato' as const } : {}),
       },
       { titulo: 'Módulos propios', desc: 'Pestañas a la medida, con campos propios, para lo que no cubre la plataforma.', href: '/configuracion/modulos', icono: Layers, modulo: 'configuracion' },
+      { titulo: 'Integraciones', desc: 'Conexión con AsistencIA (control de asistencia) mediante la clave de API de la empresa.', href: '/configuracion/integraciones', icono: Cable, modulo: 'configuracion', soloAdministrador: true },
     ],
   },
 ]

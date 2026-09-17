@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { requerirPermiso, tienePermiso } from '@/server/sesion'
+import { requerirPermiso } from '@/server/sesion'
+import { esAdministrador } from '@/lib/permisos/tipos'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { formatFechaISO, hoyBogotaISO } from '@/lib/fechas'
@@ -21,7 +22,8 @@ const LIMITE = 200
  * mes se le perdía lo causado. Ahora se registran cuando ocurren, con su fecha,
  * y el periodo las recoge por rango.
  */
-export default async function NovedadesNominaPage() {
+export default async function NovedadesNominaPage({ searchParams }: { searchParams: Promise<{ grupo?: string }> }) {
+  const { grupo } = await searchParams
   const usuario = await requerirPermiso('nomina', 'CREAR')
   const conexion = await conexionAsistencia()
 
@@ -83,7 +85,8 @@ export default async function NovedadesNominaPage() {
           pagadaEn: n.periodo?.nombre ?? null,
         }))}
         asistencia={{ conectada: Boolean(conexion), url: conexion ? `${conexion.url}/admin?tab=equipo` : null }}
-        puedeConfigurar={tienePermiso(usuario, 'configuracion', 'EDITAR')}
+        esAdmin={esAdministrador(usuario)}
+        grupoInicial={grupo === 'horas' || grupo === 'conceptos' ? grupo : 'comisiones'}
       />
     </div>
   )

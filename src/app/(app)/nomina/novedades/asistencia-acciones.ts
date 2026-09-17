@@ -3,17 +3,16 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db'
-import { dbAuditado, auditar } from '@/lib/auditoria'
+import { auditar } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { hoyBogotaISO } from '@/lib/fechas'
 import {
-  ASISTENCIA_URL_DEFECTO, CODIGOS_ASISTENCIA, ErrorAsistencia, normalizarCedula, rangoDePeriodo, resumenAsistencia,
+  CODIGOS_ASISTENCIA, ErrorAsistencia, normalizarCedula, rangoDePeriodo, resumenAsistencia,
 } from '@/server/asistencia/cliente'
 import { sincronizarHorasAsistencia } from '@/server/asistencia/horas-asistencia'
 
 /**
- * Lo que la pantalla de Horas extra le pide a AsistencIA: ver el período,
- * traerlo como novedades y conectar/desconectar la clave.
+ * Lo que la pantalla de Horas extra le pide a AsistencIA: ver el período y
+ * traerlo como novedades. La clave se conecta en Ajustes → Integraciones.
  */
 
 const periodoSchema = z.object({
@@ -116,46 +115,5 @@ export const traerHorasAsistencia = accion(
     })
     revalidatePath('/nomina/novedades')
     return r
-  },
-)
-
-/**
- * Guarda la clave de API de la empresa. Se prueba ANTES de guardarla, pidiendo
- * el resumen del mes en curso: una clave mal pegada se rechaza aquí mismo, no
- * el día del cierre de nómina.
- */
-export const conectarAsistencia = accion(
-  {
-    modulo: 'configuracion',
-    accion: 'EDITAR',
-    schema: z.object({
-      clave: z.string().trim().min(8, 'Pega la clave completa.').max(500),
-      url: z.string().trim().url('La dirección debe empezar por https://').optional().or(z.literal('')),
-    }),
-  },
-  async (d) => {
-    const url = (d.url || ASISTENCIA_URL_DEFECTO).replace(/\/+$/, '')
-    await resumenAsistencia({ mes: hoyBogotaISO().slice(0, 7) }, { url, clave: d.clave }).catch(traducir)
-
-    const actual = await prisma.configuracionEmpresa.findFirst()
-    if (!actual) throw new ErrorNegocio('Configura primero los datos de la empresa en Ajustes → Empresa.')
-    await dbAuditado.configuracionEmpresa.update({
-      where: { id: actual.id },
-      data: { asistenciaApiKey: d.clave, asistenciaUrl: d.url || null },
-    })
-    revalidatePath('/nomina/novedades')
-    return { ok: true }
-  },
-)
-
-export const desconectarAsistencia = accion(
-  { modulo: 'configuracion', accion: 'EDITAR' },
-  async () => {
-    const actual = await prisma.configuracionEmpresa.findFirst()
-    if (actual?.asistenciaApiKey) {
-      await dbAuditado.configuracionEmpresa.update({ where: { id: actual.id }, data: { asistenciaApiKey: null, asistenciaUrl: null } })
-    }
-    revalidatePath('/nomina/novedades')
-    return { ok: true }
   },
 )

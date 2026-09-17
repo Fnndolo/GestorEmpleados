@@ -36,6 +36,7 @@ const { prisma } = await import('@/lib/db')
 const { sincronizarHorasAsistencia, novedadesDesdeTramos } = await import('@/server/asistencia/horas-asistencia')
 const { anotarPagoPeriodoEnAsistencia } = await import('@/server/asistencia/pagos-asistencia')
 const { consultarHorasAsistencia } = await import('@/app/(app)/nomina/novedades/asistencia-acciones')
+const { conectarAsistencia, desconectarAsistencia } = await import('@/app/(app)/configuracion/integraciones/acciones')
 import type { UsuarioSesion } from '@/lib/permisos/tipos'
 
 const MARCA = 'PRUEBA-ASIST'
@@ -127,6 +128,29 @@ describe('AsistencIA → novedades de horas', () => {
     const ajena = res.datos.filas.find((f) => f.documento === '999999999')!
     expect(ajena.colaboradorId).toBeNull()
     expect(res.datos.sinFicha).toBe(1)
+  })
+
+  it('la clave solo la conecta y la quita el administrador', async () => {
+    const users = await prisma.user.findMany({ where: { estado: 'ACTIVO' }, include: { rol: { include: { permisos: true } } } })
+    const noAdmin = users.find((u) => u.rol && u.rol.nombre !== 'Administrador' && u.rol.permisos.some((p) => p.modulo === 'configuracion' && p.accion === 'EDITAR'))
+      ?? users.find((u) => u.rol && u.rol.nombre !== 'Administrador')!
+    actuarComo(await sesionDe(noAdmin.email))
+    const rechazo = await conectarAsistencia({ clave: 'clave-de-prueba-valida-123', url: '' })
+    expect(rechazo.ok).toBe(false)
+
+    const adminReal = users.find((u) => u.rol?.nombre === 'Administrador')!
+    actuarComo(await sesionDe(adminReal.email))
+    const antes = await prisma.configuracionEmpresa.findFirstOrThrow({ select: { id: true, asistenciaApiKey: true, asistenciaUrl: true } })
+    try {
+      const ok = await conectarAsistencia({ clave: 'clave-de-prueba-valida-123', url: '' })
+      expect(ok.ok).toBe(true)
+      expect((await prisma.configuracionEmpresa.findFirstOrThrow({ select: { asistenciaApiKey: true } })).asistenciaApiKey).toBe('clave-de-prueba-valida-123')
+      const fuera = await desconectarAsistencia({})
+      expect(fuera.ok).toBe(true)
+      expect((await prisma.configuracionEmpresa.findFirstOrThrow({ select: { asistenciaApiKey: true } })).asistenciaApiKey).toBeNull()
+    } finally {
+      await prisma.configuracionEmpresa.update({ where: { id: antes.id }, data: { asistenciaApiKey: antes.asistenciaApiKey, asistenciaUrl: antes.asistenciaUrl } })
+    }
   })
 
   it('al cerrar el periodo se anotan como pagadas sus referencias, y al reabrir se desanotan', async () => {

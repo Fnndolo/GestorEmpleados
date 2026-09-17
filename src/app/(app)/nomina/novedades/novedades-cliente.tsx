@@ -50,8 +50,10 @@ type Props = {
   conceptosNovedades: ConceptoNovedadItem[]
   /** Conexión con AsistencIA (control de asistencia): de ahí llegan las horas. */
   asistencia: { conectada: boolean; url: string | null }
-  /** Quien puede pegar o cambiar la clave de API (Ajustes). */
-  puedeConfigurar: boolean
+  /** El administrador ve el acceso a Ajustes → Integraciones desde el panel. */
+  esAdmin: boolean
+  /** Pestaña con la que abre (`?grupo=horas` desde Ajustes → Integraciones). */
+  grupoInicial: Grupo
 }
 
 const GRUPOS = [
@@ -72,7 +74,7 @@ type Grupo = (typeof GRUPOS)[number]['v']
  */
 export function NovedadesNomina(p: Props) {
   const router = useRouter()
-  const [grupo, setGrupo] = useState<Grupo>('comisiones')
+  const [grupo, setGrupo] = useState<Grupo>(p.grupoInicial)
   const [dialogo, setDialogo] = useState<Grupo | null>(null)
   const [eliminando, setEliminando] = useState<string | null>(null)
 
@@ -147,7 +149,7 @@ export function NovedadesNomina(p: Props) {
 
       {grupo === 'horas' && (
         <>
-          <PanelAsistencia conectada={p.asistencia.conectada} url={p.asistencia.url} puedeConfigurar={p.puedeConfigurar} hoy={p.hoy} />
+          <PanelAsistencia conectada={p.asistencia.conectada} esAdmin={p.esAdmin} hoy={p.hoy} />
 
           <h2 className="mb-2 text-[13px] font-bold">Registradas en la nómina</h2>
           {p.horas.length === 0 ? <Vacia texto="Aún no hay horas extra ni recargos registrados." /> : (

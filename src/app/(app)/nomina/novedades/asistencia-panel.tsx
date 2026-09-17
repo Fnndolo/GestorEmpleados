@@ -1,28 +1,24 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Timer, RefreshCw, Download, KeyRound, Eye, EyeOff, Unplug } from 'lucide-react'
+import { Timer, RefreshCw, Download, KeyRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { Chip, Pill, type PillTone } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
-import {
-  consultarHorasAsistencia, traerHorasAsistencia, conectarAsistencia, desconectarAsistencia, type ResumenPantalla,
-} from './asistencia-acciones'
+import { consultarHorasAsistencia, traerHorasAsistencia, type ResumenPantalla } from './asistencia-acciones'
 
 /**
  * Las horas extra del período tal como las calcula AsistencIA (control de
- * asistencia), cruzadas por cédula con las fichas de aquí. Desde este panel se
- * conecta la clave de la empresa, se revisa cada período y se traen las horas
- * como novedades pendientes para que la nómina las recoja.
+ * asistencia), cruzadas por cédula con las fichas de aquí. Aquí se revisa cada
+ * período y se traen las horas como novedades pendientes para que la nómina
+ * las recoja. La clave la conecta el administrador en Ajustes → Integraciones.
  */
 
 const CODIGOS = ['HED', 'HEN', 'HEDDF', 'HENDF'] as const
@@ -45,8 +41,11 @@ function mesesRecientes(hoy: string): { valor: string; etiqueta: string }[] {
   })
 }
 
-export function PanelAsistencia({ conectada, url, puedeConfigurar, hoy }: {
-  conectada: boolean; url: string | null; puedeConfigurar: boolean; hoy: string
+export function PanelAsistencia({ conectada, esAdmin, hoy }: {
+  conectada: boolean
+  /** Solo el administrador ve el acceso a Ajustes → Integraciones. */
+  esAdmin: boolean
+  hoy: string
 }) {
   const router = useRouter()
   const meses = mesesRecientes(hoy)
@@ -54,7 +53,6 @@ export function PanelAsistencia({ conectada, url, puedeConfigurar, hoy }: {
   // La quincena en curso: hasta el 15 la primera, después la segunda.
   const [quincena, setQuincena] = useState<1 | 2 | null>(Number(hoy.slice(8, 10)) <= 15 ? 1 : 2)
   const [trayendo, setTrayendo] = useState(false)
-  const [conectar, setConectar] = useState(false)
   const [version, setVersion] = useState(0)
   // La respuesta lleva la clave del período que la pidió: si no coincide con
   // el período elegido, es que todavía se está consultando.
@@ -112,9 +110,9 @@ export function PanelAsistencia({ conectada, url, puedeConfigurar, hoy }: {
               </p>
             </div>
             <Pill tone={conectada ? 'ok' : 'warn'}>{conectada ? 'Conectada' : 'Sin conectar'}</Pill>
-            {puedeConfigurar && (
-              <Button size="icon" onClick={() => setConectar(true)} aria-label={conectada ? 'Cambiar la clave de API' : 'Conectar'} title={conectada ? 'Cambiar la clave de API' : 'Conectar'}>
-                <KeyRound className="size-4" />
+            {esAdmin && (
+              <Button size="icon" asChild aria-label="Clave de API (Ajustes)" title="Clave de API (Ajustes → Integraciones)">
+                <Link href="/configuracion/integraciones"><KeyRound className="size-4" /></Link>
               </Button>
             )}
           </div>
@@ -122,12 +120,12 @@ export function PanelAsistencia({ conectada, url, puedeConfigurar, hoy }: {
           {!conectada ? (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">
-                {puedeConfigurar
-                  ? 'Pega la clave de API de la empresa (en AsistencIA: Ajustes → Mi empresa → Clave de API) para ver aquí las horas extra de cada período y traerlas a la nómina.'
-                  : 'Pide al administrador que conecte la clave de API de AsistencIA.'}
+                {esAdmin
+                  ? 'Conecta la clave de API de la empresa en Ajustes → Integraciones para ver aquí las horas extra de cada período y traerlas a la nómina.'
+                  : 'Pide al administrador que conecte AsistencIA en Ajustes → Integraciones.'}
               </p>
-              {puedeConfigurar && (
-                <Button size="sm" onClick={() => setConectar(true)}><KeyRound className="size-4" /> Conectar</Button>
+              {esAdmin && (
+                <Button size="sm" asChild><Link href="/configuracion/integraciones"><KeyRound className="size-4" /> Conectar</Link></Button>
               )}
             </div>
           ) : (
@@ -226,80 +224,6 @@ export function PanelAsistencia({ conectada, url, puedeConfigurar, hoy }: {
         </CardContent>
       </Card>
 
-      {conectar && (
-        <DialogConectar conectada={conectada} url={url} onClose={() => setConectar(false)} onDone={() => { setConectar(false); router.refresh() }} />
-      )}
     </>
-  )
-}
-
-function DialogConectar({ conectada, url, onClose, onDone }: { conectada: boolean; url: string | null; onClose: () => void; onDone: () => void }) {
-  const [clave, setClave] = useState('')
-  const [ver, setVer] = useState(false)
-  const [otraUrl, setOtraUrl] = useState(false)
-  const [urlPropia, setUrlPropia] = useState(url && !url.includes('arrivecontrol.vercel.app') ? url : '')
-  const [guardando, setGuardando] = useState(false)
-
-  async function guardar() {
-    if (clave.trim().length < 8) { toast.error('Pega la clave completa.'); return }
-    setGuardando(true)
-    const res = await conectarAsistencia({ clave: clave.trim(), url: otraUrl ? urlPropia.trim() : '' })
-    setGuardando(false)
-    if (!res.ok) { toast.error(res.error, { duration: 8000 }); return }
-    toast.success('AsistencIA conectada.')
-    onDone()
-  }
-
-  async function desconectar() {
-    if (!confirm('¿Desconectar AsistencIA? La nómina liquidará sin horas de marcaciones hasta que vuelvas a conectarla.')) return
-    setGuardando(true)
-    const res = await desconectarAsistencia({})
-    setGuardando(false)
-    if (!res.ok) { toast.error(res.error); return }
-    toast.success('AsistencIA desconectada.')
-    onDone()
-  }
-
-  return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{conectada ? 'Cambiar la clave de AsistencIA' : 'Conectar AsistencIA'}</DialogTitle>
-          <DialogDescription>En AsistencIA: Ajustes → Mi empresa → Clave de API. Cópiala y pégala aquí; se prueba antes de guardarla.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="asist-clave">Clave de API</Label>
-            <div className="flex gap-2">
-              <Input id="asist-clave" type={ver ? 'text' : 'password'} value={clave} onChange={(e) => setClave(e.target.value)} autoComplete="off" spellCheck={false} autoFocus />
-              <Button type="button" size="icon" onClick={() => setVer((v) => !v)} aria-label={ver ? 'Ocultar' : 'Mostrar'}>
-                {ver ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-              </Button>
-            </div>
-          </div>
-          {otraUrl ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="asist-url">Dirección de AsistencIA</Label>
-              <Input id="asist-url" value={urlPropia} onChange={(e) => setUrlPropia(e.target.value)} placeholder="https://arrivecontrol.vercel.app" />
-            </div>
-          ) : (
-            <button type="button" className="text-xs text-muted-foreground underline underline-offset-2" onClick={() => setOtraUrl(true)}>
-              Usar otra dirección (solo instalaciones propias)
-            </button>
-          )}
-        </div>
-        <DialogFooter className="gap-2 sm:justify-between">
-          {conectada ? (
-            <Button type="button" variant="ghost" onClick={desconectar} disabled={guardando} className="text-rose-700 dark:text-rose-400">
-              <Unplug className="size-4" /> Desconectar
-            </Button>
-          ) : <span />}
-          <div className="flex gap-2">
-            <Button type="button" variant="ghost" onClick={onClose} disabled={guardando}>Cancelar</Button>
-            <Button type="button" onClick={guardar} disabled={guardando}>{guardando && <Spinner />} {conectada ? 'Guardar' : 'Conectar'}</Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }
