@@ -28,6 +28,7 @@ export type ClaveEvento =
   | 'contrato_por_firmar'
   | 'contrato_firmado'
   | 'contrato_actualizado'
+  | 'evaluacion_firmada'
   // Cuentas de cobro
   | 'cuenta_cobro_radicada'
   | 'cuenta_cobro_estado'
@@ -101,6 +102,9 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
   { clave: 'contrato_por_firmar', etiqueta: 'Falta tu firma en el contrato', descripcion: 'Una parte firmó y falta la otra.', modulo: 'Contratos', correoPorDefecto: true },
   { clave: 'contrato_firmado', etiqueta: 'Contrato firmado', descripcion: 'Se completan las firmas del contrato.', modulo: 'Contratos' },
   { clave: 'contrato_actualizado', etiqueta: 'Contrato actualizado', descripcion: 'Se modifica un contrato ya existente.', modulo: 'Contratos' },
+  // Correo por defecto: el aspirante no es usuario, así que la evaluación
+  // sigue fuera de la app y hay que decidirla antes de que venza su periodo.
+  { clave: 'evaluacion_firmada', etiqueta: 'Acuerdo de evaluación firmado', descripcion: 'El aspirante devuelve firmado el acuerdo de evaluación previa: hay que evaluarlo y decidir.', modulo: 'Contratos', correoPorDefecto: true },
 
   // Cuentas de cobro
   { clave: 'cuenta_cobro_radicada', etiqueta: 'Cuenta de cobro radicada', descripcion: 'Se radica una cuenta de cobro.', modulo: 'Cuentas de cobro' },

@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/db'
 import { subirArchivo } from '@/server/storage'
-import { enviarCorreo } from '@/server/notificaciones/correo'
+import { avisar } from '@/server/notificaciones/avisar'
 
 /**
  * Subida PÚBLICA del acuerdo firmado: la hace el propio aspirante, que no tiene
@@ -18,6 +18,34 @@ import { enviarCorreo } from '@/server/notificaciones/correo'
 const MAX_BYTES = 5 * 1024 * 1024
 
 export type ResultadoSubida = { ok: true } | { ok: false; error: string }
+
+/**
+ * Avisa de que llegó el acuerdo firmado: a quien envió el enlace y a Talento
+ * Humano y administración. Antes era solo un correo a quien lo envió: si esa
+ * persona estaba de vacaciones o el correo caía en spam, nadie más se enteraba
+ * y el firmado esperaba hasta que alguien entrara a mirar. Ahora va por la
+ * campana y el push (y por correo, según el evento en Ajustes) a todos los que
+ * pueden seguir con la evaluación. Nunca tumba la subida: el archivo ya quedó.
+ */
+async function avisarAcuerdoFirmado(a: {
+  numero: string; nombres: string; apellidos: string; cargoEvaluado: string; enviadoPorId: string | null
+}) {
+  const roles = await prisma.user.findMany({
+    where: { estado: 'ACTIVO', rol: { nombre: { in: ['Recursos Humanos', 'Administrador', 'Subgerencia'] } } },
+    select: { id: true },
+  })
+  const destinatarios = new Set(roles.map((u) => u.id))
+  if (a.enviadoPorId) destinatarios.add(a.enviadoPorId)
+  for (const userId of destinatarios) {
+    await avisar(userId, {
+      evento: 'evaluacion_firmada',
+      titulo: `${a.nombres} ${a.apellidos} devolvió firmado el acuerdo ${a.numero}`,
+      mensaje: `${a.cargoEvaluado} · Ya puedes evaluar y decidir.`,
+      enlace: '/contratos/acuerdos',
+      llamadoAccion: 'Ver la evaluación',
+    }).catch((e) => console.error('No se pudo avisar de la firma del acuerdo:', e))
+  }
+}
 
 /**
  * Recibe FormData, no un data URI. Mandar el PDF como base64 dentro de los
@@ -88,17 +116,7 @@ export async function subirAcuerdoConToken(formData: FormData): Promise<Resultad
     })
     .catch(() => {}) // el registro de auditoría nunca debe tumbar la subida
 
-  // Aviso a quien envió el enlace: si no, nadie se entera de que ya llegó.
-  const quienEnvio = await prisma.user.findUnique({ where: { id: a.enviadoPorId }, select: { email: true, name: true } })
-  if (quienEnvio?.email) {
-    await enviarCorreo({
-      para: quienEnvio.email,
-      asunto: `Acuerdo ${a.numero} firmado — ${a.nombres} ${a.apellidos}`,
-      html: `<p>Hola ${quienEnvio.name},</p>
-        <p><b>${a.nombres} ${a.apellidos}</b> subió el acuerdo de evaluación <b>${a.numero}</b> firmado.</p>
-        <p>Ya está adjunto en Contratación → Evaluación previa.</p>`,
-    }).catch((e) => console.error('No se pudo avisar de la firma del acuerdo:', e))
-  }
+  await avisarAcuerdoFirmado(a)
 
   return { ok: true }
 }

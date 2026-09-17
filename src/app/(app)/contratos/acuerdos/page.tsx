@@ -1,6 +1,5 @@
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { Encabezado } from '@/components/shell/encabezado'
 import { AcuerdosCliente } from './acuerdos-cliente'
 import { formatFechaISO } from '@/lib/fechas'
 
@@ -32,11 +31,7 @@ export default async function AcuerdosPage() {
   })
 
   return (
-    <div className="max-w-6xl">
-      <Encabezado
-        titulo="Evaluación previa"
-        descripcion="Acuerdos de evaluación previa SIN relación laboral. El aspirante no es colaborador: solo entra a la base cuando la evaluación se aprueba y se convierte su ficha."
-      />
+    <div className="max-w-4xl">
       <AcuerdosCliente
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}

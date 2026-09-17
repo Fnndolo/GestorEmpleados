@@ -3,11 +3,11 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Pencil, Mail, Upload, Check, X, UserPlus, FileText, RefreshCw } from 'lucide-react'
+import { Plus, Pencil, Mail, Upload, Check, X, UserPlus, FileText, RefreshCw, ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
@@ -15,6 +15,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Ayuda } from '@/components/ui-kit/ayuda'
+import { Pill, type PillTone } from '@/components/ui-kit'
+import { Encabezado } from '@/components/shell/encabezado'
+import { rangoBreve } from '@/lib/notificaciones/texto'
 import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
 import { crearAcuerdo, editarAcuerdo, enviarAcuerdo, subirAcuerdoFirmado, decidirAcuerdo, convertirEnColaborador, eliminarAcuerdo, regenerarPdfAcuerdo } from './acciones'
 import type { AcuerdoEvaluacionInput } from '@/lib/validaciones/acuerdo-evaluacion'
@@ -32,10 +35,20 @@ type Acuerdo = {
 }
 type Opcion = { id: string; nombre: string }
 
-const ESTADO: Record<string, { texto: string; variante: 'default' | 'secondary' | 'destructive' }> = {
-  EN_EVALUACION: { texto: 'En evaluación', variante: 'secondary' },
-  APROBADO: { texto: 'Aprobado', variante: 'default' },
-  NO_APROBADO: { texto: 'No aprobado', variante: 'destructive' },
+const ESTADO: Record<string, { texto: string; tone: PillTone }> = {
+  EN_EVALUACION: { texto: 'En evaluación', tone: 'warn' },
+  APROBADO: { texto: 'Aprobada', tone: 'ok' },
+  NO_APROBADO: { texto: 'No aprobada', tone: 'bad' },
+}
+
+/** Un dato del panel desplegado: rótulo pequeño encima del valor. */
+function Dato({ label, valor, ancho }: { label: string; valor: string; ancho?: boolean }) {
+  return (
+    <div className={cn('min-w-0', ancho && 'sm:col-span-2')}>
+      <dt className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dd className="break-words">{valor}</dd>
+    </div>
+  )
 }
 
 /** Nombre técnico del campo → el rótulo que se ve en el formulario. */
@@ -99,6 +112,9 @@ export function AcuerdosCliente({
   const [guardando, setGuardando] = useState(false)
   const [f, setF] = useState<Formulario>(VACIO)
   const [ocupado, setOcupado] = useState<string | null>(null)
+  // Una sola fila desplegada a la vez: la lista se lee mejor y el panel
+  // abierto es el que se está mirando.
+  const [abierta, setAbierta] = useState<string | null>(null)
   const [convertir, setConvertir] = useState<Acuerdo | null>(null)
   const [sedeConversion, setSedeConversion] = useState('')
   const [fechaIngreso, setFechaIngreso] = useState('')
@@ -241,15 +257,17 @@ export function AcuerdosCliente({
 
   return (
     <>
-      {puedeCrear && (
-        <div className="mb-3 flex justify-end">
+      <Encabezado
+        enLinea
+        titulo="Evaluación previa"
+        acciones={puedeCrear && (
           <Button size="sm" onClick={abrirNuevo}>
-            <Plus className="size-4" /> Nueva evaluación
+            <Plus className="size-4" /> Nueva
           </Button>
-        </div>
-      )}
+        )}
+      />
 
-      <Card><CardContent className="p-0 divide-y">
+      <Card><CardContent className="divide-y p-0">
         {acuerdos.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             Aún no hay acuerdos de evaluación.
@@ -257,94 +275,126 @@ export function AcuerdosCliente({
         ) : acuerdos.map((a) => {
           const est = ESTADO[a.estado] ?? ESTADO.EN_EVALUACION
           const trabajando = ocupado === a.id
-          return (
-            <div key={a.id} className="flex flex-wrap items-center gap-3 p-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium">{a.nombre}</p>
-                  <Badge variant={est.variante}>{est.texto}</Badge>
-                  <Badge variant="outline">{a.numero}</Badge>
-                  {a.enviado && <Badge variant="outline">Enviado</Badge>}
-                  {a.firmado && <Badge variant="outline">Firmado por el aspirante</Badge>}
-                  {a.colaboradorId && <Badge variant="outline">Ya es colaborador</Badge>}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {a.cargoEvaluado} · {a.documento} · {a.fechaInicio} a {a.fechaFin}
-                  {a.sedeNombre && ` · ${a.sedeNombre}`}
-                </p>
-                {/* Los PDF se abren en el visor embebido, sin salir de la lista. */}
-                <div className="mt-1 flex flex-wrap gap-2">
-                  {a.documentos.map((d) => (
-                    <VisorPdf
-                      key={d.id}
-                      documentoId={d.id}
-                      titulo={d.nombre}
-                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                    >
-                      <FileText className="size-3.5" /> {d.nombre}
-                    </VisorPdf>
-                  ))}
-                </div>
-              </div>
+          const expandida = abierta === a.id
+          const enEvaluacion = a.estado === 'EN_EVALUACION'
 
-              <div className="flex flex-wrap items-center gap-2">
-                {puedeEditar && a.estado === 'EN_EVALUACION' && (
-                  <Button size="sm" variant="outline" disabled={trabajando} onClick={() => abrirEditar(a)}>
-                    <Pencil className="size-4" /> Editar
-                  </Button>
-                )}
-                {puedeEditar && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={trabajando}
-                    onClick={() => regenerar(a)}
-                    title="Vuelve a generar el PDF con los mismos datos y el formato vigente"
-                  >
-                    <RefreshCw className="size-4" /> Regenerar PDF
-                  </Button>
-                )}
-                {puedeEditar && (
-                  <>
-                    <Button size="sm" variant="outline" disabled={trabajando} onClick={() => enviar(a)}>
-                      {trabajando ? <Spinner /> : <Mail className="size-4" />} {a.enviado ? 'Reenviar' : 'Enviar'}
-                    </Button>
-                    <Button size="sm" variant="outline" asChild disabled={trabajando}>
-                      <label className="cursor-pointer">
-                        <Upload className="size-4" /> Subir firmado
-                        <input
-                          type="file"
-                          accept="application/pdf"
-                          className="hidden"
-                          onChange={(e) => { const file = e.target.files?.[0]; if (file) subirFirmado(a, file); e.target.value = '' }}
-                        />
-                      </label>
-                    </Button>
-                  </>
-                )}
-                {puedeAprobar && a.estado === 'EN_EVALUACION' && (
-                  <>
-                    <Button size="sm" variant="outline" disabled={trabajando} onClick={() => decidir(a, true)}>
-                      <Check className="size-4" /> Aprobar
-                    </Button>
-                    <Button size="sm" variant="outline" disabled={trabajando} onClick={() => decidir(a, false)}>
-                      <X className="size-4" /> No aprobar
-                    </Button>
-                  </>
-                )}
-                {puedeCrearColaborador && a.estado === 'APROBADO' && !a.colaboradorId && (
-                  <Button size="sm" onClick={() => { setConvertir(a); setSedeConversion(''); setFechaIngreso('') }}>
-                    <UserPlus className="size-4" /> Crear ficha
-                  </Button>
-                )}
-                {puedeEliminar && (
-                  <BotonEliminar
-                    onEliminar={() => eliminar(a)}
-                    etiqueta="Eliminar evaluación"
-                    motivoBloqueo={motivoNoEliminar(a)}
-                  />
-                )}
-              </div>
+          // Botones sueltos, para armar con ellos la fila y el panel sin repetir.
+          const bEditar = puedeEditar && enEvaluacion && (
+            <Button size="icon" variant="outline" disabled={trabajando} onClick={() => abrirEditar(a)} aria-label="Editar" title="Editar">
+              <Pencil className="size-4" />
+            </Button>
+          )
+          const bRegenerar = puedeEditar && (
+            <Button size="icon" variant="outline" disabled={trabajando} onClick={() => regenerar(a)} aria-label="Regenerar PDF" title="Regenerar el PDF con el formato vigente">
+              <RefreshCw className="size-4" />
+            </Button>
+          )
+          const bEnviar = puedeEditar && enEvaluacion && (
+            <Button size="sm" variant="outline" disabled={trabajando} onClick={() => enviar(a)} title={a.enviado ? 'Reenviar al correo del aspirante' : 'Enviar al correo del aspirante'}>
+              {trabajando ? <Spinner /> : <Mail className="size-4" />} {a.enviado ? 'Reenviar' : 'Enviar'}
+            </Button>
+          )
+          const bSubir = puedeEditar && enEvaluacion && (
+            <Button size="sm" variant="outline" asChild disabled={trabajando}>
+              <label className="cursor-pointer" title="Subir el acuerdo firmado (PDF)">
+                <Upload className="size-4" /> {a.firmado ? 'Subir otro' : 'Subir firmado'}
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={(e) => { const file = e.target.files?.[0]; if (file) subirFirmado(a, file); e.target.value = '' }}
+                />
+              </label>
+            </Button>
+          )
+          const bDecidir = puedeAprobar && enEvaluacion && (
+            <>
+              <Button size="sm" variant="outline" disabled={trabajando} onClick={() => decidir(a, false)}>
+                <X className="size-4" /> No aprobar
+              </Button>
+              <Button size="sm" disabled={trabajando} onClick={() => decidir(a, true)}>
+                <Check className="size-4" /> Aprobar
+              </Button>
+            </>
+          )
+          const bFicha = puedeCrearColaborador && a.estado === 'APROBADO' && !a.colaboradorId && (
+            <Button size="sm" onClick={() => { setConvertir(a); setSedeConversion(''); setFechaIngreso('') }}>
+              <UserPlus className="size-4" /> Crear ficha
+            </Button>
+          )
+          const bEliminar = puedeEliminar && (
+            <BotonEliminar onEliminar={() => eliminar(a)} etiqueta="Eliminar evaluación" motivoBloqueo={motivoNoEliminar(a)} />
+          )
+
+          // Lo que toca hacer ahora, siempre a la vista; lo demás, al desplegar.
+          const principal = !enEvaluacion ? bFicha : a.firmado ? bDecidir : <>{bEnviar}{bSubir}</>
+
+          return (
+            <div key={a.id} className="p-3">
+              <button
+                type="button"
+                onClick={() => setAbierta(expandida ? null : a.id)}
+                aria-expanded={expandida}
+                className="flex w-full items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-sm font-bold">{a.nombre}</span>
+                    <Pill tone={est.tone}>{est.texto}</Pill>
+                    {/* En qué va el papel: un solo dato, el más avanzado. */}
+                    {a.colaboradorId
+                      ? <Pill tone="muted">Ya es colaborador</Pill>
+                      : a.firmado
+                        ? <Pill tone="muted">Firmado</Pill>
+                        : a.enviado
+                          ? <Pill tone="muted">Enviado</Pill>
+                          : enEvaluacion && <Pill tone="muted">Sin enviar</Pill>}
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                    {a.cargoEvaluado} · {rangoBreve(a.fechaInicio, a.fechaFin)} · {a.numero}
+                  </span>
+                </span>
+                <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expandida && 'rotate-180')} />
+              </button>
+
+              {/* Plegada: solo lo que toca ahora. Desplegada: la fila completa de abajo, sin repetir. */}
+              {principal && !expandida && <div className="mt-2 flex flex-wrap items-center justify-end gap-2">{principal}</div>}
+
+              {expandida && (
+                <div className="mt-3 space-y-3 border-t pt-3 text-sm">
+                  <dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+                    <Dato label="Documento" valor={a.documento} />
+                    <Dato label="Correo" valor={a.email} />
+                    {a.celular && <Dato label="Celular" valor={a.celular} />}
+                    {a.sedeNombre && <Dato label="Sede" valor={a.sedeNombre} />}
+                    {a.ciudadFirma && <Dato label="Ciudad de firma" valor={a.ciudadFirma} />}
+                    {a.observaciones && <Dato label="Observaciones" valor={a.observaciones} ancho />}
+                  </dl>
+
+                  {a.documentos.length > 0 && (
+                    <div className="divide-y rounded-lg border">
+                      {a.documentos.map((d) => (
+                        <div key={d.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                          <FileText className="size-4 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate">{d.nombre}</span>
+                          {/* Se abre en el visor, sin salir de la lista. */}
+                          <VisorPdf documentoId={d.id} titulo={d.nombre} className="shrink-0 font-semibold text-primary hover:underline">Ver</VisorPdf>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {bEliminar}
+                    {bEditar}
+                    {bRegenerar}
+                    {bEnviar}
+                    {bSubir}
+                    {bDecidir}
+                    {bFicha}
+                  </div>
+                </div>
+              )}
             </div>
           )
         })}

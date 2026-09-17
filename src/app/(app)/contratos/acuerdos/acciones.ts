@@ -418,6 +418,27 @@ export const decidirAcuerdo = accion(
         observaciones: v(d.observaciones) ?? a.observaciones,
       },
     })
+
+    // El aspirante no es usuario: la decisión solo le puede llegar por correo.
+    // Sin esto se enteraba cuando alguien lo llamaba, si lo llamaban. Las
+    // observaciones son internas y no van. Si el correo falla, la decisión
+    // queda tomada igual y se deja rastro para reintentar a mano.
+    const empresa = await prisma.configuracionEmpresa.findFirst({ select: { razonSocial: true } })
+    const nombreEmpresa = empresa?.razonSocial ?? 'la empresa'
+    await enviarCorreo({
+      para: a.email,
+      asunto: `Resultado de tu evaluación previa ${a.numero}`,
+      html: d.aprobado
+        ? `<p>Hola ${a.nombres},</p>
+          <p>Tu evaluación previa para el cargo de <b>${a.cargoEvaluado}</b> fue <b>aprobada</b>.</p>
+          <p>${nombreEmpresa} se pondrá en contacto contigo para continuar con el proceso de vinculación.</p>`
+        : `<p>Hola ${a.nombres},</p>
+          <p>Tu evaluación previa para el cargo de <b>${a.cargoEvaluado}</b> terminó y ${nombreEmpresa} decidió <b>no continuar</b> con el proceso.</p>
+          <p>Gracias por tu tiempo y tu interés.</p>`,
+    })
+      .then(() => auditar('EDITAR', 'AcuerdoEvaluacion', { registroId: a.id, descripcion: `Decisión de la evaluación ${a.numero} enviada a ${a.email}` }))
+      .catch((e) => console.error('No se pudo enviar la decisión de la evaluación al aspirante:', e))
+
     revalidatePath(RUTA)
     return { ok: true }
   },

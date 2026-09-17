@@ -13,6 +13,7 @@ describe('CORREO_POR_DEFECTO', () => {
       'denuncia_acoso',
       'disciplinario_citacion',
       'disciplinario_decision',
+      'evaluacion_firmada',
       'habeas_data',
     ])
   })
