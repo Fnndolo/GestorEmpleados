@@ -29,7 +29,7 @@ export function Asistencia({ capacitacionId, asistentes, colaboradores, puedeEdi
     <div className="space-y-3">
       {puedeEditar && (
         <div className="flex flex-wrap justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={() => setModo('convocar')}>
+          <Button size="sm" onClick={() => setModo('convocar')}>
             <Megaphone className="size-4" /> Convocar
           </Button>
           <Button size="sm" onClick={() => setModo('lista')}>
@@ -143,7 +143,7 @@ function DialogChecklist({ modo, capacitacionId, colaboradores, preMarcados, onC
             <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input className="pl-8" placeholder="Buscar por nombre o sede…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
           </div>
-          <Button type="button" size="sm" variant="outline" onClick={alternarTodos}>
+          <Button type="button" size="sm" onClick={alternarTodos}>
             {todosVisiblesMarcados ? 'Desmarcar' : 'Marcar'} visibles
           </Button>
         </div>

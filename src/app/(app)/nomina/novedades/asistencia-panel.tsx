@@ -1,18 +1,22 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Timer, RefreshCw, Download, KeyRound } from 'lucide-react'
+import { Timer, RefreshCw, Download, KeyRound, FileText, Upload, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { cn } from '@/lib/utils'
-import { Chip, Pill, type PillTone } from '@/components/ui-kit'
+import { Chip, Pill } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
-import { consultarHorasAsistencia, traerHorasAsistencia, type ResumenPantalla } from './asistencia-acciones'
+import {
+  consultarHorasAsistencia, traerHorasAsistencia, generarOrdenPago, subirComprobantePago, marcarPagoPendiente,
+  type ResumenPantalla, type FilaAsistencia,
+} from './asistencia-acciones'
 
 /**
  * Las horas extra del período tal como las calcula AsistencIA (control de
@@ -23,9 +27,6 @@ import { consultarHorasAsistencia, traerHorasAsistencia, type ResumenPantalla } 
 
 const CODIGOS = ['HED', 'HEN', 'HEDDF', 'HENDF'] as const
 const ETIQUETA: Record<string, string> = { HED: 'Diurna', HEN: 'Nocturna', HEDDF: 'Dom/fest. diurna', HENDF: 'Dom/fest. nocturna' }
-const PAGO: Record<string, { texto: string; tone: PillTone }> = {
-  pendiente: { texto: 'Pendiente', tone: 'warn' }, parcial: { texto: 'Parcial', tone: 'info' }, pagado: { texto: 'Pagada', tone: 'ok' },
-}
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
 const horas = (n: number) => (n ? `${n.toLocaleString('es-CO', { maximumFractionDigits: 2 })} h` : '—')
@@ -175,7 +176,7 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
                           {CODIGOS.map((c) => <th key={c} className="py-1.5 px-2 text-right font-bold" title={ETIQUETA[c]}>{c}</th>)}
                           <th className="py-1.5 px-2 text-right font-bold">Total</th>
                           <th className="py-1.5 px-2 text-right font-bold">Valor</th>
-                          <th className="py-1.5 pl-2 text-right font-bold">Pago</th>
+                          <th className="py-1.5 pl-2 text-right font-bold" title="En esta empresa las horas extra se pagan aparte de la nómina">Pago (aparte)</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
@@ -196,7 +197,11 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
                             ))}
                             <td className="py-2 px-2 text-right tabular-nums">{horas(f.horasExtra)}</td>
                             <td className="py-2 px-2 text-right font-semibold tabular-nums">{f.valor == null ? <span className="font-normal text-muted-foreground" title="Sin salario en AsistencIA">—</span> : fmtCOP(f.valor)}</td>
-                            <td className="py-2 pl-2 text-right"><Pill tone={PAGO[f.pago].tone}>{PAGO[f.pago].texto}</Pill></td>
+                            <td className="py-2 pl-2 text-right">
+                              {f.colaboradorId && (
+                                <AccionesPago colaboradorId={f.colaboradorId} mes={mes} quincena={quincena} nombre={f.nombre} pagoLocal={f.pagoLocal} sinHoras={f.horasExtra <= 0 || f.valor == null} />
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -225,5 +230,116 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
       </Card>
 
     </>
+  )
+}
+
+type PagoLocal = FilaAsistencia['pagoLocal']
+
+/** Lee un archivo como data URI, para mandarlo por la Server Action (mismo patrón que AdjuntarDocumento). */
+function leerArchivo(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('lectura'))
+    reader.readAsDataURL(file)
+  })
+}
+
+/**
+ * Orden de pago + comprobante + estado, persona por persona: el pago de horas
+ * extra en esta empresa va APARTE de la nómina, así que no lo cubre ningún
+ * desprendible. "Generar orden" arma el PDF-resumen para enviar a quien paga;
+ * "Marcar pagado" sube el soporte de que ya se hizo y cierra el registro.
+ */
+function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHoras }: {
+  colaboradorId: string
+  mes: string
+  quincena: 1 | 2 | null
+  nombre: string
+  pagoLocal: PagoLocal
+  /** Sin horas extra o sin salario en AsistencIA: no hay nada que generar todavía. */
+  sinHoras: boolean
+}) {
+  const router = useRouter()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [ocupado, setOcupado] = useState<'generar' | 'subir' | 'deshacer' | null>(null)
+  const pagado = pagoLocal?.estado === 'PAGADO'
+
+  async function generar() {
+    setOcupado('generar')
+    const res = await generarOrdenPago({ colaboradorId, mes, quincena })
+    setOcupado(null)
+    if (!res.ok) { toast.error(res.error); return }
+    toast.success('Orden de pago generada.')
+    router.refresh()
+  }
+
+  async function subirComprobante(file: File) {
+    setOcupado('subir')
+    let pdfBase64: string
+    try {
+      pdfBase64 = await leerArchivo(file)
+    } catch {
+      setOcupado(null); toast.error('No se pudo leer el archivo.'); return
+    }
+    const res = await subirComprobantePago({ colaboradorId, mes, quincena, pdfBase64, nombreArchivo: file.name })
+    setOcupado(null)
+    if (!res.ok) { toast.error(res.error); return }
+    toast.success('Marcado como pagado.')
+    router.refresh()
+  }
+
+  async function deshacer() {
+    setOcupado('deshacer')
+    const res = await marcarPagoPendiente({ colaboradorId, mes, quincena })
+    setOcupado(null)
+    if (!res.ok) { toast.error(res.error); return }
+    toast.success('Vuelto a pendiente.')
+    router.refresh()
+  }
+
+  if (sinHoras && !pagoLocal) {
+    return <span className="text-xs text-muted-foreground">—</span>
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Pill tone={pagado ? 'ok' : 'warn'}>{pagado ? 'Pagado' : 'Pendiente'}</Pill>
+      <div className="flex items-center gap-2 text-xs">
+        {pagoLocal?.ordenDocId ? (
+          <VisorPdf documentoId={pagoLocal.ordenDocId} titulo={`Orden de pago de horas extra · ${nombre}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+            <FileText className="size-3" /> Orden
+          </VisorPdf>
+        ) : (
+          !pagado && (
+            <button type="button" onClick={generar} disabled={ocupado !== null} className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50">
+              {ocupado === 'generar' ? <Spinner className="size-3" /> : <FileText className="size-3" />} Generar orden
+            </button>
+          )
+        )}
+        {pagado ? (
+          <>
+            {pagoLocal?.comprobanteDocId && (
+              <VisorPdf documentoId={pagoLocal.comprobanteDocId} titulo={`Comprobante de pago de horas extra · ${nombre}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+                <Download className="size-3" /> Comprobante
+              </VisorPdf>
+            )}
+            <button type="button" onClick={deshacer} disabled={ocupado !== null} title="Corregir: vuelve a pendiente y retira el comprobante" className="inline-flex items-center gap-1 text-muted-foreground hover:underline disabled:opacity-50">
+              {ocupado === 'deshacer' ? <Spinner className="size-3" /> : <Undo2 className="size-3" />} Deshacer
+            </button>
+          </>
+        ) : (
+          <>
+            <input
+              ref={inputRef} type="file" accept="application/pdf,image/*" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) subirComprobante(f); e.target.value = '' }}
+            />
+            <button type="button" onClick={() => inputRef.current?.click()} disabled={ocupado !== null} className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50">
+              {ocupado === 'subir' ? <Spinner className="size-3" /> : <Upload className="size-3" />} Marcar pagado
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   )
 }

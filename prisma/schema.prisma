@@ -641,6 +641,7 @@ model Colaborador {
   certificaciones        CertificacionLaboral[]
   liquidaciones          LiquidacionNomina[]
   novedadesHoras         NovedadHoras[]
+  pagosHorasExtra        PagoHorasExtra[]
   comisiones             Comision[]
   prestamos              Prestamo[]
   terminaciones          Terminacion[]
@@ -2054,6 +2055,44 @@ model NovedadHoras {
   @@unique([referenciaExterna, tipoHora])
   @@index([colaboradorId, periodoId])
   @@map("novedad_horas")
+}
+
+/**
+ * En esta empresa las horas extra de AsistencIA se pagan APARTE de la nómina
+ * (otro desembolso, otra fecha): esto lleva el estado de ESE pago, persona por
+ * persona y período por período, independiente de si el período de nómina de
+ * aquí ya cerró. `desde`/`hasta` son el rango exacto que se consultó en pantalla
+ * (mes completo o una quincena), así que identifican el lote sin ambigüedad.
+ * `horasExtra`/`valor`/`detalleHoras` quedan congelados al generar la orden de
+ * pago: lo que se firma no debe moverse si luego AsistencIA corrige algo.
+ */
+model PagoHorasExtra {
+  id               String               @id @default(uuid(7)) @db.Uuid
+  colaboradorId    String               @map("colaborador_id") @db.Uuid
+  colaborador      Colaborador          @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  desde            DateTime             @db.Date
+  hasta            DateTime             @db.Date
+  horasExtra       Decimal              @map("horas_extra") @db.Decimal(7, 2)
+  valor            Decimal              @db.Decimal(14, 2)
+  // { HED, HEN, HEDDF, HENDF } en horas, para el detalle de la orden de pago.
+  detalleHoras     Json?                @map("detalle_horas")
+  estado           EstadoPagoHorasExtra @default(PENDIENTE)
+  ordenDocId       String?              @map("orden_doc_id") @db.Uuid // orden de pago (la arma la app o se sube la propia)
+  comprobanteDocId String?              @map("comprobante_doc_id") @db.Uuid // soporte de que ya se pagó (siempre se sube)
+  pagadoEn         DateTime?            @map("pagado_en")
+  pagadoPorId      String?              @map("pagado_por_id") @db.Uuid
+  creadoEn         DateTime             @default(now()) @map("creado_en")
+  actualizadoEn    DateTime             @updatedAt @map("actualizado_en")
+
+  @@unique([colaboradorId, desde, hasta])
+  @@map("pago_horas_extra")
+}
+
+enum EstadoPagoHorasExtra {
+  PENDIENTE
+  PAGADO
+
+  @@map("estado_pago_horas_extra")
 }
 
 enum TipoComision {
