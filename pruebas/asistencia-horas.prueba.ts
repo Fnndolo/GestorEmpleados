@@ -13,6 +13,10 @@ const simulado = vi.hoisted(() => ({
   tramos: [] as unknown[],
   empleados: [] as unknown[],
   pagadas: [] as { referencias: string[]; pagado: boolean }[],
+  avatares: [] as { cedula: string; bytes: number; mime: string }[],
+  quitados: [] as string[],
+  /** Cédulas que "no existen" allá: el PUT/DELETE responde 404. */
+  ausentes: new Set<string>(),
 }))
 vi.mock('@/server/asistencia/cliente', async (original) => {
   const real = await original<typeof import('@/server/asistencia/cliente')>()
@@ -29,12 +33,23 @@ vi.mock('@/server/asistencia/cliente', async (original) => {
       simulado.pagadas.push({ referencias, pagado })
       return { afectados: referencias.length }
     },
+    subirAvatar: async (cedula: string, imagen: Buffer, mime: string) => {
+      if (simulado.ausentes.has(cedula)) throw new real.ErrorAsistencia('Empleado no encontrado.', 'NO_EXISTE')
+      simulado.avatares.push({ cedula, bytes: imagen.length, mime })
+      return { bytes: imagen.length }
+    },
+    quitarAvatar: async (cedula: string) => {
+      if (simulado.ausentes.has(cedula)) throw new real.ErrorAsistencia('Empleado no encontrado.', 'NO_EXISTE')
+      simulado.quitados.push(cedula)
+    },
   }
 })
 
 const { prisma } = await import('@/lib/db')
 const { sincronizarHorasAsistencia, novedadesDesdeTramos } = await import('@/server/asistencia/horas-asistencia')
 const { anotarPagoPeriodoEnAsistencia } = await import('@/server/asistencia/pagos-asistencia')
+const { enviarFotoAsistencia, quitarFotoAsistencia, sincronizarFotosAsistencia } = await import('@/server/asistencia/fotos-asistencia')
+const { subirArchivo, eliminarArchivo } = await import('@/server/storage')
 const { consultarHorasAsistencia } = await import('@/app/(app)/nomina/novedades/asistencia-acciones')
 const { conectarAsistencia, desconectarAsistencia } = await import('@/app/(app)/configuracion/integraciones/acciones')
 import type { UsuarioSesion } from '@/lib/permisos/tipos'
@@ -150,6 +165,38 @@ describe('AsistencIA → novedades de horas', () => {
       expect((await prisma.configuracionEmpresa.findFirstOrThrow({ select: { asistenciaApiKey: true } })).asistenciaApiKey).toBeNull()
     } finally {
       await prisma.configuracionEmpresa.update({ where: { id: antes.id }, data: { asistenciaApiKey: antes.asistenciaApiKey, asistenciaUrl: antes.asistenciaUrl } })
+    }
+  })
+
+  it('la foto de perfil se replica en AsistencIA por cédula, y se quita allá cuando se quita aquí', async () => {
+    const antes = await prisma.colaborador.findUniqueOrThrow({ where: { id: colab.id }, select: { fotoPath: true } })
+    // Una foto de prueba (JPEG mínimo) en el almacenamiento local del gestor.
+    const jpeg = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64')
+    const subida = await subirArchivo(`colaborador/${colab.id}/foto`, `${MARCA}.jpg`, jpeg, 'image/jpeg')
+    await prisma.colaborador.update({ where: { id: colab.id }, data: { fotoPath: subida.storagePath } })
+    try {
+      simulado.avatares = []
+      expect(await enviarFotoAsistencia(colab.id)).toEqual({ ok: true })
+      expect(simulado.avatares).toEqual([{ cedula: colab.cedula, bytes: jpeg.length, mime: 'image/jpeg' }])
+
+      // Si la persona no existe allá, se dice; no se inventa ni revienta.
+      simulado.ausentes.add(colab.cedula)
+      expect(await enviarFotoAsistencia(colab.id)).toMatchObject({ ok: false, motivo: 'NO_EXISTE' })
+      simulado.ausentes.clear()
+
+      // El envío masivo cuenta lo que pasó con cada quien.
+      simulado.avatares = []
+      const masivo = await sincronizarFotosAsistencia()
+      expect(masivo.enviadas).toBeGreaterThanOrEqual(1)
+      expect(simulado.avatares.some((a) => a.cedula === colab.cedula)).toBe(true)
+
+      await prisma.colaborador.update({ where: { id: colab.id }, data: { fotoPath: null } })
+      expect(await enviarFotoAsistencia(colab.id)).toMatchObject({ ok: false, motivo: 'SIN_FOTO' })
+      expect(await quitarFotoAsistencia(colab.id)).toEqual({ ok: true })
+      expect(simulado.quitados).toEqual([colab.cedula])
+    } finally {
+      await eliminarArchivo(subida.storagePath).catch(() => {})
+      await prisma.colaborador.update({ where: { id: colab.id }, data: { fotoPath: antes.fotoPath } })
     }
   })
 

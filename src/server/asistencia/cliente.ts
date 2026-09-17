@@ -74,7 +74,7 @@ export type PeriodoAsistencia = { mes: string; quincena?: 1 | 2 | null } | { des
 export class ErrorAsistencia extends Error {
   constructor(
     mensaje: string,
-    public readonly codigo: 'SIN_CLAVE' | 'CLAVE_INVALIDA' | 'NO_RESPONDE' | 'RECHAZADA',
+    public readonly codigo: 'SIN_CLAVE' | 'CLAVE_INVALIDA' | 'NO_RESPONDE' | 'NO_EXISTE' | 'RECHAZADA',
   ) {
     super(mensaje)
   }
@@ -149,6 +149,9 @@ async function llamar<T>(ruta: string, init: RequestInit = {}, conexion?: { url:
   if (res.status === 401) {
     throw new ErrorAsistencia('AsistencIA no reconoce esta clave de API. Revisa que la copiaste completa; si allá la regeneraron, pídela de nuevo en AsistencIA → Ajustes → Mi empresa.', 'CLAVE_INVALIDA')
   }
+  if (res.status === 404) {
+    throw new ErrorAsistencia(datos?.error ?? 'AsistencIA no encontró lo que se le pidió.', 'NO_EXISTE')
+  }
   if (!res.ok || !datos?.ok) {
     throw new ErrorAsistencia(`AsistencIA rechazó la petición (${res.status}): ${datos?.error ?? 'sin detalle'}`, 'RECHAZADA')
   }
@@ -165,6 +168,24 @@ export async function resumenAsistencia(periodo: PeriodoAsistencia, conexion?: {
 export async function tramosAsistencia(periodo: PeriodoAsistencia): Promise<TramoAsistencia[]> {
   const r = await llamar<{ registros: TramoAsistencia[] }>(`/api/horas?${query(periodo)}`)
   return r.registros ?? []
+}
+
+/**
+ * Pone (o reemplaza) la foto de perfil de una persona en AsistencIA. Allá la
+ * recortan al centro a 256×256; es solo la foto de las listas, no el rostro
+ * del reconocimiento facial. 404 si la cédula no existe allá.
+ */
+export async function subirAvatar(cedula: string, imagen: Buffer, mime: 'image/jpeg' | 'image/png' | 'image/webp'): Promise<{ bytes: number }> {
+  const r = await llamar<{ bytes: number }>(`/api/empleados/${normalizarCedula(cedula)}/avatar`, {
+    method: 'PUT',
+    body: JSON.stringify({ imagen: `data:${mime};base64,${imagen.toString('base64')}` }),
+  })
+  return { bytes: r.bytes ?? 0 }
+}
+
+/** Quita la foto de perfil en AsistencIA. */
+export async function quitarAvatar(cedula: string): Promise<void> {
+  await llamar<unknown>(`/api/empleados/${normalizarCedula(cedula)}/avatar`, { method: 'DELETE' })
 }
 
 /**

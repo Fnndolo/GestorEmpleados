@@ -320,3 +320,10 @@ AsistencIA (`https://arrivecontrol.vercel.app`) con la **clave de API de la empr
 
 El **valor** en pesos que muestra AsistencIA es de referencia (sale de su salario
 registrado); la nómina liquida con el salario y los factores de esta plataforma.
+
+**Foto de perfil (2026-09-17):** la foto que se pone o se quita en el gestor (ficha o
+Mi información) se replica en AsistencIA por cédula con `PUT/DELETE
+/api/empleados/{cédula}/avatar` (cuerpo `{ "imagen": "data:image/jpeg;base64,…" }`, hasta
+6 MB; allá la recortan a 256×256). Corre después de responder, de mejor esfuerzo; en
+Ajustes → Integraciones, «Enviar fotos de perfil» manda las de todos los activos de una
+vez y reporta quiénes no existen allá (404).

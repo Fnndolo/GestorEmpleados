@@ -7,7 +7,8 @@ import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { esAdministrador } from '@/lib/permisos/tipos'
 import { hoyBogotaISO } from '@/lib/fechas'
-import { ASISTENCIA_URL_DEFECTO, ErrorAsistencia, resumenAsistencia } from '@/server/asistencia/cliente'
+import { ASISTENCIA_URL_DEFECTO, ErrorAsistencia, conexionAsistencia, resumenAsistencia } from '@/server/asistencia/cliente'
+import { sincronizarFotosAsistencia } from '@/server/asistencia/fotos-asistencia'
 
 /**
  * La clave de API de AsistencIA la conecta y la quita SOLO el administrador:
@@ -50,6 +51,16 @@ export const conectarAsistencia = accion(
     revalidatePath('/configuracion/integraciones')
     revalidatePath('/nomina/novedades')
     return { ok: true }
+  },
+)
+
+/** Manda a AsistencIA las fotos de perfil de todos los colaboradores activos. */
+export const enviarFotosAsistencia = accion(
+  { modulo: 'configuracion', accion: 'EDITAR' },
+  async (_, usuario) => {
+    soloAdmin(usuario)
+    if (!(await conexionAsistencia())) throw new ErrorNegocio('Conecta primero AsistencIA.')
+    return sincronizarFotosAsistencia()
   },
 )
 

@@ -1,8 +1,9 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse, after, type NextRequest } from 'next/server'
 import { obtenerSesion, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { subirArchivo, subirArchivoEn, eliminarArchivo } from '@/server/storage'
 import { rutaMiniatura } from '@/lib/foto'
+import { enviarFotoAsistencia, quitarFotoAsistencia } from '@/server/asistencia/fotos-asistencia'
 
 export const runtime = 'nodejs'
 const MAX_BYTES = 8 * 1024 * 1024
@@ -37,6 +38,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await eliminarArchivo(rutaMiniatura(c.fotoPath)).catch(() => {})
   }
   await prisma.colaborador.update({ where: { id }, data: { fotoPath: subido.storagePath } })
+  // La misma foto en AsistencIA, sin hacer esperar a quien la subió.
+  after(() => enviarFotoAsistencia(id))
 
   return NextResponse.json({ ok: true })
 }
@@ -56,6 +59,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     await eliminarArchivo(rutaMiniatura(c.fotoPath)).catch(() => {})
   }
   await prisma.colaborador.update({ where: { id }, data: { fotoPath: null } })
+  after(() => quitarFotoAsistencia(id))
 
   return NextResponse.json({ ok: true })
 }
