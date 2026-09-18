@@ -3,8 +3,9 @@ import { prisma } from '@/lib/db'
 import { formatFechaCorta } from '@/lib/fechas'
 import { Encabezado } from '@/components/shell/encabezado'
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
-import { plantillaAutorizacionDatos } from '@/server/plantillas-documento'
-import { DocumentosPlantillas } from './documentos-cliente'
+import { plantillaAutorizacionDatos, plantillaTexto } from '@/server/plantillas-documento'
+import { CLAVES_TEXTO, type ClaveTexto } from '@/lib/plantillas-documento/textos'
+import { DocumentosPlantillas, type TextoEditable } from './documentos-cliente'
 import { EDITORES, type Editor } from './editores'
 
 export const metadata = { title: 'Plantillas de documentos · Configuración' }
@@ -19,14 +20,15 @@ export default async function PlantillasPage({ searchParams }: { searchParams: P
   const puedeEditar = tienePermiso(usuario, 'configuracion', 'EDITAR')
   const { abrir } = await searchParams
 
-  const [empresa, autorizacionOps, autorizacionLaboral, plantillasCC, plantillasContrato] = await Promise.all([
+  const [empresa, autorizacionOps, autorizacionLaboral, plantillasCC, plantillasContrato, textosLista] = await Promise.all([
     prisma.configuracionEmpresa.findFirst({
-      select: { membreteFondoPath: true, emailContacto: true, nit: true, sitioWeb: true, razonSocial: true, direccion: true },
+      select: { membreteFondoPath: true, emailContacto: true, nit: true, sitioWeb: true, razonSocial: true, nombreComercial: true, direccion: true, telefono: true },
     }),
     plantillaAutorizacionDatos('OPS'),
     plantillaAutorizacionDatos('LABORAL'),
     prisma.plantillaCuentaCobro.findMany({ orderBy: { creadoEn: 'desc' } }),
     GENERAR_CONTRATOS_DESDE_PLANTILLA ? prisma.plantillaContrato.count({ where: { activa: true } }) : Promise.resolve(0),
+    Promise.all(CLAVES_TEXTO.map((clave) => plantillaTexto(clave))),
   ])
 
   const abrirInicial = EDITORES.includes(abrir as Editor) ? (abrir as Editor) : null
@@ -40,6 +42,23 @@ export default async function PlantillasPage({ searchParams }: { searchParams: P
   }
   const estadoDe = (a: { personalizada: boolean; actualizadoEn: Date | null }) =>
     a.actualizadoEn ? `Personalizado · ${formatFechaCorta(a.actualizadoEn)}` : 'Texto de la aplicación'
+
+  // Los textos editables: actas de Mis entregas, orden de pago de horas extra y certificaciones.
+  const textos = Object.fromEntries(
+    CLAVES_TEXTO.map((clave, i) => [clave, {
+      plantilla: { titulo: textosLista[i].titulo, contenido: textosLista[i].contenido },
+      personalizada: textosLista[i].personalizada,
+      estado: estadoDe(textosLista[i]),
+    }]),
+  ) as Record<ClaveTexto, TextoEditable>
+  const empresaTextos = {
+    razonSocial: empresa?.razonSocial ?? 'Razón social sin configurar',
+    nombreComercial: empresa?.nombreComercial ?? '',
+    nit: empresa?.nit ?? '—',
+    direccion: empresa?.direccion ?? null,
+    telefono: empresa?.telefono ?? null,
+    emailContacto: empresa?.emailContacto ?? null,
+  }
 
   return (
     <div className="max-w-4xl">
@@ -74,6 +93,8 @@ export default async function PlantillasPage({ searchParams }: { searchParams: P
           empresa: { razonSocial: empresa?.razonSocial ?? 'Razón social sin configurar', nit: empresa?.nit ?? '—' },
         }}
         plantillasContrato={plantillasContrato}
+        textos={textos}
+        empresaTextos={empresaTextos}
       />
     </div>
   )

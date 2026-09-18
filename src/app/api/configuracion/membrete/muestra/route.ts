@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { obtenerSesion, tienePermiso } from '@/server/sesion'
-import { renderMuestra, renderMuestraPlantilla, renderMuestraCuentaCobro, TIPOS_MUESTRA, type TipoMuestra } from '@/server/pdf/muestras'
+import { renderMuestra, renderMuestraPlantilla, renderMuestraCuentaCobro, renderMuestraTexto, TIPOS_MUESTRA, type TipoMuestra } from '@/server/pdf/muestras'
+import { esClaveTexto } from '@/lib/plantillas-documento/textos'
 import { respuestaPdf } from '@/server/pdf/respuesta-pdf'
 
 export const runtime = 'nodejs'
@@ -27,6 +28,18 @@ export async function GET(req: NextRequest) {
       return respuestaPdf(await renderMuestraPlantilla(plantillaId), 'muestra-plantilla.pdf', descargar)
     } catch (e) {
       console.error('No se pudo generar la muestra de la plantilla:', e)
+      return NextResponse.json({ error: 'No se pudo generar la muestra' }, { status: 500 })
+    }
+  }
+
+  // Muestra de un texto editable (actas, orden de pago, certificaciones), desde su editor.
+  if (tipo === 'texto') {
+    const clave = req.nextUrl.searchParams.get('clave')
+    if (!esClaveTexto(clave)) return NextResponse.json({ error: 'Texto desconocido' }, { status: 400 })
+    try {
+      return respuestaPdf(await renderMuestraTexto(clave, req.nextUrl.searchParams.get('variante') ?? ''), `muestra-${clave.toLowerCase()}.pdf`, descargar)
+    } catch (e) {
+      console.error('No se pudo generar la muestra del texto:', e)
       return NextResponse.json({ error: 'No se pudo generar la muestra' }, { status: 500 })
     }
   }

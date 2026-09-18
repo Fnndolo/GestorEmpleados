@@ -8,6 +8,17 @@ import { construirVariables, sustituir, type PlantillaResuelta } from '@/lib/con
 import { renderCuentaCobro } from './cuenta-cobro'
 import { logoDataUri } from '@/server/cuentas-cobro'
 import { CUERPO_DEFECTO_CUENTA_COBRO, MUESTRA_CUENTA_COBRO } from '@/lib/plantillas-documento/cuenta-cobro'
+import { renderActaActivo } from './acta-activo'
+import { renderActaDotacion } from './acta-dotacion'
+import { renderActaEpp } from './acta-epp'
+import { renderCertificacion } from './certificacion'
+import { renderOrdenPagoHorasExtra } from './pago-horas-extra'
+import { fondoMembrete } from './fondo-membrete'
+import { plantillaTexto } from '@/server/plantillas-documento'
+import type { ClaveTexto, PlantillaTexto } from '@/lib/plantillas-documento/textos'
+import {
+  muestraActaActivo, muestraActaDotacion, muestraActaEpp, muestraCertificacion, muestraOrdenPago,
+} from '@/lib/plantillas-documento/textos-muestra'
 
 /**
  * Documentos de MUESTRA para ver cómo queda el papel membretado sin tener que
@@ -251,6 +262,41 @@ export async function renderMuestraPlantilla(plantillaId: string): Promise<Buffe
     },
     firmaContratanteNombre: repLegal, firmaContratistaNombre: ASPIRANTE,
   })
+}
+
+/**
+ * Muestra de uno de los textos editables (actas de Mis entregas, orden de pago
+ * de horas extra, certificaciones) con los mismos datos ficticios de la vista
+ * previa del editor. Usa el texto guardado en Ajustes, salvo que se pase uno
+ * (para ver un borrador sin guardarlo). `variante` elige el caso: tipo de
+ * certificación, un activo o varios, entrega inicial o reposición.
+ */
+export async function renderMuestraTexto(clave: ClaveTexto, variante: string, plantilla?: PlantillaTexto): Promise<Buffer> {
+  const empresa = await empresaActual()
+  const texto = plantilla ?? (await plantillaTexto(clave))
+
+  switch (clave) {
+    case 'ACTA_ACTIVO_ENTREGA':
+    case 'ACTA_ACTIVO_DEVOLUCION':
+      return renderActaActivo(
+        { ...muestraActaActivo(variante, empresa), tipo: clave === 'ACTA_ACTIVO_ENTREGA' ? 'entrega' : 'devolucion', empresa, firmaDataUri: null, firmaFecha: null },
+        texto,
+      )
+    case 'ACTA_DOTACION':
+      return renderActaDotacion({ ...muestraActaDotacion(empresa), empresa }, texto)
+    case 'ACTA_EPP':
+      return renderActaEpp({ ...muestraActaEpp(variante, empresa), empresa }, texto)
+    case 'ORDEN_PAGO_HORAS_EXTRA': {
+      const { src, propio } = await fondoMembrete()
+      return renderOrdenPagoHorasExtra({ ...muestraOrdenPago(empresa), empresa, firma: null }, propio ? src : undefined, texto)
+    }
+    case 'CERTIFICACION_LABORAL':
+    case 'CERTIFICACION_CONTRACTUAL':
+      return renderCertificacion(
+        { ...muestraCertificacion(clave === 'CERTIFICACION_CONTRACTUAL' ? 'CONTRACTUAL' : 'LABORAL', variante, empresa), empresa, firmaDataUri: null },
+        texto,
+      )
+  }
 }
 
 /**

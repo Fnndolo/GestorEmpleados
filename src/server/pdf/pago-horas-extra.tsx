@@ -1,5 +1,8 @@
 import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
 import { MembreteFondo, type DatosEmpresa } from './membrete'
+import { BloquesPdf, NotasPdf } from './bloques-texto'
+import { plantillaTexto } from '@/server/plantillas-documento'
+import { resolverTexto, variablesOrdenPago, type PlantillaTexto, type TextoResuelto } from '@/lib/plantillas-documento/textos'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaLarga } from '@/lib/fechas'
 
@@ -12,10 +15,14 @@ import { formatFechaLarga } from '@/lib/fechas'
  * El recuadro de firma tiene una posición FIJA (a diferencia de un PDF subido,
  * este lo arma la app): no hace falta detectar dónde va, solo dejar el espacio
  * reservado y, cuando ya está firmada, dibujar el PNG ahí encima al re-renderizar.
+ *
+ * El título y el texto alrededor de la tabla se editan en Ajustes → Plantillas
+ * de documentos (clave ORDEN_PAGO_HORAS_EXTRA); la cabecera (número, fecha,
+ * colaborador, período), la tabla de horas, el total y la firma los pone la app.
  */
 
 const s = StyleSheet.create({
-  page: { paddingTop: 122, paddingBottom: 80, paddingHorizontal: 56, fontSize: 10, fontFamily: 'Helvetica', color: '#0f172a' },
+  page: { paddingTop: 122, paddingBottom: 80, paddingHorizontal: 56, fontSize: 10, fontFamily: 'Helvetica', color: '#0f172a', lineHeight: 1.5 },
   titulo: { fontSize: 14, fontFamily: 'Helvetica-Bold', textAlign: 'center', marginBottom: 4 },
   subtitulo: { fontSize: 9.5, textAlign: 'center', color: '#475569', marginBottom: 20 },
   fila: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
@@ -28,12 +35,11 @@ const s = StyleSheet.create({
   celdaEnc: { flex: 1, padding: 6, fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: '#334155' },
   celdaDer: { textAlign: 'right' },
   totalBox: {
-    marginTop: 4, backgroundColor: '#0f172a', borderRadius: 3, padding: 10,
+    marginTop: 4, marginBottom: 16, backgroundColor: '#0f172a', borderRadius: 3, padding: 10,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
   totalTexto: { color: '#ffffff', fontFamily: 'Helvetica-Bold', fontSize: 11 },
-  banco: { marginTop: 16, fontSize: 9.5 },
-  firma: { marginTop: 56, borderTopWidth: 1, borderTopColor: '#1e293b', paddingTop: 4, width: 220 },
+  firma: { marginTop: 40, borderTopWidth: 1, borderTopColor: '#1e293b', paddingTop: 4, width: 220 },
   firmaImg: { width: 150, height: 52, objectFit: 'contain', marginBottom: -6 },
   firmaFecha: { fontSize: 7.5, color: '#64748b', marginTop: 1 },
 })
@@ -53,14 +59,41 @@ export type DatosOrdenPagoHorasExtra = {
   firma?: { dataUri: string; fecha: string } | null
 }
 
-function Doc({ d, fondo }: { d: DatosOrdenPagoHorasExtra; fondo?: string }) {
+function TablaHoras({ d }: { d: DatosOrdenPagoHorasExtra }) {
   const codigos = Object.entries(d.detalleHoras).filter(([, h]) => h > 0)
+  return (
+    <>
+      <View style={s.tabla}>
+        <View style={[s.filaTabla, s.encTabla]}>
+          <Text style={s.celdaEnc}>Tipo de hora</Text>
+          <Text style={[s.celdaEnc, s.celdaDer]}>Horas</Text>
+        </View>
+        {codigos.map(([c, h]) => (
+          <View key={c} style={s.filaTabla}>
+            <Text style={s.celda}>{ETIQUETA_HORA[c] ?? c}</Text>
+            <Text style={[s.celda, s.celdaDer]}>{h.toLocaleString('es-CO', { maximumFractionDigits: 2 })} h</Text>
+          </View>
+        ))}
+        <View style={s.filaTabla}>
+          <Text style={[s.celda, s.negrita]}>Total horas extra</Text>
+          <Text style={[s.celda, s.celdaDer, s.negrita]}>{d.horasExtra.toLocaleString('es-CO', { maximumFractionDigits: 2 })} h</Text>
+        </View>
+      </View>
+      <View style={s.totalBox}>
+        <Text style={s.totalTexto}>Total a pagar</Text>
+        <Text style={s.totalTexto}>{fmtCOP(d.valor)}</Text>
+      </View>
+    </>
+  )
+}
+
+function Doc({ d, texto, fondo }: { d: DatosOrdenPagoHorasExtra; texto: TextoResuelto; fondo?: string }) {
   return (
     <Document>
       <Page size="LETTER" style={s.page}>
         <MembreteFondo fondo={fondo} empresa={d.empresa} />
 
-        <Text style={s.titulo}>ORDEN DE PAGO · HORAS EXTRA</Text>
+        <Text style={s.titulo}>{texto.titulo.toUpperCase()}</Text>
         <Text style={s.subtitulo}>No. {d.numero} · {formatFechaLarga(d.fecha)}</Text>
 
         <View style={s.fila}>
@@ -72,45 +105,22 @@ function Doc({ d, fondo }: { d: DatosOrdenPagoHorasExtra; fondo?: string }) {
           <Text style={s.negrita}>{formatFechaLarga(new Date(`${d.periodo.desde}T00:00:00.000Z`))} a {formatFechaLarga(new Date(`${d.periodo.hasta}T00:00:00.000Z`))}</Text>
         </View>
 
-        <View style={s.tabla}>
-          <View style={[s.filaTabla, s.encTabla]}>
-            <Text style={s.celdaEnc}>Tipo de hora</Text>
-            <Text style={[s.celdaEnc, s.celdaDer]}>Horas</Text>
-          </View>
-          {codigos.map(([c, h]) => (
-            <View key={c} style={s.filaTabla}>
-              <Text style={s.celda}>{ETIQUETA_HORA[c] ?? c}</Text>
-              <Text style={[s.celda, s.celdaDer]}>{h.toLocaleString('es-CO', { maximumFractionDigits: 2 })} h</Text>
-            </View>
-          ))}
-          <View style={s.filaTabla}>
-            <Text style={[s.celda, s.negrita]}>Total horas extra</Text>
-            <Text style={[s.celda, s.celdaDer, s.negrita]}>{d.horasExtra.toLocaleString('es-CO', { maximumFractionDigits: 2 })} h</Text>
-          </View>
-        </View>
+        <BloquesPdf bloques={texto.bloques} tabla={<TablaHoras d={d} />} />
 
-        <View style={s.totalBox}>
-          <Text style={s.totalTexto}>Total a pagar</Text>
-          <Text style={s.totalTexto}>{fmtCOP(d.valor)}</Text>
-        </View>
-
-        {(d.colaborador.banco || d.colaborador.numeroCuenta) && (
-          <Text style={s.banco}>
-            Consignar a: {d.colaborador.banco ?? ''} {d.colaborador.tipoCuenta ?? ''} {d.colaborador.numeroCuenta ?? ''}.
-          </Text>
-        )}
-
-        <View style={s.firma}>
+        <View style={s.firma} wrap={false}>
           {d.firma && <Image src={d.firma.dataUri} style={s.firmaImg} />}
           <Text style={s.negrita}>{d.colaborador.nombre}</Text>
           <Text style={{ fontSize: 8.5, color: '#64748b' }}>{d.colaborador.documento}</Text>
           {d.firma && <Text style={s.firmaFecha}>Firmado electrónicamente el {d.firma.fecha}</Text>}
         </View>
+        <NotasPdf notas={texto.notas} />
       </Page>
     </Document>
   )
 }
 
-export async function renderOrdenPagoHorasExtra(d: DatosOrdenPagoHorasExtra, fondo?: string): Promise<Buffer> {
-  return renderToBuffer(<Doc d={d} fondo={fondo} />)
+/** Renderiza la orden con el texto vigente de Ajustes, salvo que se pase `plantilla` (muestras). */
+export async function renderOrdenPagoHorasExtra(d: DatosOrdenPagoHorasExtra, fondo?: string, plantilla?: PlantillaTexto): Promise<Buffer> {
+  const texto = plantilla ?? (await plantillaTexto('ORDEN_PAGO_HORAS_EXTRA'))
+  return renderToBuffer(<Doc d={d} texto={resolverTexto(texto, variablesOrdenPago(d))} fondo={fondo} />)
 }
