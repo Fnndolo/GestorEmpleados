@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ShieldAlert, FileLock, Lock, Copy, Search, Paperclip, X } from 'lucide-react'
+import { ShieldAlert, FileLock, Copy, Search, Paperclip, X } from 'lucide-react'
 import { Pill, type PillTone } from '@/components/ui-kit'
 import { formatFechaCorta } from '@/lib/fechas'
 import { Button } from '@/components/ui/button'
@@ -33,7 +33,7 @@ function Campo({ label, obligatorio, children }: { label: string; obligatorio?: 
 }
 
 /** `mostrar` decide qué tarjetas se ven: solo el canal anti-acoso, solo habeas data, o ambas. */
-export function CanalEtico({ mostrar = 'ambos', remitente }: { mostrar?: 'anti-acoso' | 'habeas-data' | 'ambos'; remitente: string }) {
+export function CanalEtico({ mostrar = 'ambos' }: { mostrar?: 'anti-acoso' | 'habeas-data' | 'ambos' }) {
   const [dialogo, setDialogo] = useState<'denuncia' | 'habeas' | 'seguimiento' | null>(null)
   const [codigoCreado, setCodigoCreado] = useState<string | null>(null)
   const verAntiAcoso = mostrar !== 'habeas-data'
@@ -84,7 +84,7 @@ export function CanalEtico({ mostrar = 'ambos', remitente }: { mostrar?: 'anti-a
         )}
       </div>
 
-      {dialogo === 'denuncia' && <DialogDenuncia remitente={remitente} onClose={() => setDialogo(null)} onCreada={(codigo) => { setDialogo(null); setCodigoCreado(codigo) }} />}
+      {dialogo === 'denuncia' && <DialogDenuncia onClose={() => setDialogo(null)} onCreada={(codigo) => { setDialogo(null); setCodigoCreado(codigo) }} />}
       {dialogo === 'habeas' && <DialogHabeas onClose={() => setDialogo(null)} />}
       {dialogo === 'seguimiento' && <DialogSeguimiento onClose={() => setDialogo(null)} />}
       {codigoCreado && <DialogCodigo codigo={codigoCreado} onClose={() => setCodigoCreado(null)} />}
@@ -181,7 +181,7 @@ function DialogSeguimiento({ onClose }: { onClose: () => void }) {
   )
 }
 
-function DialogDenuncia({ remitente, onClose, onCreada }: { remitente: string; onClose: () => void; onCreada: (codigo: string) => void }) {
+function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: (codigo: string) => void }) {
   const router = useRouter()
   const [asunto, setAsunto] = useState('')
   const [hechos, setHechos] = useState('')
@@ -225,12 +225,6 @@ function DialogDenuncia({ remitente, onClose, onCreada }: { remitente: string; o
         <DialogHeader>
           <DialogTitle>Línea ética</DialogTitle>
         </DialogHeader>
-
-        {/* Una línea: a nombre de quién va y quién lo lee. */}
-        <p className="flex items-start gap-2 rounded-lg bg-muted/60 p-2.5 text-xs text-muted-foreground">
-          <Lock className="mt-0.5 size-3.5 shrink-0" />
-          <span>Se envía a nombre de <strong>{remitente}</strong>. Solo lo lee Jurídica y no aparece en tu autoservicio; guarda el código que verás al enviarlo para consultar en qué va.</span>
-        </p>
 
         <div className="space-y-4">
           <Campo label="¿De qué se trata?" obligatorio>
