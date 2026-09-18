@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Timer, RefreshCw, Download, KeyRound, FileText, Send } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Timer, RefreshCw, Download, KeyRound, FileText, FilePlus2, FileCheck2, Receipt, Send, MessageSquareText, LockKeyhole } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -19,7 +19,7 @@ import { Chip, Pill, AvatarColaborador } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import {
   consultarHorasAsistencia, traerHorasAsistencia, previsualizarOrdenPago, generarOrdenPago, enviarOrdenAFirma, marcarPagoPagado, marcarPagoPendiente,
-  type ResumenPantalla, type FilaAsistencia,
+  enviarResumenHoy, type ResumenPantalla, type FilaAsistencia,
 } from './asistencia-acciones'
 
 /**
@@ -106,15 +106,17 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
     <>
       <Card className="mb-3">
         <CardContent className="p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Chip icono={Timer} color="bg-foreground text-background" className="size-9 rounded-[10px]" iconClassName="size-[18px]" />
+          <div className="flex items-start gap-2.5">
+            <Chip icono={Timer} color="bg-foreground text-background" className="size-9 shrink-0 rounded-[10px]" iconClassName="size-[18px]" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold">AsistencIA</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {conectada ? 'Horas extra calculadas de las marcaciones.' : 'Control de asistencia sin conectar.'}
+              <p className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                AsistencIA
+                <Pill tone={conectada ? 'ok' : 'warn'}>{conectada ? 'Conectada' : 'Sin conectar'}</Pill>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {conectada ? 'Horas extra y recargos calculados de las marcaciones.' : 'Control de asistencia sin conectar.'}
               </p>
             </div>
-            <Pill tone={conectada ? 'ok' : 'warn'}>{conectada ? 'Conectada' : 'Sin conectar'}</Pill>
             {esAdmin && (
               <Button size="icon" asChild aria-label="Clave de API (Ajustes)" title="Clave de API (Ajustes → Integraciones)">
                 <Link href="/configuracion/integraciones"><KeyRound className="size-4" /></Link>
@@ -135,18 +137,20 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
             </div>
           ) : (
             <>
-              {/* El período de pago, como lo liquida nómina: mes y quincena. */}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              {/* El período de pago, como lo liquida nómina: mes y quincena. Una sola
+                  franja: a la izquierda qué período, a la derecha qué hacer con él. */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-2">
                 <Select value={mes} onValueChange={setMes}>
-                  <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-40 bg-card text-xs" aria-label="Mes"><SelectValue /></SelectTrigger>
                   <SelectContent>{meses.map((m) => <SelectItem key={m.valor} value={m.valor}>{m.etiqueta}</SelectItem>)}</SelectContent>
                 </Select>
-                <div className="flex gap-1.5">
+                <div className="flex h-8 items-center gap-1.5" role="group" aria-label="Quincena">
                   {([[1, '1 – 15'], [2, '16 – fin'], [null, 'Todo el mes']] as const).map(([q, l]) => (
                     <button
                       key={String(q)}
                       type="button"
                       onClick={() => setQuincena(q)}
+                      aria-pressed={quincena === q}
                       className={cn(
                         'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
                         quincena === q ? 'bg-foreground text-background' : 'border bg-card text-muted-foreground hover:bg-accent',
@@ -156,11 +160,11 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
                     </button>
                   ))}
                 </div>
-                <div className="ml-auto flex gap-2">
+                <div className="ml-auto flex items-center gap-2">
                   <Button size="icon" onClick={() => setVersion((v) => v + 1)} disabled={cargando} aria-label="Actualizar" title="Volver a consultar">
                     {cargando ? <Spinner /> : <RefreshCw className="size-4" />}
                   </Button>
-                  <Button size="sm" onClick={traer} disabled={trayendo || cargando || !datos || datos.filas.length === 0}>
+                  <Button onClick={traer} disabled={trayendo || cargando || !datos || datos.filas.length === 0}>
                     {trayendo ? <Spinner /> : <Download className="size-4" />} Traer a la nómina
                   </Button>
                 </div>
@@ -211,8 +215,8 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
                             {CODIGOS.map((c) => (
                               <td key={c} className={cn('hidden py-2 px-2 text-right tabular-nums sm:table-cell', f.horas[c] ? 'font-semibold' : 'text-muted-foreground')}>{horas(f.horas[c])}</td>
                             ))}
-                            <td className="py-2 px-1.5 text-right tabular-nums sm:px-2">{horas(f.horasExtra)}</td>
-                            <td className="py-2 px-1.5 text-right font-semibold tabular-nums sm:px-2">{f.valor == null ? <span className="font-normal text-muted-foreground" title="Sin salario en AsistencIA">—</span> : fmtCOP(f.valor)}</td>
+                            <td className="whitespace-nowrap py-2 px-1.5 text-right tabular-nums sm:px-2">{horas(f.horasExtra)}</td>
+                            <td className="whitespace-nowrap py-2 px-1.5 text-right font-semibold tabular-nums sm:px-2">{f.valor == null ? <span className="font-normal text-muted-foreground" title="Sin salario en AsistencIA">—</span> : fmtCOP(f.valor)}</td>
                             <td className="py-2 pl-1.5 text-right sm:pl-2">
                               {f.colaboradorId && (
                                 <AccionesPago colaboradorId={f.colaboradorId} mes={mes} quincena={quincena} nombre={f.nombre} pagoLocal={f.pagoLocal} sinHoras={f.horasExtra <= 0 || f.valor == null} />
@@ -355,53 +359,76 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
     router.refresh()
   }
 
-  if (sinHoras && !pagoLocal) {
-    return <span className="text-xs text-muted-foreground">—</span>
-  }
+  // Sin horas (o sin salario allá) y sin pago iniciado: no hay orden que generar,
+  // pero el aviso de prueba del día sí se puede mandar.
+  const sinPago = sinHoras && !pagoLocal
 
-  const ETIQUETA_ESTADO: Record<string, string> = {
-    PENDIENTE: 'Sin firmar', ENVIADA_A_FIRMA: 'Esperando firma', FIRMADA: 'Firmada · pendiente de pago', PAGADO: 'Pagado',
+  const ESTADO: Record<string, { texto: string; tone: 'muted' | 'warn' | 'info' | 'ok' }> = {
+    PENDIENTE: { texto: 'Sin firmar', tone: 'muted' },
+    ENVIADA_A_FIRMA: { texto: 'Esperando firma', tone: 'warn' },
+    FIRMADA: { texto: 'Firmada', tone: 'info' },
+    PAGADO: { texto: 'Pagado', tone: 'ok' },
   }
+  // PENDIENTE cubre dos momentos: sin orden todavía, o con la orden guardada pero sin enviar.
+  const est = pagoLocal
+    ? pagoLocal.estado === 'PENDIENTE'
+      ? { texto: pagoLocal.ordenDocId ? 'Orden sin enviar' : 'Sin orden', tone: 'muted' as const }
+      : ESTADO[pagoLocal.estado]
+    : null
+  const icono = buttonVariants({ size: 'icon-sm' })
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <label
-        className={cn('flex items-center gap-1.5', firmada ? 'cursor-pointer' : 'cursor-not-allowed')}
-        title={firmada ? undefined : 'La orden debe estar firmada por el colaborador antes de poder marcar el pago'}
-      >
-        <Checkbox
-          checked={pagado}
-          onCheckedChange={(v) => (v === true ? setDialogoPago(true) : setDialogoDeshacer(true))}
-          disabled={ocupado !== null || !firmada}
-        />
-        <span className={cn('text-xs font-semibold', pagado ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400')}>
-          {pagoLocal ? ETIQUETA_ESTADO[pagoLocal.estado] : 'Pendiente'}
-        </span>
-      </label>
-      <div className="flex flex-wrap justify-end items-center gap-x-2 gap-y-0.5 text-xs">
-        {pagoLocal?.ordenDocId ? (
-          <VisorPdf documentoId={pagoLocal.ordenDocId} titulo={`Orden de pago de horas extra · ${nombre}`} className="inline-flex items-center gap-1 text-primary hover:underline">
-            <FileText className="size-3" /> {firmada ? 'Orden firmada' : 'Orden'}
-          </VisorPdf>
+    <div className="flex items-center justify-end gap-1.5">
+      {/* Estado y casilla de pagado. Los botones son solo íconos: el nombre va en el título. */}
+      {!sinPago && (
+        <label
+          className={cn('flex items-center gap-1.5', firmada ? 'cursor-pointer' : 'cursor-not-allowed')}
+          title={pagado ? 'Pagado (quitar la marca abre una confirmación)' : firmada ? 'Marcar como pagado' : 'La orden debe estar firmada por el colaborador antes de poder marcar el pago'}
+        >
+          <Checkbox
+            checked={pagado}
+            onCheckedChange={(v) => (v === true ? setDialogoPago(true) : setDialogoDeshacer(true))}
+            disabled={ocupado !== null || !firmada}
+            aria-label="Pagado"
+          />
+          <Pill tone={est?.tone ?? 'muted'} className="whitespace-nowrap">
+            {est?.texto ?? 'Sin orden'}
+            {pagoLocal?.anotadoEnAsistencia && <LockKeyhole className="ml-1 inline size-3" aria-label="Cerrado y marcado como pagado en AsistencIA" />}
+          </Pill>
+        </label>
+      )}
+
+      {!sinPago && (
+        pagoLocal?.ordenDocId ? (
+          <span title={firmada ? 'Ver la orden firmada' : 'Ver la orden de pago'}>
+            <VisorPdf documentoId={pagoLocal.ordenDocId} titulo={`Orden de pago de horas extra · ${nombre}`} className={icono}>
+              {firmada ? <FileCheck2 className="size-3.5" /> : <FileText className="size-3.5" />}
+              <span className="sr-only">{firmada ? 'Ver la orden firmada' : 'Ver la orden de pago'}</span>
+            </VisorPdf>
+          </span>
         ) : (
           !pagado && (
-            <button type="button" onClick={verOrden} disabled={ocupado !== null} className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50">
-              {ocupado === 'previa' ? <Spinner className="size-3" /> : <FileText className="size-3" />} Generar orden
-            </button>
+            <Button size="icon-sm" onClick={verOrden} disabled={ocupado !== null} aria-label="Generar orden de pago" title="Generar orden de pago (primero se ve; se guarda si confirmas)">
+              {ocupado === 'previa' ? <Spinner className="size-3.5" /> : <FilePlus2 className="size-3.5" />}
+            </Button>
           )
-        )}
-        {/* Solo se puede enviar mientras está PENDIENTE (orden generada, sin enviar). */}
-        {estado === 'PENDIENTE' && (
-          <button type="button" onClick={enviarAFirmar} disabled={ocupado !== null} className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50">
-            {ocupado === 'enviar' ? <Spinner className="size-3" /> : <Send className="size-3" />} Enviar a firmar
-          </button>
-        )}
-        {pagado && pagoLocal?.comprobanteDocId && (
-          <VisorPdf documentoId={pagoLocal.comprobanteDocId} titulo={`Comprobante de pago de horas extra · ${nombre}`} className="inline-flex items-center gap-1 text-primary hover:underline">
-            <Download className="size-3" /> Comprobante
+        )
+      )}
+      {/* Solo se puede enviar mientras está PENDIENTE (orden generada, sin enviar). */}
+      {estado === 'PENDIENTE' && (
+        <Button size="icon-sm" onClick={enviarAFirmar} disabled={ocupado !== null} aria-label="Enviar a firmar" title="Enviar a firmar (le llega al colaborador en su autoservicio)">
+          {ocupado === 'enviar' ? <Spinner className="size-3.5" /> : <Send className="size-3.5" />}
+        </Button>
+      )}
+      {pagado && pagoLocal?.comprobanteDocId && (
+        <span title="Ver el comprobante de pago">
+          <VisorPdf documentoId={pagoLocal.comprobanteDocId} titulo={`Comprobante de pago de horas extra · ${nombre}`} className={icono}>
+            <Receipt className="size-3.5" />
+            <span className="sr-only">Ver el comprobante de pago</span>
           </VisorPdf>
-        )}
-      </div>
+        </span>
+      )}
+      <BotonResumenHoy colaboradorId={colaboradorId} nombre={nombre} />
 
       {/* Vista previa de la orden: no queda nada guardado hasta que se confirme. Mismo
           visor que "Ver orden" (con su respaldo para móvil), pero sin botón propio: se
@@ -464,5 +491,35 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+/**
+ * Botón de PRUEBA: le manda al colaborador, como notificación, lo que
+ * AsistencIA le registró hoy (horas extra y recargos). Es el ensayo del aviso
+ * diario que después saldrá solo, por eso va con el ícono de mensaje.
+ */
+function BotonResumenHoy({ colaboradorId, nombre }: { colaboradorId: string; nombre: string }) {
+  const [enviando, setEnviando] = useState(false)
+
+  async function enviar() {
+    setEnviando(true)
+    const res = await enviarResumenHoy({ colaboradorId })
+    setEnviando(false)
+    if (!res.ok) { toast.error(res.error, { duration: 8000 }); return }
+    toast.success(`Aviso de prueba enviado a ${nombre}: ${res.datos.mensaje}`, { duration: 8000 })
+  }
+
+  return (
+    <Button
+      size="icon-sm"
+      variant="secondary"
+      onClick={enviar}
+      disabled={enviando}
+      aria-label="Enviar lo que marcó hoy (prueba)"
+      title="Prueba: mandarle al colaborador, como notificación, lo que AsistencIA le registró hoy"
+    >
+      {enviando ? <Spinner className="size-3.5" /> : <MessageSquareText className="size-3.5" />}
+    </Button>
   )
 }

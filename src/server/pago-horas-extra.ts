@@ -9,6 +9,7 @@ import { subirArchivo } from '@/server/storage'
 import { eliminarDocumento } from '@/server/documentos'
 import { leerFirmaComoDataUri } from '@/server/contratos-ops-pdf'
 import { renderOrdenPagoHorasExtra } from '@/server/pdf/pago-horas-extra'
+import { cerrarPagoPersonaEnAsistencia } from '@/server/asistencia/pagos-asistencia'
 import { resumenAsistencia, normalizarCedula, rangoDePeriodo, CODIGOS_ASISTENCIA } from '@/server/asistencia/cliente'
 import { avisar, avisarPorRol, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { nombreCorto } from '@/lib/notificaciones/texto'
@@ -272,14 +273,33 @@ export async function firmarOrdenHorasExtra(opts: {
   })
 
   const colaborador = await prisma.colaborador.findUnique({ where: { id: pago.colaboradorId }, select: { nombres: true, apellidos: true } })
+  const nombre = nombreCorto(colaborador?.nombres, colaborador?.apellidos)
+
+  // Con la firma, el período de esta persona se cierra en AsistencIA: allá
+  // queda congelado y marcado como pagado. Si no se pudo, se avisa y se
+  // vuelve a intentar al marcar el pago.
+  const cierre = await cerrarPagoPersonaEnAsistencia(pago)
+  if (cierre.cerrado) {
+    await dbAuditado.pagoHorasExtra.update({ where: { id: pago.id }, data: { asistenciaAnotadoEn: ahora } })
+  }
+
   await avisarPorRol(['Administrador', 'Recursos Humanos'], {
     evento: 'pago_horas_extra_firmado',
-    titulo: `${nombreCorto(colaborador?.nombres, colaborador?.apellidos)} firmó la orden de sus horas extra`,
-    mensaje: `${pago.desde.toISOString().slice(0, 10)} a ${pago.hasta.toISOString().slice(0, 10)} · ${fmtCOP(Number(pago.valor))}. Ya se puede pagar.`,
+    titulo: `${nombre} firmó la orden de sus horas extra`,
+    mensaje: `${pago.desde.toISOString().slice(0, 10)} a ${pago.hasta.toISOString().slice(0, 10)} · ${fmtCOP(Number(pago.valor))}. Ya se puede pagar.${cierre.cerrado ? ' Quedó cerrado y marcado como pagado en AsistencIA.' : ''}`,
     colaboradorId: pago.colaboradorId,
     enlace: '/nomina/novedades?tab=horas',
     llamadoAccion: 'Ir a pagarla',
   }).catch(() => {})
+  if (cierre.error) {
+    await avisarPorRol(['Administrador', 'Recursos Humanos'], {
+      evento: 'pago_horas_extra_firmado',
+      titulo: `No se pudo cerrar en AsistencIA las horas de ${nombre}`,
+      mensaje: `${cierre.error} Se volverá a intentar al marcar el pago.`,
+      colaboradorId: pago.colaboradorId,
+      enlace: '/nomina/novedades?tab=horas',
+    }).catch(() => {})
+  }
 
   return { documentoId: doc.id }
 }
@@ -301,6 +321,12 @@ export async function marcarPagoHorasExtraPagado(opts: {
   const pago = await prisma.pagoHorasExtra.findUniqueOrThrow({ where: { id: opts.pagoId } })
   if (pago.estado !== 'FIRMADA') {
     throw new ErrorNegocio('La orden debe estar firmada por el colaborador antes de poder marcar el pago.')
+  }
+
+  // Si al firmar no se pudo cerrar en AsistencIA, se reintenta ahora.
+  if (!pago.asistenciaAnotadoEn) {
+    const cierre = await cerrarPagoPersonaEnAsistencia(pago)
+    if (cierre.cerrado) await dbAuditado.pagoHorasExtra.update({ where: { id: pago.id }, data: { asistenciaAnotadoEn: new Date() } })
   }
 
   if (!opts.pdfBase64) {

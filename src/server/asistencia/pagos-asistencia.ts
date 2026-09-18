@@ -1,6 +1,6 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
-import { anotarPagadas, conexionAsistencia } from '@/server/asistencia/cliente'
+import { anotarPagadas, cerrarEnAsistencia, conexionAsistencia, normalizarCedula } from '@/server/asistencia/cliente'
 
 /**
  * Al cerrar un periodo de nómina, AsistencIA se entera de qué tramos de horas
@@ -28,5 +28,31 @@ export async function anotarPagoPeriodoEnAsistencia(
   } catch (e) {
     console.error('No se pudo anotar el pago en AsistencIA:', e)
     return { anotados: 0, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+/**
+ * Al firmar la orden de pago aparte, se cierra en AsistencIA el período de
+ * ESA persona: allá queda congelado y marcado como pagado, así nadie corrige
+ * una marcación después de firmado ni lo vuelve a pagar. Idempotente (si ya
+ * estaba cerrado, AsistencIA lo dice y no es error). De mejor esfuerzo: la
+ * firma vale igual; si AsistencIA no respondió se devuelve el error para
+ * avisar y se reintenta al marcar el pago.
+ */
+export async function cerrarPagoPersonaEnAsistencia(
+  pago: { colaboradorId: string; desde: Date; hasta: Date },
+): Promise<{ cerrado: boolean; omitido?: boolean; error?: string }> {
+  if (!(await conexionAsistencia())) return { cerrado: false, omitido: true }
+  const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: pago.colaboradorId }, select: { numeroDocumento: true } })
+  const cedula = normalizarCedula(colab.numeroDocumento)
+  const periodo = { desde: pago.desde.toISOString().slice(0, 10), hasta: pago.hasta.toISOString().slice(0, 10) }
+  try {
+    const r = await cerrarEnAsistencia(periodo, [cedula])
+    if (r.cerrados.includes(cedula) || r.yaCerrados.includes(cedula)) return { cerrado: true }
+    if (r.sinExtras.includes(cedula)) return { cerrado: false, error: `La cédula ${cedula} no existe en AsistencIA.` }
+    return { cerrado: false, error: 'AsistencIA no confirmó el cierre.' }
+  } catch (e) {
+    console.error('No se pudo cerrar el período en AsistencIA:', e)
+    return { cerrado: false, error: e instanceof Error ? e.message : String(e) }
   }
 }

@@ -2097,6 +2097,9 @@ model PagoHorasExtra {
   comprobanteDocId String?              @map("comprobante_doc_id") @db.Uuid // soporte de que ya se pagó (siempre se sube)
   pagadoEn         DateTime?            @map("pagado_en")
   pagadoPorId      String?              @map("pagado_por_id") @db.Uuid
+  // Cuándo se le anotó a AsistencIA que estas horas quedaron pagadas y cerradas
+  // (al firmar la orden); null si todavía no se pudo (se reintenta al marcar el pago).
+  asistenciaAnotadoEn DateTime?         @map("asistencia_anotado_en")
   creadoEn         DateTime             @default(now()) @map("creado_en")
   actualizadoEn    DateTime             @updatedAt @map("actualizado_en")
   evidenciasFirma  EvidenciaFirmaContrato[]

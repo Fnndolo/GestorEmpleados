@@ -191,7 +191,9 @@ export async function quitarAvatar(cedula: string): Promise<void> {
 /**
  * Anota en AsistencIA que esos tramos ya se pagaron (o deshace la anotación con
  * `pagado: false`). Es idempotente: repetirlo no duplica nada. AsistencIA no
- * mueve dinero; solo deja de mostrarlos como pendientes.
+ * mueve dinero; solo deja de mostrarlos como pendientes. Ojo: es solo una
+ * anotación, las marcaciones siguen editables allá; lo que congela de verdad
+ * es `cerrarEnAsistencia`.
  */
 export async function anotarPagadas(referencias: string[], pagado = true): Promise<{ afectados: number }> {
   const limpias = [...new Set(referencias.filter(Boolean))]
@@ -201,4 +203,38 @@ export async function anotarPagadas(referencias: string[], pagado = true): Promi
     body: JSON.stringify(pagado ? { referencias: limpias } : { referencias: limpias, pagado: false }),
   })
   return { afectados: r.afectados ?? 0 }
+}
+
+/** Lo que responde AsistencIA al cerrar: a quién congeló ahora, quién ya lo estaba y qué cédulas no existen allá. */
+export type CierreAsistencia = { desde: string; hasta: string; cerrados: string[]; yaCerrados: string[]; sinExtras: string[] }
+
+/**
+ * Cierra en AsistencIA el período de esas personas: allá guardan los tramos
+ * tal como quedaron, los marcan pagados y los sirven congelados aunque después
+ * cambie una marcación o la configuración. Es lo que se llama cuando el
+ * colaborador firma su orden de pago. Idempotente: quien ya estaba cerrado en
+ * ese período exacto vuelve en `yaCerrados`, nunca es error. `sinExtras` son
+ * cédulas que NO existen allá (el nombre engaña); una persona sin horas sí se
+ * cierra, en cero. El período debe ser el MISMO (desde/hasta exactos) con que
+ * se consultaron las horas.
+ */
+export async function cerrarEnAsistencia(periodo: { desde: string; hasta: string }, documentos: string[]): Promise<CierreAsistencia> {
+  const cedulas = [...new Set(documentos.map(normalizarCedula).filter(Boolean))]
+  if (cedulas.length === 0) return { desde: periodo.desde, hasta: periodo.hasta, cerrados: [], yaCerrados: [], sinExtras: [] }
+  const r = await llamar<CierreAsistencia>('/api/horas/cierre', {
+    method: 'POST',
+    body: JSON.stringify({ desde: periodo.desde, hasta: periodo.hasta, documentos: cedulas }),
+  })
+  return { desde: r.desde, hasta: r.hasta, cerrados: r.cerrados ?? [], yaCerrados: r.yaCerrados ?? [], sinExtras: r.sinExtras ?? [] }
+}
+
+/** Deshace el cierre (y la anotación de pago) de esas personas en ese período exacto. Idempotente. */
+export async function reabrirEnAsistencia(periodo: { desde: string; hasta: string }, documentos: string[]): Promise<{ reabiertos: string[] }> {
+  const cedulas = [...new Set(documentos.map(normalizarCedula).filter(Boolean))]
+  if (cedulas.length === 0) return { reabiertos: [] }
+  const r = await llamar<{ reabiertos: string[] }>('/api/horas/cierre', {
+    method: 'DELETE',
+    body: JSON.stringify({ desde: periodo.desde, hasta: periodo.hasta, documentos: cedulas }),
+  })
+  return { reabiertos: r.reabiertos ?? [] }
 }

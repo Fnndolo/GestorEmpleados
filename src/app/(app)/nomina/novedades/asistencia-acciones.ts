@@ -9,6 +9,7 @@ import {
   CODIGOS_ASISTENCIA, ErrorAsistencia, normalizarCedula, rangoDePeriodo, resumenAsistencia,
 } from '@/server/asistencia/cliente'
 import { sincronizarHorasAsistencia } from '@/server/asistencia/horas-asistencia'
+import { enviarResumenDiaAsistencia } from '@/server/asistencia/resumen-dia'
 import { urlFoto } from '@/lib/foto'
 import {
   generarOrdenPagoHorasExtra, previsualizarOrdenPagoHorasExtra, enviarOrdenHorasExtraAFirma,
@@ -57,6 +58,8 @@ export type FilaAsistencia = {
     estado: 'PENDIENTE' | 'ENVIADA_A_FIRMA' | 'FIRMADA' | 'PAGADO'
     ordenDocId: string | null
     comprobanteDocId: string | null
+    /** Ya quedó cerrado y marcado como pagado en AsistencIA (al firmar, o al marcar el pago). */
+    anotadoEnAsistencia: boolean
   } | null
 }
 
@@ -101,7 +104,7 @@ export const consultarHorasAsistencia = accion(
     const pagos = colaboradorIds.length
       ? await prisma.pagoHorasExtra.findMany({
           where: { colaboradorId: { in: colaboradorIds }, desde, hasta },
-          select: { id: true, colaboradorId: true, estado: true, ordenDocId: true, comprobanteDocId: true },
+          select: { id: true, colaboradorId: true, estado: true, ordenDocId: true, comprobanteDocId: true, asistenciaAnotadoEn: true },
         })
       : []
     const pagoPorColaborador = new Map(pagos.map((p) => [p.colaboradorId, p]))
@@ -125,7 +128,7 @@ export const consultarHorasAsistencia = accion(
         periodos,
         pagoLocal: activa ? (() => {
           const p = pagoPorColaborador.get(activa.id)
-          return p ? { id: p.id, estado: p.estado, ordenDocId: p.ordenDocId, comprobanteDocId: p.comprobanteDocId } : null
+          return p ? { id: p.id, estado: p.estado, ordenDocId: p.ordenDocId, comprobanteDocId: p.comprobanteDocId, anotadoEnAsistencia: p.asistenciaAnotadoEn != null } : null
         })() : null,
       }
     })
@@ -226,4 +229,14 @@ export const marcarPagoPendiente = accion(
     await auditar('EDITAR', 'PagoHorasExtra', { registroId: d.pagoId, descripcion: 'Pago de horas extra corregido (vuelto a firmada)' })
     revalidatePath('/nomina/novedades')
   },
+)
+
+/**
+ * Botón de prueba: le manda al colaborador, como notificación, lo que
+ * AsistencIA le registró HOY (horas extra y recargos). Es el ensayo del aviso
+ * diario que después saldrá solo.
+ */
+export const enviarResumenHoy = accion(
+  { modulo: 'nomina', accion: 'CREAR', schema: z.object({ colaboradorId: z.uuid() }) },
+  async (d) => enviarResumenDiaAsistencia(d.colaboradorId).catch(traducir),
 )
