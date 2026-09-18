@@ -421,7 +421,7 @@ export const resolverPaso = accion(
     if (siguiente) {
       await avisarAprobadoresDelPaso(paso.solicitudId, siguiente.orden)
     } else {
-      await ejecutarEfecto(paso.solicitudId, usuario.id)
+      await ejecutarEfecto(paso.solicitudId, usuario.id, { comentario: d.comentario })
     }
     revalidatePath('/autoservicio')
     revalidatePath('/autoservicio/aprobaciones')
@@ -438,7 +438,7 @@ async function usuarioPuedeResolver(usuario: UsuarioSesion, paso: { usaJefeInmed
   return paso.rolAprobador != null && usuario.rolNombre === paso.rolAprobador
 }
 
-async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { constancia?: string }) {
+async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { constancia?: string; comentario?: string | null }) {
   const s = await prisma.solicitud.findUniqueOrThrow({ where: { id: solicitudId } })
   const datos = s.datos as Record<string, string>
   let resultado = 'Aprobada'
@@ -561,8 +561,14 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
 
   const resultadoFinal = opts?.constancia ? `${resultado} · ${opts.constancia}` : resultado
   await dbAuditado.solicitud.update({ where: { id: solicitudId }, data: { estado: 'APROBADA', resultado: resultadoFinal } })
-  // En auto-registro (representante legal) no se notifica a sí mismo.
-  if (!opts?.constancia) await avisarSolicitante(solicitudId, aviso.titulo, aviso.mensaje)
+  // En auto-registro (representante legal) no se notifica a sí mismo. El
+  // comentario opcional de quien aprobó viaja en el mismo aviso: ya quedaba en
+  // el historial, pero el colaborador se entera por la notificación, no
+  // abriendo el paso.
+  if (!opts?.constancia) {
+    const nota = opts?.comentario?.trim()
+    await avisarSolicitante(solicitudId, aviso.titulo, nota ? `${aviso.mensaje} · "${nota}"` : aviso.mensaje)
+  }
 }
 
 /**
