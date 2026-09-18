@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Pill } from '@/components/ui-kit'
 import { SoportesLista, type SoporteDoc } from '@/app/(app)/juridica/_ui'
+import { RutaProceso } from '@/components/juridica/ruta-proceso'
+import type { FaseRuta } from '@/lib/ruta-disciplinaria'
 
 /**
  * Un proceso disciplinario en la vista del colaborador: plegado muestra el
@@ -30,12 +32,14 @@ const BORDE_ETAPA: Record<string, string> = {
 }
 
 export function ProcesoPlegable({
-  asunto, clase, etapaEtiqueta, cerrado, descripcion, etapas, plazo, children,
+  asunto, clase, etapaEtiqueta, cerrado, ruta, descripcion, etapas, plazo, children,
 }: {
   asunto: string
   clase: string
   etapaEtiqueta: string
   cerrado: boolean
+  /** Fases cumplidas / en curso / pendientes: siempre a la vista, aunque esté plegado. */
+  ruta: FaseRuta[]
   descripcion: string | null
   etapas: EtapaItem[]
   /** "Tienes hasta el … para presentar tus descargos", solo mientras corre el plazo. */
@@ -64,6 +68,11 @@ export function ProcesoPlegable({
           </span>
           <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', abierto && 'rotate-180')} />
         </button>
+
+        {/* El rastreo de fases va fuera del botón y siempre visible: es lo primero que se quiere saber. */}
+        <div className="mt-3 rounded-lg border bg-muted/20 px-3 py-3">
+          <RutaProceso fases={ruta} compacta />
+        </div>
 
         {plazo && <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-400">{plazo}</p>}
         {children && <div className="mt-2">{children}</div>}

@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { formatFechaLarga, hoyBogota } from '@/lib/fechas'
 import { SoportesLista, type SoporteDoc } from '../../_ui'
 import { AccionesDisciplinario } from './acciones-disciplinario'
+import { RutaProceso } from '@/components/juridica/ruta-proceso'
+import { rutaDisciplinaria } from '@/lib/ruta-disciplinaria'
 
 export const metadata = { title: 'Proceso disciplinario · Smart Gadgets RH' }
 
@@ -56,6 +58,11 @@ export default async function DisciplinarioPage({ params }: { params: Promise<{ 
         }
       />
       <p className="mb-4"><Link href={`/colaboradores/${p.colaborador.id}`} className="text-sm text-primary hover:underline">Ver ficha →</Link></p>
+
+      {/* En qué va, de un vistazo: fases cumplidas, en curso y pendientes, como el rastreo de un envío. */}
+      <Card className="mb-4"><CardContent className="px-5 py-5">
+        <RutaProceso fases={rutaDisciplinaria(p)} />
+      </CardContent></Card>
 
       {p.descripcion && <Card className="mb-4"><CardContent className="py-3 text-sm text-muted-foreground">{p.descripcion}</CardContent></Card>}
 

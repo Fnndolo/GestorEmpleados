@@ -10,6 +10,7 @@ import { fechaBreve } from '@/lib/notificaciones/texto'
 import { Descargos, Apelacion } from './descargos'
 import type { SoporteDoc } from '@/app/(app)/juridica/_ui'
 import { ProcesoPlegable } from './proceso-plegable'
+import { rutaDisciplinaria } from '@/lib/ruta-disciplinaria'
 
 export const metadata = { title: 'Mis procesos disciplinarios · Smart Gadgets RH' }
 
@@ -102,6 +103,7 @@ export default async function MisDisciplinariosPage() {
                 clase={p.clase}
                 etapaEtiqueta={ETAPA[p.etapa] ?? p.etapa}
                 cerrado={p.cerrado}
+                ruta={rutaDisciplinaria(p)}
                 descripcion={p.descripcion}
                 etapas={p.etapas.map((e) => ({
                   id: e.id, etapa: e.etapa, etiqueta: ETAPA[e.etapa] ?? e.etapa, fecha: formatFechaLarga(e.fecha), detalle: e.detalle, soportes: porEtapa.get(e.id) ?? [],
