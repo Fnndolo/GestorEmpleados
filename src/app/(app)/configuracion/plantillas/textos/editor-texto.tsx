@@ -12,8 +12,9 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { TEXTOS, type ClaveTexto, type PlantillaTexto } from '@/lib/plantillas-documento/textos'
+import { TEXTOS, type ClaveTexto, type TextoDocumento } from '@/lib/plantillas-documento/textos'
 import { PreviewTexto } from '@/components/plantillas/preview-texto'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { guardarPlantillaTexto, restaurarPlantillaTexto } from './acciones'
@@ -38,7 +39,7 @@ export function EditorTexto({
   clave, plantilla, personalizada, puedeEditar, empresa,
 }: {
   clave: ClaveTexto
-  plantilla: PlantillaTexto
+  plantilla: TextoDocumento
   personalizada: boolean
   puedeEditar: boolean
   empresa: EmpresaPreview
@@ -47,13 +48,14 @@ export function EditorTexto({
   const router = useRouter()
   const [titulo, setTitulo] = useState(plantilla.titulo)
   const [contenido, setContenido] = useState(plantilla.contenido)
+  const [usaMembrete, setUsaMembrete] = useState(plantilla.usaMembrete)
   const [variante, setVariante] = useState(def.variantes[0]?.valor ?? '')
   const [guardando, setGuardando] = useState(false)
   // Móvil: alterna entre editar y ver el documento (en xl se muestran ambos).
   const [vista, setVista] = useState<'editar' | 'preview'>('editar')
   const area = useRef<HTMLTextAreaElement>(null)
 
-  const cambiado = titulo !== plantilla.titulo || contenido !== plantilla.contenido
+  const cambiado = titulo !== plantilla.titulo || contenido !== plantilla.contenido || usaMembrete !== plantilla.usaMembrete
   const valido = titulo.trim().length >= 3 && contenido.trim().length >= 5
   const id = clave.toLowerCase().replace(/_/g, '-')
 
@@ -78,7 +80,7 @@ export function EditorTexto({
 
   async function guardar() {
     setGuardando(true)
-    const res = await guardarPlantillaTexto({ clave, titulo, contenido })
+    const res = await guardarPlantillaTexto({ clave, titulo, contenido, usaMembrete })
     setGuardando(false)
     if (res.ok) {
       toast.success('Texto guardado. Aplica desde el próximo documento que se genere.')
@@ -94,6 +96,7 @@ export function EditorTexto({
     if (res.ok) {
       setTitulo(def.defecto.titulo)
       setContenido(def.defecto.contenido)
+      setUsaMembrete(def.membrete)
       toast.success('Se restauró el texto de la aplicación.')
       router.refresh()
     } else toast.error(res.error)
@@ -119,6 +122,19 @@ export function EditorTexto({
             <p className="text-sm font-medium">Texto del documento</p>
             <Badge variant={personalizada ? 'default' : 'secondary'}>{personalizada ? 'Personalizado' : 'De la aplicación'}</Badge>
             {cambiado && <Badge variant="outline">Cambios sin guardar</Badge>}
+          </div>
+
+          {/* Papel membretado o encabezado sencillo: se ve al instante en la vista previa. */}
+          <div className="flex items-start justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2.5">
+            <div className="min-w-0">
+              <Label htmlFor={`${id}-membrete`} className="text-sm font-medium">Papel membretado</Label>
+              <p className="text-xs text-muted-foreground">
+                {usaMembrete
+                  ? 'El PDF va sobre el papel membretado de Ajustes (logo, marca de agua y pie de contacto).'
+                  : 'Sin membrete: la app pone un encabezado sencillo con el nombre de la empresa y el NIT, y el pie con la razón social.'}
+              </p>
+            </div>
+            <Switch id={`${id}-membrete`} checked={usaMembrete} onCheckedChange={setUsaMembrete} disabled={!puedeEditar} aria-label="Usar papel membretado" />
           </div>
 
           <div className="space-y-1.5">
@@ -217,7 +233,7 @@ export function EditorTexto({
         </div>
         {/* Vive dentro de una ventana emergente que ya hace scroll: sin sticky ni alto fijo. */}
         <div className="rounded-lg border bg-muted/30 p-3">
-          <PreviewTexto clave={clave} plantilla={{ titulo, contenido }} variante={variante} empresa={empresa} />
+          <PreviewTexto clave={clave} plantilla={{ titulo, contenido }} membrete={usaMembrete} variante={variante} empresa={empresa} />
         </div>
       </div>
     </div>

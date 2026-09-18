@@ -1,9 +1,9 @@
-import { Document, Page, Text, View, Image, renderToBuffer } from '@react-pdf/renderer'
+import { Document, Text, View, Image, renderToBuffer } from '@react-pdf/renderer'
 import { estilos } from './estilos'
-import { Membrete, Pie, type DatosEmpresa } from './membrete'
-import { BloquesPdf, NotasPdf } from './bloques-texto'
+import type { DatosEmpresa } from './membrete'
+import { BloquesPdf, HojaTexto, NotasPdf, fondoParaTexto } from './bloques-texto'
 import { plantillaTexto } from '@/server/plantillas-documento'
-import { resolverTexto, variablesActaEpp, type PlantillaTexto, type TextoResuelto } from '@/lib/plantillas-documento/textos'
+import { resolverTexto, variablesActaEpp, type TextoDocumento, type TextoResuelto } from '@/lib/plantillas-documento/textos'
 import { formatFechaLarga } from '@/lib/fechas'
 
 export type DatosActaEpp = {
@@ -23,7 +23,7 @@ export type DatosActaEpp = {
  * El texto viene de Ajustes → Plantillas de documentos (clave ACTA_EPP); aquí
  * solo se pone la hoja: membrete, tabla del elemento, firmas y pie.
  */
-function Doc({ d, texto }: { d: DatosActaEpp; texto: TextoResuelto }) {
+function Doc({ d, texto, membrete, fondo }: { d: DatosActaEpp; texto: TextoResuelto; membrete: boolean; fondo?: string }) {
   const tabla = (
     <View style={estilos.tabla}>
       <Fila k="Elemento" v={d.elemento} />
@@ -33,8 +33,7 @@ function Doc({ d, texto }: { d: DatosActaEpp; texto: TextoResuelto }) {
   )
   return (
     <Document>
-      <Page size="LETTER" style={estilos.page}>
-        <Membrete empresa={d.empresa} />
+      <HojaTexto empresa={d.empresa} membrete={membrete} fondo={fondo} pie={`${d.empresa.razonSocial} · NIT ${d.empresa.nit}`}>
         <Text style={estilos.titulo}>{texto.titulo.toUpperCase()}</Text>
         <BloquesPdf bloques={texto.bloques} tabla={tabla} />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 56 }} wrap={false}>
@@ -51,8 +50,7 @@ function Doc({ d, texto }: { d: DatosActaEpp; texto: TextoResuelto }) {
           <View style={estilos.firmaLinea}><Text>Responsable SST</Text><Text style={{ fontSize: 8 }}>{d.empresa.nombreComercial}</Text></View>
         </View>
         <NotasPdf notas={texto.notas} />
-        <Pie texto={`${d.empresa.razonSocial} · NIT ${d.empresa.nit}`} />
-      </Page>
+      </HojaTexto>
     </Document>
   )
 }
@@ -67,7 +65,8 @@ function Fila({ k, v }: { k: string; v: string }) {
 }
 
 /** Renderiza la constancia con el texto vigente de Ajustes, salvo que se pase `plantilla` (muestras). */
-export async function renderActaEpp(d: DatosActaEpp, plantilla?: PlantillaTexto): Promise<Buffer> {
+export async function renderActaEpp(d: DatosActaEpp, plantilla?: TextoDocumento): Promise<Buffer> {
   const texto = plantilla ?? (await plantillaTexto('ACTA_EPP'))
-  return renderToBuffer(<Doc d={d} texto={resolverTexto(texto, variablesActaEpp(d))} />)
+  const fondo = await fondoParaTexto(texto.usaMembrete)
+  return renderToBuffer(<Doc d={d} texto={resolverTexto(texto, variablesActaEpp(d))} membrete={texto.usaMembrete} fondo={fondo} />)
 }

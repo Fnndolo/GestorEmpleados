@@ -1,9 +1,9 @@
-import { Document, Page, Text, View, Image, renderToBuffer } from '@react-pdf/renderer'
+import { Document, Text, View, Image, renderToBuffer } from '@react-pdf/renderer'
 import { estilos } from './estilos'
-import { Membrete, Pie, type DatosEmpresa } from './membrete'
-import { BloquesPdf, NotasPdf } from './bloques-texto'
+import type { DatosEmpresa } from './membrete'
+import { BloquesPdf, HojaTexto, NotasPdf, fondoParaTexto } from './bloques-texto'
 import { plantillaTexto } from '@/server/plantillas-documento'
-import { resolverTexto, variablesActaDotacion, type PlantillaTexto, type TextoResuelto } from '@/lib/plantillas-documento/textos'
+import { resolverTexto, variablesActaDotacion, type TextoDocumento, type TextoResuelto } from '@/lib/plantillas-documento/textos'
 import { formatFechaLarga } from '@/lib/fechas'
 
 export type DatosActaDotacion = {
@@ -23,7 +23,7 @@ export type DatosActaDotacion = {
  * El texto viene de Ajustes → Plantillas de documentos (clave ACTA_DOTACION);
  * aquí solo se pone la hoja: membrete, tabla de elementos, firmas y pie.
  */
-function Doc({ d, texto }: { d: DatosActaDotacion; texto: TextoResuelto }) {
+function Doc({ d, texto, membrete, fondo }: { d: DatosActaDotacion; texto: TextoResuelto; membrete: boolean; fondo?: string }) {
   const tabla = (
     <View style={estilos.tabla}>
       <View style={estilos.fila}>
@@ -34,8 +34,7 @@ function Doc({ d, texto }: { d: DatosActaDotacion; texto: TextoResuelto }) {
   )
   return (
     <Document>
-      <Page size="LETTER" style={estilos.page}>
-        <Membrete empresa={d.empresa} />
+      <HojaTexto empresa={d.empresa} membrete={membrete} fondo={fondo} pie={`${d.empresa.razonSocial} · NIT ${d.empresa.nit}`}>
         <Text style={estilos.titulo}>{texto.titulo.toUpperCase()}</Text>
         <BloquesPdf bloques={texto.bloques} tabla={tabla} />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 48 }} wrap={false}>
@@ -52,14 +51,14 @@ function Doc({ d, texto }: { d: DatosActaDotacion; texto: TextoResuelto }) {
           <View style={estilos.firmaLinea}><Text>Talento Humano</Text><Text style={{ fontSize: 8 }}>{d.empresa.nombreComercial}</Text></View>
         </View>
         <NotasPdf notas={texto.notas} />
-        <Pie texto={`${d.empresa.razonSocial} · NIT ${d.empresa.nit}`} />
-      </Page>
+      </HojaTexto>
     </Document>
   )
 }
 
 /** Renderiza el recibido con el texto vigente de Ajustes, salvo que se pase `plantilla` (muestras). */
-export async function renderActaDotacion(d: DatosActaDotacion, plantilla?: PlantillaTexto): Promise<Buffer> {
+export async function renderActaDotacion(d: DatosActaDotacion, plantilla?: TextoDocumento): Promise<Buffer> {
   const texto = plantilla ?? (await plantillaTexto('ACTA_DOTACION'))
-  return renderToBuffer(<Doc d={d} texto={resolverTexto(texto, variablesActaDotacion(d))} />)
+  const fondo = await fondoParaTexto(texto.usaMembrete)
+  return renderToBuffer(<Doc d={d} texto={resolverTexto(texto, variablesActaDotacion(d))} membrete={texto.usaMembrete} fondo={fondo} />)
 }

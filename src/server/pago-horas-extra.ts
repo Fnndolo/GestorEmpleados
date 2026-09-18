@@ -7,7 +7,6 @@ import { ErrorNegocio } from '@/server/accion'
 import { contextoActual } from '@/server/contexto'
 import { subirArchivo } from '@/server/storage'
 import { eliminarDocumento } from '@/server/documentos'
-import { fondoMembrete } from '@/server/pdf/fondo-membrete'
 import { leerFirmaComoDataUri } from '@/server/contratos-ops-pdf'
 import { renderOrdenPagoHorasExtra } from '@/server/pdf/pago-horas-extra'
 import { resumenAsistencia, normalizarCedula, rangoDePeriodo, CODIGOS_ASISTENCIA } from '@/server/asistencia/cliente'
@@ -96,10 +95,9 @@ async function upsertPago(colaboradorId: string, mes: string, quincena: 1 | 2 | 
  * queda archivado.
  */
 async function renderizarPdfDePago(pago: PagoHorasExtra, firma?: { dataUri: string; fecha: Date } | null): Promise<Buffer> {
-  const [colaborador, empresa, { src, propio }] = await Promise.all([
+  const [colaborador, empresa] = await Promise.all([
     prisma.colaborador.findUniqueOrThrow({ where: { id: pago.colaboradorId }, include: { banco: true } }),
     prisma.configuracionEmpresa.findFirstOrThrow(),
-    fondoMembrete(),
   ])
 
   return renderOrdenPagoHorasExtra(
@@ -120,7 +118,6 @@ async function renderizarPdfDePago(pago: PagoHorasExtra, firma?: { dataUri: stri
       valor: Number(pago.valor),
       firma: firma ? { dataUri: firma.dataUri, fecha: formatFechaLarga(firma.fecha) } : null,
     },
-    propio ? src : undefined,
   )
 }
 

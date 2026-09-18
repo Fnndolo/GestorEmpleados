@@ -13,7 +13,7 @@ import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { enfocarDialogo } from '@/components/ui-kit'
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import type { DatosAutorizacion, PlantillaAutorizacion } from '@/lib/plantillas-documento/autorizacion-datos'
-import { TEXTOS, esClaveTexto, type ClaveTexto, type PlantillaTexto } from '@/lib/plantillas-documento/textos'
+import { TEXTOS, esClaveTexto, type ClaveTexto, type TextoDocumento } from '@/lib/plantillas-documento/textos'
 import { MembretePanel } from './membrete/membrete-panel'
 import { EditorAutorizacion } from './autorizacion-datos/editor'
 import { PlantillasCliente } from './cuentas-cobro/plantillas-cliente'
@@ -28,7 +28,7 @@ type Autorizacion = {
 }
 
 export type TextoEditable = {
-  plantilla: PlantillaTexto
+  plantilla: TextoDocumento
   personalizada: boolean
   estado: string
 }

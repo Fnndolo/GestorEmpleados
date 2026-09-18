@@ -13,9 +13,8 @@ import { renderActaDotacion } from './acta-dotacion'
 import { renderActaEpp } from './acta-epp'
 import { renderCertificacion } from './certificacion'
 import { renderOrdenPagoHorasExtra } from './pago-horas-extra'
-import { fondoMembrete } from './fondo-membrete'
 import { plantillaTexto } from '@/server/plantillas-documento'
-import type { ClaveTexto, PlantillaTexto } from '@/lib/plantillas-documento/textos'
+import type { ClaveTexto, TextoDocumento } from '@/lib/plantillas-documento/textos'
 import {
   muestraActaActivo, muestraActaDotacion, muestraActaEpp, muestraCertificacion, muestraOrdenPago,
 } from '@/lib/plantillas-documento/textos-muestra'
@@ -271,7 +270,7 @@ export async function renderMuestraPlantilla(plantillaId: string): Promise<Buffe
  * (para ver un borrador sin guardarlo). `variante` elige el caso: tipo de
  * certificación, un activo o varios, entrega inicial o reposición.
  */
-export async function renderMuestraTexto(clave: ClaveTexto, variante: string, plantilla?: PlantillaTexto): Promise<Buffer> {
+export async function renderMuestraTexto(clave: ClaveTexto, variante: string, plantilla?: TextoDocumento): Promise<Buffer> {
   const empresa = await empresaActual()
   const texto = plantilla ?? (await plantillaTexto(clave))
 
@@ -286,10 +285,8 @@ export async function renderMuestraTexto(clave: ClaveTexto, variante: string, pl
       return renderActaDotacion({ ...muestraActaDotacion(empresa), empresa }, texto)
     case 'ACTA_EPP':
       return renderActaEpp({ ...muestraActaEpp(variante, empresa), empresa }, texto)
-    case 'ORDEN_PAGO_HORAS_EXTRA': {
-      const { src, propio } = await fondoMembrete()
-      return renderOrdenPagoHorasExtra({ ...muestraOrdenPago(empresa), empresa, firma: null }, propio ? src : undefined, texto)
-    }
+    case 'ORDEN_PAGO_HORAS_EXTRA':
+      return renderOrdenPagoHorasExtra({ ...muestraOrdenPago(empresa), empresa, firma: null }, texto)
     case 'CERTIFICACION_LABORAL':
     case 'CERTIFICACION_CONTRACTUAL':
       return renderCertificacion(

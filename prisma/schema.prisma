@@ -1579,6 +1579,9 @@ model PlantillaDocumento {
   categoria     String // "contrato", "carta_preaviso", "certificacion"…
   tipoVinculo   TipoVinculo? @map("tipo_vinculo")
   contenido     String // texto con variables {{colaborador.nombres}}…
+  // Textos editables (actas, orden de pago, certificaciones): ¿el PDF va sobre
+  // el papel membretado de Ajustes? null = lo que trae cada documento de fábrica.
+  usaMembrete   Boolean?     @map("usa_membrete")
   activa        Boolean      @default(true)
   creadoEn      DateTime     @default(now()) @map("creado_en")
   actualizadoEn DateTime     @updatedAt @map("actualizado_en")

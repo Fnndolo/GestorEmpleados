@@ -1,8 +1,8 @@
-import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
-import { MembreteFondo, type DatosEmpresa } from './membrete'
-import { BloquesPdf, NotasPdf } from './bloques-texto'
+import { Document, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
+import type { DatosEmpresa } from './membrete'
+import { BloquesPdf, HojaTexto, NotasPdf, fondoParaTexto } from './bloques-texto'
 import { plantillaTexto } from '@/server/plantillas-documento'
-import { resolverTexto, variablesOrdenPago, type PlantillaTexto, type TextoResuelto } from '@/lib/plantillas-documento/textos'
+import { resolverTexto, variablesOrdenPago, type TextoDocumento, type TextoResuelto } from '@/lib/plantillas-documento/textos'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaLarga } from '@/lib/fechas'
 
@@ -17,12 +17,13 @@ import { formatFechaLarga } from '@/lib/fechas'
  * reservado y, cuando ya está firmada, dibujar el PNG ahí encima al re-renderizar.
  *
  * El título y el texto alrededor de la tabla se editan en Ajustes → Plantillas
- * de documentos (clave ORDEN_PAGO_HORAS_EXTRA); la cabecera (número, fecha,
+ * de documentos (clave ORDEN_PAGO_HORAS_EXTRA), y ahí mismo se elige si va
+ * sobre el papel membretado (de fábrica, sí); la cabecera (número, fecha,
  * colaborador, período), la tabla de horas, el total y la firma los pone la app.
  */
 
 const s = StyleSheet.create({
-  page: { paddingTop: 122, paddingBottom: 80, paddingHorizontal: 56, fontSize: 10, fontFamily: 'Helvetica', color: '#0f172a', lineHeight: 1.5 },
+  page: { fontSize: 10 },
   titulo: { fontSize: 14, fontFamily: 'Helvetica-Bold', textAlign: 'center', marginBottom: 4 },
   subtitulo: { fontSize: 9.5, textAlign: 'center', color: '#475569', marginBottom: 20 },
   fila: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
@@ -87,12 +88,10 @@ function TablaHoras({ d }: { d: DatosOrdenPagoHorasExtra }) {
   )
 }
 
-function Doc({ d, texto, fondo }: { d: DatosOrdenPagoHorasExtra; texto: TextoResuelto; fondo?: string }) {
+function Doc({ d, texto, membrete, fondo }: { d: DatosOrdenPagoHorasExtra; texto: TextoResuelto; membrete: boolean; fondo?: string }) {
   return (
     <Document>
-      <Page size="LETTER" style={s.page}>
-        <MembreteFondo fondo={fondo} empresa={d.empresa} />
-
+      <HojaTexto empresa={d.empresa} membrete={membrete} fondo={fondo} estilo={s.page} pie={`${d.empresa.razonSocial} · NIT ${d.empresa.nit}`}>
         <Text style={s.titulo}>{texto.titulo.toUpperCase()}</Text>
         <Text style={s.subtitulo}>No. {d.numero} · {formatFechaLarga(d.fecha)}</Text>
 
@@ -114,13 +113,18 @@ function Doc({ d, texto, fondo }: { d: DatosOrdenPagoHorasExtra; texto: TextoRes
           {d.firma && <Text style={s.firmaFecha}>Firmado electrónicamente el {d.firma.fecha}</Text>}
         </View>
         <NotasPdf notas={texto.notas} />
-      </Page>
+      </HojaTexto>
     </Document>
   )
 }
 
-/** Renderiza la orden con el texto vigente de Ajustes, salvo que se pase `plantilla` (muestras). */
-export async function renderOrdenPagoHorasExtra(d: DatosOrdenPagoHorasExtra, fondo?: string, plantilla?: PlantillaTexto): Promise<Buffer> {
+/**
+ * Renderiza la orden con el texto vigente de Ajustes, salvo que se pase
+ * `plantilla` (muestras). El membrete propio de la empresa se resuelve aquí
+ * mismo, solo si el texto lo usa.
+ */
+export async function renderOrdenPagoHorasExtra(d: DatosOrdenPagoHorasExtra, plantilla?: TextoDocumento): Promise<Buffer> {
   const texto = plantilla ?? (await plantillaTexto('ORDEN_PAGO_HORAS_EXTRA'))
-  return renderToBuffer(<Doc d={d} texto={resolverTexto(texto, variablesOrdenPago(d))} fondo={fondo} />)
+  const fondo = await fondoParaTexto(texto.usaMembrete)
+  return renderToBuffer(<Doc d={d} texto={resolverTexto(texto, variablesOrdenPago(d))} membrete={texto.usaMembrete} fondo={fondo} />)
 }

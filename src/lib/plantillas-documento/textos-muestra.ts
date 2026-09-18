@@ -46,7 +46,8 @@ export type FijosMuestra = {
   /** Filas etiqueta/valor bajo el subtítulo (solo la orden de pago). */
   filas?: [string, string][]
   firmas: { nombre: string; detalle: string; conFirma: boolean }[]
-  pie: string | null
+  /** Pie de texto, para cuando el documento va sin papel membretado. */
+  pie: string
 }
 
 export type MuestraTexto = {
@@ -200,7 +201,7 @@ export function muestraTexto(clave: ClaveTexto, variante: string, empresa: Empre
           subtitulo: `No. ${vars.numero} · ${vars.fecha}`,
           filas: [['Colaborador', `${vars.nombre} · ${vars.documento}`], ['Período', `${vars.periodo_desde} a ${vars.periodo_hasta}`]],
           firmas: [{ nombre: MUESTRA_PERSONA.nombre, detalle: `${MUESTRA_PERSONA.documento} · Firmado electrónicamente el (fecha de la firma)`, conFirma: true }],
-          pie: null,
+          pie,
         },
       }
     }

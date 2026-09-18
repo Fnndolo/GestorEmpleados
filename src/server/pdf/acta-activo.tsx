@@ -1,9 +1,9 @@
-import { Document, Page, Text, View, Image, renderToBuffer } from '@react-pdf/renderer'
+import { Document, Text, View, Image, renderToBuffer } from '@react-pdf/renderer'
 import { estilos } from './estilos'
-import { Membrete, Pie, type DatosEmpresa } from './membrete'
-import { BloquesPdf, NotasPdf } from './bloques-texto'
+import type { DatosEmpresa } from './membrete'
+import { BloquesPdf, HojaTexto, NotasPdf, fondoParaTexto } from './bloques-texto'
 import { plantillaTexto } from '@/server/plantillas-documento'
-import { resolverTexto, variablesActaActivo, type PlantillaTexto, type TextoResuelto } from '@/lib/plantillas-documento/textos'
+import { resolverTexto, variablesActaActivo, type TextoDocumento, type TextoResuelto } from '@/lib/plantillas-documento/textos'
 import { formatFechaLarga } from '@/lib/fechas'
 import { fmtCOP } from '@/lib/moneda'
 
@@ -68,11 +68,10 @@ function TablaActivos({ activos }: { activos: ActivoActa[] }) {
  * Plantillas de documentos (claves ACTA_ACTIVO_ENTREGA / ACTA_ACTIVO_DEVOLUCION);
  * aquí solo se pone la hoja: membrete, tabla, firmas y pie.
  */
-function Doc({ d, texto }: { d: DatosActaActivo; texto: TextoResuelto }) {
+function Doc({ d, texto, membrete, fondo }: { d: DatosActaActivo; texto: TextoResuelto; membrete: boolean; fondo?: string }) {
   return (
     <Document>
-      <Page size="LETTER" style={estilos.page}>
-        <Membrete empresa={d.empresa} />
+      <HojaTexto empresa={d.empresa} membrete={membrete} fondo={fondo} pie={`${d.empresa.razonSocial} · NIT ${d.empresa.nit}`}>
         <Text style={estilos.titulo}>{texto.titulo.toUpperCase()}</Text>
         <BloquesPdf bloques={texto.bloques} tabla={<TablaActivos activos={d.activos} />} />
 
@@ -90,14 +89,14 @@ function Doc({ d, texto }: { d: DatosActaActivo; texto: TextoResuelto }) {
           <View style={estilos.firmaLinea}><Text>Talento Humano</Text><Text style={{ fontSize: 8 }}>{d.empresa.nombreComercial}</Text></View>
         </View>
         <NotasPdf notas={texto.notas} />
-        <Pie texto={`${d.empresa.razonSocial} · NIT ${d.empresa.nit}`} />
-      </Page>
+      </HojaTexto>
     </Document>
   )
 }
 
 /** Renderiza el acta con el texto vigente de Ajustes, salvo que se pase `plantilla` (muestras). */
-export async function renderActaActivo(d: DatosActaActivo, plantilla?: PlantillaTexto): Promise<Buffer> {
+export async function renderActaActivo(d: DatosActaActivo, plantilla?: TextoDocumento): Promise<Buffer> {
   const texto = plantilla ?? (await plantillaTexto(d.tipo === 'entrega' ? 'ACTA_ACTIVO_ENTREGA' : 'ACTA_ACTIVO_DEVOLUCION'))
-  return renderToBuffer(<Doc d={d} texto={resolverTexto(texto, variablesActaActivo(d))} />)
+  const fondo = await fondoParaTexto(texto.usaMembrete)
+  return renderToBuffer(<Doc d={d} texto={resolverTexto(texto, variablesActaActivo(d))} membrete={texto.usaMembrete} fondo={fondo} />)
 }

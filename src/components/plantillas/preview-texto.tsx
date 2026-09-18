@@ -97,10 +97,12 @@ function CajaFirma({ ancho = '120pt', alto = '48pt' }: { ancho?: string; alto?: 
 }
 
 export function PreviewTexto({
-  clave, plantilla, variante, empresa, version,
+  clave, plantilla, membrete, variante, empresa, version,
 }: {
   clave: ClaveTexto
   plantilla: PlantillaTexto
+  /** Sobre el papel membretado de Ajustes (true) o con encabezado sencillo (false). */
+  membrete: boolean
   variante: string
   empresa: EmpresaTexto & { direccion?: string | null; telefono?: string | null; emailContacto?: string | null }
   version?: number
@@ -108,7 +110,8 @@ export function PreviewTexto({
   const m = useMemo(() => muestraTexto(clave, variante, empresa), [clave, variante, empresa])
   const r = useMemo(() => resolverTexto(plantilla, m.vars), [plantilla, m])
   const bloques = m.tabla ? conTablaImplicita(r.bloques) : r.bloques.filter((b) => b.tipo !== 'tabla')
-  const fondo = m.fijos.cabecera === 'fondo'
+  const fondo = membrete
+  const orden = m.fijos.cabecera === 'fondo'
 
   const cuerpo: ReactNode = bloques.map((b, i) => {
     if (b.tipo === 'tabla') return m.tabla ? <Tabla key={i} t={m.tabla} /> : null
@@ -127,9 +130,9 @@ export function PreviewTexto({
   const firmaDoble = firmas.length > 1
 
   return (
-    <HojaCarta membrete={fondo} fuente="helvetica" padding={fondo ? '122pt 56pt 80pt' : '48pt 56pt 64pt'} version={version}>
+    <HojaCarta membrete={fondo} fuente="helvetica" padding={fondo ? '122pt 56pt 96pt' : '48pt 56pt 64pt'} version={version}>
       {/* Alto mínimo de una hoja (792 − márgenes) para que el pie caiga abajo, como en el PDF. */}
-      <div style={{ minHeight: fondo ? '590pt' : '680pt', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ minHeight: fondo ? '574pt' : '680pt', display: 'flex', flexDirection: 'column' }}>
       {!fondo && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2pt solid #0f172a', paddingBottom: '12pt', marginBottom: '24pt' }}>
           <div>
@@ -144,23 +147,23 @@ export function PreviewTexto({
         </div>
       )}
 
-      <div style={{ fontSize: '14pt', fontWeight: 'bold', textAlign: 'center', color: '#020617', marginBottom: fondo ? '4pt' : '20pt' }}>
+      <div style={{ fontSize: '14pt', fontWeight: 'bold', textAlign: 'center', color: '#020617', marginBottom: orden ? '4pt' : '20pt' }}>
         {r.titulo.toUpperCase() || ' '}
       </div>
-      {fondo && m.fijos.subtitulo && (
+      {orden && m.fijos.subtitulo && (
         <div style={{ fontSize: '9.5pt', textAlign: 'center', color: '#475569', marginBottom: '20pt' }}>{m.fijos.subtitulo}</div>
       )}
-      {fondo && m.fijos.filas?.map(([k, v]) => (
+      {orden && m.fijos.filas?.map(([k, v]) => (
         <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5pt', fontSize: '10pt' }}>
           <span style={{ color: '#475569' }}>{k}</span>
           <span style={{ fontWeight: 'bold' }}>{v}</span>
         </div>
       ))}
 
-      <div style={fondo ? { fontSize: '10pt' } : undefined}>{cuerpo}</div>
+      <div style={orden ? { fontSize: '10pt' } : undefined}>{cuerpo}</div>
 
       {/* Firmas: dos columnas en las actas; una sola en certificaciones y orden de pago. */}
-      <div style={{ display: 'flex', justifyContent: firmaDoble ? 'space-between' : 'flex-start', marginTop: fondo ? '40pt' : '48pt' }}>
+      <div style={{ display: 'flex', justifyContent: firmaDoble ? 'space-between' : 'flex-start', marginTop: orden ? '40pt' : '48pt' }}>
         {firmas.map((f) => (
           <div key={f.nombre} style={{ width: '220pt' }}>
             {f.conFirma && <CajaFirma ancho={firmaDoble ? '120pt' : '150pt'} alto={firmaDoble ? '48pt' : '56pt'} />}
@@ -176,7 +179,7 @@ export function PreviewTexto({
         <p key={i} style={{ margin: '18pt 0 0', fontSize: '8pt', color: GRIS, textAlign: 'center' }}><Tramos tramos={n} /></p>
       ))}
 
-      {m.fijos.pie && (
+      {!fondo && (
         <div style={{ marginTop: 'auto', paddingTop: '24pt' }}>
           <div style={{ fontSize: '8pt', color: GRIS, borderTop: '1pt solid #e2e8f0', paddingTop: '8pt', textAlign: 'center' }}>{m.fijos.pie}</div>
         </div>

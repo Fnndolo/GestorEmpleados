@@ -26,6 +26,8 @@ export const guardarPlantillaTexto = accion(
       clave: claveSchema,
       titulo: z.string().trim().min(3, 'El título es muy corto').max(200),
       contenido: z.string().trim().min(5, 'El texto es muy corto').max(12000, 'El texto es demasiado largo'),
+      /** ¿El PDF va sobre el papel membretado de Ajustes? */
+      usaMembrete: z.boolean(),
     }),
   },
   async (d) => {
@@ -33,11 +35,11 @@ export const guardarPlantillaTexto = accion(
     if (actual) {
       await dbAuditado.plantillaDocumento.update({
         where: { id: actual.id },
-        data: { nombre: d.titulo, contenido: d.contenido, activa: true },
+        data: { nombre: d.titulo, contenido: d.contenido, usaMembrete: d.usaMembrete, activa: true },
       })
     } else {
       await dbAuditado.plantillaDocumento.create({
-        data: { nombre: d.titulo, categoria: d.clave, contenido: d.contenido, activa: true },
+        data: { nombre: d.titulo, categoria: d.clave, contenido: d.contenido, usaMembrete: d.usaMembrete, activa: true },
       })
     }
     revalidatePath(RUTA)
@@ -52,6 +54,6 @@ export const restaurarPlantillaTexto = accion(
     const filas = await prisma.plantillaDocumento.findMany({ where: { categoria: d.clave }, select: { id: true } })
     for (const f of filas) await dbAuditado.plantillaDocumento.delete({ where: { id: f.id } })
     revalidatePath(RUTA)
-    return { ...TEXTOS[d.clave].defecto }
+    return { ...TEXTOS[d.clave].defecto, usaMembrete: TEXTOS[d.clave].membrete }
   },
 )

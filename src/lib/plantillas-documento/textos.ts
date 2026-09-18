@@ -27,6 +27,9 @@ import { marcadorDe, sustituirVariables, tramosDe, type Parrafo, type Tramo } fr
 
 export type PlantillaTexto = { titulo: string; contenido: string }
 
+/** El texto vigente de un documento más cómo va la hoja: sobre el papel membretado o con encabezado sencillo. */
+export type TextoDocumento = PlantillaTexto & { usaMembrete: boolean }
+
 export const CLAVES_TEXTO = [
   'CERTIFICACION_LABORAL',
   'CERTIFICACION_CONTRACTUAL',
@@ -53,6 +56,11 @@ export type DefinicionTexto = {
   /** Lo que la app pone sola y no se edita aquí (cabecera, tabla, firmas). */
   fijo: string
   defecto: PlantillaTexto
+  /**
+   * De fábrica, ¿va sobre el papel membretado de Ajustes (logo, marca de agua y
+   * pie)? Si no, la app pone un encabezado sencillo con la empresa y el NIT.
+   */
+  membrete: boolean
   variables: VariableTexto[]
   /** Qué trae la tabla que se inserta con `[tabla]`; sin esto el documento no tiene tabla. */
   tabla?: string
@@ -88,6 +96,7 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
     nombre: 'Certificación laboral',
     descripcion: 'La pide el colaborador desde su autoservicio y la emite Talento Humano. Simple, con salario, con funciones o para entidad financiera.',
     fijo: 'La app pone el encabezado de la empresa, la firma de Talento Humano y el pie de página.',
+    membrete: false,
     defecto: {
       titulo: 'La empresa {{razon_social}} certifica:',
       contenido: [
@@ -125,6 +134,7 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
     nombre: 'Certificación contractual · OPS',
     descripcion: 'Para contratistas por prestación de servicios: habla de contrato, objeto y honorarios, nunca de cargo ni salario.',
     fijo: 'La app pone el encabezado de la empresa, la firma de Talento Humano y el pie de página.',
+    membrete: false,
     defecto: {
       titulo: 'La empresa {{razon_social}} certifica:',
       contenido: [
@@ -162,6 +172,7 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
     nombre: 'Acta de entrega de activos',
     descripcion: 'Se genera al asignar uno o varios activos (computador, celular, herramienta…) y la firma el colaborador desde Mis entregas.',
     fijo: 'La app pone el encabezado de la empresa, la tabla de activos (código, nombre, tipo, marca, serie y valor), las firmas del colaborador y de Talento Humano, y el pie.',
+    membrete: false,
     defecto: {
       titulo: 'Acta de entrega de activos',
       contenido: [
@@ -190,6 +201,7 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
     nombre: 'Acta de devolución de activos',
     descripcion: 'Se genera cuando el colaborador devuelve activos a la empresa (retiro, cambio de equipo).',
     fijo: 'La app pone el encabezado de la empresa, la tabla de activos, las firmas del colaborador y de Talento Humano, y el pie.',
+    membrete: false,
     defecto: {
       titulo: 'Acta de devolución de activos',
       contenido: [
@@ -218,6 +230,7 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
     nombre: 'Recibido de dotación',
     descripcion: 'Vestido y calzado de labor de cada corte (abril, agosto, diciembre; arts. 230-234 CST). Lo firma el colaborador desde Mis entregas.',
     fijo: 'La app pone el encabezado de la empresa, la tabla con los elementos entregados, las firmas del colaborador y de Talento Humano, y el pie.',
+    membrete: false,
     defecto: {
       titulo: 'Recibido de dotación — {{corte}} {{anio}}',
       contenido: [
@@ -241,6 +254,7 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
     nombre: 'Constancia de entrega de EPP',
     descripcion: 'Elementos de protección personal (Decreto 1072 de 2015). La firma el colaborador desde Mis entregas.',
     fijo: 'La app pone el encabezado de la empresa, la tabla (elemento, cantidad y tipo de entrega), las firmas del colaborador y del responsable SST, y el pie.',
+    membrete: false,
     defecto: {
       titulo: 'Constancia de entrega de elementos de protección personal',
       contenido: [
@@ -266,7 +280,8 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
     clave: 'ORDEN_PAGO_HORAS_EXTRA',
     nombre: 'Orden de pago de horas extra',
     descripcion: 'Se envía al colaborador para que acepte el monto con su firma antes de pagarle las horas extra aparte de la nómina.',
-    fijo: 'La app pone el papel membretado, el número y la fecha, el colaborador y el período, la tabla de horas con el total a pagar, y la firma del colaborador.',
+    fijo: 'La app pone el encabezado, el número y la fecha, el colaborador y el período, la tabla de horas con el total a pagar, y la firma del colaborador.',
+    membrete: true,
     defecto: {
       titulo: 'Orden de pago · Horas extra',
       contenido: [

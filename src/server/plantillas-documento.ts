@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db'
 import {
   autorizacionPorDefecto, categoriaAutorizacion, type PlantillaAutorizacion, type VinculoAutorizacion,
 } from '@/lib/plantillas-documento/autorizacion-datos'
-import { TEXTOS, type ClaveTexto, type PlantillaTexto } from '@/lib/plantillas-documento/textos'
+import { TEXTOS, type ClaveTexto, type TextoDocumento } from '@/lib/plantillas-documento/textos'
 
 /**
  * Plantilla vigente de la autorización de tratamiento de datos del vínculo
@@ -30,11 +30,15 @@ export async function plantillaAutorizacionDatos(
  */
 export async function plantillaTexto(
   clave: ClaveTexto,
-): Promise<PlantillaTexto & { personalizada: boolean; actualizadoEn: Date | null }> {
+): Promise<TextoDocumento & { personalizada: boolean; actualizadoEn: Date | null }> {
+  const def = TEXTOS[clave]
   const p = await prisma.plantillaDocumento.findFirst({
     where: { categoria: clave, activa: true },
     orderBy: { actualizadoEn: 'desc' },
   })
-  if (!p) return { ...TEXTOS[clave].defecto, personalizada: false, actualizadoEn: null }
-  return { titulo: p.nombre, contenido: p.contenido, personalizada: true, actualizadoEn: p.actualizadoEn }
+  if (!p) return { ...def.defecto, usaMembrete: def.membrete, personalizada: false, actualizadoEn: null }
+  return {
+    titulo: p.nombre, contenido: p.contenido, usaMembrete: p.usaMembrete ?? def.membrete,
+    personalizada: true, actualizadoEn: p.actualizadoEn,
+  }
 }

@@ -1,9 +1,9 @@
-import { Document, Page, Text, View, Image, renderToBuffer } from '@react-pdf/renderer'
+import { Document, Text, View, Image, renderToBuffer } from '@react-pdf/renderer'
 import { estilos } from './estilos'
-import { Membrete, Pie, type DatosEmpresa } from './membrete'
-import { BloquesPdf, NotasPdf } from './bloques-texto'
+import type { DatosEmpresa } from './membrete'
+import { BloquesPdf, HojaTexto, NotasPdf, fondoParaTexto } from './bloques-texto'
 import { plantillaTexto } from '@/server/plantillas-documento'
-import { resolverTexto, variablesCertificacion, type PlantillaTexto, type TextoResuelto } from '@/lib/plantillas-documento/textos'
+import { resolverTexto, variablesCertificacion, type TextoDocumento, type TextoResuelto } from '@/lib/plantillas-documento/textos'
 
 export type DatosCertificacion = {
   tipo: 'SIMPLE' | 'CON_SALARIO' | 'CON_FUNCIONES' | 'ENTIDAD_FINANCIERA'
@@ -48,11 +48,10 @@ export type DatosCertificacion = {
  * funciones, destinatario) lo deciden las variables según el tipo pedido.
  * Aquí solo se pone la hoja: membrete, título, firma de Talento Humano y pie.
  */
-function DocumentoCertificacion({ d, texto }: { d: DatosCertificacion; texto: TextoResuelto }) {
+function DocumentoCertificacion({ d, texto, membrete, fondo }: { d: DatosCertificacion; texto: TextoResuelto; membrete: boolean; fondo?: string }) {
   return (
     <Document>
-      <Page size="LETTER" style={estilos.page}>
-        <Membrete empresa={d.empresa} />
+      <HojaTexto empresa={d.empresa} membrete={membrete} fondo={fondo} pie={`${d.empresa.razonSocial} · NIT ${d.empresa.nit} · Documento generado electrónicamente`}>
         <Text style={estilos.titulo}>{texto.titulo.toUpperCase()}</Text>
         <BloquesPdf bloques={texto.bloques} />
 
@@ -64,14 +63,16 @@ function DocumentoCertificacion({ d, texto }: { d: DatosCertificacion; texto: Te
           </View>
         </View>
         <NotasPdf notas={texto.notas} />
-        <Pie texto={`${d.empresa.razonSocial} · NIT ${d.empresa.nit} · Documento generado electrónicamente`} />
-      </Page>
+      </HojaTexto>
     </Document>
   )
 }
 
 /** Renderiza la certificación con el texto vigente de Ajustes, salvo que se pase `plantilla` (muestras). */
-export async function renderCertificacion(d: DatosCertificacion, plantilla?: PlantillaTexto): Promise<Buffer> {
+export async function renderCertificacion(d: DatosCertificacion, plantilla?: TextoDocumento): Promise<Buffer> {
   const texto = plantilla ?? (await plantillaTexto(d.clase === 'CONTRACTUAL' ? 'CERTIFICACION_CONTRACTUAL' : 'CERTIFICACION_LABORAL'))
-  return renderToBuffer(<DocumentoCertificacion d={d} texto={resolverTexto(texto, variablesCertificacion(d))} />)
+  const fondo = await fondoParaTexto(texto.usaMembrete)
+  return renderToBuffer(
+    <DocumentoCertificacion d={d} texto={resolverTexto(texto, variablesCertificacion(d))} membrete={texto.usaMembrete} fondo={fondo} />,
+  )
 }

@@ -46,7 +46,7 @@ export default async function PlantillasPage({ searchParams }: { searchParams: P
   // Los textos editables: actas de Mis entregas, orden de pago de horas extra y certificaciones.
   const textos = Object.fromEntries(
     CLAVES_TEXTO.map((clave, i) => [clave, {
-      plantilla: { titulo: textosLista[i].titulo, contenido: textosLista[i].contenido },
+      plantilla: { titulo: textosLista[i].titulo, contenido: textosLista[i].contenido, usaMembrete: textosLista[i].usaMembrete },
       personalizada: textosLista[i].personalizada,
       estado: estadoDe(textosLista[i]),
     }]),
