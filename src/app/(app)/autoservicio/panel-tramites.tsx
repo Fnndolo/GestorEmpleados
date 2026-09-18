@@ -103,7 +103,7 @@ function Seccion({
 
 
 export function PanelTramites({
-  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, documentosFaltantes, dotacionPorFirmar, horasExtraPorFirmar,
+  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, documentosFaltantes, dotacionPorFirmar, horasExtraPorFirmar, hrefsNuevos = [],
 }: {
   /** Colaborador con vínculo activo: solo entonces se ofrecen los trámites operativos. */
   activo: boolean
@@ -119,12 +119,16 @@ export function PanelTramites({
   dotacionPorFirmar: number
   /** Órdenes de pago de horas extra (se pagan aparte de la nómina) esperando su firma. */
   horasExtraPorFirmar: number
+  /** Rutas con un aviso de la plataforma vigente sin leer: su casilla muestra "Nuevo". */
+  hrefsNuevos?: string[]
 }) {
   const [solicitar, setSolicitar] = useState<TipoSol | null>(null)
   /** Atajo local: `aplica('vacaciones')` en vez de repetir el tipo de vínculo. */
   const aplica = (t: Tramite) => aplicaTramite(tipoVinculo, t)
   const ops = esOps(tipoVinculo)
   const plural = (n: number, s: string) => `${n} ${s}${n > 1 ? 's' : ''}`
+  // Un aviso vigente sin leer que apunte a la casilla la marca como "Nuevo".
+  const conNuevo = (items: Item[]) => items.map((i) => (i.href && hrefsNuevos.includes(i.href.split('?')[0]) ? { ...i, nuevo: true } : i))
 
   // Solo lo que de verdad es una SOLICITUD: algo que se manda y otra persona
   // aprueba o procesa (jefe, RRHH, o quien paga). Nada de consultar, firmar ni
@@ -252,8 +256,8 @@ export function PanelTramites({
         </div>
       )}
 
-      <Seccion titulo="¿Qué necesitas solicitar?" items={solicitudes} onSolicitar={setSolicitar} />
-      <Seccion titulo="Canales" items={canales} onSolicitar={setSolicitar} />
+      <Seccion titulo="¿Qué necesitas solicitar?" items={conNuevo(solicitudes)} onSolicitar={setSolicitar} />
+      <Seccion titulo="Canales" items={conNuevo(canales)} onSolicitar={setSolicitar} />
 
       {/* Se monta al abrir para que el formulario arranque limpio en cada trámite. */}
       {solicitar && <NuevaSolicitud tipoInicial={solicitar} saldoVacaciones={saldoVacaciones} onClose={() => setSolicitar(null)} />}

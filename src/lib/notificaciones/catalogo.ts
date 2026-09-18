@@ -59,6 +59,8 @@ export type ClaveEvento =
   | 'disciplinario_cerrado'
   // Vencimientos
   | 'vencimiento_alerta'
+  // Plataforma
+  | 'aviso_publicado'
 
 export type EventoNotif = {
   clave: ClaveEvento
@@ -142,6 +144,8 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
 
   // Vencimientos / automáticas (incluye alertas de documentos y de obligaciones del calendario legal)
   { clave: 'vencimiento_alerta', etiqueta: 'Alerta de vencimiento', descripcion: 'Aviso automático de un vencimiento u obligación legal próxima (10 días hábiles antes y última alerta).', modulo: 'Vencimientos' },
+  // Plataforma
+  { clave: 'aviso_publicado', etiqueta: 'Aviso de la plataforma', descripcion: 'Talento Humano o el administrador publican un aviso: un módulo nuevo, una mejora o un cambio importante.', modulo: 'Plataforma' },
 ]
 
 /** Eventos que mandan correo mientras nadie cambie la preferencia en Ajustes. */

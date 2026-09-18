@@ -10,6 +10,7 @@ import { MenuUsuario } from '@/components/shell/menu-usuario'
 import { DrawerMovil } from '@/components/shell/drawer-movil'
 import { BottomNav } from '@/components/shell/bottom-nav'
 import { Campana } from '@/components/shell/campana'
+import { AvisosIcono } from '@/components/shell/avisos-icono'
 import { ActualizacionEnVivo } from '@/components/shell/actualizacion-en-vivo'
 import { BusquedaGlobal } from '@/components/shell/busqueda-global'
 import { RegistrarSW } from '@/components/pwa/registrar-sw'
@@ -89,6 +90,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <BusquedaGlobal />
           </div>
           <div className="flex-1 sm:hidden" />
+          {/* Avisos de la plataforma (qué hay de nuevo) y notificaciones de cada persona: dos iconos, dos cosas. */}
+          <AvisosIcono />
           <Campana verVencimientos={verVencimientos} />
         </header>
 

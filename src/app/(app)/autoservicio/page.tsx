@@ -14,6 +14,8 @@ import { formatFechaCorta, formatFechaLarga, formatFechaISO, hoyBogota, parseFec
 import { defLicencia } from '@/lib/licencias'
 import { situacionComprobante } from '@/lib/comprobante-permiso'
 import { PanelTramites } from './panel-tramites'
+import { BannerAvisos } from '@/components/avisos/banner-avisos'
+import { avisosParaUsuario, hrefsNuevos } from '@/server/avisos'
 import { CumpleanosACargo, type CumpleanosACargoItem } from './cumpleanos-a-mi-cargo'
 import { MisSolicitudes, type SolicitudItem, type ComprobanteItem } from './mis-solicitudes'
 
@@ -387,8 +389,14 @@ export default async function AutoservicioPage() {
     i.comprobante?.situacion === 'PENDIENTE' || i.comprobante?.situacion === 'VENCIDO'
   const itemsActividad = actividad.slice(0, 40).map((a) => ({ ...a.item, reciente: a.fecha.getTime() >= hace7dias || abierta(a.item) }))
 
+  // Avisos de la plataforma que le tocan y no ha leído: el banner de arriba y
+  // el punto de "nuevo" en la casilla del módulo al que apuntan.
+  const avisos = await avisosParaUsuario(usuario)
+  const avisosNuevos = avisos.filter((a) => a.vigente && !a.leido)
+
   return (
     <div className="max-w-7xl">
+      <BannerAvisos avisos={avisosNuevos.slice(0, 5).map((a) => ({ id: a.id, titulo: a.titulo, resumen: a.resumen, tipo: a.tipo, enlace: a.enlace }))} />
       {/* Sin encabezado: el saludo vive en la barra superior y lo pendiente ya
           lo dicen las cifras y los avisos de cada tarjeta. */}
       {/* Etiquetas de una palabra: con "Días de vacaciones disponibles" el texto
@@ -437,6 +445,7 @@ export default async function AutoservicioPage() {
         documentosFaltantes={documentosFaltantes}
         horasExtraPorFirmar={horasExtraPorFirmar}
         dotacionPorFirmar={dotacionPorFirmar}
+        hrefsNuevos={hrefsNuevos(avisos)}
       />
 
       {cumpleanosACargo.length > 0 && (

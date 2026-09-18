@@ -51,6 +51,8 @@ model User {
   sessions    Session[]
   accounts    Account[]
   sedes       UsuarioSede[]
+  avisosCreados  Aviso[]        @relation("AvisosCreados")
+  avisosLeidos   AvisoLectura[]
   // Roles adicionales al principal (`rolId`). Los permisos efectivos son la
   // unión de todos; ver fusionarPermisos() en src/lib/permisos/tipos.ts.
   rolesExtra  UsuarioRol[]
@@ -2622,6 +2624,75 @@ model DenunciaAcoso {
 
   @@index([colaboradorId])
   @@map("denuncia_acoso")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AVISOS DE LA PLATAFORMA — "qué hay de nuevo": un módulo que se habilita, una
+// mejora o un cambio, redactado una vez por Talento Humano o el administrador y
+// mostrado a cada persona de la audiencia hasta que lo marque como leído.
+// Reemplaza la capacitación presencial por cada módulo nuevo.
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum TipoAviso {
+  NUEVO_MODULO
+  MEJORA
+  CAMBIO
+
+  @@map("tipo_aviso")
+}
+
+enum EstadoAviso {
+  BORRADOR
+  PUBLICADO
+  ARCHIVADO
+
+  @@map("estado_aviso")
+}
+
+model Aviso {
+  id      String      @id @default(uuid(7)) @db.Uuid
+  titulo  String
+  // Una o dos líneas: es lo que se ve en la tarjeta y en el icono de avisos.
+  resumen String
+  // Qué puede hacer y cómo, en pasos cortos. Texto plano: una línea = un
+  // párrafo; las que empiezan por "- " son viñetas.
+  detalle String?
+  tipo    TipoAviso   @default(NUEVO_MODULO)
+  // Ruta interna del módulo ("/autoservicio/dotacion"): botón "Ir al módulo" y,
+  // mientras el aviso esté vigente, el punto de "nuevo" en la casilla que
+  // apunte a esa ruta.
+  enlace  String?
+  // Captura de pantalla (storage), opcional.
+  imagenPath String?  @map("imagen_path")
+  // A quién va: { roles: string[], vinculos: ("LABORAL"|"OPS")[], sedeIds: string[] }.
+  // Listas vacías = sin restricción en ese eje (todos).
+  audiencia Json      @default("{}")
+  estado    EstadoAviso @default(BORRADOR)
+  publicadoEn  DateTime? @map("publicado_en")
+  // Hasta cuándo se destaca (tarjeta y punto de "nuevo"); después queda solo en el historial.
+  vigenteHasta DateTime? @map("vigente_hasta") @db.Date
+  creadoPorId  String    @map("creado_por_id") @db.Uuid
+  creadoPor    User      @relation("AvisosCreados", fields: [creadoPorId], references: [id])
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  lecturas AvisoLectura[]
+
+  @@index([estado, publicadoEn])
+  @@map("aviso")
+}
+
+/** Quién ya leyó (tocó "Entendido") cada aviso. */
+model AvisoLectura {
+  avisoId String   @map("aviso_id") @db.Uuid
+  aviso   Aviso    @relation(fields: [avisoId], references: [id], onDelete: Cascade)
+  userId  String   @map("user_id") @db.Uuid
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leidoEn DateTime @default(now()) @map("leido_en")
+
+  @@id([avisoId, userId])
+  @@index([userId])
+  @@map("aviso_lectura")
 }
 
 // Habeas data (Ley 1581): autorización de tratamiento por persona

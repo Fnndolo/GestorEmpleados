@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils'
 import { hoyBogota, formatFechaCorta } from '@/lib/fechas'
 import { BannerPush } from '@/components/pwa/banner-push'
 import { ModulosInicio } from './modulos-inicio'
+import { BannerAvisos } from '@/components/avisos/banner-avisos'
+import { avisosParaUsuario } from '@/server/avisos'
 
 export const metadata = { title: 'Inicio · Smart Gadgets RH' }
 
@@ -79,6 +81,9 @@ export default async function InicioPage() {
     indicadores.push({ icono: ShieldCheck, valor: String(roles), label: 'Roles configurados' })
   }
 
+  const avisosNuevos = (await avisosParaUsuario(usuario)).filter((a) => a.vigente && !a.leido).slice(0, 5)
+    .map((a) => ({ id: a.id, titulo: a.titulo, resumen: a.resumen, tipo: a.tipo, enlace: a.enlace }))
+
   return (
     <div className="max-w-7xl">
       {/* El saludo va en la barra superior (ver layout); aquí solo lo que
@@ -92,6 +97,7 @@ export default async function InicioPage() {
       {/* El aviso vive solo aquí: en el resto de pantallas empujaba el contenido
           hacia abajo y se llevaba por delante los encabezados fijos. */}
       <BannerPush />
+      <BannerAvisos avisos={avisosNuevos} />
 
       {indicadores.length > 0 && (
         <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
