@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { es } from 'date-fns/locale'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LICENCIAS, defLicencia, type TipoLicencia } from '@/lib/licencias'
 import { festivosDeRango, esDiaHabil } from '@/lib/dias-habiles'
 import { parseFechaISO } from '@/lib/fechas'
@@ -346,14 +346,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose 
                   <Select value={licTipo} onValueChange={(v) => { setLicTipo(v as TipoLicencia); setArchivos([]) }}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
                     <SelectContent>
-                      <SelectGroup>
-                        <SelectLabel>Que te concede la ley</SelectLabel>
-                        {LICENCIAS.filter((l) => l.derecho).map((l) => <SelectItem key={l.tipo} value={l.tipo}>{l.label}</SelectItem>)}
-                      </SelectGroup>
-                      <SelectGroup>
-                        <SelectLabel>Que decide la empresa</SelectLabel>
-                        {LICENCIAS.filter((l) => !l.derecho).map((l) => <SelectItem key={l.tipo} value={l.tipo}>{l.label}</SelectItem>)}
-                      </SelectGroup>
+                      {LICENCIAS.map((l) => <SelectItem key={l.tipo} value={l.tipo}>{l.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
