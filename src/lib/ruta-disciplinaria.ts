@@ -1,7 +1,8 @@
 /**
  * La "ruta" de un proceso disciplinario, al estilo del rastreo de un envío:
- * qué fases ya se cumplieron, en cuál va y cuáles faltan. Es pura (sin
- * base ni hooks) para que la usen el detalle de Jurídica y el autoservicio.
+ * qué fases ya se cumplieron, en cuál va y cuáles faltan, y qué se actuó en
+ * cada una. Es pura (sin base ni hooks) para que la usen el detalle de
+ * Jurídica y el autoservicio.
  *
  * `etapa` en el proceso es la fase EN CURSO (lo que está por hacerse): estar
  * en DESCARGOS quiere decir que la citación ya se hizo y se espera al
@@ -10,12 +11,21 @@
  * sancionatoria ni recurso, así que su ruta es más corta.
  */
 
+export type ActuacionRuta = {
+  id: string
+  fecha: Date
+  detalle: string | null
+  soportes: { id: string; nombre: string; mimeType: string }[]
+}
+
 export type FaseRuta = {
   clave: string
   etiqueta: string
   estado: 'hecha' | 'actual' | 'pendiente'
-  /** Fecha de la actuación registrada para esa fase, si la hay. */
+  /** Fecha de la primera actuación de la fase (la última, para el cierre). */
   fecha: Date | null
+  /** Lo que se actuó en esa fase, en orden: es lo que se despliega bajo el nodo. */
+  actuaciones: ActuacionRuta[]
 }
 
 const ORDEN_PROCESO = ['CITACION_DESCARGOS', 'DESCARGOS', 'DECISION', 'RECURSO', 'CERRADO'] as const
@@ -33,20 +43,20 @@ export function rutaDisciplinaria(p: {
   clase: string
   etapa: string
   cerrado: boolean
-  etapas: { etapa: string; fecha: Date }[]
+  etapas: { id: string; etapa: string; fecha: Date; detalle: string | null; soportes?: ActuacionRuta['soportes'] }[]
 }): FaseRuta[] {
   const orden: readonly string[] = p.clase === 'LLAMADO_ATENCION' ? ORDEN_LLAMADO : ORDEN_PROCESO
   const actual = p.cerrado ? orden.length : Math.max(0, orden.indexOf(p.etapa))
   return orden.map((clave, i) => {
-    // La fecha de la fase es su primera actuación registrada; el cierre, la última de todas.
-    const reg = clave === 'CERRADO'
-      ? (p.cerrado ? p.etapas.at(-1) : undefined)
-      : p.etapas.find((e) => e.etapa === clave)
+    const actuaciones = p.etapas
+      .filter((e) => e.etapa === clave)
+      .map((e) => ({ id: e.id, fecha: e.fecha, detalle: e.detalle, soportes: e.soportes ?? [] }))
     return {
       clave,
       etiqueta: ETIQUETA_FASE[clave] ?? clave,
       estado: i < actual ? 'hecha' : i === actual ? 'actual' : 'pendiente',
-      fecha: reg?.fecha ?? null,
+      fecha: actuaciones[0]?.fecha ?? null,
+      actuaciones,
     }
   })
 }

@@ -103,7 +103,7 @@ export default async function MisDisciplinariosPage() {
                 clase={p.clase}
                 etapaEtiqueta={ETAPA[p.etapa] ?? p.etapa}
                 cerrado={p.cerrado}
-                ruta={rutaDisciplinaria(p)}
+                ruta={rutaDisciplinaria({ ...p, etapas: p.etapas.map((e) => ({ ...e, soportes: porEtapa.get(e.id) ?? [] })) })}
                 descripcion={p.descripcion}
                 etapas={p.etapas.map((e) => ({
                   id: e.id, etapa: e.etapa, etiqueta: ETAPA[e.etapa] ?? e.etapa, fecha: formatFechaLarga(e.fecha), detalle: e.detalle, soportes: porEtapa.get(e.id) ?? [],

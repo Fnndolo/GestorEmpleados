@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatFechaLarga, hoyBogota } from '@/lib/fechas'
-import { SoportesLista, type SoporteDoc } from '../../_ui'
+import type { SoporteDoc } from '../../_ui'
 import { AccionesDisciplinario } from './acciones-disciplinario'
 import { RutaProceso } from '@/components/juridica/ruta-proceso'
 import { rutaDisciplinaria } from '@/lib/ruta-disciplinaria'
@@ -61,7 +61,7 @@ export default async function DisciplinarioPage({ params }: { params: Promise<{ 
 
       {/* En qué va, de un vistazo: fases cumplidas, en curso y pendientes, como el rastreo de un envío. */}
       <Card className="mb-4"><CardContent className="px-5 py-5">
-        <RutaProceso fases={rutaDisciplinaria(p)} />
+        <RutaProceso fases={rutaDisciplinaria({ ...p, etapas: p.etapas.map((e) => ({ ...e, soportes: porEtapa.get(e.id) ?? [] })) })} />
       </CardContent></Card>
 
       {p.descripcion && <Card className="mb-4"><CardContent className="py-3 text-sm text-muted-foreground">{p.descripcion}</CardContent></Card>}
@@ -79,23 +79,6 @@ export default async function DisciplinarioPage({ params }: { params: Promise<{ 
           <FileText className="size-5 text-muted-foreground shrink-0" />
           <span className="text-sm flex-1 truncate">Acta / acuerdo final: {acta.nombre}</span>
           <Button size="sm" asChild><a href={`/api/documentos/${acta.id}`} target="_blank" rel="noreferrer">Abrir</a></Button>
-        </CardContent></Card>
-      )}
-
-      {/* Línea de tiempo de etapas */}
-      {p.etapas.length > 0 && (
-        <Card className="mb-4"><CardContent className="py-4">
-          <h3 className="text-sm font-medium mb-3">Actuaciones</h3>
-          <ol className="space-y-3 border-l pl-4">
-            {p.etapas.map((e) => (
-              <li key={e.id} className="relative">
-                <span className="absolute -left-[21px] top-1 size-2.5 rounded-full bg-primary" />
-                <p className="text-sm font-medium">{ETAPA[e.etapa]}</p>
-                <p className="text-xs text-muted-foreground">{formatFechaLarga(e.fecha)}{e.detalle ? ` · ${e.detalle}` : ''}</p>
-                <SoportesLista documentos={porEtapa.get(e.id) ?? []} />
-              </li>
-            ))}
-          </ol>
         </CardContent></Card>
       )}
 

@@ -1,11 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, CircleCheck } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Pill } from '@/components/ui-kit'
-import { SoportesLista, type SoporteDoc } from '@/app/(app)/juridica/_ui'
+import type { SoporteDoc } from '@/app/(app)/juridica/_ui'
 import { RutaProceso } from '@/components/juridica/ruta-proceso'
 import type { FaseRuta } from '@/lib/ruta-disciplinaria'
 
@@ -17,19 +17,6 @@ import type { FaseRuta } from '@/lib/ruta-disciplinaria'
  * falta de entrada.
  */
 export type EtapaItem = { id: string; etapa: string; etiqueta: string; fecha: string; detalle: string | null; soportes: SoporteDoc[] }
-
-/**
- * Las etapas van en una sola escala de grises, de claro a negro según avanza el
- * proceso: la citación apenas marcada y el cierre en tinta. Sin colores por
- * etapa —el color en esta app queda para lo que exige atención—.
- */
-const BORDE_ETAPA: Record<string, string> = {
-  CITACION_DESCARGOS: 'border-l-foreground/20',
-  DESCARGOS: 'border-l-foreground/40',
-  DECISION: 'border-l-foreground/60',
-  RECURSO: 'border-l-foreground/80',
-  CERRADO: 'border-l-foreground',
-}
 
 export function ProcesoPlegable({
   asunto, clase, etapaEtiqueta, cerrado, ruta, descripcion, etapas, plazo, children,
@@ -80,22 +67,6 @@ export function ProcesoPlegable({
         {abierto && (
           <div className="mt-3 space-y-3 border-t pt-3">
             {descripcion && <p className="text-sm text-muted-foreground">{descripcion}</p>}
-            {etapas.length > 0 && (
-              <ol>
-                {/* Bloques cuadrados contiguos; solo el borde izquierdo lleva el gris de la etapa. */}
-                {etapas.map((e) => (
-                  <li key={e.id} className={cn('border border-l-4 bg-card px-3.5 py-2.5 text-sm [&+li]:-mt-px', BORDE_ETAPA[e.etapa] ?? 'border-l-foreground/40')}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <CircleCheck className="size-4 shrink-0 text-muted-foreground" />
-                      <span className="font-semibold">{e.etiqueta}</span>
-                      <span className="text-xs text-muted-foreground">· {e.fecha}</span>
-                    </div>
-                    {e.detalle && <p className="mt-0.5 text-xs text-muted-foreground">{e.detalle}</p>}
-                    <SoportesLista documentos={e.soportes} />
-                  </li>
-                ))}
-              </ol>
-            )}
           </div>
         )}
       </CardContent>

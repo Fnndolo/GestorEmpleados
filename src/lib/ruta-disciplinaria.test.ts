@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { rutaDisciplinaria } from './ruta-disciplinaria'
 
 const d = (s: string) => new Date(`${s}T00:00:00.000Z`)
+const et = (etapa: string, fecha: string) => ({ id: `${etapa}-${fecha}`, etapa, fecha: d(fecha), detalle: null })
 
 describe('rutaDisciplinaria', () => {
   it('en DESCARGOS: la citación está hecha, descargos en curso, el resto pendiente', () => {
     const r = rutaDisciplinaria({
       clase: 'PROCESO', etapa: 'DESCARGOS', cerrado: false,
-      etapas: [{ etapa: 'CITACION_DESCARGOS', fecha: d('2026-08-03') }],
+      etapas: [et('CITACION_DESCARGOS', '2026-08-03')],
     })
     expect(r.map((f) => f.estado)).toEqual(['hecha', 'actual', 'pendiente', 'pendiente', 'pendiente'])
     expect(r[0].fecha).toEqual(d('2026-08-03'))
@@ -17,11 +18,11 @@ describe('rutaDisciplinaria', () => {
     const r = rutaDisciplinaria({
       clase: 'PROCESO', etapa: 'CERRADO', cerrado: true,
       etapas: [
-        { etapa: 'CITACION_DESCARGOS', fecha: d('2026-08-03') },
-        { etapa: 'DESCARGOS', fecha: d('2026-08-06') },
-        { etapa: 'DECISION', fecha: d('2026-08-11') },
-        { etapa: 'RECURSO', fecha: d('2026-08-14') },
-        { etapa: 'CERRADO', fecha: d('2026-08-20') },
+        et('CITACION_DESCARGOS', '2026-08-03'),
+        et('DESCARGOS', '2026-08-06'),
+        et('DECISION', '2026-08-11'),
+        et('RECURSO', '2026-08-14'),
+        et('CERRADO', '2026-08-20'),
       ],
     })
     expect(r.every((f) => f.estado === 'hecha')).toBe(true)
