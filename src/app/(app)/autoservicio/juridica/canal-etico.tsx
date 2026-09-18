@@ -52,7 +52,7 @@ export function CanalEtico({ mostrar = 'ambos' }: { mostrar?: 'anti-acoso' | 'ha
                 </span>
                 <div className="min-w-0">
                   {mostrar === 'ambos' && <p className="text-sm font-bold">Línea ética</p>}
-                  <p className="text-sm text-muted-foreground">Acoso, conductas indebidas o irregularidades. Solo lo lee Jurídica.</p>
+                  <p className="text-sm text-muted-foreground">Reportar irregularidades</p>
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">

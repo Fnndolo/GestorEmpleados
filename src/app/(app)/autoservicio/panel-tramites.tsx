@@ -232,7 +232,7 @@ export function PanelTramites({
     },
     {
       clave: 'acoso', icono: ShieldAlert,
-      titulo: 'Línea ética', corto: 'Línea ética', desc: 'Reporta algo, de forma confidencial o anónima',
+      titulo: 'Línea ética', corto: 'Línea ética', desc: 'Reportar irregularidades',
       href: '/autoservicio/juridica?vista=anti-acoso',
     },
     {
