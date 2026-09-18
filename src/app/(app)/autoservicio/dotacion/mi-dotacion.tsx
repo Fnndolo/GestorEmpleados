@@ -43,8 +43,8 @@ type Grupo = (typeof GRUPOS)[number]['v']
 
 /**
  * Lo que la empresa le ha entregado a la persona, en tres pestañas y como
- * tarjetas con imagen: la foto del activo si Talento Humano la subió, o el
- * ícono de lo que es. Cada tarjeta dice si el acta o el recibido ya está
+ * lista con miniatura: la foto del activo si Talento Humano la subió, o el
+ * ícono de lo que es. Cada fila dice si el acta o el recibido ya está
  * firmado y, si no, deja firmarlo ahí mismo.
  */
 export function MiDotacion({ entregas, activos, epps, verDotacion, verEpp }: {
@@ -96,9 +96,9 @@ export function MiDotacion({ entregas, activos, epps, verDotacion, verEpp }: {
           {aCargo.length === 0 ? (
             <Vacio texto="No tienes activos a tu cargo." />
           ) : (
-            <Rejilla>
+            <Lista>
               {primero(aCargo.map((a) => ({ ...a, firmado: Boolean(a.firmaEntregaEn) }))).map((a) => (
-                <Tarjeta
+                <Fila
                   key={a.id}
                   fotoUrl={a.fotoUrl}
                   icono={iconoActivo(a.tipo, a.nombre)}
@@ -112,7 +112,7 @@ export function MiDotacion({ entregas, activos, epps, verDotacion, verEpp }: {
                   textoFirmar="Firmar acta"
                 />
               ))}
-            </Rejilla>
+            </Lista>
           )}
           {devueltos.length > 0 && (
             <div className="mt-4">
@@ -120,9 +120,9 @@ export function MiDotacion({ entregas, activos, epps, verDotacion, verEpp }: {
                 Devueltos ({devueltos.length}) <ChevronDown className={cn('size-3.5 transition-transform', verDevueltos && 'rotate-180')} />
               </button>
               {verDevueltos && (
-                <Rejilla className="mt-2 opacity-75">
+                <Lista className="mt-2 opacity-75">
                   {devueltos.map((a) => (
-                    <Tarjeta
+                    <Fila
                       key={a.id}
                       fotoUrl={a.fotoUrl}
                       icono={iconoActivo(a.tipo, a.nombre)}
@@ -134,7 +134,7 @@ export function MiDotacion({ entregas, activos, epps, verDotacion, verEpp }: {
                       documento={a.actaDevolucionDocId ? { id: a.actaDevolucionDocId, titulo: `Acta de devolución — ${a.nombre}` } : null}
                     />
                   ))}
-                </Rejilla>
+                </Lista>
               )}
             </div>
           )}
@@ -143,9 +143,9 @@ export function MiDotacion({ entregas, activos, epps, verDotacion, verEpp }: {
 
       {grupo === 'dotacion' && (
         entregas.length === 0 ? <Vacio texto="Aún no tienes entregas de dotación." /> : (
-          <Rejilla>
+          <Lista>
             {primero(entregas.map((e) => ({ ...e, firmado: Boolean(e.firmadoEn) }))).map((e) => (
-              <Tarjeta
+              <Fila
                 key={e.id}
                 fotoUrl={null}
                 icono={ICONO_DOTACION}
@@ -158,15 +158,15 @@ export function MiDotacion({ entregas, activos, epps, verDotacion, verEpp }: {
                 textoFirmar="Firmar recibido"
               />
             ))}
-          </Rejilla>
+          </Lista>
         )
       )}
 
       {grupo === 'epp' && (
         epps.length === 0 ? <Vacio texto="Aún no tienes entregas de elementos de protección." /> : (
-          <Rejilla>
+          <Lista>
             {primero(epps.map((e) => ({ ...e, firmado: Boolean(e.firmadoEn) }))).map((e) => (
-              <Tarjeta
+              <Fila
                 key={e.id}
                 fotoUrl={null}
                 icono={iconoEpp(e.elemento)}
@@ -179,7 +179,7 @@ export function MiDotacion({ entregas, activos, epps, verDotacion, verEpp }: {
                 textoFirmar="Firmar recibido"
               />
             ))}
-          </Rejilla>
+          </Lista>
         )
       )}
 
@@ -200,8 +200,8 @@ function Vacio({ texto }: { texto: string }) {
   return <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">{texto}</CardContent></Card>
 }
 
-function Rejilla({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn('grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4', className)}>{children}</div>
+function Lista({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <Card className={className}><CardContent className="divide-y p-0">{children}</CardContent></Card>
 }
 
 // No pasa por next/image: la sirve nuestra ruta con sesión, no un CDN.
@@ -209,10 +209,10 @@ function Rejilla({ children, className }: { children: React.ReactNode; className
 const Foto = ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} className="size-full object-cover" loading="lazy" />
 
 /**
- * Una entrega como tarjeta: la imagen arriba (foto o ícono), el nombre, un
- * detalle, la fecha y el estado de la firma; abajo, ver la constancia o firmar.
+ * Una entrega como fila: la miniatura (foto o ícono), el nombre, un detalle,
+ * la fecha y el estado de la firma; a la derecha, ver la constancia o firmar.
  */
-function Tarjeta({ fotoUrl, icono: Icono, titulo, detalle, fecha, firmado, etiquetaFirmado = 'Firmado', nota, documento, onFirmar, textoFirmar = 'Firmar' }: {
+function Fila({ fotoUrl, icono: Icono, titulo, detalle, fecha, firmado, etiquetaFirmado = 'Firmado', nota, documento, onFirmar, textoFirmar = 'Firmar' }: {
   fotoUrl: string | null
   icono: LucideIcon
   titulo: string
@@ -227,39 +227,35 @@ function Tarjeta({ fotoUrl, icono: Icono, titulo, detalle, fecha, firmado, etiqu
   textoFirmar?: string
 }) {
   return (
-    <Card className="flex flex-col overflow-hidden">
-      <div className="relative aspect-square bg-foreground/[.06]">
-        {fotoUrl
-          ? <Foto src={fotoUrl} alt={titulo} />
-          : <div className="grid size-full place-items-center text-foreground/80"><Icono className="size-12" strokeWidth={1.5} /></div>}
-        {/* Sobre una foto la píldora necesita fondo propio para leerse. */}
-        <div className="absolute left-2 top-2 rounded-full bg-card/90 shadow-sm backdrop-blur-sm">
-          {firmado
-            ? <Pill tone="ok">{etiquetaFirmado}</Pill>
-            : <Pill tone="warn">Por firmar</Pill>}
-        </div>
+    <div className="flex items-center gap-3 p-3">
+      <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-foreground text-background">
+        {fotoUrl ? <Foto src={fotoUrl} alt={titulo} /> : <Icono className="size-6" strokeWidth={1.75} />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold leading-tight">
+          <span className="truncate">{titulo}</span>
+          {firmado ? <Pill tone="ok">{etiquetaFirmado}</Pill> : <Pill tone="warn">Por firmar</Pill>}
+        </p>
+        {detalle && <p className="truncate text-xs text-muted-foreground">{detalle}</p>}
+        <p className="truncate text-[11px] text-muted-foreground">
+          {fecha}{firmado && onFirmar ? ` · firmado ${firmado}` : ''}{nota ? ` · ${nota}` : ''}
+        </p>
       </div>
-      <CardContent className="flex flex-1 flex-col gap-1 p-3">
-        <p className="line-clamp-2 text-sm font-semibold leading-tight">{titulo}</p>
-        {detalle && <p className="line-clamp-2 text-xs text-muted-foreground">{detalle}</p>}
-        <p className="text-[11px] text-muted-foreground">{fecha}{firmado && onFirmar ? ` · firmado ${firmado}` : ''}</p>
-        {nota && <p className="text-[11px] text-muted-foreground">{nota}</p>}
-        {(documento || (!firmado && onFirmar)) && (
-          <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
-            {documento && (
-              <VisorPdf documentoId={documento.id} titulo={documento.titulo} className="inline-flex h-8 items-center gap-1 rounded-md border bg-card px-2.5 text-xs font-medium hover:bg-accent">
-                <Eye className="size-3.5" /> Ver
-              </VisorPdf>
-            )}
-            {!firmado && onFirmar && (
-              <Button size="sm" className="h-8 px-2.5 text-xs" onClick={onFirmar}>
-                <PenLine className="size-3.5" /> {textoFirmar}
-              </Button>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      {(documento || (!firmado && onFirmar)) && (
+        <div className="flex shrink-0 items-center gap-1.5">
+          {documento && (
+            <VisorPdf documentoId={documento.id} titulo={documento.titulo} className="inline-flex size-8 items-center justify-center rounded-md border bg-card hover:bg-accent">
+              <Eye className="size-4" /><span className="sr-only">Ver la constancia</span>
+            </VisorPdf>
+          )}
+          {!firmado && onFirmar && (
+            <Button size="sm" className="h-8 px-2.5 text-xs" onClick={onFirmar}>
+              <PenLine className="size-3.5" /> {textoFirmar}
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
