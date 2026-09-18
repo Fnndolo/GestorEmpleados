@@ -152,12 +152,14 @@ export function PanelTramites({
     activo && aplica('licencias') && {
       clave: 'licencia', icono: CalendarClock,
       titulo: 'Reportar licencia', corto: 'Licencia', desc: 'Maternidad, luto, estudio…',
-      nuevo: true, sol: 'LICENCIA' as TipoSol,
+      // En desarrollo: el trámite (sol: 'LICENCIA') sigue intacto; solo se desvía el acceso.
+      href: '/autoservicio/en-desarrollo?titulo=Reportar%20licencia',
     },
     activo && aplica('incapacidades') && {
       clave: 'incapacidad', icono: HeartPulse,
       titulo: 'Subir incapacidad', corto: 'Incapacidad', desc: 'RRHH la valida y registra',
-      sol: 'INCAPACIDAD' as TipoSol,
+      // En desarrollo: el trámite (sol: 'INCAPACIDAD') sigue intacto; solo se desvía el acceso.
+      href: '/autoservicio/en-desarrollo?titulo=Subir%20incapacidad',
     },
     // Se radica y se espera el pago: es una solicitud de plata, no una consulta.
     {
