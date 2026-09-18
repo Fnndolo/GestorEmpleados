@@ -126,6 +126,9 @@ export function PanelTramites({
   const ops = esOps(tipoVinculo)
   const plural = (n: number, s: string) => `${n} ${s}${n > 1 ? 's' : ''}`
 
+  // Solo lo que de verdad es una SOLICITUD: algo que se manda y otra persona
+  // aprueba o procesa (jefe, RRHH, o quien paga). Nada de consultar, firmar ni
+  // completar datos propios: eso va abajo, en Canales.
   const solicitudes: Item[] = [
     // Trámites operativos: solo con vínculo activo.
     activo && aplica('vacaciones') && {
@@ -136,23 +139,6 @@ export function PanelTramites({
     activo && aplica('permisos') && {
       clave: 'permiso', icono: Clock,
       titulo: 'Pedir permiso', corto: 'Permiso', desc: 'Por día o por horas', sol: 'PERMISO' as TipoSol,
-    },
-    {
-      clave: 'mi-info', icono: IdCard,
-      titulo: 'Mi información', corto: 'Mi información', desc: 'Completa tus datos, banco y emergencia',
-      aviso: fichaFaltantes > 0 ? `${fichaFaltantes} por completar` : null,
-      href: '/autoservicio/mi-informacion',
-    },
-    aplica('desprendibles') && {
-      clave: 'desprendibles', icono: FileText,
-      titulo: 'Descargar desprendibles', corto: 'Desprendibles', desc: 'Todos tus pagos en PDF',
-      nuevo: true, href: '/autoservicio/desprendibles',
-    },
-    {
-      clave: 'documentos', icono: FolderUp,
-      titulo: 'Mis documentos', corto: 'Documentos', desc: 'Sube cédula, diplomas, certificados…',
-      aviso: documentosFaltantes > 0 ? plural(documentosFaltantes, 'pendiente') : null,
-      nuevo: true, href: '/autoservicio/documentos',
     },
     // La certificación laboral sigue disponible aunque esté retirado (habeas data).
     {
@@ -171,22 +157,40 @@ export function PanelTramites({
       titulo: 'Subir incapacidad', corto: 'Incapacidad', desc: 'RRHH la valida y registra',
       sol: 'INCAPACIDAD' as TipoSol,
     },
+    // Se radica y se espera el pago: es una solicitud de plata, no una consulta.
+    {
+      clave: 'cuentas', icono: Receipt,
+      titulo: 'Cobrar', corto: 'Cuenta de cobro',
+      desc: 'Servicios, comisiones o saldos a tu favor', href: '/autoservicio/cuentas-cobro',
+    },
   ].filter(Boolean) as Item[]
 
+  // Todo lo demás: se consulta, tiene historial, o es un canal por el que se
+  // llega a firmar o completar algo tuyo — pero no es un formulario que otro
+  // aprueba.
   const canales: Item[] = [
+    {
+      clave: 'mi-info', icono: IdCard,
+      titulo: 'Mi información', corto: 'Mi información', desc: 'Completa tus datos, banco y emergencia',
+      aviso: fichaFaltantes > 0 ? `${fichaFaltantes} por completar` : null,
+      href: '/autoservicio/mi-informacion',
+    },
+    aplica('desprendibles') && {
+      clave: 'desprendibles', icono: FileText,
+      titulo: 'Descargar desprendibles', corto: 'Desprendibles', desc: 'Todos tus pagos en PDF',
+      nuevo: true, href: '/autoservicio/desprendibles',
+    },
+    {
+      clave: 'documentos', icono: FolderUp,
+      titulo: 'Mis documentos', corto: 'Documentos', desc: 'Sube cédula, diplomas, certificados…',
+      aviso: documentosFaltantes > 0 ? plural(documentosFaltantes, 'pendiente') : null,
+      nuevo: true, href: '/autoservicio/documentos',
+    },
     {
       clave: 'contratos', icono: PenLine,
       titulo: 'Firmar contrato', corto: 'Contrato', desc: 'Contrato y autorización de datos',
       aviso: contratosPorFirmar > 0 ? plural(contratosPorFirmar, 'pendiente') : null,
       href: '/autoservicio/contratos',
-    },
-    // No es solo de OPS: cualquier colaborador cobra comisiones o saldos a su favor.
-    // Si tiene contrato OPS activo, la cuenta se vincula y exige verificar la
-    // seguridad social; si no, se radica igual. Ver `crearMiCuentaCobro`.
-    {
-      clave: 'cuentas', icono: Receipt,
-      titulo: 'Cuenta de cobro', corto: 'Cuenta de cobro',
-      desc: 'Servicios, comisiones o saldos a tu favor', href: '/autoservicio/cuentas-cobro',
     },
     // Se pagan aparte de la nómina: solo aparece cuando hay algo que ver.
     horasExtraPorFirmar > 0 && {
@@ -243,7 +247,7 @@ export function PanelTramites({
       )}
 
       <Seccion titulo="¿Qué necesitas solicitar?" items={solicitudes} onSolicitar={setSolicitar} />
-      <Seccion titulo="Contratos y canales" items={canales} onSolicitar={setSolicitar} />
+      <Seccion titulo="Canales" items={canales} onSolicitar={setSolicitar} />
 
       {/* Se monta al abrir para que el formulario arranque limpio en cada trámite. */}
       {solicitar && <NuevaSolicitud tipoInicial={solicitar} saldoVacaciones={saldoVacaciones} onClose={() => setSolicitar(null)} />}
