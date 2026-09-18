@@ -25,8 +25,13 @@ const ESTADO_DENUNCIA: Record<string, { label: string; tone: PillTone; nota: str
   ARCHIVADA: { label: 'Archivada', tone: 'muted', nota: 'El caso fue archivado.' },
 }
 
-function Campo({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>
+function Campo({ label, obligatorio, children }: { label: string; obligatorio?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}{obligatorio && <span className="text-destructive"> *</span>}</Label>
+      {children}
+    </div>
+  )
 }
 
 /** `mostrar` decide qué tarjetas se ven: solo el canal anti-acoso, solo habeas data, o ambas. */
@@ -195,6 +200,7 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
     if (asunto.trim().length < 3) { toast.error('Escribe de qué se trata.'); return }
     if (!tipo) { toast.error('Elige el tipo de reporte.'); return }
     if (hechos.trim().length < 10) { toast.error('Describe los hechos (mínimo 10 caracteres).'); return }
+    if (archivos.length === 0) { toast.error('Adjunta al menos una evidencia (captura, foto, audio o PDF).'); return }
     setG(true)
     const res = await crearMiDenuncia({ tipo, asunto, anonima, denuncianteNombre: anonima ? undefined : nombre, hechos, fechaHechos: fechaHechos || undefined })
     if (!res.ok) { setG(false); toast.error(res.error); return }
@@ -236,10 +242,10 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
           {/* De qué se trata lo escribe la persona; el tipo queda como una
               lista corta porque decide el camino: los de acoso van al Comité de
               Convivencia con su procedimiento, los demás no. */}
-          <Campo label="¿De qué se trata?">
+          <Campo label="¿De qué se trata?" obligatorio>
             <Input value={asunto} onChange={(e) => setAsunto(e.target.value)} maxLength={120} placeholder="Ej.: Gritos de un supervisor, faltante en caja, horario del almuerzo…" />
           </Campo>
-          <Campo label="Tipo">
+          <Campo label="Tipo" obligatorio>
             <Select value={tipo} onValueChange={(v) => setTipo(v as TipoReporte)}>
               <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
               <SelectContent>
@@ -248,10 +254,10 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
             </Select>
           </Campo>
           <label className="flex items-center gap-2 text-sm"><Checkbox checked={anonima} onCheckedChange={(v) => setAnonima(Boolean(v))} /> Enviar de forma anónima</label>
-          {!anonima && <Campo label="Tu nombre (opcional)"><Input value={nombre} onChange={(e) => setNombre(e.target.value)} /></Campo>}
-          <Campo label="Detalles"><Textarea rows={5} value={hechos} onChange={(e) => setHechos(e.target.value)} placeholder="Qué pasó, quiénes, dónde y cuándo." /></Campo>
-          <Campo label="Fecha de los hechos (opcional)"><Input type="date" value={fechaHechos} onChange={(e) => setFechaHechos(e.target.value)} /></Campo>
-          <Campo label="Evidencias (opcional)">
+          {!anonima && <Campo label="Tu nombre"><Input value={nombre} onChange={(e) => setNombre(e.target.value)} /></Campo>}
+          <Campo label="Detalles" obligatorio><Textarea rows={5} value={hechos} onChange={(e) => setHechos(e.target.value)} placeholder="Qué pasó, quiénes, dónde y cuándo." /></Campo>
+          <Campo label="Fecha de los hechos"><Input type="date" value={fechaHechos} onChange={(e) => setFechaHechos(e.target.value)} /></Campo>
+          <Campo label="Evidencias" obligatorio>
             <input
               ref={inputArchivo}
               type="file"
@@ -316,7 +322,7 @@ function DialogHabeas({ onClose }: { onClose: () => void }) {
           <DialogDescription>Recibirás respuesta en el plazo indicado.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <Campo label="Tipo">
+          <Campo label="Tipo" obligatorio>
             <Select value={tipo} onValueChange={(v) => setTipo(v as 'CONSULTA' | 'RECLAMO')}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -325,7 +331,7 @@ function DialogHabeas({ onClose }: { onClose: () => void }) {
               </SelectContent>
             </Select>
           </Campo>
-          <Campo label="¿Qué necesitas?"><Textarea rows={4} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Ej.: solicito conocer qué datos míos tienen, corregir un dato, o eliminar información." /></Campo>
+          <Campo label="¿Qué necesitas?" obligatorio><Textarea rows={4} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Ej.: solicito conocer qué datos míos tienen, corregir un dato, o eliminar información." /></Campo>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
