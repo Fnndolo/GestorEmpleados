@@ -120,7 +120,6 @@ export default async function AprobacionesPage({ searchParams }: { searchParams:
               esCertFinal: s.tipo === 'CERTIFICACION_LABORAL' && !s.pasos.some((p) => p.estado === 'PENDIENTE' && p.orden > pasoActual.orden),
               // Licencia que concede la ley: se valida el soporte, no se aprueba ni se niega.
               licenciaDerecho: s.tipo === 'LICENCIA' && !!datos.licenciaTipo && defLicencia(datos.licenciaTipo).derecho,
-              licenciaFundamento: s.tipo === 'LICENCIA' && datos.licenciaTipo ? defLicencia(datos.licenciaTipo).fundamento : null,
               calculoVacaciones,
               // La solicitud volvió tras una devolución: el colaborador corrigió el soporte.
               soporteCorregido: Boolean((s.datos as Record<string, unknown>).soporteCorregidoEn),

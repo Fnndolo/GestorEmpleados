@@ -46,8 +46,6 @@ const TIPOS_INCAP = [
   { v: 'ENFERMEDAD_GENERAL', l: 'Enfermedad general' },
   { v: 'ACCIDENTE_TRABAJO', l: 'Accidente de trabajo' },
   { v: 'ENFERMEDAD_LABORAL', l: 'Enfermedad laboral' },
-  { v: 'LICENCIA_MATERNIDAD', l: 'Licencia de maternidad' },
-  { v: 'LICENCIA_PATERNIDAD', l: 'Licencia de paternidad' },
 ]
 
 /** "lunes, 15 de septiembre de 2026", con los componentes locales de la fecha. */
@@ -372,7 +370,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose 
                           : 'La autoriza tu jefe inmediato.'}
                       </p>
                       <p className="text-muted-foreground">
-                        {lic.fundamento} · <strong>{lic.remunerada ? 'Remunerada' : 'No remunerada'}</strong>
+                        <strong>{lic.remunerada ? 'Remunerada' : 'No remunerada'}</strong>
                         {lic.diasLey ? ` · ${lic.diasLey} día${lic.diasLey === 1 ? '' : 's'} de ley` : ''}
                       </p>
                     </div>

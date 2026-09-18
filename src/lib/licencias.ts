@@ -1,16 +1,5 @@
-/**
- * Catálogo de licencias — única fuente de verdad para el autoservicio y el flujo
- * de aprobación.
- *
- * La distinción que importa es jurídica, no de interfaz: una licencia que la ley
- * concede como DERECHO no se "aprueba" (negarla es una falta del empleador), solo
- * se REGISTRA y Talento Humano valida el soporte. Una licencia DISCRECIONAL sí
- * depende de la voluntad del empleador y pasa por el jefe inmediato.
- *
- * Sin `server-only`: lo importan tanto el form cliente como las acciones server.
- */
-
 export type TipoLicencia =
+
   | 'LUTO' | 'MATERNIDAD' | 'PATERNIDAD' | 'CALAMIDAD' | 'DIA_COMPENSATORIO_VOTACION'
   | 'MATRIMONIO' | 'ESTUDIO' | 'NO_REMUNERADA' | 'DIA_DE_LA_FAMILIA' | 'OTRA'
 
@@ -20,9 +9,9 @@ export type DefLicencia = {
   /** true = la ley la concede; no se aprueba, se registra y se valida el soporte. */
   derecho: boolean
   remunerada: boolean
-  /** Norma que la sustenta, para mostrar al colaborador y al aprobador. */
+  /** Norma básica o descripción corta para el colaborador. */
   fundamento: string
-  /** Días que fija la ley (guía para validar el soporte). null = los fija el RIT o el caso. */
+  /** Días que fija la ley. null = los fija el RIT o el caso. 0.5 = medio día. */
   diasLey: number | null
   requiereSoporte: boolean
   /** Qué soporte se espera. */
@@ -32,61 +21,61 @@ export type DefLicencia = {
 export const LICENCIAS: DefLicencia[] = [
   {
     tipo: 'LUTO', label: 'Luto', derecho: true, remunerada: true,
-    fundamento: 'Ley 1280 de 2009 — 5 días hábiles remunerados por fallecimiento de familiar hasta 2.º grado de consanguinidad, 1.º de afinidad o 1.º civil.',
+    fundamento: 'Por fallecimiento de familiar hasta 2.° grado de consanguinidad, 1.° de afinidad o 1.° civil.',
     diasLey: 5, requiereSoporte: true,
-    soporteEsperado: 'Registro civil de defunción (puedes entregarlo dentro de los 30 días siguientes).',
+    soporteEsperado: 'Registro civil de defunción (máximo 30 días después del hecho).',
   },
   {
     tipo: 'MATERNIDAD', label: 'Maternidad', derecho: true, remunerada: true,
-    fundamento: 'Ley 1822 de 2017 — 18 semanas remuneradas. La paga la EPS.',
+    fundamento: 'Licencia por nacimiento o adopción. Pago asumido por la EPS.',
     diasLey: 126, requiereSoporte: true,
-    soporteEsperado: 'Certificado médico de la EPS con la fecha probable de parto.',
+    soporteEsperado: 'Certificado médico de la EPS con fecha probable de parto o acta de adopción.',
   },
   {
     tipo: 'PATERNIDAD', label: 'Paternidad', derecho: true, remunerada: true,
-    fundamento: 'Ley 2114 de 2021 — 2 semanas remuneradas. La paga la EPS.',
+    fundamento: 'Licencia para el padre por nacimiento o adopción. Pago asumido por la EPS.',
     diasLey: 14, requiereSoporte: true,
-    soporteEsperado: 'Registro civil de nacimiento (dentro de los 30 días siguientes al parto).',
+    soporteEsperado: 'Registro civil de nacimiento (máximo 30 días después del parto).',
   },
   {
     tipo: 'CALAMIDAD', label: 'Calamidad doméstica', derecho: true, remunerada: true,
-    fundamento: 'Art. 57 num. 6 CST — grave calamidad doméstica comprobada. La duración la fija el Reglamento Interno de Trabajo.',
+    fundamento: 'Por emergencias familiares graves. La duración exacta se define según el RIT.',
     diasLey: null, requiereSoporte: true,
-    soporteEsperado: 'Documento que acredite el hecho (constancia médica, denuncia, certificación, etc.).',
+    soporteEsperado: 'Soporte físico, fotográfico o constancia que certifique la fuerza mayor.',
   },
   {
     tipo: 'DIA_COMPENSATORIO_VOTACION', label: 'Día compensatorio por votación', derecho: true, remunerada: true,
-    fundamento: 'Ley 403 de 1997 y Ley 1163 de 2007 — medio día de descanso compensatorio remunerado, dentro del mes siguiente a la votación.',
-    diasLey: 1, requiereSoporte: true,
-    soporteEsperado: 'Certificado electoral.',
+    fundamento: 'Medio día de descanso remunerado por ejercer el derecho al voto.',
+    diasLey: 0.5, requiereSoporte: true,
+    soporteEsperado: 'Certificado electoral de las últimas votaciones.',
   },
   {
-    tipo: 'MATRIMONIO', label: 'Matrimonio', derecho: false, remunerada: true,
-    fundamento: 'No la concede la ley: depende del Reglamento Interno de Trabajo o de la decisión del empleador.',
-    diasLey: null, requiereSoporte: false,
-    soporteEsperado: 'Acta o registro de matrimonio (si te lo piden).',
+    tipo: 'MATRIMONIO', label: 'Matrimonio', derecho: true, remunerada: true,
+    fundamento: 'Derecho de ley por contraer matrimonio o declarar unión marital de hecho.',
+    diasLey: 3, requiereSoporte: true,
+    soporteEsperado: 'Registro civil de matrimonio o documento de unión de hecho.',
   },
   {
-    tipo: 'ESTUDIO', label: 'Estudio', derecho: false, remunerada: true,
-    fundamento: 'Depende de la decisión del empleador o de lo pactado.',
-    diasLey: null, requiereSoporte: false,
-    soporteEsperado: 'Constancia de la institución educativa.',
-  },
-  {
-    tipo: 'NO_REMUNERADA', label: 'No remunerada', derecho: false, remunerada: false,
-    fundamento: 'Art. 51 CST — requiere acuerdo con el empleador; suspende el contrato y no se paga.',
-    diasLey: null, requiereSoporte: false,
-    soporteEsperado: '—',
-  },
-  {
-    tipo: 'DIA_DE_LA_FAMILIA', label: 'Día de la familia', derecho: false, remunerada: true,
-    fundamento: 'Ley 1857 de 2017 — la empresa debe facilitar una jornada semestral; la fecha se coordina con el jefe.',
+    tipo: 'DIA_DE_LA_FAMILIA', label: 'Día de la familia', derecho: true, remunerada: true,
+    fundamento: 'Jornada obligatoria de ley para compartir con el núcleo familiar (una por semestre).',
     diasLey: 1, requiereSoporte: false,
     soporteEsperado: '—',
   },
   {
-    tipo: 'OTRA', label: 'Otra', derecho: false, remunerada: true,
-    fundamento: 'Se evalúa caso por caso.',
+    tipo: 'ESTUDIO', label: 'Estudio o capacitaciones', derecho: false, remunerada: true,
+    fundamento: 'Permiso condicionado al Reglamento Interno o acuerdo directo con el jefe.',
+    diasLey: null, requiereSoporte: true,
+    soporteEsperado: 'Horarios de clase, matrícula o constancia de asistencia escolar.',
+  },
+  {
+    tipo: 'NO_REMUNERADA', label: 'Licencia no remunerada', derecho: false, remunerada: false,
+    fundamento: 'Solicitud personal que suspende temporalmente el contrato y el pago del salario.',
+    diasLey: null, requiereSoporte: false,
+    soporteEsperado: '—',
+  },
+  {
+    tipo: 'OTRA', label: 'Otra (Discrecional)', derecho: false, remunerada: true,
+    fundamento: 'Permisos especiales aprobados bajo criterio exclusivo de la empresa.',
     diasLey: null, requiereSoporte: false,
     soporteEsperado: '—',
   },
@@ -100,7 +89,7 @@ export function defLicencia(tipo: string): DefLicencia {
   return d
 }
 
-/** Una licencia por derecho no se aprueba: Talento Humano la registra validando el soporte. */
 export function esDerecho(tipo: string): boolean {
   return defLicencia(tipo).derecho
 }
+

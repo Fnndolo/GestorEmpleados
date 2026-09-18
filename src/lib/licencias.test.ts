@@ -27,7 +27,8 @@ describe('licencias que concede la ley (no se aprueban, se registran)', () => {
     ['MATERNIDAD', 126],
     ['PATERNIDAD', 14],
     ['CALAMIDAD', null],
-    ['DIA_COMPENSATORIO_VOTACION', 1],
+    ['DIA_COMPENSATORIO_VOTACION', 0.5],
+    ['MATRIMONIO', 3],
   ] as const)('%s es un derecho, remunerada, con %s día(s) de ley', (tipo, diasLey) => {
     const d = defLicencia(tipo)
     expect(esDerecho(tipo)).toBe(true)
@@ -36,22 +37,31 @@ describe('licencias que concede la ley (no se aprueban, se registran)', () => {
     expect(d.requiereSoporte).toBe(true) // un derecho se acredita con soporte
   })
 
-  it('el luto son 5 días hábiles (Ley 1280 de 2009)', () => {
-    expect(defLicencia('LUTO').diasLey).toBe(5)
-    expect(defLicencia('LUTO').fundamento).toContain('1280')
+  // Excepción: es un derecho y remunerado, pero no lleva soporte (la fecha la
+  // coordina el jefe, no hay documento que acreditarlo).
+  it('día de la familia es un derecho remunerado sin soporte', () => {
+    const d = defLicencia('DIA_DE_LA_FAMILIA')
+    expect(esDerecho('DIA_DE_LA_FAMILIA')).toBe(true)
+    expect(d.remunerada).toBe(true)
+    expect(d.diasLey).toBe(1)
+    expect(d.requiereSoporte).toBe(false)
   })
 
-  it('maternidad son 18 semanas = 126 días (Ley 1822 de 2017)', () => {
+  it('el luto son 5 días de ley', () => {
+    expect(defLicencia('LUTO').diasLey).toBe(5)
+  })
+
+  it('maternidad son 18 semanas = 126 días', () => {
     expect(defLicencia('MATERNIDAD').diasLey).toBe(18 * 7)
   })
 
-  it('paternidad son 2 semanas = 14 días (Ley 2114 de 2021)', () => {
+  it('paternidad son 2 semanas = 14 días', () => {
     expect(defLicencia('PATERNIDAD').diasLey).toBe(2 * 7)
   })
 })
 
 describe('licencias discrecionales (sí las decide el empleador)', () => {
-  it.each(['MATRIMONIO', 'ESTUDIO', 'NO_REMUNERADA', 'DIA_DE_LA_FAMILIA', 'OTRA'] as const)(
+  it.each(['ESTUDIO', 'NO_REMUNERADA', 'OTRA'] as const)(
     '%s no es un derecho de ley',
     (tipo) => expect(esDerecho(tipo)).toBe(false),
   )

@@ -31,7 +31,7 @@ type Solicitud = {
   motivo: string | null
   fechaInicio: string; fechaFin: string
   documentos: { id: string; nombre: string; esImagen: boolean }[]; esCertFinal: boolean
-  licenciaDerecho: boolean; licenciaFundamento: string | null
+  licenciaDerecho: boolean
   calculoVacaciones: { dias: number; saldo: number; anticipadas: boolean; diasAnticipados: number; advertencias: string[] } | null
   /** Contrapropuesta de fechas que el colaborador rechazó (solo vacaciones). */
   contrapropuestaRechazada: { fechaInicio: string; fechaFin: string; respuesta: string | null } | null
@@ -197,7 +197,6 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
                     <Scale className="mt-0.5 size-4 shrink-0 text-emerald-600" />
                     <div>
                       <p className="font-medium">Licencia de ley: no se aprueba ni se niega.</p>
-                      <p className="text-muted-foreground">{s.licenciaFundamento}</p>
                       <p className="text-muted-foreground">Valida el soporte y regístrala. Si el soporte no acredita el hecho, devuélvela explicando qué falta.</p>
                     </div>
                   </div>
