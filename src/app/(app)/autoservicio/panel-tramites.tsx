@@ -145,7 +145,9 @@ export function PanelTramites({
       clave: 'certificacion', icono: FileBadge,
       titulo: ops ? 'Pedir certificación contractual' : 'Pedir certificación', corto: 'Certificación',
       desc: ops ? 'De tu contrato de prestación de servicios' : 'Laboral, con salario, para banco',
-      sol: 'CERTIFICACION_LABORAL' as TipoSol,
+      // En desarrollo: el trámite en sí (sol: 'CERTIFICACION_LABORAL') sigue intacto,
+      // solo se desvía el acceso mientras se termina de habilitar.
+      href: '/autoservicio/en-desarrollo?titulo=Pedir%20certificaci%C3%B3n',
     },
     activo && aplica('licencias') && {
       clave: 'licencia', icono: CalendarClock,
@@ -161,7 +163,9 @@ export function PanelTramites({
     {
       clave: 'cuentas', icono: Receipt,
       titulo: 'Cobrar', corto: 'Cuenta de cobro',
-      desc: 'Servicios, comisiones o saldos a tu favor', href: '/autoservicio/cuentas-cobro',
+      // En desarrollo: la pantalla real (/autoservicio/cuentas-cobro) sigue intacta,
+      // solo se desvía el acceso mientras se termina de habilitar.
+      desc: 'Servicios, comisiones o saldos a tu favor', href: '/autoservicio/en-desarrollo?titulo=Cuenta%20de%20cobro',
     },
   ].filter(Boolean) as Item[]
 
