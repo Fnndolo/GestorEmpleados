@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { TIPOS_REPORTE, etiquetaReporte, esAcoso } from './linea-etica'
+import { TIPOS_REPORTE, TIPOS_CLASIFICABLES, etiquetaReporte, esAcoso } from './linea-etica'
 
 describe('línea ética', () => {
   it('solo los dos de acoso van al Comité de Convivencia', () => {
@@ -18,6 +18,13 @@ describe('línea ética', () => {
 
   it('traduce el tipo a lo que se lee en pantalla', () => {
     expect(etiquetaReporte('ACOSO_SEXUAL')).toBe('Acoso sexual')
+    expect(etiquetaReporte('SIN_CLASIFICAR')).toBe('Por clasificar')
+  })
+
+  it('lo recién recibido está por clasificar: no es acoso hasta que Jurídica lo diga', () => {
+    expect(esAcoso('SIN_CLASIFICAR')).toBe(false)
+    expect(TIPOS_CLASIFICABLES.map((t) => t.valor)).not.toContain('SIN_CLASIFICAR')
+    expect(TIPOS_CLASIFICABLES).toHaveLength(4)
   })
 
   it('un tipo desconocido no revienta ni se hace pasar por acoso', () => {

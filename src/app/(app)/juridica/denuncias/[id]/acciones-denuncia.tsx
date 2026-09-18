@@ -3,20 +3,34 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Search, CircleCheck, Archive } from 'lucide-react'
+import { Search, CircleCheck, Archive, Tag } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { iniciarInvestigacionDenuncia, resolverDenuncia, archivarDenuncia, vincularResolucionDenuncia } from '../../acciones'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { TIPOS_CLASIFICABLES, type TipoClasificable } from '@/lib/linea-etica'
+import { iniciarInvestigacionDenuncia, resolverDenuncia, archivarDenuncia, vincularResolucionDenuncia, clasificarDenuncia } from '../../acciones'
 import { ZonaArchivos, subirArchivoEntidad } from '../../_ui'
 
-export function AccionesDenuncia({ id, estado }: { id: string; estado: string }) {
+export function AccionesDenuncia({ id, estado, tipo }: { id: string; estado: string; tipo: string }) {
   const router = useRouter()
   const [g, setG] = useState(false)
   const [dialogo, setDialogo] = useState<'resolver' | 'archivar' | null>(null)
+  const [tipoElegido, setTipoElegido] = useState(tipo === 'SIN_CLASIFICAR' ? '' : tipo)
+  const [clasificando, setClasificando] = useState(false)
+
+  // Quien reporta no elige el tipo; lo decide Jurídica al leerlo. De eso
+  // depende el camino: los de acoso van al Comité de Convivencia (Ley 1010).
+  async function clasificar() {
+    if (!tipoElegido) { toast.error('Elige el tipo.'); return }
+    setClasificando(true)
+    const res = await clasificarDenuncia({ id, tipo: tipoElegido as TipoClasificable })
+    setClasificando(false)
+    if (res.ok) { toast.success('Reporte clasificado.'); router.refresh() } else toast.error(res.error)
+  }
 
   async function iniciar() {
     setG(true)
@@ -28,6 +42,18 @@ export function AccionesDenuncia({ id, estado }: { id: string; estado: string })
   return (
     <Card><CardContent className="py-4 space-y-3">
       <h3 className="text-sm font-medium">Gestión de la denuncia</h3>
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-56 space-y-1.5">
+          <Label>Tipo {tipo === 'SIN_CLASIFICAR' && <span className="text-destructive">*</span>}</Label>
+          <Select value={tipoElegido} onValueChange={setTipoElegido}>
+            <SelectTrigger className="w-full"><SelectValue placeholder="Por clasificar…" /></SelectTrigger>
+            <SelectContent>{TIPOS_CLASIFICABLES.map((t) => <SelectItem key={t.valor} value={t.valor}>{t.etiqueta}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <Button size="sm" onClick={clasificar} disabled={clasificando || !tipoElegido || tipoElegido === tipo}>
+          {clasificando ? <Spinner /> : <Tag className="size-4" />} {tipo === 'SIN_CLASIFICAR' ? 'Clasificar' : 'Cambiar tipo'}
+        </Button>
+      </div>
       {estado === 'RECIBIDA' && (
         <>
           <p className="text-sm text-muted-foreground">Denuncia recibida. Inicia la investigación para continuar, o archívala si no procede.</p>

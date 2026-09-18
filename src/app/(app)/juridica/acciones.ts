@@ -302,6 +302,26 @@ export const vincularActaDisciplinario = accion(
 // (confidencial, sin auditar el autor): ver `autoservicio/juridica-acciones.ts`.
 // Aquí solo se gestionan (investigar/resolver/archivar).
 
+/**
+ * Clasifica un reporte de la línea ética. Quien reporta ya no elige el tipo:
+ * lo decide Jurídica al leerlo, y de eso depende el camino (los de acoso van
+ * al Comité de Convivencia con los plazos de la Ley 1010).
+ */
+export const clasificarDenuncia = accion(
+  {
+    modulo: 'juridica',
+    accion: 'EDITAR',
+    schema: z.object({ id: z.uuid(), tipo: z.enum(['ACOSO_LABORAL', 'ACOSO_SEXUAL', 'CONDUCTA_IRREGULAR', 'SUGERENCIA']) }),
+  },
+  async (d) => {
+    const den = await prisma.denunciaAcoso.findUniqueOrThrow({ where: { id: d.id }, select: { estado: true } })
+    if (den.estado === 'RESUELTA' || den.estado === 'ARCHIVADA') throw new ErrorNegocio('La denuncia ya está cerrada.')
+    await dbAuditado.denunciaAcoso.update({ where: { id: d.id }, data: { tipo: d.tipo } })
+    revalidatePath(`/juridica/denuncias/${d.id}`)
+    revalidatePath('/juridica')
+  },
+)
+
 /** Anti-acoso — paso 1: iniciar investigación (RECIBIDA → EN_INVESTIGACION). */
 export const iniciarInvestigacionDenuncia = accion(
   { modulo: 'juridica', accion: 'EDITAR', schema: z.object({ id: z.uuid() }) },

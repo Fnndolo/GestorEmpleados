@@ -10,13 +10,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { crearMiDenuncia, crearMiConsultaReclamo, consultarMiDenuncia } from '../juridica-acciones'
-import { TIPOS_REPORTE, type TipoReporte } from '@/lib/linea-etica'
 
 const ESTADO_DENUNCIA: Record<string, { label: string; tone: PillTone; nota: string }> = {
   RECIBIDA: { label: 'Recibida', tone: 'warn', nota: 'Tu denuncia fue recibida y está pendiente de revisión por el Comité de Convivencia / Jurídica.' },
@@ -35,7 +33,7 @@ function Campo({ label, obligatorio, children }: { label: string; obligatorio?: 
 }
 
 /** `mostrar` decide qué tarjetas se ven: solo el canal anti-acoso, solo habeas data, o ambas. */
-export function CanalEtico({ mostrar = 'ambos' }: { mostrar?: 'anti-acoso' | 'habeas-data' | 'ambos' }) {
+export function CanalEtico({ mostrar = 'ambos', remitente }: { mostrar?: 'anti-acoso' | 'habeas-data' | 'ambos'; remitente: string }) {
   const [dialogo, setDialogo] = useState<'denuncia' | 'habeas' | 'seguimiento' | null>(null)
   const [codigoCreado, setCodigoCreado] = useState<string | null>(null)
   const verAntiAcoso = mostrar !== 'habeas-data'
@@ -54,7 +52,7 @@ export function CanalEtico({ mostrar = 'ambos' }: { mostrar?: 'anti-acoso' | 'ha
                 </span>
                 <div className="min-w-0">
                   {mostrar === 'ambos' && <p className="text-sm font-bold">Línea ética</p>}
-                  <p className="text-sm text-muted-foreground">Acoso, conductas indebidas o irregularidades. Confidencial y, si quieres, anónimo.</p>
+                  <p className="text-sm text-muted-foreground">Acoso, conductas indebidas o irregularidades. Solo lo lee Jurídica.</p>
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -86,7 +84,7 @@ export function CanalEtico({ mostrar = 'ambos' }: { mostrar?: 'anti-acoso' | 'ha
         )}
       </div>
 
-      {dialogo === 'denuncia' && <DialogDenuncia onClose={() => setDialogo(null)} onCreada={(codigo) => { setDialogo(null); setCodigoCreado(codigo) }} />}
+      {dialogo === 'denuncia' && <DialogDenuncia remitente={remitente} onClose={() => setDialogo(null)} onCreada={(codigo) => { setDialogo(null); setCodigoCreado(codigo) }} />}
       {dialogo === 'habeas' && <DialogHabeas onClose={() => setDialogo(null)} />}
       {dialogo === 'seguimiento' && <DialogSeguimiento onClose={() => setDialogo(null)} />}
       {codigoCreado && <DialogCodigo codigo={codigoCreado} onClose={() => setCodigoCreado(null)} />}
@@ -126,7 +124,7 @@ function DialogCodigo({ codigo, onClose }: { codigo: string; onClose: () => void
   )
 }
 
-/** Consulta anónima del estado de una denuncia por su código. */
+/** Consulta del estado de un reporte por su código. */
 function DialogSeguimiento({ onClose }: { onClose: () => void }) {
   const [codigo, setCodigo] = useState('')
   const [g, setG] = useState(false)
@@ -148,7 +146,7 @@ function DialogSeguimiento({ onClose }: { onClose: () => void }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Consultar mi denuncia</DialogTitle>
-          <DialogDescription>La consulta es anónima: solo necesitas el código que recibiste al enviarla.</DialogDescription>
+          <DialogDescription>Solo necesitas el código que recibiste al enviarlo.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="flex gap-2">
@@ -183,12 +181,9 @@ function DialogSeguimiento({ onClose }: { onClose: () => void }) {
   )
 }
 
-function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: (codigo: string) => void }) {
+function DialogDenuncia({ remitente, onClose, onCreada }: { remitente: string; onClose: () => void; onCreada: (codigo: string) => void }) {
   const router = useRouter()
-  const [anonima, setAnonima] = useState(true)
-  const [tipo, setTipo] = useState<TipoReporte | ''>('')
   const [asunto, setAsunto] = useState('')
-  const [nombre, setNombre] = useState('')
   const [hechos, setHechos] = useState('')
   const [fechaHechos, setFechaHechos] = useState('')
   // Evidencias: capturas, fotos, audios, PDF… varias, se suben tras crear el reporte.
@@ -198,14 +193,13 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
 
   async function enviar() {
     if (asunto.trim().length < 3) { toast.error('Escribe de qué se trata.'); return }
-    if (!tipo) { toast.error('Elige el tipo de reporte.'); return }
     if (hechos.trim().length < 10) { toast.error('Describe los hechos (mínimo 10 caracteres).'); return }
     if (archivos.length === 0) { toast.error('Adjunta al menos una evidencia (captura, foto, audio o PDF).'); return }
     setG(true)
-    const res = await crearMiDenuncia({ tipo, asunto, anonima, denuncianteNombre: anonima ? undefined : nombre, hechos, fechaHechos: fechaHechos || undefined })
+    const res = await crearMiDenuncia({ asunto, hechos, fechaHechos: fechaHechos || undefined })
     if (!res.ok) { setG(false); toast.error(res.error); return }
-    // Las evidencias van por su propio endpoint, que no registra quién las sube;
-    // la prueba de que son de este reporte es el código.
+    // Las evidencias van por su propio endpoint; la prueba de que son de este
+    // reporte es el código.
     let fallidos = 0
     for (const archivo of archivos) {
       try {
@@ -232,29 +226,16 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
           <DialogTitle>Línea ética</DialogTitle>
         </DialogHeader>
 
-        {/* Una línea: lo que importa saber antes de escribir. */}
+        {/* Una línea: a nombre de quién va y quién lo lee. */}
         <p className="flex items-start gap-2 rounded-lg bg-muted/60 p-2.5 text-xs text-muted-foreground">
-          <Lock className="mt-0.5 size-4 shrink-0" />
-          <span>Confidencial: <strong>no se registra quién lo envía</strong>. Guarda el código que verás al enviarlo.</span>
+          <Lock className="mt-0.5 size-3.5 shrink-0" />
+          <span>Se envía a nombre de <strong>{remitente}</strong>. Solo lo lee Jurídica y no aparece en tu autoservicio; guarda el código que verás al enviarlo para consultar en qué va.</span>
         </p>
 
         <div className="space-y-4">
-          {/* De qué se trata lo escribe la persona; el tipo queda como una
-              lista corta porque decide el camino: los de acoso van al Comité de
-              Convivencia con su procedimiento, los demás no. */}
           <Campo label="¿De qué se trata?" obligatorio>
-            <Input value={asunto} onChange={(e) => setAsunto(e.target.value)} maxLength={120} placeholder="Ej.: Gritos de un supervisor, faltante en caja, horario del almuerzo…" />
+            <Input value={asunto} onChange={(e) => setAsunto(e.target.value)} maxLength={120} placeholder="Ej.: Gritos de un supervisor, faltante en caja…" />
           </Campo>
-          <Campo label="Tipo" obligatorio>
-            <Select value={tipo} onValueChange={(v) => setTipo(v as TipoReporte)}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
-              <SelectContent>
-                {TIPOS_REPORTE.map((t) => <SelectItem key={t.valor} value={t.valor}>{t.etiqueta}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </Campo>
-          <label className="flex items-center gap-2 text-sm"><Checkbox checked={anonima} onCheckedChange={(v) => setAnonima(Boolean(v))} /> Enviar de forma anónima</label>
-          {!anonima && <Campo label="Tu nombre"><Input value={nombre} onChange={(e) => setNombre(e.target.value)} /></Campo>}
           <Campo label="Detalles" obligatorio><Textarea rows={5} value={hechos} onChange={(e) => setHechos(e.target.value)} placeholder="Qué pasó, quiénes, dónde y cuándo." /></Campo>
           <Campo label="Fecha de los hechos"><Input type="date" value={fechaHechos} onChange={(e) => setFechaHechos(e.target.value)} /></Campo>
           <Campo label="Evidencias" obligatorio>
@@ -267,15 +248,12 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
               onChange={(e) => { setArchivos((prev) => [...prev, ...Array.from(e.target.files ?? [])]); e.target.value = '' }}
             />
             {archivos.length > 0 && (
-              <ul className="space-y-1 rounded-lg border p-2">
+              <ul className="space-y-1 rounded-lg border p-2 text-xs">
                 {archivos.map((a, i) => (
-                  <li key={`${a.name}-${i}`} className="flex items-center gap-2 text-xs">
+                  <li key={`${a.name}-${i}`} className="flex items-center gap-2">
                     <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
                     <span className="min-w-0 flex-1 truncate">{a.name}</span>
-                    <span className="shrink-0 text-muted-foreground">{(a.size / 1024 / 1024).toFixed(1)} MB</span>
-                    <button type="button" onClick={() => setArchivos((prev) => prev.filter((_, j) => j !== i))} className="shrink-0 text-destructive" aria-label={`Quitar ${a.name}`}>
-                      <X className="size-3.5" />
-                    </button>
+                    <button type="button" onClick={() => setArchivos((prev) => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive" aria-label="Quitar"><X className="size-3.5" /></button>
                   </li>
                 ))}
               </ul>
@@ -285,6 +263,7 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
             </Button>
           </Campo>
         </div>
+
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button onClick={enviar} disabled={g}>{g && <Spinner />}Enviar reporte</Button>

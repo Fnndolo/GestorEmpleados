@@ -17,6 +17,13 @@ export default async function AutoservicioJuridicaPage({ searchParams }: { searc
   const vista: 'anti-acoso' | 'habeas-data' | 'ambos' =
     vistaParam === 'anti-acoso' || vistaParam === 'habeas-data' ? vistaParam : 'ambos'
 
+  // El reporte de la línea ética va a nombre de quien lo envía: el nombre sale
+  // de su ficha (o del usuario, si no tiene ficha), nunca de un campo libre.
+  const ficha = usuario.colaboradorId
+    ? await prisma.colaborador.findUnique({ where: { id: usuario.colaboradorId }, select: { nombres: true, apellidos: true } })
+    : null
+  const remitente = ficha ? `${ficha.nombres} ${ficha.apellidos}` : usuario.nombre
+
   // La lista de solicitudes solo aplica a habeas data (la denuncia es confidencial y no se lista).
   const verHabeas = vista !== 'anti-acoso'
   const misHabeas = verHabeas && usuario.colaboradorId
@@ -35,7 +42,7 @@ export default async function AutoservicioJuridicaPage({ searchParams }: { searc
       </Link>
       <Encabezado enLinea titulo={TITULO[vista]} />
 
-      <CanalEtico mostrar={vista} />
+      <CanalEtico mostrar={vista} remitente={remitente} />
 
       {verHabeas && (
         <>

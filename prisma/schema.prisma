@@ -656,6 +656,7 @@ model Colaborador {
   cumpleanosACargo       CelebracionCumpleanos[]  @relation("CumpleanosEncargado")
   autorizacionesDatos    AutorizacionDatos[]
   consultasHabeas        ConsultaReclamoDatos[]
+  denunciasLineaEtica    DenunciaAcoso[]          @relation("DenunciasLineaEtica")
   examenesMedicos        ExamenMedico[]
   accidentes             AccidenteTrabajo[]
   entregasEpp            EntregaEpp[]
@@ -2574,6 +2575,8 @@ enum TipoReporte {
   ACOSO_SEXUAL
   CONDUCTA_IRREGULAR
   SUGERENCIA
+  // Así entra todo reporte nuevo: quien reporta no lo clasifica, lo hace Jurídica.
+  SIN_CLASIFICAR
 
   @@map("tipo_reporte")
 }
@@ -2594,9 +2597,15 @@ model DenunciaAcoso {
   // Qué se está reportando. Los de acoso van al Comité de Convivencia con los
   // plazos de la Ley 1010; los demás son del canal ético y no llevan ese
   // procedimiento. Sin esto una sugerencia entraba como caso de acoso.
-  tipo                  TipoReporte    @default(ACOSO_LABORAL)
-  anonima               Boolean        @default(true)
+  tipo                  TipoReporte    @default(SIN_CLASIFICAR)
+  // Desde 2026-09-17 el reporte va a nombre de quien lo envía (decisión de la
+  // empresa): confidencial significa que solo lo ve Jurídica y que no aparece
+  // en el autoservicio, no que sea anónimo. Los anteriores conservan su
+  // `anonima = true` y no traen colaborador.
+  anonima               Boolean        @default(false)
   denuncianteNombre     String?        @map("denunciante_nombre")
+  colaboradorId         String?        @map("colaborador_id") @db.Uuid
+  colaborador           Colaborador?   @relation("DenunciasLineaEtica", fields: [colaboradorId], references: [id], onDelete: SetNull)
   // De qué se trata, en palabras de quien reporta (los detalles van en hechos).
   asunto                String?
   hechos                String
@@ -2608,6 +2617,7 @@ model DenunciaAcoso {
   creadoEn              DateTime       @default(now()) @map("creado_en")
   actualizadoEn         DateTime       @updatedAt @map("actualizado_en")
 
+  @@index([colaboradorId])
   @@map("denuncia_acoso")
 }
 

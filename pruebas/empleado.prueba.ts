@@ -132,13 +132,20 @@ describe('lo que el empleado SÍ puede hacer', () => {
     expect(despues.celular).toBe(antes.celular)
   })
 
-  it('reporta por la línea ética y consulta con su código', async () => {
+  it('reporta por la línea ética a su nombre, entra por clasificar y consulta con su código', async () => {
     actuarComo(empleado)
-    const res = await crearMiDenuncia({
-      tipo: 'CONDUCTA_IRREGULAR', asunto: 'Prueba del canal', anonima: true, hechos: `Hechos de ${MARCA} para probar el canal`,
-    } as never)
+    const res = await crearMiDenuncia({ asunto: 'Prueba del canal', hechos: `Hechos de ${MARCA} para probar el canal` } as never)
     expect(res.ok, res.ok ? '' : res.error).toBe(true)
     const { codigo } = (res.ok ? res.datos : { codigo: '' }) as { codigo: string }
+
+    // Va a nombre de quien lo envía (de su ficha, no de un campo libre) y sin tipo:
+    // lo clasifica Jurídica.
+    const d = await prisma.denunciaAcoso.findUniqueOrThrow({ where: { codigo } })
+    const ficha = await prisma.colaborador.findUniqueOrThrow({ where: { id: empleadoColabId }, select: { nombres: true, apellidos: true } })
+    expect(d.colaboradorId).toBe(empleadoColabId)
+    expect(d.denuncianteNombre).toBe(`${ficha.nombres} ${ficha.apellidos}`)
+    expect(d.anonima).toBe(false)
+    expect(d.tipo).toBe('SIN_CLASIFICAR')
 
     const consulta = await consultarMiDenuncia({ codigo } as never)
     expect(consulta.ok).toBe(true)

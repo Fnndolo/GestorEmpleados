@@ -35,7 +35,7 @@ export default async function DenunciaPage({ params }: { params: Promise<{ id: s
     <div className="max-w-5xl">
       <Encabezado
         titulo={d.asunto ? `${d.asunto} · ${d.codigo}` : `Denuncia ${d.codigo}`}
-        descripcion={`${etiquetaReporte(d.tipo)} · ${d.anonima ? 'reporte anónimo' : `reportado por ${d.denuncianteNombre ?? '—'}`}${esAcoso(d.tipo) ? ' · Comité de Convivencia (Ley 1010 / Ley 2466 de 2025)' : ''}`}
+        descripcion={`${etiquetaReporte(d.tipo)} · ${d.anonima ? 'reporte anónimo' : `reportado por ${d.denuncianteNombre ?? '—'}`}${esAcoso(d.tipo) ? ' · Comité de Convivencia' : ''}`}
         acciones={<Badge variant={d.estado === 'RESUELTA' ? 'default' : 'secondary'}>{ESTADO[d.estado]}</Badge>}
       />
 
@@ -55,7 +55,7 @@ export default async function DenunciaPage({ params }: { params: Promise<{ id: s
         </CardContent></Card>
       )}
 
-      {puedeEditar && (d.estado === 'RECIBIDA' || d.estado === 'EN_INVESTIGACION') && <AccionesDenuncia id={d.id} estado={d.estado} />}
+      {puedeEditar && (d.estado === 'RECIBIDA' || d.estado === 'EN_INVESTIGACION') && <AccionesDenuncia id={d.id} estado={d.estado} tipo={d.tipo} />}
     </div>
   )
 }

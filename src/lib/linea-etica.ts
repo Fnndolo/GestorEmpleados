@@ -7,8 +7,10 @@
  * trámite. Antes todo entraba como denuncia de acoso, así que una sugerencia
  * sobre el parqueadero le llegaba al Comité como un caso de ley.
  *
- * Módulo puro: lo usan la pantalla del colaborador, la bandeja de Jurídica y la
- * Server Action.
+ * Quien reporta NO elige el tipo (2026-09-17): todo entra «por clasificar» y
+ * Jurídica lo clasifica al revisarlo, que es quien sabe si es acoso o no.
+ *
+ * Módulo puro: lo usan la bandeja de Jurídica y las Server Actions.
  */
 export const TIPOS_REPORTE = [
   {
@@ -35,9 +37,19 @@ export const TIPOS_REPORTE = [
     ayuda: 'Algo que se puede mejorar, o una inconformidad que quieres que se sepa.',
     esAcoso: false,
   },
+  {
+    valor: 'SIN_CLASIFICAR',
+    etiqueta: 'Por clasificar',
+    ayuda: 'Recién recibido; Jurídica decide de qué se trata.',
+    esAcoso: false,
+  },
 ] as const
 
 export type TipoReporte = (typeof TIPOS_REPORTE)[number]['valor']
+
+/** Los tipos que Jurídica puede asignar (todo menos «por clasificar»). */
+export const TIPOS_CLASIFICABLES = TIPOS_REPORTE.filter((t) => t.valor !== 'SIN_CLASIFICAR')
+export type TipoClasificable = Exclude<TipoReporte, 'SIN_CLASIFICAR'>
 
 const POR_VALOR = new Map(TIPOS_REPORTE.map((t) => [t.valor as string, t]))
 

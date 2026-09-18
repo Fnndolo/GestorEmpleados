@@ -10,56 +10,53 @@ import { parseFechaISO, hoyBogota } from '@/lib/fechas'
 import { avisarPorRol } from '@/server/notificaciones/avisar'
 import { nombreCorto } from '@/lib/notificaciones/texto'
 import { sumarDiasHabiles, festivosDeRango } from '@/lib/dias-habiles'
-import { etiquetaReporte } from '@/lib/linea-etica'
 
-const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
 
 /**
  * Canal anti-acoso desde el autoservicio del colaborador (Ley 2466 de 2025).
  *
- * CONFIDENCIALIDAD: se usa `prisma` (NO `dbAuditado`) a propósito, para que el
- * AuditLog NO registre quién radicó la denuncia. Tampoco se guarda el
- * colaboradorId ni ningún vínculo con el usuario: la denuncia no es rastreable
- * hasta su autor. Si es anónima, ni siquiera se guarda el nombre. El colaborador
- * recibe un CÓDIGO para dar seguimiento sin revelar su identidad.
+ * El reporte va A NOMBRE de quien lo envía (decisión de la empresa, 2026-09-17):
+ * se guarda su ficha y su nombre, tomados de la sesión —no de un campo libre,
+ * que permitía firmar con cualquier nombre—. Lo confidencial es quién lo lee:
+ * solo Jurídica; no aparece en el autoservicio ni en Mi actividad. El código
+ * sigue siendo la forma de consultar en qué va. El tipo no lo elige quien
+ * reporta: entra «por clasificar» y Jurídica lo clasifica al revisarlo.
  */
 export const crearMiDenuncia = accion(
   {
     modulo: 'autoservicio',
     accion: 'CREAR',
     schema: z.object({
-      tipo: z.enum(['ACOSO_LABORAL', 'ACOSO_SEXUAL', 'CONDUCTA_IRREGULAR', 'SUGERENCIA']),
       asunto: z.string().trim().min(3, 'Escribe de qué se trata.').max(120),
-      anonima: z.boolean(),
-      denuncianteNombre: z.string().max(150).optional(),
       hechos: z.string().trim().min(10, 'Describe los hechos (mínimo 10 caracteres).').max(2000),
       fechaHechos: z.string().optional(),
     }),
   },
-  async (d) => {
+  async (d, usuario) => {
     const codigo = `DA-${randomBytes(4).toString('hex').toUpperCase()}`
-    // prisma (sin auditar): no se registra el autor en ninguna parte → confidencial.
-    await prisma.denunciaAcoso.create({
+    const ficha = usuario.colaboradorId
+      ? await prisma.colaborador.findUnique({ where: { id: usuario.colaboradorId }, select: { nombres: true, apellidos: true } })
+      : null
+    const nombre = ficha ? `${ficha.nombres} ${ficha.apellidos}` : usuario.nombre
+    await dbAuditado.denunciaAcoso.create({
       data: {
         codigo,
-        tipo: d.tipo,
+        tipo: 'SIN_CLASIFICAR',
         asunto: d.asunto,
-        anonima: d.anonima,
-        denuncianteNombre: d.anonima ? null : v(d.denuncianteNombre),
+        anonima: false,
+        denuncianteNombre: nombre,
+        colaboradorId: usuario.colaboradorId ?? null,
         hechos: d.hechos,
         fechaHechos: parseFechaISO(d.fechaHechos || null),
         estado: 'RECIBIDA',
       },
     })
 
-    // Avisar al Comité de Convivencia / Jurídica SIN revelar identidad (solo el
-    // código). Se dice de qué tipo es porque de eso depende el procedimiento:
-    // los de acoso llevan el trámite y los plazos de la Ley 1010.
-    const etiqueta = etiquetaReporte(d.tipo).toLowerCase()
+    // A Jurídica le llega el asunto y el código; el detalle lo ve en la bandeja.
     await avisarPorRol(['Jurídica', 'Administrador', 'Subgerencia'], {
       evento: 'denuncia_acoso',
-      titulo: `Línea ética: reporte de ${etiqueta}`,
-      mensaje: `Código ${codigo} · Confidencial.`,
+      titulo: 'Línea ética: nuevo reporte',
+      mensaje: `${d.asunto} · Código ${codigo} · Confidencial.`,
       enlace: '/juridica?tab=denuncias',
       llamadoAccion: 'Revisar la línea ética',
     })
