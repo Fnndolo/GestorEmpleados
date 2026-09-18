@@ -1,4 +1,4 @@
-import { Building2 } from 'lucide-react'
+import Image from 'next/image'
 
 /**
  * Portada de Ajustes: quién es la empresa, antes que el formulario.
@@ -16,19 +16,14 @@ export function IdentidadEmpresa({ nombreComercial, razonSocial, nit, representa
   colaboradores: number
 }) {
   const nombre = nombreComercial || razonSocial
-  // Monograma con las iniciales; si no hay nombre aún, el ícono genérico.
-  const iniciales = nombre
-    .split(/\s+/)
-    .filter((p) => p.length > 2)
-    .slice(0, 2)
-    .map((p) => p[0])
-    .join('')
-    .toUpperCase()
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-4 rounded-2xl border bg-card p-5 shadow-sm">
-      <span className="grid size-16 shrink-0 place-items-center rounded-2xl border border-primary/20 bg-primary/10 text-[22px] font-extrabold tracking-tight text-primary">
-        {iniciales || <Building2 className="size-7" />}
+      {/* La marca: el mismo ícono de la app (el del manifiesto PWA). Va sobre
+          blanco porque la imagen ya trae ese fondo, y así se ve igual en modo
+          oscuro. Se amplía un poco porque el ícono trae margen propio. */}
+      <span className="grid size-16 shrink-0 place-items-center overflow-hidden rounded-2xl border bg-white">
+        <Image src="/icono-192.png" alt="Smart Gadgets" width={64} height={64} className="size-full scale-[1.2] object-contain" />
       </span>
 
       <div className="min-w-0 flex-1 basis-64">
