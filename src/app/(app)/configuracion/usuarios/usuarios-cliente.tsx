@@ -10,6 +10,7 @@ import {
   type CrearUsuarioInput, type EditarUsuarioInput,
 } from '@/lib/validaciones/usuarios'
 import { crearUsuario, editarUsuario, reenviarAcceso } from './acciones'
+import { AvatarColaborador } from '@/components/ui-kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -25,7 +26,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Ayuda } from '@/components/ui-kit/ayuda'
 
 type Usuario = {
-  id: string; nombre: string; email: string; rolId: string; rolNombre: string
+  id: string; nombre: string; email: string; fotoUrl: string | null; rolId: string; rolNombre: string
   rolIdsExtra: string[]; rolNombresExtra: string[]
   estado: string; telefonoE164: string | null; debeCambiarPassword: boolean
   ultimoAcceso: string | null; sedeIds: string[]; sedeNombres: string[]
@@ -67,8 +68,13 @@ export function UsuariosCliente({
             {usuarios.map((u) => (
               <TableRow key={u.id}>
                 <TableCell>
-                  <p className="font-medium">{u.nombre}</p>
-                  <p className="text-xs text-muted-foreground">{u.email}</p>
+                  <div className="flex items-center gap-2.5">
+                    <AvatarColaborador nombre={u.nombre} fotoUrl={u.fotoUrl} />
+                    <div className="min-w-0">
+                      <p className="font-medium">{u.nombre}</p>
+                      <p className="text-xs text-muted-foreground">{u.email}</p>
+                    </div>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">

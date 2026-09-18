@@ -9,6 +9,7 @@ import {
   CODIGOS_ASISTENCIA, ErrorAsistencia, normalizarCedula, rangoDePeriodo, resumenAsistencia,
 } from '@/server/asistencia/cliente'
 import { sincronizarHorasAsistencia } from '@/server/asistencia/horas-asistencia'
+import { urlFoto } from '@/lib/foto'
 import {
   generarOrdenPagoHorasExtra, previsualizarOrdenPagoHorasExtra, enviarOrdenHorasExtraAFirma,
   marcarPagoHorasExtraPagado, marcarPagoHorasExtraPendiente,
@@ -32,6 +33,8 @@ export type FilaAsistencia = {
   sede: string | null
   /** Ficha de esta plataforma; null si la cédula no existe aquí (o está retirada). */
   colaboradorId: string | null
+  /** Miniatura de la foto de la ficha, para ponerle cara a la fila. */
+  fotoUrl: string | null
   horas: Record<string, number>
   horasExtra: number
   /** Pesos según el salario que tiene en AsistencIA; null si allá no lo tiene. */
@@ -77,7 +80,7 @@ export const consultarHorasAsistencia = accion(
     const r = await resumenAsistencia({ mes: d.mes, quincena: d.quincena }).catch(traducir)
     const rango = rangoDePeriodo(d.mes, d.quincena)
 
-    const fichas = await prisma.colaborador.findMany({ select: { id: true, nombres: true, apellidos: true, numeroDocumento: true, estado: true } })
+    const fichas = await prisma.colaborador.findMany({ select: { id: true, nombres: true, apellidos: true, numeroDocumento: true, estado: true, fotoPath: true } })
     const porCedula = new Map(fichas.map((c) => [normalizarCedula(c.numeroDocumento), c]))
 
     // Qué tramos ya están aquí y en qué periodo cayeron.
@@ -112,6 +115,7 @@ export const consultarHorasAsistencia = accion(
         nombre: activa ? `${activa.nombres} ${activa.apellidos}` : (e.nombre ?? e.documento),
         sede: e.sede,
         colaboradorId: activa?.id ?? null,
+        fotoUrl: activa ? urlFoto(activa.id, activa.fotoPath, true) : null,
         horas: Object.fromEntries(CODIGOS_ASISTENCIA.map((c) => [c, e.horas[c] ?? 0])),
         horasExtra: e.horasExtra,
         valor: e.valor,

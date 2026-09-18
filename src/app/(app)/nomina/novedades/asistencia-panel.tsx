@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { cn } from '@/lib/utils'
-import { Chip, Pill } from '@/components/ui-kit'
+import { Chip, Pill, AvatarColaborador } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import {
   consultarHorasAsistencia, traerHorasAsistencia, previsualizarOrdenPago, generarOrdenPago, enviarOrdenAFirma, marcarPagoPagado, marcarPagoPendiente,
@@ -189,19 +189,24 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
                         {datos.filas.map((f) => (
                           <tr key={f.documento} className="align-middle">
                             <td className="py-2 pr-1.5 sm:pr-2">
-                              <p className="font-semibold">{f.nombre}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {f.documento}{f.sede ? ` · ${f.sede}` : ''}
-                                {f.colaboradorId
-                                  ? ` · ${f.registrados}/${f.tramos} en nómina${f.periodos.length ? ` (${f.periodos.join(', ')})` : ''}`
-                                  : ''}
-                              </p>
-                              {/* Mismo detalle que las columnas HED/HEN/HEDDF/HENDF, resumido: en
-                                  el teléfono esas columnas están ocultas (arriba). */}
-                              <p className="text-xs text-muted-foreground sm:hidden">
-                                {CODIGOS.filter((c) => f.horas[c]).map((c) => `${ETIQUETA[c]} ${horas(f.horas[c])}`).join(' · ')}
-                              </p>
-                              {!f.colaboradorId && <Pill tone="bad" className="mt-1">Sin ficha activa aquí</Pill>}
+                              <div className="flex items-center gap-2.5">
+                                <AvatarColaborador nombre={f.nombre} fotoUrl={f.fotoUrl} />
+                                <div className="min-w-0">
+                                  <p className="font-semibold">{f.nombre}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {f.documento}{f.sede ? ` · ${f.sede}` : ''}
+                                    {f.colaboradorId
+                                      ? ` · ${f.registrados}/${f.tramos} en nómina${f.periodos.length ? ` (${f.periodos.join(', ')})` : ''}`
+                                      : ''}
+                                  </p>
+                                  {/* Mismo detalle que las columnas HED/HEN/HEDDF/HENDF, resumido: en
+                                      el teléfono esas columnas están ocultas (arriba). */}
+                                  <p className="text-xs text-muted-foreground sm:hidden">
+                                    {CODIGOS.filter((c) => f.horas[c]).map((c) => `${ETIQUETA[c]} ${horas(f.horas[c])}`).join(' · ')}
+                                  </p>
+                                  {!f.colaboradorId && <Pill tone="bad" className="mt-1">Sin ficha activa aquí</Pill>}
+                                </div>
+                              </div>
                             </td>
                             {CODIGOS.map((c) => (
                               <td key={c} className={cn('hidden py-2 px-2 text-right tabular-nums sm:table-cell', f.horas[c] ? 'font-semibold' : 'text-muted-foreground')}>{horas(f.horas[c])}</td>

@@ -3,6 +3,7 @@ import { tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { UsuariosCliente } from './usuarios-cliente'
+import { urlFoto } from '@/lib/foto'
 
 export const metadata = { title: 'Usuarios · Configuración' }
 
@@ -15,6 +16,7 @@ export default async function UsuariosPage() {
     prisma.user.findMany({
       include: {
         rol: true,
+        colaborador: { select: { id: true, fotoPath: true } },
         rolesExtra: { include: { rol: { select: { id: true, nombre: true } } } },
         sedes: { include: { sede: true } },
       },
@@ -35,6 +37,7 @@ export default async function UsuariosPage() {
           id: u.id,
           nombre: u.name,
           email: u.email,
+          fotoUrl: u.colaborador ? urlFoto(u.colaborador.id, u.colaborador.fotoPath, true) : null,
           rolId: u.rolId,
           rolNombre: u.rol.nombre,
           rolIdsExtra: u.rolesExtra.map((r) => r.rolId),
