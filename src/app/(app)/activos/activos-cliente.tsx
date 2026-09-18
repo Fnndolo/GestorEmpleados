@@ -21,8 +21,10 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import { crearActivos, asignarActivos, devolverActivo, registrarDotacion } from './acciones'
+import { FotoActivo } from '@/components/activos/foto-activo'
+import { iconoActivo } from '@/lib/activos-visual'
 
-type Activo = { id: string; codigo: string; nombre: string; tipo: string; estado: string; valor: number | null; asignacion: { id: string; colaborador: string; actaEntregaDocId: string | null; actaFirmada: boolean } | null }
+type Activo = { id: string; codigo: string; nombre: string; tipo: string; estado: string; valor: number | null; fotoUrl: string | null; asignacion: { id: string; colaborador: string; actaEntregaDocId: string | null; actaFirmada: boolean } | null }
 type Dotacion = {
   id: string; colaborador: string; anio: number; corte: string; items: string; fechaEntrega: string
   /** PDF del recibido (arts. 230-234 CST); lo firma el colaborador desde su autoservicio. */
@@ -72,7 +74,8 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
           <Card><CardContent className="p-0 divide-y">
             {activos.map((a) => (
               <div key={a.id} className="flex items-center gap-3 p-3">
-                <Chip icono={Laptop} color="ink" />
+                {/* La foto del activo va aquí mismo: tocarla la sube o la cambia. */}
+                <FotoActivo activoId={a.id} fotoUrl={a.fotoUrl} icono={iconoActivo(a.tipo, a.nombre)} puedeEditar={puedeEditar} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm truncate">{a.nombre}</p>
                   <p className="text-xs text-muted-foreground">{a.codigo} · {a.tipo}{a.asignacion && ` · ${a.asignacion.colaborador}`}</p>

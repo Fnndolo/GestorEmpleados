@@ -3,14 +3,16 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Check, HardHat, Laptop, PenLine, Shirt, Undo2 } from 'lucide-react'
+import { Check, PenLine, Eye, ChevronDown, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FirmaCaptura } from '@/components/firma/firma-captura'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
+import { cn } from '@/lib/utils'
+import { Pill } from '@/components/ui-kit'
+import { iconoActivo, iconoEpp, ICONO_DOTACION } from '@/lib/activos-visual'
 import { firmarRecibidoDotacion, firmarActaEntrega } from '../../activos/acciones'
 import { firmarRecibidoEpp } from '../../sst/acciones'
 
@@ -24,6 +26,7 @@ type EntregaEpp = {
 }
 type ActivoAsignado = {
   id: string; nombre: string; codigo: string; tipo: string; marca: string | null; serie: string | null
+  fotoUrl: string | null
   fechaEntrega: string; fechaDevolucion: string | null
   actaEntregaDocId: string | null; actaDevolucionDocId: string | null
   firmaEntregaEn: string | null
@@ -31,223 +34,232 @@ type ActivoAsignado = {
   activosEnActa: number
 }
 
-export function MiDotacion({ entregas, activos, epps }: { entregas: Entrega[]; activos: ActivoAsignado[]; epps: EntregaEpp[] }) {
+const GRUPOS = [
+  { v: 'activos', l: 'Activos a tu cargo' },
+  { v: 'dotacion', l: 'Dotación de labor' },
+  { v: 'epp', l: 'Elementos de protección' },
+] as const
+type Grupo = (typeof GRUPOS)[number]['v']
+
+/**
+ * Lo que la empresa le ha entregado a la persona, en tres pestañas y como
+ * tarjetas con imagen: la foto del activo si Talento Humano la subió, o el
+ * ícono de lo que es. Cada tarjeta dice si el acta o el recibido ya está
+ * firmado y, si no, deja firmarlo ahí mismo.
+ */
+export function MiDotacion({ entregas, activos, epps, verDotacion, verEpp }: {
+  entregas: Entrega[]; activos: ActivoAsignado[]; epps: EntregaEpp[]
+  /** Un contratista OPS no recibe dotación ni EPP: esas pestañas no se muestran. */
+  verDotacion: boolean; verEpp: boolean
+}) {
   const router = useRouter()
+  const [grupo, setGrupo] = useState<Grupo>('activos')
+  const [verDevueltos, setVerDevueltos] = useState(false)
   const [firmando, setFirmando] = useState<Entrega | null>(null)
   const [firmandoActa, setFirmandoActa] = useState<ActivoAsignado | null>(null)
   const [firmandoEpp, setFirmandoEpp] = useState<EntregaEpp | null>(null)
 
   const aCargo = activos.filter((a) => !a.fechaDevolucion)
   const devueltos = activos.filter((a) => a.fechaDevolucion)
-
-  // Prioridad: primero lo que exige acción (firmar), luego lo vigente, al final el historial.
-  const activosPorFirmar = aCargo.filter((a) => !a.firmaEntregaEn)
-  const dotacionPorFirmar = entregas.filter((e) => !e.firmadoEn)
-  const eppPorFirmar = epps.filter((e) => !e.firmadoEn)
-  const porFirmar = activosPorFirmar.length + dotacionPorFirmar.length + eppPorFirmar.length
-  const activosFirmados = aCargo.filter((a) => a.firmaEntregaEn)
-  const dotacionFirmada = entregas.filter((e) => e.firmadoEn)
-  const eppFirmados = epps.filter((e) => e.firmadoEn)
-
-  const filaActivo = (a: ActivoAsignado) => (
-    <div key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-teal-500/12 text-teal-600 dark:text-teal-400">
-        <Laptop className="size-[18px]" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">
-          {a.nombre} <span className="text-xs font-normal text-muted-foreground">({a.codigo})</span>
-        </p>
-        <p className="truncate text-xs text-muted-foreground">
-          {a.tipo}{a.marca ? ` · ${a.marca}` : ''}{a.serie ? ` · serie ${a.serie}` : ''} · a tu cargo desde {a.fechaEntrega}
-        </p>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          {a.firmaEntregaEn
-            ? <Badge className="bg-emerald-500/12 text-[10px] text-emerald-700 dark:text-emerald-400" variant="secondary">Acta firmada · {a.firmaEntregaEn}</Badge>
-            : <Badge className="bg-amber-500/12 text-[10px] text-amber-700 dark:text-amber-400" variant="secondary">Acta pendiente de firma</Badge>}
-          {/* Varios activos entregados el mismo día van en una sola acta: se avisa
-              para que no parezca que falta firmar los demás por separado. */}
-          {a.activosEnActa > 1 && (
-            <span className="text-[10px] text-muted-foreground">Una sola acta para {a.activosEnActa} activos</span>
-          )}
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {a.actaEntregaDocId && (
-          <VisorPdf documentoId={a.actaEntregaDocId} titulo={`Acta de entrega — ${a.nombre}`} className="whitespace-nowrap text-xs text-primary hover:underline">
-            Ver acta
-          </VisorPdf>
-        )}
-        {!a.firmaEntregaEn && (
-          <Button size="sm" onClick={() => setFirmandoActa(a)}>
-            <PenLine className="size-4" /> Firmar acta
-          </Button>
-        )}
-      </div>
-    </div>
-  )
-
-  const filaDotacion = (e: Entrega) => (
-    <div key={e.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-indigo-500/12 text-indigo-600 dark:text-indigo-400">
-        <Shirt className="size-[18px]" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
-          Dotación {e.corte} {e.anio}
-          {e.firmadoEn
-            ? <Badge className="bg-emerald-500/12 text-[10px] text-emerald-700 dark:text-emerald-400" variant="secondary">Firmado · {e.firmadoEn}</Badge>
-            : <Badge className="bg-amber-500/12 text-[10px] text-amber-700 dark:text-amber-400" variant="secondary">Pendiente de firma</Badge>}
-        </p>
-        <p className="truncate text-xs text-muted-foreground">{e.items} · entregada {e.fechaEntrega}</p>
-      </div>
-      {e.recibidoDocId && (
-        <VisorPdf documentoId={e.recibidoDocId} titulo={`Recibido de dotación ${e.corte} ${e.anio}`} className="text-xs text-primary hover:underline">
-          Ver recibido
-        </VisorPdf>
-      )}
-      {!e.firmadoEn && (
-        <Button size="sm" onClick={() => setFirmando(e)}>
-          <PenLine className="size-4" /> Firmar recibido
-        </Button>
-      )}
-    </div>
-  )
-
-  const filaEpp = (e: EntregaEpp) => (
-    <div key={e.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-amber-500/12 text-amber-600 dark:text-amber-400">
-        <HardHat className="size-[18px]" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{e.cantidad}× {e.elemento}{e.reposicion ? ' (reposición)' : ''}</p>
-        <p className="truncate text-xs text-muted-foreground">Elemento de protección · entregado el {e.fechaEntrega}</p>
-        <div className="mt-1">
-          {e.firmadoEn
-            ? <Badge className="bg-emerald-500/12 text-[10px] text-emerald-700 dark:text-emerald-400" variant="secondary">Firmado · {e.firmadoEn}</Badge>
-            : <Badge className="bg-amber-500/12 text-[10px] text-amber-700 dark:text-amber-400" variant="secondary">Pendiente de firma</Badge>}
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {e.soporteDocId && (
-          <VisorPdf documentoId={e.soporteDocId} titulo={`Recibido EPP — ${e.elemento}`} className="whitespace-nowrap text-xs text-primary hover:underline">
-            Ver recibido
-          </VisorPdf>
-        )}
-        {!e.firmadoEn && (
-          <Button size="sm" onClick={() => setFirmandoEpp(e)}>
-            <PenLine className="size-4" /> Firmar recibido
-          </Button>
-        )}
-      </div>
-    </div>
-  )
+  // Lo pendiente de firma va primero en cada pestaña; el contador de la pestaña lo avisa.
+  const porFirmar: Record<Grupo, number> = {
+    activos: aCargo.filter((a) => !a.firmaEntregaEn).length,
+    dotacion: entregas.filter((e) => !e.firmadoEn).length,
+    epp: epps.filter((e) => !e.firmadoEn).length,
+  }
+  const cantidad: Record<Grupo, number> = { activos: aCargo.length, dotacion: entregas.length, epp: epps.length }
+  const grupos = GRUPOS.filter((g) => (g.v === 'dotacion' ? verDotacion : g.v === 'epp' ? verEpp : true))
+  const primero = <T extends { firmado: boolean }>(xs: T[]) => [...xs].sort((a, b) => Number(a.firmado) - Number(b.firmado))
 
   return (
-    <div className="space-y-6">
-      {/* ── 1. Lo que exige tu acción: pendientes de firma ── */}
-      {porFirmar > 0 && (
-        <section>
-          <h2 className="mb-2 text-[13px] font-bold text-amber-600 dark:text-amber-400">Por firmar ({porFirmar})</h2>
-          <Card className="border-amber-500/40"><CardContent className="divide-y p-0">
-            {activosPorFirmar.map(filaActivo)}
-            {dotacionPorFirmar.map(filaDotacion)}
-            {eppPorFirmar.map(filaEpp)}
-            <p className="px-4 py-2.5 text-xs text-muted-foreground">
-              Tu firma digital queda incrustada en el PDF y la constancia se guarda en tu expediente.
-            </p>
-          </CardContent></Card>
-        </section>
-      )}
+    <div>
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {grupos.map((g) => (
+          <button
+            key={g.v}
+            type="button"
+            onClick={() => setGrupo(g.v)}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors',
+              grupo === g.v ? 'bg-foreground text-background' : 'border bg-card text-muted-foreground hover:bg-accent',
+            )}
+          >
+            {g.l}
+            {cantidad[g.v] > 0 && <span className={cn('tabular-nums', grupo === g.v ? 'opacity-70' : '')}>{cantidad[g.v]}</span>}
+            {porFirmar[g.v] > 0 && <span className="size-1.5 rounded-full bg-amber-500" aria-label="Con pendientes de firma" />}
+          </button>
+        ))}
+      </div>
 
-      {/* ── 2. Lo vigente, ya al día ── */}
-      <section>
-        <h2 className="mb-2 text-[13px] font-bold">Activos a tu cargo ({aCargo.length})</h2>
-        {activosFirmados.length === 0 ? (
-          <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">
-            {activosPorFirmar.length > 0 ? 'Tus activos asignados están arriba, pendientes de firma.' : 'No tienes activos asignados actualmente.'}
-          </CardContent></Card>
-        ) : (
-          <Card><CardContent className="divide-y p-0">
-            {activosFirmados.map(filaActivo)}
-            <p className="px-4 py-2.5 text-xs text-muted-foreground">
-              Estos activos deben devolverse al finalizar la relación laboral o cuando la empresa lo requiera; hacen parte de tu paz y salvo.
-            </p>
-          </CardContent></Card>
-        )}
-      </section>
-
-      {(dotacionFirmada.length > 0 || dotacionPorFirmar.length === 0) && (
-        <section>
-          <h2 className="mb-2 text-[13px] font-bold">Dotación de labor</h2>
-          {dotacionFirmada.length === 0 ? (
-            <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">
-              Aún no tienes entregas de dotación registradas.
-            </CardContent></Card>
+      {grupo === 'activos' && (
+        <>
+          {aCargo.length === 0 ? (
+            <Vacio texto="No tienes activos a tu cargo." />
           ) : (
-            <Card><CardContent className="divide-y p-0">{dotacionFirmada.map(filaDotacion)}</CardContent></Card>
+            <Rejilla>
+              {primero(aCargo.map((a) => ({ ...a, firmado: Boolean(a.firmaEntregaEn) }))).map((a) => (
+                <Tarjeta
+                  key={a.id}
+                  fotoUrl={a.fotoUrl}
+                  icono={iconoActivo(a.tipo, a.nombre)}
+                  titulo={a.nombre}
+                  detalle={[a.tipo, a.marca, a.serie ? `serie ${a.serie}` : null].filter(Boolean).join(' · ')}
+                  fecha={`Desde ${a.fechaEntrega} · ${a.codigo}`}
+                  firmado={a.firmaEntregaEn}
+                  nota={a.activosEnActa > 1 ? `Una sola acta para ${a.activosEnActa} activos` : null}
+                  documento={a.actaEntregaDocId ? { id: a.actaEntregaDocId, titulo: `Acta de entrega — ${a.nombre}` } : null}
+                  onFirmar={() => setFirmandoActa(a)}
+                  textoFirmar="Firmar acta"
+                />
+              ))}
+            </Rejilla>
           )}
-        </section>
+          {devueltos.length > 0 && (
+            <div className="mt-4">
+              <button type="button" onClick={() => setVerDevueltos((v) => !v)} aria-expanded={verDevueltos} className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                Devueltos ({devueltos.length}) <ChevronDown className={cn('size-3.5 transition-transform', verDevueltos && 'rotate-180')} />
+              </button>
+              {verDevueltos && (
+                <Rejilla className="mt-2 opacity-75">
+                  {devueltos.map((a) => (
+                    <Tarjeta
+                      key={a.id}
+                      fotoUrl={a.fotoUrl}
+                      icono={iconoActivo(a.tipo, a.nombre)}
+                      titulo={a.nombre}
+                      detalle={[a.tipo, a.marca].filter(Boolean).join(' · ')}
+                      fecha={`Devuelto el ${a.fechaDevolucion}`}
+                      firmado={a.fechaDevolucion}
+                      etiquetaFirmado="Devuelto"
+                      documento={a.actaDevolucionDocId ? { id: a.actaDevolucionDocId, titulo: `Acta de devolución — ${a.nombre}` } : null}
+                    />
+                  ))}
+                </Rejilla>
+              )}
+            </div>
+          )}
+        </>
       )}
 
-      {(eppFirmados.length > 0 || eppPorFirmar.length === 0) && (
-        <section>
-          <h2 className="mb-2 text-[13px] font-bold">Elementos de protección personal (EPP)</h2>
-          {eppFirmados.length === 0 ? (
-            <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">
-              Aún no tienes entregas de EPP registradas.
-            </CardContent></Card>
-          ) : (
-            <Card><CardContent className="divide-y p-0">{eppFirmados.map(filaEpp)}</CardContent></Card>
-          )}
-        </section>
-      )}
-
-      {/* ── 3. Historial ── */}
-      {devueltos.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-[13px] font-bold">Activos devueltos</h2>
-          <Card><CardContent className="divide-y p-0">
-            {devueltos.map((a) => (
-              <div key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 opacity-80">
-                <Undo2 className="size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm">{a.nombre} <span className="text-xs text-muted-foreground">({a.codigo})</span></p>
-                  <p className="text-xs text-muted-foreground">Devuelto el {a.fechaDevolucion}</p>
-                </div>
-                {a.actaDevolucionDocId && (
-                  <VisorPdf documentoId={a.actaDevolucionDocId} titulo={`Acta de devolución — ${a.nombre}`} className="text-xs text-primary hover:underline">
-                    Ver acta
-                  </VisorPdf>
-                )}
-              </div>
+      {grupo === 'dotacion' && (
+        entregas.length === 0 ? <Vacio texto="Aún no tienes entregas de dotación." /> : (
+          <Rejilla>
+            {primero(entregas.map((e) => ({ ...e, firmado: Boolean(e.firmadoEn) }))).map((e) => (
+              <Tarjeta
+                key={e.id}
+                fotoUrl={null}
+                icono={ICONO_DOTACION}
+                titulo={`Dotación ${e.corte} ${e.anio}`}
+                detalle={e.items}
+                fecha={`Entregada el ${e.fechaEntrega}`}
+                firmado={e.firmadoEn}
+                documento={e.recibidoDocId ? { id: e.recibidoDocId, titulo: `Recibido de dotación ${e.corte} ${e.anio}` } : null}
+                onFirmar={() => setFirmando(e)}
+                textoFirmar="Firmar recibido"
+              />
             ))}
-          </CardContent></Card>
-        </section>
+          </Rejilla>
+        )
+      )}
+
+      {grupo === 'epp' && (
+        epps.length === 0 ? <Vacio texto="Aún no tienes entregas de elementos de protección." /> : (
+          <Rejilla>
+            {primero(epps.map((e) => ({ ...e, firmado: Boolean(e.firmadoEn) }))).map((e) => (
+              <Tarjeta
+                key={e.id}
+                fotoUrl={null}
+                icono={iconoEpp(e.elemento)}
+                titulo={`${e.cantidad}× ${e.elemento}`}
+                detalle={e.reposicion ? 'Reposición' : 'Elemento de protección personal'}
+                fecha={`Entregado el ${e.fechaEntrega}`}
+                firmado={e.firmadoEn}
+                documento={e.soporteDocId ? { id: e.soporteDocId, titulo: `Recibido EPP — ${e.elemento}` } : null}
+                onFirmar={() => setFirmandoEpp(e)}
+                textoFirmar="Firmar recibido"
+              />
+            ))}
+          </Rejilla>
+        )
       )}
 
       {firmando && (
-        <DialogFirma
-          entrega={firmando}
-          onClose={() => setFirmando(null)}
-          onDone={() => { setFirmando(null); router.refresh() }}
-        />
+        <DialogFirma entrega={firmando} onClose={() => setFirmando(null)} onDone={() => { setFirmando(null); router.refresh() }} />
       )}
       {firmandoActa && (
-        <DialogFirmaActa
-          activo={firmandoActa}
-          onClose={() => setFirmandoActa(null)}
-          onDone={() => { setFirmandoActa(null); router.refresh() }}
-        />
+        <DialogFirmaActa activo={firmandoActa} onClose={() => setFirmandoActa(null)} onDone={() => { setFirmandoActa(null); router.refresh() }} />
       )}
       {firmandoEpp && (
-        <DialogFirmaEpp
-          entrega={firmandoEpp}
-          onClose={() => setFirmandoEpp(null)}
-          onDone={() => { setFirmandoEpp(null); router.refresh() }}
-        />
+        <DialogFirmaEpp entrega={firmandoEpp} onClose={() => setFirmandoEpp(null)} onDone={() => { setFirmandoEpp(null); router.refresh() }} />
       )}
     </div>
+  )
+}
+
+function Vacio({ texto }: { texto: string }) {
+  return <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">{texto}</CardContent></Card>
+}
+
+function Rejilla({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn('grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4', className)}>{children}</div>
+}
+
+// No pasa por next/image: la sirve nuestra ruta con sesión, no un CDN.
+// eslint-disable-next-line @next/next/no-img-element
+const Foto = ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} className="size-full object-cover" loading="lazy" />
+
+/**
+ * Una entrega como tarjeta: la imagen arriba (foto o ícono), el nombre, un
+ * detalle, la fecha y el estado de la firma; abajo, ver la constancia o firmar.
+ */
+function Tarjeta({ fotoUrl, icono: Icono, titulo, detalle, fecha, firmado, etiquetaFirmado = 'Firmado', nota, documento, onFirmar, textoFirmar = 'Firmar' }: {
+  fotoUrl: string | null
+  icono: LucideIcon
+  titulo: string
+  detalle: string
+  fecha: string
+  /** Fecha de la firma, o null si está pendiente. */
+  firmado: string | null
+  etiquetaFirmado?: string
+  nota?: string | null
+  documento: { id: string; titulo: string } | null
+  onFirmar?: () => void
+  textoFirmar?: string
+}) {
+  return (
+    <Card className="flex flex-col overflow-hidden">
+      <div className="relative aspect-square bg-foreground/[.06]">
+        {fotoUrl
+          ? <Foto src={fotoUrl} alt={titulo} />
+          : <div className="grid size-full place-items-center text-foreground/80"><Icono className="size-12" strokeWidth={1.5} /></div>}
+        {/* Sobre una foto la píldora necesita fondo propio para leerse. */}
+        <div className="absolute left-2 top-2 rounded-full bg-card/90 shadow-sm backdrop-blur-sm">
+          {firmado
+            ? <Pill tone="ok">{etiquetaFirmado}</Pill>
+            : <Pill tone="warn">Por firmar</Pill>}
+        </div>
+      </div>
+      <CardContent className="flex flex-1 flex-col gap-1 p-3">
+        <p className="line-clamp-2 text-sm font-semibold leading-tight">{titulo}</p>
+        {detalle && <p className="line-clamp-2 text-xs text-muted-foreground">{detalle}</p>}
+        <p className="text-[11px] text-muted-foreground">{fecha}{firmado && onFirmar ? ` · firmado ${firmado}` : ''}</p>
+        {nota && <p className="text-[11px] text-muted-foreground">{nota}</p>}
+        {(documento || (!firmado && onFirmar)) && (
+          <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
+            {documento && (
+              <VisorPdf documentoId={documento.id} titulo={documento.titulo} className="inline-flex h-8 items-center gap-1 rounded-md border bg-card px-2.5 text-xs font-medium hover:bg-accent">
+                <Eye className="size-3.5" /> Ver
+              </VisorPdf>
+            )}
+            {!firmado && onFirmar && (
+              <Button size="sm" className="h-8 px-2.5 text-xs" onClick={onFirmar}>
+                <PenLine className="size-3.5" /> {textoFirmar}
+              </Button>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -268,10 +280,9 @@ function DialogFirmaEpp({ entrega, onClose, onDone }: { entrega: EntregaEpp; onC
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Firmar recibido de EPP — {entrega.elemento}</DialogTitle>
+          <DialogTitle>Firmar recibido — {entrega.elemento}</DialogTitle>
           <DialogDescription>
-            Declaras haber recibido {entrega.cantidad}× {entrega.elemento} en buen estado y te comprometes a usarlos
-            en tus labores (Decreto 1072 de 2015). Tu firma queda incrustada en el PDF.
+            Declaras haber recibido {entrega.cantidad}× {entrega.elemento} en buen estado y te comprometes a usarlos en tus labores. Tu firma queda en el PDF.
           </DialogDescription>
         </DialogHeader>
         <FirmaCaptura onChange={setFirma} />
@@ -301,10 +312,9 @@ function DialogFirmaActa({ activo, onClose, onDone }: { activo: ActivoAsignado; 
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Firmar acta de entrega — {activo.nombre}</DialogTitle>
+          <DialogTitle>Firmar acta — {activo.nombre}</DialogTitle>
           <DialogDescription>
-            Declaras haber recibido {activo.nombre} ({activo.codigo}) y te comprometes a custodiarlo y devolverlo
-            cuando la empresa lo requiera. Tu firma queda incrustada en el PDF del acta.
+            Declaras haber recibido {activo.nombre} ({activo.codigo}) y te comprometes a cuidarlo y devolverlo cuando la empresa lo requiera. Tu firma queda en el PDF del acta.
           </DialogDescription>
         </DialogHeader>
         <FirmaCaptura onChange={setFirma} />
@@ -336,7 +346,7 @@ function DialogFirma({ entrega, onClose, onDone }: { entrega: Entrega; onClose: 
         <DialogHeader>
           <DialogTitle>Firmar recibido — {entrega.corte} {entrega.anio}</DialogTitle>
           <DialogDescription>
-            Declaras haber recibido a satisfacción: {entrega.items}. Tu firma queda incrustada en el PDF del recibido.
+            Declaras haber recibido a satisfacción: {entrega.items}. Tu firma queda en el PDF del recibido.
           </DialogDescription>
         </DialogHeader>
         <FirmaCaptura onChange={setFirma} />

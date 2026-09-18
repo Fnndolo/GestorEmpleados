@@ -2326,6 +2326,9 @@ model Activo {
   sede          Sede?        @relation(fields: [sedeId], references: [id])
   estado        EstadoActivo @default(DISPONIBLE)
   observaciones String?
+  // Foto del activo (la sube Talento Humano desde Activos); el colaborador la ve
+  // en Mis entregas como la imagen de la tarjeta. Sin foto se muestra el ícono del tipo.
+  fotoPath      String?      @map("foto_path")
   creadoEn      DateTime     @default(now()) @map("creado_en")
 
   asignaciones AsignacionActivo[]

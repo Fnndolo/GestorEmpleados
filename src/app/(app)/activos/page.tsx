@@ -4,6 +4,7 @@ import { sedeActualId } from '@/server/sede-actual'
 import { Encabezado } from '@/components/shell/encabezado'
 import { ActivosCliente } from './activos-cliente'
 import { formatFechaISO } from '@/lib/fechas'
+import { urlFotoActivo } from '@/lib/activos-visual'
 
 export const metadata = { title: 'Activos y dotación · Smart Gadgets RH' }
 
@@ -41,6 +42,7 @@ export default async function ActivosPage() {
         activos={activos.map((a) => ({
           id: a.id, codigo: a.codigo, nombre: a.nombre, tipo: a.tipo, estado: a.estado,
           valor: a.valor ? Number(a.valor) : null,
+          fotoUrl: urlFotoActivo(a.id, a.fotoPath),
           asignacion: a.asignaciones[0] ? { id: a.asignaciones[0].id, colaborador: `${a.asignaciones[0].colaborador.nombres} ${a.asignaciones[0].colaborador.apellidos}`, actaEntregaDocId: a.asignaciones[0].actaEntregaDocId, actaFirmada: Boolean(a.asignaciones[0].firmaEntregaEn) } : null,
         }))}
         dotaciones={dotaciones.map((d) => ({
