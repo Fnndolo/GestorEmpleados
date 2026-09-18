@@ -25,6 +25,7 @@ export type ArchivoSubido = {
 
 function clienteSupabase() {
   // Import dinámico para no cargar el SDK cuando se usa el driver local
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- carga diferida a propósito
   const { createClient } = require('@supabase/supabase-js') as typeof import('@supabase/supabase-js')
   return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { persistSession: false },

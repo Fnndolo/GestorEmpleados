@@ -1,0 +1,58 @@
+# Verificación continua: en cada push a main y en cada pull request se
+# comprueba que el código compila, pasa el lint y las pruebas unitarias.
+#
+# No despliega nada: de eso se encarga la integración de Vercel con GitHub.
+# Su valor es marcar el commit en rojo ANTES de que un cambio roto llegue a
+# producción, y que nadie tenga que desplegar desde su máquina.
+#
+# Las pruebas de integración (pruebas/*.prueba.ts) necesitan una base con datos
+# sembrados; no corren aquí todavía.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # Un push nuevo cancela la verificación del anterior en la misma rama.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: Compilar, lint y pruebas
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # prisma generate (postinstall) y el cliente solo leen la URL al conectar;
+      # ninguna verificación toca una base de datos.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      NODE_ENV: test
+
+    steps:
+      - name: Código
+        uses: actions/checkout@v4
+
+      - name: pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Tipos (tsc)
+        run: pnpm exec tsc --noEmit -p tsconfig.json
+
+      - name: Lint (eslint)
+        run: pnpm exec eslint .
+
+      - name: Pruebas unitarias (vitest)
+        run: pnpm test

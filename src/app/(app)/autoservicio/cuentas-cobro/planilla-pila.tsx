@@ -82,7 +82,7 @@ export function PlanillaPila({
                 <TriangleAlert className="mt-0.5 size-4 shrink-0 text-rose-600 dark:text-rose-400" />
                 <div>
                   <p className="font-medium">La planilla anterior fue marcada inválida</p>
-                  <p className="text-muted-foreground">"{observaciones}"</p>
+                  <p className="text-muted-foreground">&ldquo;{observaciones}&rdquo;</p>
                 </div>
               </div>
             )}

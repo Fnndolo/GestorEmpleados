@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Worker de pdf.js copiado a public/: código minificado de terceros.
+    "public/pdf.worker.min.mjs",
+    // Cliente de Prisma generado.
+    "src/generated/**",
   ]),
 ]);
 

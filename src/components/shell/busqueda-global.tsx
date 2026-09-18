@@ -39,6 +39,8 @@ export function BusquedaGlobal() {
 
   useEffect(() => {
     if (texto.trim().length < 2) {
+      // Limpia resultados al borrar el texto; es sincronizar con el input, no un cálculo derivable.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPersonas([])
       return
     }
