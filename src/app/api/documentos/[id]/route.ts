@@ -73,3 +73,39 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'No se pudo leer el archivo' }, { status: 500 })
   }
 }
+
+/**
+ * Solo las cabeceras: tipo y tamaño, sin tocar el almacenamiento. El visor las
+ * usa para saber si puede mostrar el archivo o debe ofrecer descargarlo.
+ *
+ * Existe a propósito: sin este handler, Next resolvería el HEAD ejecutando el
+ * GET entero —bajando el archivo y anotando un acceso más en la auditoría— solo
+ * para tirar el cuerpo.
+ */
+export async function HEAD(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const sesion = await auth.api.getSession({ headers: await headers() })
+  if (!sesion?.user) return new NextResponse(null, { status: 401 })
+
+  const doc = await prisma.documento.findUnique({
+    where: { id },
+    select: { mimeType: true, tamanoBytes: true, nivelAcceso: true, entidadTipo: true, entidadId: true },
+  })
+  if (!doc) return new NextResponse(null, { status: 404 })
+
+  const esGeneral = doc.nivelAcceso === 'GENERAL' && doc.entidadTipo !== 'AcuerdoEvaluacion'
+  if (!esGeneral) {
+    const usuario = await obtenerSesion()
+    if (!usuario) return new NextResponse(null, { status: 401 })
+    const esPropio = doc.entidadTipo === 'Colaborador' && usuario.colaboradorId != null && doc.entidadId === usuario.colaboradorId
+    if (!esPropio && !puedeVerNivel(usuario, doc.nivelAcceso)) return new NextResponse(null, { status: 403 })
+    if (doc.entidadTipo === 'AcuerdoEvaluacion' && !tienePermiso(usuario, 'contratos', 'VER')) {
+      return new NextResponse(null, { status: 403 })
+    }
+  }
+
+  return new NextResponse(null, {
+    status: 200,
+    headers: { 'Content-Type': doc.mimeType, 'Content-Length': String(doc.tamanoBytes ?? 0), 'Cache-Control': 'private, max-age=600' },
+  })
+}

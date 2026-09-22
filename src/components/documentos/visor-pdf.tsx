@@ -15,6 +15,18 @@ import { cn } from '@/lib/utils'
  * navegadores NO renderizan PDF en iframes, así que se renderizan las páginas
  * con pdf.js sobre canvas (carga diferida; el worker vive en /pdf.worker.min.mjs).
  */
+/**
+ * Lo que el navegador puede mostrar dentro de la ventana: PDF, imágenes,
+ * audio, video y texto. Un comprimido (el escaneo de un contrato viejo) no, y
+ * ahí lo honesto es ofrecer la descarga en vez de dejar la ventana en blanco.
+ */
+const SE_PUEDE_VER = (tipo: string) =>
+  tipo === 'application/pdf' ||
+  tipo.startsWith('image/') ||
+  tipo.startsWith('video/') ||
+  tipo.startsWith('audio/') ||
+  tipo.startsWith('text/')
+
 export function VisorPdf({
   documentoId,
   url: urlPropia,
@@ -82,13 +94,20 @@ export function VisorPdf({
   // Tipo averiguado del propio documento cuando quien abre el visor no lo sabe
   // (las listas que solo tienen el id). Una cabecera basta: no se baja el archivo.
   const [tipoDetectado, setTipoDetectado] = useState<string | null>(null)
-  const tipo = mimeType ?? tipoDetectado ?? undefined
+  // Un archivo recién elegido (todavía sin subir) ya sabe lo que es.
+  const tipoLocal = archivo && 'type' in archivo ? (archivo as File).type || null : null
+  const tipo = mimeType ?? tipoLocal ?? tipoDetectado ?? undefined
+  // Mientras no se sepa qué es, no se pinta nada: soltar un comprimido en el
+  // iframe hace que el navegador se lo descargue solo, sin que nadie lo pida.
+  const esperandoTipo = !tipo && !!documentoId && !archivo && !urlPropia
   const evaluarMovil = () => window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768
   const detectarTipo = () => {
     if (mimeType || tipoDetectado || archivo || !documentoId) return
     fetch(`/api/documentos/${documentoId}`, { method: 'HEAD' })
-      .then((r) => setTipoDetectado(r.headers.get('content-type')?.split(';')[0] ?? null))
-      .catch(() => {})
+      // Si la consulta falla, se sigue como PDF (lo que era antes): mejor
+      // intentar mostrarlo que decir en falso que no se puede ver.
+      .then((r) => setTipoDetectado((r.ok && r.headers.get('content-type')?.split(';')[0]) || 'application/pdf'))
+      .catch(() => setTipoDetectado('application/pdf'))
   }
   const alAbrir = () => {
     setMovil(evaluarMovil())
@@ -145,7 +164,9 @@ export function VisorPdf({
               <a href={url} target="_blank" rel="noopener noreferrer"><ExternalLink className="size-4" /></a>
             </Button>
           </DialogHeader>
-          {tipo && tipo !== 'application/pdf' && !tipo.startsWith('image/') ? (
+          {esperandoTipo ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center"><Spinner /></div>
+          ) : tipo && !SE_PUEDE_VER(tipo) ? (
             // Un comprimido (el escaneo de un contrato viejo, por ejemplo) no se
             // puede mostrar: se ofrece descargarlo, que es lo único que tiene sentido.
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-muted/30 p-6 text-center">

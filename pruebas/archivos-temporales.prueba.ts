@@ -123,3 +123,58 @@ describe('comprimidos: solo donde el archivo es evidencia', () => {
     await borrarPdfTemporal(ref)
   })
 })
+
+/** Lo que la revisión encontró: el tamaño real manda, la ruta no se puede torcer y lo inválido no se queda. */
+describe('depósito: límites y limpieza', () => {
+  it('rechaza por el tamaño REAL del archivo, no por el que se anunció, y lo retira', async () => {
+    const { ref } = await guardarPdfTemporal(PDF, YO)
+    const { p, n } = JSON.parse(Buffer.from(ref.split('.')[0], 'base64url').toString())
+    expect(n).toBe(PDF.byteLength)
+    // Alguien anuncia poco y sube mucho: se cambia el archivo por uno enorme.
+    const { subirArchivoEn, leerArchivo } = await import('@/server/storage')
+    await subirArchivoEn(p, Buffer.concat([PDF, Buffer.alloc(200)]), 'application/pdf')
+    await expect(leerArchivoTemporal(ref, YO)).rejects.toThrow(/máximo|pesa/)
+    // Y no se queda ocupando espacio.
+    await expect(leerArchivo(p)).rejects.toThrow()
+  })
+
+  it('una referencia que apunta fuera del depósito no vale', async () => {
+    const { ref } = await guardarPdfTemporal(PDF, YO)
+    const [carga, firma] = ref.split('.')
+    const datos = JSON.parse(Buffer.from(carga, 'base64url').toString())
+    const fuera = Buffer.from(JSON.stringify({ ...datos, p: 'contratos/otro/importante.pdf' })).toString('base64url')
+    // Cambiar la ruta rompe la firma…
+    await expect(leerArchivoTemporal(`${fuera}.${firma}`, YO)).rejects.toThrow(/no es válida/)
+    await borrarPdfTemporal(ref)
+  })
+
+  it('el contenido que no es lo que dice se retira del depósito', async () => {
+    const { ref } = await guardarPdfTemporal(PDF, YO)
+    const { p } = JSON.parse(Buffer.from(ref.split('.')[0], 'base64url').toString())
+    const { subirArchivoEn, leerArchivo } = await import('@/server/storage')
+    await subirArchivoEn(p, Buffer.from('ni pdf ni nada'), 'application/pdf')
+    await expect(leerArchivoTemporal(ref, YO)).rejects.toThrow(/no es un PDF/)
+    await expect(leerArchivo(p)).rejects.toThrow()
+  })
+
+  it('la vía antigua en base64 también comprueba el contenido', async () => {
+    const falso = `data:application/pdf;base64,${Buffer.from('esto no es un pdf').toString('base64')}`
+    await expect(obtenerPdfAdjunto({ pdfBase64: falso }, YO)).rejects.toThrow(/no es un PDF/)
+    const bueno = `data:application/pdf;base64,${PDF.toString('base64')}`
+    expect((await obtenerPdfAdjunto({ pdfBase64: bueno }, YO)).equals(PDF)).toBe(true)
+  })
+
+  it('el barrido se lleva lo viejo y deja lo recién subido', async () => {
+    const { limpiarDepositoTemporal } = await import('@/server/archivos-temporales')
+    const { ref } = await guardarPdfTemporal(PDF, YO)
+    // Horas negativas ponen el corte en el futuro: todo lo del depósito cuenta
+    // como viejo, sin depender de cuántos milisegundos pasaron.
+    expect(await limpiarDepositoTemporal(-1)).toBeGreaterThan(0)
+    await expect(leerArchivoTemporal(ref, YO)).rejects.toThrow(/ya no está disponible/)
+    // Y con el plazo normal, lo nuevo se queda.
+    const nuevo = await guardarPdfTemporal(PDF, YO)
+    expect(await limpiarDepositoTemporal(24)).toBe(0)
+    expect((await leerArchivoTemporal(nuevo.ref, YO)).contenido.equals(PDF)).toBe(true)
+    await borrarPdfTemporal(nuevo.ref)
+  })
+})

@@ -1,5 +1,5 @@
 import 'server-only'
-import { obtenerArchivoAdjunto } from '@/server/archivos-temporales'
+import { extensionDe, obtenerArchivoAdjunto } from '@/server/archivos-temporales'
 import { esComprimido } from '@/lib/archivos'
 import { createHash } from 'node:crypto'
 import { dbAuditado } from '@/lib/auditoria'
@@ -31,7 +31,7 @@ export async function guardarAutorizacionSubida({
   const comprimido = esComprimido(adjunto.mimeType)
 
   const sha256 = createHash('sha256').update(pdf).digest('hex')
-  const extension = comprimido ? (adjunto.nombre?.split('.').pop() ?? 'zip').toLowerCase() : 'pdf'
+  const extension = extensionDe(adjunto.mimeType)
   const archivo = await subirArchivo(
     `contratos/${entidadId}`, `autorizacion-datos-${numero}.${extension}`, pdf, adjunto.mimeType,
   )

@@ -26,7 +26,12 @@ const modoDe = (v: unknown): ModoArchivo => (v === 'evidencia' ? 'evidencia' : '
  */
 export async function POST(req: NextRequest) {
   const usuario = await obtenerSesion()
-  if (!usuario) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  // No basta con tener sesión: una cuenta inactiva o que todavía debe cambiar la
+  // contraseña no puede escribir en el almacenamiento (lo mismo que exige
+  // `requerirSesion` en las pantallas).
+  if (!usuario || usuario.estado !== 'ACTIVO' || usuario.debeCambiarPassword) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
 
   try {
     if (req.headers.get('content-type')?.includes('application/json')) {

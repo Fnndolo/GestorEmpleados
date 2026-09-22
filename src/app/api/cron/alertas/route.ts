@@ -6,6 +6,7 @@ import { alertarContratosVencidosSinCierre } from '@/server/contratos-vencidos'
 import { publicarVencimientosOpsFaltantes } from '@/server/vencimientos/contratos-ops'
 import { alertarComprobantesPermisoVencidos } from '@/server/comprobante-permiso'
 import { recordarCumpleanosProximos } from '@/server/cumpleanos'
+import { limpiarDepositoTemporal } from '@/server/archivos-temporales'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -42,7 +43,11 @@ export async function GET(req: NextRequest) {
     const comprobantesPermiso = await alertarComprobantesPermisoVencidos()
     // Cumpleaños que se acercan: se le recuerda una vez al encargado.
     const cumpleanos = await recordarCumpleanosProximos()
-    return NextResponse.json({ ok: true, ...resumen, opsFaltantes, vacaciones, dotacion, induccion, contratosVencidos, comprobantesPermiso, cumpleanos })
+    // Archivos que alguien subió para adjuntar y nunca llegaron a usarse (se
+    // cerró el formulario, falló el alta, se cambió de archivo): sin esto se
+    // quedan en el almacenamiento para siempre.
+    const temporalesBorrados = await limpiarDepositoTemporal().catch(() => 0)
+    return NextResponse.json({ ok: true, ...resumen, opsFaltantes, vacaciones, dotacion, induccion, contratosVencidos, comprobantesPermiso, cumpleanos, temporalesBorrados })
   } catch (e) {
     console.error('Error en cron de alertas:', e)
     return NextResponse.json({ error: 'Fallo en el procesamiento' }, { status: 500 })

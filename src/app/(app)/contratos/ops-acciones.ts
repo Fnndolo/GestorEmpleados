@@ -10,7 +10,7 @@ import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subid
 import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
 import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { borrarPdfTemporal, obtenerArchivoAdjunto, obtenerPdfAdjunto } from '@/server/archivos-temporales'
+import { borrarPdfTemporal, extensionDe, obtenerArchivoAdjunto, obtenerPdfAdjunto } from '@/server/archivos-temporales'
 import { esComprimido } from '@/lib/archivos'
 import { pdfAdjuntoCampos } from '@/lib/validaciones/pdf-adjunto'
 import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, corregirPosicionFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema, cerrarContratoOpsSchema } from '@/lib/validaciones/contrato'
@@ -285,7 +285,7 @@ export const subirContratoOpsExistente = accion(
     // Subir el archivo aportado y registrarlo como Documento del contrato.
     const sha256 = createHash('sha256').update(pdf).digest('hex')
     const comprimido = esComprimido(adjunto.mimeType)
-    const extension = comprimido ? (adjunto.nombre?.split('.').pop() ?? 'zip').toLowerCase() : 'pdf'
+    const extension = extensionDe(adjunto.mimeType)
     const archivo = await subirArchivo(`contratos/${c.id}`, `contrato-${numero}.${extension}`, pdf, adjunto.mimeType)
     await dbAuditado.documento.create({
       data: {
@@ -890,6 +890,18 @@ export const prepararFirmaContratoOps = accion(
     if (c.origenPdf !== 'SUBIDO') {
       throw new ErrorNegocio('Este contrato ya está en el flujo de firma de la app.')
     }
+    // Firmar dentro de la app es estampar la firma sobre el documento: si lo que
+    // se archivó fue un comprimido con los escaneos, no hay nada que estampar.
+    const docContrato = await prisma.documento.findFirst({
+      where: { entidadTipo: 'ContratoOps', entidadId: c.id, nombre: { not: { startsWith: 'Autorización' } } },
+      select: { mimeType: true },
+      orderBy: { creadoEn: 'asc' },
+    })
+    if (docContrato && docContrato.mimeType !== 'application/pdf') {
+      throw new ErrorNegocio(
+        'El contrato se archivó como comprimido (ZIP/RAR), y la firma en la app necesita el PDF. Sube el contrato de nuevo en PDF, o recoge la firma en físico.',
+      )
+    }
     const doc = await documentoDelContratoOps(c.id)
     const pdf = await leerArchivo(doc.storagePath)
     const [posiciones, paginas] = await Promise.all([ubicarFirmasEnPdf(pdf), contarPaginas(pdf)])
@@ -984,6 +996,18 @@ export const habilitarFirmaContratoOps = accion(
     })
     if (c.origenPdf !== 'SUBIDO') {
       throw new ErrorNegocio('Este contrato ya está en el flujo de firma de la app.')
+    }
+    // Firmar dentro de la app es estampar la firma sobre el documento: si lo que
+    // se archivó fue un comprimido con los escaneos, no hay nada que estampar.
+    const docContrato = await prisma.documento.findFirst({
+      where: { entidadTipo: 'ContratoOps', entidadId: c.id, nombre: { not: { startsWith: 'Autorización' } } },
+      select: { mimeType: true },
+      orderBy: { creadoEn: 'asc' },
+    })
+    if (docContrato && docContrato.mimeType !== 'application/pdf') {
+      throw new ErrorNegocio(
+        'El contrato se archivó como comprimido (ZIP/RAR), y la firma en la app necesita el PDF. Sube el contrato de nuevo en PDF, o recoge la firma en físico.',
+      )
     }
     // Un contrato con firmas ya recogidas no se reabre: cambiar el origen haría
     // que se le estampen encima sobre un PDF que ya circuló.
