@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
+import { ACEPTA_EVIDENCIA, MAX_PDF_BYTES, mensajePdfPesado, subirArchivoTemporal } from '@/lib/archivos'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -243,7 +243,7 @@ export function FormContrato({
    * misma acción que usa «Subir contrato existente» en la ficha del colaborador.
    */
   async function subirConPdf(d: ContratoInput) {
-    if (!pdf) { toast.error('Adjunta el PDF del contrato.'); setPanel((s) => new Set(s).add('pdf')); return }
+    if (!pdf) { toast.error('Adjunta el contrato escaneado.'); setPanel((s) => new Set(s).add('pdf')); return }
     for (const archivo of [pdf, autorizacionPdf]) {
       if (archivo && archivo.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(archivo.size)); return }
     }
@@ -251,8 +251,8 @@ export function FormContrato({
     let pdfRef: string
     let autorizacionRef = ''
     try {
-      pdfRef = await subirPdfTemporal(pdf)
-      if (autorizacionPdf) autorizacionRef = await subirPdfTemporal(autorizacionPdf)
+      pdfRef = await subirArchivoTemporal(pdf, 'evidencia')
+      if (autorizacionPdf) autorizacionRef = await subirArchivoTemporal(autorizacionPdf, 'evidencia')
     } catch (e) {
       setGuardando(false); toast.error(e instanceof Error ? e.message : 'No se pudo subir el PDF.'); return
     }
@@ -534,23 +534,25 @@ export function FormContrato({
       {/* ── Modo "solo PDF": el documento se adjunta, no se redacta ── */}
       {modoSubir && (
         <Seccion
-          icono={Upload} color="sky" titulo="PDF del contrato"
+          icono={Upload} color="sky" titulo="Contrato escaneado"
           resumen={pdf ? pdf.name : 'Contrato ya redactado y firmado en físico'}
-          estado={pdf ? { tono: 'ok', texto: 'Adjunto' } : { tono: 'warn', texto: 'Falta el PDF' }}
+          estado={pdf ? { tono: 'ok', texto: 'Adjunto' } : { tono: 'warn', texto: 'Falta el archivo' }}
           open={panel.has('pdf')} onToggle={() => togglePanel('pdf')}
         >
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Se registra el contrato con los datos de arriba (los necesitan nómina y las alertas de vencimiento) y se adjunta el PDF tal cual. No se pide firma digital.
+              Se registra el contrato con los datos de arriba (los necesitan nómina y las alertas de vencimiento) y se adjunta el archivo tal cual. No se pide firma digital.
             </p>
             <div className="space-y-1.5">
-              <Label>PDF del contrato</Label>
-              <input type="file" accept="application/pdf" onChange={(e) => setPdf(e.target.files?.[0] ?? null)} className={INPUT_ARCHIVO} />
-              {pdf && <ArchivoElegido archivo={pdf} />}
+              <Label>Contrato escaneado</Label>
+              <input type="file" accept={ACEPTA_EVIDENCIA} onChange={(e) => setPdf(e.target.files?.[0] ?? null)} className={INPUT_ARCHIVO} />
+              {pdf
+                ? <ArchivoElegido archivo={pdf} />
+                : <p className="text-xs text-muted-foreground">PDF, o un ZIP/RAR si el escaneo viene en varios archivos. Hasta 25 MB.</p>}
             </div>
             <div className="space-y-1.5">
               <Label>Autorización de datos (opcional)</Label>
-              <input type="file" accept="application/pdf" onChange={(e) => setAutorizacionPdf(e.target.files?.[0] ?? null)} className={INPUT_ARCHIVO} />
+              <input type="file" accept={ACEPTA_EVIDENCIA} onChange={(e) => setAutorizacionPdf(e.target.files?.[0] ?? null)} className={INPUT_ARCHIVO} />
               {autorizacionPdf && <ArchivoElegido archivo={autorizacionPdf} />}
               <p className="text-xs text-muted-foreground">
                 Autorización de tratamiento de datos firmada en físico (Ley 1581). Si no la tienes digitalizada, puedes subirla después desde el contrato.
@@ -652,7 +654,7 @@ export function FormContrato({
       <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card p-3 shadow-sm">
         {modoSubir ? (
           <span className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Upload className="size-4" /> {pdf ? pdf.name : 'Falta adjuntar el PDF del contrato'}
+            <Upload className="size-4" /> {pdf ? pdf.name : 'Falta adjuntar el contrato escaneado'}
           </span>
         ) : (
           <label className="flex items-center gap-2 text-sm text-muted-foreground">

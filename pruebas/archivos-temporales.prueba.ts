@@ -3,7 +3,7 @@ import { instalarSesionFalsa } from './sesion-falsa'
 
 instalarSesionFalsa()
 
-const { guardarPdfTemporal, leerPdfTemporal, borrarPdfTemporal, obtenerPdfAdjunto, prepararSubidaDirecta } = await import('@/server/archivos-temporales')
+const { guardarPdfTemporal, guardarArchivoTemporal, leerPdfTemporal, leerArchivoTemporal, borrarPdfTemporal, obtenerPdfAdjunto, prepararSubidaDirecta } = await import('@/server/archivos-temporales')
 const { MAX_PDF_BYTES } = await import('@/lib/archivos')
 const { subirAcuerdoFirmadoSchema } = await import('@/lib/validaciones/acuerdo-evaluacion')
 const { otrosiSchema } = await import('@/lib/validaciones/contrato')
@@ -84,5 +84,42 @@ describe('depósito temporal de PDF', () => {
     const otrosi = { contratoId: YO, tiposCambio: ['OTRO'], posicionFirma: { pagina: 1, x: 1, y: 1, ancho: 150, alto: 45 } }
     expect(otrosiSchema.safeParse({ ...otrosi, pdfRef: 'x'.repeat(40) }).success).toBe(true)
     expect(otrosiSchema.safeParse(otrosi).success).toBe(false)
+  })
+})
+
+/**
+ * El contrato ya firmado en físico se sube como evidencia: ahí vale un ZIP con
+ * los escaneos. El que se manda a firmar NO: la app tiene que abrirlo.
+ */
+describe('comprimidos: solo donde el archivo es evidencia', () => {
+  const ZIP = Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.alloc(40)])
+
+  it('guarda un ZIP en modo evidencia y lo devuelve con su tipo y su nombre', async () => {
+    const { ref } = await guardarArchivoTemporal(ZIP, YO, { mimeType: 'application/zip', nombre: 'contrato-escaneado.zip', modo: 'evidencia' })
+    const a = await leerArchivoTemporal(ref, YO)
+    expect(a.mimeType).toBe('application/zip')
+    expect(a.nombre).toBe('contrato-escaneado.zip')
+    expect(a.contenido.equals(ZIP)).toBe(true)
+    // Quien necesita abrirlo (firmar, estampar) lo rechaza.
+    await expect(leerPdfTemporal(ref, YO)).rejects.toThrow(/debe ser un PDF/)
+    await borrarPdfTemporal(ref)
+  })
+
+  it('en modo firma no se admite un comprimido', async () => {
+    await expect(guardarArchivoTemporal(ZIP, YO, { mimeType: 'application/zip', modo: 'firma' })).rejects.toThrow(/debe ser un PDF/)
+    await expect(prepararSubidaDirecta(YO, 1024, { mimeType: 'application/zip', modo: 'firma' })).rejects.toThrow(/debe ser un PDF/)
+  })
+
+  it('no se puede hacer pasar un ZIP por PDF, ni al revés', async () => {
+    await expect(guardarArchivoTemporal(ZIP, YO, { mimeType: 'application/pdf', modo: 'evidencia' })).rejects.toThrow(/no es un PDF/)
+    await expect(guardarArchivoTemporal(PDF, YO, { mimeType: 'application/zip', modo: 'evidencia' })).rejects.toThrow(/no es el comprimido/)
+  })
+
+  it('el tipo va firmado en la referencia: cambiarlo la invalida', async () => {
+    const { ref } = await guardarArchivoTemporal(ZIP, YO, { mimeType: 'application/zip', nombre: 'x.zip', modo: 'evidencia' })
+    const [carga, firma] = ref.split('.')
+    const falsa = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(carga, 'base64url').toString()), t: 'application/pdf' })).toString('base64url')
+    await expect(leerArchivoTemporal(`${falsa}.${firma}`, YO)).rejects.toThrow(/no es válida/)
+    await borrarPdfTemporal(ref)
   })
 })

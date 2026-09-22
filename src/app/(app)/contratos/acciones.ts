@@ -10,7 +10,8 @@ import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subid
 import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
 import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { borrarPdfTemporal, obtenerPdfAdjunto } from '@/server/archivos-temporales'
+import { borrarPdfTemporal, obtenerArchivoAdjunto, obtenerPdfAdjunto } from '@/server/archivos-temporales'
+import { esComprimido } from '@/lib/archivos'
 import { contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema, subirContratoLaboralSchema, subirContratoLaboralParaFirmaSchema, corregirPosicionFirmaLaboralSchema, type SubirContratoLaboralInput } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { pdfAdjuntoCampos } from '@/lib/validaciones/pdf-adjunto'
@@ -248,8 +249,14 @@ async function registrarContratoSubido(
     if (dur > 4) throw new ErrorNegocio('El contrato a término fijo no puede superar 4 años.')
   }
 
-  // El PDF: por referencia al depósito temporal o, en pruebas, en base64.
-  const pdf = await obtenerPdfAdjunto(d, usuario.id)
+  // El archivo: por referencia al depósito temporal o, en pruebas, en base64.
+  // Un contrato que se manda a firmar TIENE que ser un PDF (la app lo abre y le
+  // estampa las firmas); uno ya firmado en físico es solo evidencia, y ahí vale
+  // también el comprimido con los escaneos.
+  const adjunto = origen.origenPdf === 'SUBIDO_PARA_FIRMA'
+    ? { contenido: await obtenerPdfAdjunto(d, usuario.id), mimeType: 'application/pdf', nombre: null as string | null }
+    : await obtenerArchivoAdjunto(d, usuario.id)
+  const pdf = adjunto.contenido
 
   let periodoPruebaFin: Date | null = null
   if (d.periodoPruebaDias && d.periodoPruebaDias > 0) {
@@ -289,17 +296,19 @@ async function registrarContratoSubido(
     },
   })
 
-  // Subir el PDF aportado y registrarlo como Documento del contrato.
+  // Subir el archivo aportado y registrarlo como Documento del contrato.
   const sha256 = createHash('sha256').update(pdf).digest('hex')
-  const archivo = await subirArchivo(`contratos/${contrato.id}`, `contrato-${numero}.pdf`, pdf, 'application/pdf')
+  const comprimido = esComprimido(adjunto.mimeType)
+  const extension = comprimido ? (adjunto.nombre?.split('.').pop() ?? 'zip').toLowerCase() : 'pdf'
+  const archivo = await subirArchivo(`contratos/${contrato.id}`, `contrato-${numero}.${extension}`, pdf, adjunto.mimeType)
   const documento = await dbAuditado.documento.create({
     data: {
       entidadTipo: 'Contrato',
       entidadId: contrato.id,
-      nombre: `Contrato laboral ${numero}`,
+      nombre: `Contrato laboral ${numero}${comprimido ? ' (comprimido)' : ''}`,
       bucket: archivo.bucket,
       storagePath: archivo.storagePath,
-      mimeType: 'application/pdf',
+      mimeType: adjunto.mimeType,
       tamanoBytes: archivo.tamanoBytes,
       sha256,
       nivelAcceso: 'GENERAL',
