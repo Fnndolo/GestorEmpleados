@@ -45,9 +45,10 @@ export function VisorPdf({
   /** Botón que abre el visor. Se omite cuando se controla `abierto` desde afuera (sin trigger propio). */
   children?: ReactNode
   /**
-   * Tipo del archivo. Las listas de documentos mezclan PDF con fotos de cédulas
-   * y soportes escaneados: una imagen se muestra tal cual, porque pdf.js no
-   * sabría abrirla y el iframe la dejaría a tamaño original.
+   * Tipo del archivo. Las listas de documentos mezclan PDF con fotos de cédulas,
+   * soportes escaneados y algún comprimido: una imagen se muestra tal cual
+   * (pdf.js no sabría abrirla) y lo que no se puede mostrar se ofrece descargar.
+   * Si no se pasa, el visor lo averigua del propio documento al abrirlo.
    */
   mimeType?: string
   /**
@@ -78,9 +79,20 @@ export function VisorPdf({
   // Pantalla táctil o angosta → el iframe no muestra PDFs: usar pdf.js.
   // Se evalúa al abrir (evento de usuario o efecto controlado), no antes.
   const [movil, setMovil] = useState(false)
+  // Tipo averiguado del propio documento cuando quien abre el visor no lo sabe
+  // (las listas que solo tienen el id). Una cabecera basta: no se baja el archivo.
+  const [tipoDetectado, setTipoDetectado] = useState<string | null>(null)
+  const tipo = mimeType ?? tipoDetectado ?? undefined
   const evaluarMovil = () => window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768
+  const detectarTipo = () => {
+    if (mimeType || tipoDetectado || archivo || !documentoId) return
+    fetch(`/api/documentos/${documentoId}`, { method: 'HEAD' })
+      .then((r) => setTipoDetectado(r.headers.get('content-type')?.split(';')[0] ?? null))
+      .catch(() => {})
+  }
   const alAbrir = () => {
     setMovil(evaluarMovil())
+    detectarTipo()
     if (archivo) setUrlArchivo(URL.createObjectURL(archivo))
     if (controlado) onAbiertoChange?.(true)
     else setAbiertoPropio(true)
@@ -100,6 +112,7 @@ export function VisorPdf({
   const [seguiaAbierto, setSeguiaAbierto] = useState(false)
   if (controlado && abiertoControlado && !seguiaAbierto) {
     setMovil(evaluarMovil())
+    detectarTipo()
     if (archivo && !urlArchivo) setUrlArchivo(URL.createObjectURL(archivo))
     setSeguiaAbierto(true)
   } else if (controlado && !abiertoControlado && seguiaAbierto) {
@@ -132,7 +145,16 @@ export function VisorPdf({
               <a href={url} target="_blank" rel="noopener noreferrer"><ExternalLink className="size-4" /></a>
             </Button>
           </DialogHeader>
-          {mimeType?.startsWith('image/') ? (
+          {tipo && tipo !== 'application/pdf' && !tipo.startsWith('image/') ? (
+            // Un comprimido (el escaneo de un contrato viejo, por ejemplo) no se
+            // puede mostrar: se ofrece descargarlo, que es lo único que tiene sentido.
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-muted/30 p-6 text-center">
+              <p className="text-sm text-muted-foreground">Este archivo no se puede ver aquí. Descárgalo para abrirlo en tu computador.</p>
+              <Button asChild size="sm">
+                <a href={urlDescarga} download={archivo ? nombreDescarga : undefined}><Download className="size-4" /> Descargar</a>
+              </Button>
+            </div>
+          ) : tipo?.startsWith('image/') ? (
             <div className="min-h-0 flex-1 overflow-auto rounded-md bg-muted/40 p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={url} alt={titulo} className="mx-auto max-w-full rounded-md bg-white shadow-sm" />

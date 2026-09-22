@@ -10,7 +10,8 @@ import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subid
 import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
 import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { borrarPdfTemporal, obtenerPdfAdjunto } from '@/server/archivos-temporales'
+import { borrarPdfTemporal, obtenerArchivoAdjunto, obtenerPdfAdjunto } from '@/server/archivos-temporales'
+import { esComprimido } from '@/lib/archivos'
 import { pdfAdjuntoCampos } from '@/lib/validaciones/pdf-adjunto'
 import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, corregirPosicionFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema, cerrarContratoOpsSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
@@ -257,8 +258,11 @@ export const crearContratoOps = accion(
 export const subirContratoOpsExistente = accion(
   { modulo: 'contratos', accion: 'CREAR', schema: subirContratoOpsSchema },
   async (d, usuario) => {
-    // El PDF: por referencia al depósito temporal o, en pruebas, en base64.
-    const pdf = await obtenerPdfAdjunto(d, usuario.id)
+    // El archivo: por referencia al depósito temporal o, en pruebas, en base64.
+    // Este contrato ya viene firmado en físico y aquí solo se archiva, así que
+    // vale el PDF o el comprimido con los escaneos.
+    const adjunto = await obtenerArchivoAdjunto(d, usuario.id)
+    const pdf = adjunto.contenido
 
     const numero = v(d.numero) ?? (await siguienteNumeroOps())
     const c = await dbAuditado.contratoOps.create({
@@ -278,17 +282,19 @@ export const subirContratoOpsExistente = accion(
       },
     })
 
-    // Subir el PDF aportado y registrarlo como Documento del contrato.
+    // Subir el archivo aportado y registrarlo como Documento del contrato.
     const sha256 = createHash('sha256').update(pdf).digest('hex')
-    const archivo = await subirArchivo(`contratos/${c.id}`, `contrato-${numero}.pdf`, pdf, 'application/pdf')
+    const comprimido = esComprimido(adjunto.mimeType)
+    const extension = comprimido ? (adjunto.nombre?.split('.').pop() ?? 'zip').toLowerCase() : 'pdf'
+    const archivo = await subirArchivo(`contratos/${c.id}`, `contrato-${numero}.${extension}`, pdf, adjunto.mimeType)
     await dbAuditado.documento.create({
       data: {
         entidadTipo: 'ContratoOps',
         entidadId: c.id,
-        nombre: `Contrato OPS ${numero}`,
+        nombre: `Contrato OPS ${numero}${comprimido ? ' (comprimido)' : ''}`,
         bucket: archivo.bucket,
         storagePath: archivo.storagePath,
-        mimeType: 'application/pdf',
+        mimeType: adjunto.mimeType,
         tamanoBytes: archivo.tamanoBytes,
         sha256,
         nivelAcceso: 'GENERAL',

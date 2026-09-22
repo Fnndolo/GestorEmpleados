@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
+import { ACEPTA_EVIDENCIA, MAX_PDF_BYTES, mensajePdfPesado, subirArchivoTemporal } from '@/lib/archivos'
 import { Upload } from 'lucide-react'
 import { subirContratoExistente } from '../../contratos/acciones'
 import { subirContratoOpsExistente } from '../../contratos/ops-acciones'
@@ -80,9 +80,9 @@ export function SubirContratoExistente({
   }
 
   async function guardar() {
-    if (!pdf) { toast.error('Adjunta el PDF del contrato.'); return }
-    // Cada PDF se sube aparte al depósito temporal (hasta 10 MB cada uno); se
-    // avisa aquí para no fallar tras la espera.
+    if (!pdf) { toast.error('Adjunta el contrato escaneado.'); return }
+    // Cada archivo se sube aparte al depósito temporal (hasta 25 MB cada uno);
+    // se avisa aquí para no fallar tras la espera.
     for (const archivo of [pdf, autorizacion]) {
       if (archivo && archivo.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(archivo.size)); return }
     }
@@ -94,8 +94,8 @@ export function SubirContratoExistente({
     let pdfRef: string
     let autorizacionRef = ''
     try {
-      pdfRef = await subirPdfTemporal(pdf)
-      if (autorizacion) autorizacionRef = await subirPdfTemporal(autorizacion)
+      pdfRef = await subirArchivoTemporal(pdf, 'evidencia')
+      if (autorizacion) autorizacionRef = await subirArchivoTemporal(autorizacion, 'evidencia')
     } catch (e) {
       setGuardando(false); toast.error(e instanceof Error ? e.message : 'No se pudo subir el PDF.'); return
     }
@@ -217,13 +217,15 @@ export function SubirContratoExistente({
             </div>
 
             <div className="space-y-1.5">
-              <Label>PDF del contrato</Label>
+              <Label>Contrato escaneado</Label>
               <input
-                type="file" accept="application/pdf"
+                type="file" accept={ACEPTA_EVIDENCIA}
                 onChange={(e) => setPdf(e.target.files?.[0] ?? null)}
                 className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
               />
-              {pdf && <p className="text-xs text-muted-foreground">{pdf.name} ({(pdf.size / 1024).toFixed(0)} KB)</p>}
+              {pdf
+                ? <p className="text-xs text-muted-foreground">{pdf.name} ({(pdf.size / 1024).toFixed(0)} KB)</p>
+                : <p className="text-xs text-muted-foreground">PDF, o un ZIP/RAR si el escaneo viene en varios archivos. Hasta 25 MB.</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -232,7 +234,7 @@ export function SubirContratoExistente({
                 <Ayuda texto="Autorización de tratamiento de datos firmada en físico (Ley 1581). Si no la tienes digitalizada, puedes subirla después." />
               </Label>
               <input
-                type="file" accept="application/pdf"
+                type="file" accept={ACEPTA_EVIDENCIA}
                 onChange={(e) => setAutorizacion(e.target.files?.[0] ?? null)}
                 className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
               />
