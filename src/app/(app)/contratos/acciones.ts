@@ -10,7 +10,7 @@ import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subid
 import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
 import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
-import { borrarPdfTemporal, obtenerArchivoAdjunto, obtenerPdfAdjunto } from '@/server/archivos-temporales'
+import { borrarPdfTemporal, extensionDe, obtenerArchivoAdjunto, obtenerPdfAdjunto } from '@/server/archivos-temporales'
 import { esComprimido } from '@/lib/archivos'
 import { contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema, subirContratoLaboralSchema, subirContratoLaboralParaFirmaSchema, corregirPosicionFirmaLaboralSchema, type SubirContratoLaboralInput } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
@@ -299,7 +299,7 @@ async function registrarContratoSubido(
   // Subir el archivo aportado y registrarlo como Documento del contrato.
   const sha256 = createHash('sha256').update(pdf).digest('hex')
   const comprimido = esComprimido(adjunto.mimeType)
-  const extension = comprimido ? (adjunto.nombre?.split('.').pop() ?? 'zip').toLowerCase() : 'pdf'
+  const extension = extensionDe(adjunto.mimeType)
   const archivo = await subirArchivo(`contratos/${contrato.id}`, `contrato-${numero}.${extension}`, pdf, adjunto.mimeType)
   const documento = await dbAuditado.documento.create({
     data: {

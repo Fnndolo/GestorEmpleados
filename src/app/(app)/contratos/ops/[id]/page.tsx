@@ -48,7 +48,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
     prisma.documento.findMany({
       where: { entidadTipo: 'ContratoOps', entidadId: id },
       orderBy: { creadoEn: 'desc' },
-      select: { id: true, nombre: true, creadoEn: true, sha256: true },
+      select: { id: true, nombre: true, creadoEn: true, sha256: true, mimeType: true },
     }),
     // Anexos: entidad propia ('ContratoOpsAnexo') para que el gestor —que permite borrar—
     // nunca liste el PDF del contrato ni la autorización.
@@ -149,7 +149,9 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
                   de vuelta: el autoservicio mira `origenPdf` para ofrecer la firma,
                   así que sin esto el contrato queda sin botón allá y tampoco hay
                   forma de borrarlo para rehacerlo por la pantalla correcta. */}
-              {puedeEditar && documentos.length > 0 && !c.firmaContratistaPath && !c.firmaContratantePath && (
+              {/* Solo si lo archivado es un PDF: firmar en la app es estampar la
+                  firma sobre el documento, y un comprimido no se puede estampar. */}
+              {puedeEditar && documentos.some((d) => d.mimeType === 'application/pdf') && !c.firmaContratistaPath && !c.firmaContratantePath && (
                 <HabilitarFirma contratoId={c.id} />
               )}
             </div>

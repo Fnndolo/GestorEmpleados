@@ -121,3 +121,67 @@ export async function urlSubidaFirmada(storagePath: string): Promise<string | nu
     return null
   }
 }
+
+/**
+ * Tamaño del archivo SIN descargarlo. Con Supabase se pregunta por los
+ * metadatos del objeto; en local, al sistema de archivos. Devuelve null si no
+ * existe o no se pudo saber.
+ *
+ * Sirve para cortar un archivo demasiado grande antes de traerlo a memoria:
+ * lo que se sube directo al almacenamiento no pasó por el servidor, así que su
+ * tamaño real solo se conoce aquí.
+ */
+export async function tamanoArchivo(storagePath: string): Promise<number | null> {
+  if (DRIVER === 'supabase') {
+    try {
+      const supabase = clienteSupabase()
+      const carpeta = storagePath.includes('/') ? storagePath.slice(0, storagePath.lastIndexOf('/')) : ''
+      const nombre = storagePath.slice(storagePath.lastIndexOf('/') + 1)
+      const { data, error } = await supabase.storage.from(BUCKET).list(carpeta, { search: nombre, limit: 1 })
+      if (error || !data?.length) return null
+      const tam = (data[0].metadata as { size?: number } | null)?.size
+      return typeof tam === 'number' ? tam : null
+    } catch {
+      return null
+    }
+  }
+  try {
+    const { stat } = await import('node:fs/promises')
+    return (await stat(join(DIR_LOCAL, storagePath))).size
+  } catch {
+    return null
+  }
+}
+
+/** Archivos de una carpeta del almacenamiento creados antes de `antesDe`, con su ruta completa. */
+export async function archivosAntiguos(prefijo: string, antesDe: Date): Promise<string[]> {
+  if (DRIVER === 'supabase') {
+    const supabase = clienteSupabase()
+    const viejos: string[] = []
+    // El depósito guarda `temporal/<usuario>/<archivo>`: se recorre carpeta por carpeta.
+    const { data: carpetas } = await supabase.storage.from(BUCKET).list(prefijo, { limit: 1000 })
+    for (const carpeta of carpetas ?? []) {
+      const { data: archivos } = await supabase.storage.from(BUCKET).list(`${prefijo}/${carpeta.name}`, { limit: 1000 })
+      for (const a of archivos ?? []) {
+        const creado = a.created_at ? new Date(a.created_at) : null
+        if (creado && creado < antesDe) viejos.push(`${prefijo}/${carpeta.name}/${a.name}`)
+      }
+    }
+    return viejos
+  }
+  try {
+    const { readdir, stat } = await import('node:fs/promises')
+    const raiz = join(DIR_LOCAL, prefijo)
+    const viejos: string[] = []
+    for (const carpeta of await readdir(raiz)) {
+      for (const nombre of await readdir(join(raiz, carpeta))) {
+        const ruta = `${prefijo}/${carpeta}/${nombre}`
+        const s = await stat(join(DIR_LOCAL, ruta))
+        if (s.mtime < antesDe) viejos.push(ruta)
+      }
+    }
+    return viejos
+  } catch {
+    return []
+  }
+}

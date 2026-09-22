@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { ErrorNegocio } from '@/server/accion'
-import { eliminarArchivo, leerArchivo, subirArchivoEn, urlSubidaFirmada } from '@/server/storage'
+import { archivosAntiguos, eliminarArchivo, leerArchivo, subirArchivoEn, tamanoArchivo, urlSubidaFirmada } from '@/server/storage'
 import { MAX_PDF_BYTES, mensajePdfPesado, mensajeTipoNoAdmitido, tiposDe, type ModoArchivo } from '@/lib/archivos'
 
 /**
@@ -47,9 +47,21 @@ const EXTENSION: Record<string, string> = {
   'application/x-7z-compressed': '7z',
 }
 
+/** Todo lo del depósito vive aquí: una referencia que apunte fuera no vale. */
+const RAIZ = 'temporal/'
+
 /** Ruta del depósito para esa persona. Nadie más puede leerla (la referencia va firmada). */
 const rutaTemporal = (usuarioId: string, mimeType: string) =>
-  `temporal/${usuarioId}/${randomUUID()}.${EXTENSION[canonico(mimeType)] ?? 'bin'}`
+  `${RAIZ}${usuarioId}/${randomUUID()}.${EXTENSION[canonico(mimeType)] ?? 'bin'}`
+
+/** La extensión con que se archiva sale del TIPO, nunca del nombre que mandó el cliente. */
+export const extensionDe = (mimeType: string) => EXTENSION[canonico(mimeType)] ?? 'bin'
+
+/** El nombre original es informativo: se queda solo con el del archivo, sin rutas ni rarezas. */
+const nombreLimpio = (nombre?: string) =>
+  nombre
+    ? nombre.split(/[\\/]/).pop()!.replace(/[^\w.\- áéíóúñÁÉÍÓÚÑ]/g, '').slice(0, 120) || undefined
+    : undefined
 
 /** El archivo pesa lo que debe y por dentro es lo que dice ser. */
 function exigirArchivo(contenido: Buffer, mimeType: string) {
@@ -93,6 +105,8 @@ function abrirRef(ref: string, usuarioId?: string): Carga {
   const datos = JSON.parse(Buffer.from(carga, 'base64url').toString('utf8')) as Carga
   if (datos.e < Date.now()) throw new ErrorNegocio('El archivo adjunto caducó (pasaron más de 4 horas). Vuelve a adjuntarlo.')
   if (usuarioId && datos.u !== usuarioId) throw new ErrorNegocio('Ese archivo lo adjuntó otra persona. Vuelve a adjuntarlo.')
+  // Cinturón y tirantes: aunque la firma es nuestra, la ruta solo puede ser del depósito.
+  if (!datos.p.startsWith(RAIZ)) throw new ErrorNegocio('La referencia del archivo no es válida. Vuelve a adjuntarlo.')
   return datos
 }
 
@@ -100,7 +114,7 @@ function refDe(storagePath: string, usuarioId: string, bytes: number, mimeType: 
   const carga = Buffer.from(
     JSON.stringify({
       p: storagePath, u: usuarioId, n: bytes, e: Date.now() + VIGENCIA_MS,
-      t: canonico(mimeType), ...(nombre ? { f: nombre.slice(0, 200) } : {}),
+      t: canonico(mimeType), ...(nombreLimpio(nombre) ? { f: nombreLimpio(nombre) } : {}),
     } satisfies Carga),
   ).toString('base64url')
   return `${carga}.${firmar(carga)}`
@@ -152,17 +166,32 @@ export async function prepararSubidaDirecta(
 
 /** Lee el archivo de una referencia (solo su dueño), comprobando qué es. */
 export async function leerArchivoTemporal(ref: string, usuarioId: string): Promise<ArchivoAdjunto> {
-  const { p, t, f } = abrirRef(ref, usuarioId)
+  const { p, t, f, n } = abrirRef(ref, usuarioId)
   const mimeType = canonico(t ?? 'application/pdf')
+
+  // El tamaño ANTES de traerlo a memoria: lo que se subió directo no pasó por
+  // el servidor, y bajar 50 MB para luego rechazarlos sería regalarle la
+  // memoria del servidor a quien mienta en el tamaño que anunció.
+  const tamano = await tamanoArchivo(p)
+  if (tamano != null && (tamano > MAX_PDF_BYTES || (n && tamano > n))) {
+    await eliminarArchivo(p).catch(() => {})
+    throw new ErrorNegocio(mensajePdfPesado(tamano))
+  }
+
   let contenido: Buffer
   try {
     contenido = await leerArchivo(p)
   } catch {
     throw new ErrorNegocio('El archivo adjunto ya no está disponible. Vuelve a adjuntarlo.')
   }
-  // Subido directo al almacenamiento, el servidor no lo vio pasar: se comprueba
-  // aquí que sea lo que dice ser y que no se pase de tamaño.
-  exigirArchivo(contenido, mimeType)
+  // Y que sea lo que dice ser. Si no lo es, se retira del depósito: no va a
+  // servir para nada y nadie más lo iba a borrar.
+  try {
+    exigirArchivo(contenido, mimeType)
+  } catch (e) {
+    await eliminarArchivo(p).catch(() => {})
+    throw e
+  }
   return { contenido, mimeType, nombre: f ?? null }
 }
 
@@ -174,14 +203,26 @@ export async function leerPdfTemporal(ref: string, usuarioId: string): Promise<B
 }
 
 /** Retira del depósito el archivo de una referencia. De mejor esfuerzo: nunca falla. */
-export async function borrarPdfTemporal(ref: string | null | undefined): Promise<void> {
+export async function borrarPdfTemporal(ref: string | null | undefined, usuarioId?: string): Promise<void> {
   if (!ref) return
   try {
-    const { p } = abrirRef(ref)
+    const { p } = abrirRef(ref, usuarioId)
     await eliminarArchivo(p)
   } catch {
     /* ya no estaba o la referencia no vale: nada que retirar */
   }
+}
+
+/**
+ * Barrido del depósito: lo que se subió y nunca se usó (se cerró el formulario,
+ * falló el alta, se cambió de archivo) queda ahí sin que nadie lo reclame. Lo
+ * llama el cron diario. Devuelve cuántos retiró.
+ */
+export async function limpiarDepositoTemporal(horas = 24): Promise<number> {
+  const limite = new Date(Date.now() - horas * 60 * 60 * 1000)
+  const viejos = await archivosAntiguos('temporal', limite)
+  for (const ruta of viejos) await eliminarArchivo(ruta).catch(() => {})
+  return viejos.length
 }
 
 type Adjunto = { pdfBase64?: string | null; pdfRef?: string | null }
@@ -200,6 +241,9 @@ export async function obtenerArchivoAdjunto(
   if (d.pdfRef) return leerArchivoTemporal(d.pdfRef, usuarioId)
   const contenido = Buffer.from(d.pdfBase64?.split(',')[1] ?? '', 'base64')
   if (contenido.byteLength === 0) throw new ErrorNegocio(vacio)
+  // La vía antigua también se comprueba: un data URI que diga ser PDF y no lo sea
+  // no debe colarse solo por no haber pasado por el depósito.
+  exigirArchivo(contenido, 'application/pdf')
   return { contenido, mimeType: 'application/pdf', nombre: null }
 }
 
