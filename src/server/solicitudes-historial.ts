@@ -37,6 +37,22 @@ export async function historialSolicitudes(opts: {
   const usuarios = ids.length ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : []
   const nombreDe = new Map(usuarios.map((u) => [u.id, u.name]))
 
+  // Los soportes adjuntos (incapacidad, licencia, comprobante corregido…): lo
+  // ya decidido también se consulta, y sin el soporte no se entiende la decisión.
+  const docs = solicitudes.length
+    ? await prisma.documento.findMany({
+        where: { entidadTipo: 'Solicitud', entidadId: { in: solicitudes.map((s) => s.id) } },
+        select: { id: true, entidadId: true, nombre: true, mimeType: true },
+        orderBy: { creadoEn: 'asc' },
+      })
+    : []
+  const docsDe = new Map<string, HistorialItem['documentos']>()
+  for (const d of docs) {
+    const lista = docsDe.get(d.entidadId) ?? []
+    lista.push({ id: d.id, nombre: d.nombre, esImagen: d.mimeType.startsWith('image/') })
+    docsDe.set(d.entidadId, lista)
+  }
+
   return solicitudes.map((s) => {
     const datos = s.datos as Record<string, string>
     const calc = (s.datos as Record<string, unknown>).calculoVacaciones as { dias?: number } | undefined
@@ -50,6 +66,7 @@ export async function historialSolicitudes(opts: {
       motivo: datos.motivo?.trim() || null,
       creadoEn: fechaBreve(s.creadoEn),
       resultado: s.resultado && !s.resultado.startsWith('Certificación generada:') ? s.resultado : null,
+      documentos: docsDe.get(s.id) ?? [],
       colaborador: {
         id: s.colaborador.id,
         nombre: `${s.colaborador.nombres} ${s.colaborador.apellidos}`,

@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, CalendarRange, Clock, HeartPulse, FileBadge, CalendarClock, FileCheck, Check, X, CircleDashed } from 'lucide-react'
+import { ChevronDown, CalendarRange, Clock, HeartPulse, FileBadge, CalendarClock, FileCheck, Check, X, CircleDashed, Paperclip } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Pill } from '@/components/ui-kit'
 import { colorAvatar } from '@/lib/etiquetas'
 import { TONO_SOLICITUD } from '@/lib/solicitudes-texto'
@@ -16,6 +18,10 @@ import { TONO_SOLICITUD } from '@/lib/solicitudes-texto'
  *
  * `conColaborador` pone la foto y el nombre (archivo de Aprobaciones); en la
  * ficha de una persona sobra y va el icono del tipo.
+ *
+ * Los soportes que se adjuntaron (incapacidad, licencia, comprobante) se ven
+ * ahí mismo al desplegar: las imágenes en miniatura y ampliables, los PDF en
+ * el visor; igual que en la bandeja de lo pendiente.
  */
 export type HistorialItem = {
   id: string
@@ -27,6 +33,8 @@ export type HistorialItem = {
   motivo: string | null
   creadoEn: string
   resultado: string | null
+  /** Soportes adjuntos a la solicitud. */
+  documentos: { id: string; nombre: string; esImagen: boolean }[]
   colaborador: { id: string; nombre: string; nombreCorto: string; iniciales: string; fotoUrl: string | null; jefeInmediatoId: string | null }
   pasos: { rol: string; estado: string; decididoPorId: string | null; decididoPor: string | null; decididoEn: string | null; comentario: string | null }[]
 }
@@ -46,6 +54,7 @@ export function HistorialSolicitudes({ items, conColaborador = false, vacio = 'S
   vacio?: string
 }) {
   const [abierta, setAbierta] = useState<string | null>(null)
+  const [imagenAmpliada, setImagenAmpliada] = useState<{ id: string; nombre: string } | null>(null)
   if (items.length === 0) {
     return <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">{vacio}</CardContent></Card>
   }
@@ -78,6 +87,7 @@ export function HistorialSolicitudes({ items, conColaborador = false, vacio = 'S
                 </span>
                 <span className="block truncate text-xs text-muted-foreground">
                   {s.cuando}{s.motivo ? ` · ${s.motivo}` : ''}
+                  {s.documentos.length > 0 && ` · ${s.documentos.length} adjunto${s.documentos.length === 1 ? '' : 's'}`}
                 </span>
               </span>
               <span className="flex shrink-0 flex-col items-end gap-1">
@@ -112,11 +122,59 @@ export function HistorialSolicitudes({ items, conColaborador = false, vacio = 'S
                   </ul>
                 )}
                 {s.resultado && <p className="text-xs text-muted-foreground">{s.resultado}</p>}
+                {s.documentos.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Soportes</p>
+                    <div className="flex flex-wrap items-start gap-2">
+                      {s.documentos.map((d) =>
+                        d.esImagen ? (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => setImagenAmpliada(d)}
+                            className="group/img overflow-hidden rounded-lg border bg-muted/30 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            title={`${d.nombre} — clic para ampliar`}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`/api/documentos/${d.id}`}
+                              alt={d.nombre}
+                              className="h-28 w-36 object-contain transition-transform group-hover/img:scale-105"
+                              loading="lazy"
+                            />
+                          </button>
+                        ) : (
+                          <VisorPdf
+                            key={d.id}
+                            documentoId={d.id}
+                            titulo={d.nombre}
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                          >
+                            <Paperclip className="size-3.5" /> {d.nombre}
+                          </VisorPdf>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
         )
       })}
+
+      {/* Ampliación del soporte de imagen, sin salir del historial. */}
+      <Dialog open={imagenAmpliada !== null} onOpenChange={(o) => { if (!o) setImagenAmpliada(null) }}>
+        <DialogContent className="max-w-[calc(100%-2.5rem)] sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-6 text-base">{imagenAmpliada?.nombre}</DialogTitle>
+          </DialogHeader>
+          {imagenAmpliada && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={`/api/documentos/${imagenAmpliada.id}`} alt={imagenAmpliada.nombre} className="max-h-[70vh] w-full rounded-lg object-contain" />
+          )}
+        </DialogContent>
+      </Dialog>
     </CardContent></Card>
   )
 }
