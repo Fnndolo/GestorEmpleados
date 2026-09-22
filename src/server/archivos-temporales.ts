@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { ErrorNegocio } from '@/server/accion'
-import { eliminarArchivo, leerArchivo, subirArchivoEn } from '@/server/storage'
+import { eliminarArchivo, leerArchivo, subirArchivoEn, urlSubidaFirmada } from '@/server/storage'
 import { MAX_PDF_BYTES, mensajePdfPesado } from '@/lib/archivos'
 
 /**
@@ -21,6 +21,16 @@ import { MAX_PDF_BYTES, mensajePdfPesado } from '@/lib/archivos'
  */
 
 const VIGENCIA_MS = 4 * 60 * 60 * 1000
+
+/** Ruta del depósito para esa persona. Nadie más puede leerla (la referencia va firmada). */
+const rutaTemporal = (usuarioId: string) => `temporal/${usuarioId}/${randomUUID()}.pdf`
+
+/** Un PDF de verdad empieza por %PDF-; lo que no, se rechaza al leerlo. */
+function exigirPdf(pdf: Buffer, bytesMax = MAX_PDF_BYTES) {
+  if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF está vacío.')
+  if (pdf.byteLength > bytesMax) throw new ErrorNegocio(mensajePdfPesado(pdf.byteLength))
+  if (pdf.subarray(0, 5).toString('latin1') !== '%PDF-') throw new ErrorNegocio('El archivo no es un PDF.')
+}
 
 type Carga = { p: string; u: string; n: number; e: number }
 
@@ -47,27 +57,51 @@ function abrirRef(ref: string, usuarioId?: string): Carga {
   return datos
 }
 
+function refDe(storagePath: string, usuarioId: string, bytes: number): string {
+  const carga = Buffer.from(JSON.stringify({ p: storagePath, u: usuarioId, n: bytes, e: Date.now() + VIGENCIA_MS } satisfies Carga)).toString('base64url')
+  return `${carga}.${firmar(carga)}`
+}
+
 /** Guarda el PDF en el depósito y devuelve la referencia firmada. */
 export async function guardarPdfTemporal(pdf: Buffer, usuarioId: string): Promise<{ ref: string; bytes: number }> {
-  if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF está vacío.')
-  if (pdf.byteLength > MAX_PDF_BYTES) throw new ErrorNegocio(mensajePdfPesado(pdf.byteLength))
-  if (pdf.subarray(0, 5).toString('latin1') !== '%PDF-') throw new ErrorNegocio('El archivo no es un PDF.')
-  const storagePath = `temporal/${usuarioId}/${randomUUID()}.pdf`
+  exigirPdf(pdf)
+  const storagePath = rutaTemporal(usuarioId)
   await subirArchivoEn(storagePath, pdf, 'application/pdf')
-  const carga = Buffer.from(JSON.stringify({ p: storagePath, u: usuarioId, n: pdf.byteLength, e: Date.now() + VIGENCIA_MS } satisfies Carga)).toString('base64url')
-  return { ref: `${carga}.${firmar(carga)}`, bytes: pdf.byteLength }
+  return { ref: refDe(storagePath, usuarioId, pdf.byteLength), bytes: pdf.byteLength }
+}
+
+/**
+ * Prepara una subida DIRECTA del navegador al almacenamiento: devuelve la URL
+ * firmada a la que mandar el archivo y la referencia que después recibirá la
+ * acción. Es lo que permite subir un escaneo grande en producción, donde el
+ * servidor no admite cuerpos de más de ~4,5 MB.
+ *
+ * Devuelve null si el almacenamiento no puede firmar la subida (driver local
+ * en desarrollo, o un fallo de Supabase): quien llama cae a la subida normal.
+ * Aquí no se ve el archivo, así que el PDF se valida al leerlo.
+ */
+export async function prepararSubidaDirecta(usuarioId: string, bytes: number): Promise<{ url: string; ref: string } | null> {
+  if (bytes <= 0) throw new ErrorNegocio('El PDF está vacío.')
+  if (bytes > MAX_PDF_BYTES) throw new ErrorNegocio(mensajePdfPesado(bytes))
+  const storagePath = rutaTemporal(usuarioId)
+  const url = await urlSubidaFirmada(storagePath)
+  if (!url) return null
+  return { url, ref: refDe(storagePath, usuarioId, bytes) }
 }
 
 /** Lee el PDF de una referencia (solo su dueño). */
 export async function leerPdfTemporal(ref: string, usuarioId: string): Promise<Buffer> {
   const { p } = abrirRef(ref, usuarioId)
+  let pdf: Buffer
   try {
-    const pdf = await leerArchivo(p)
-    if (pdf.byteLength === 0) throw new Error('vacío')
-    return pdf
+    pdf = await leerArchivo(p)
   } catch {
     throw new ErrorNegocio('El PDF adjunto ya no está disponible. Vuelve a adjuntarlo.')
   }
+  // Subido directo al almacenamiento, el servidor no lo vio pasar: se
+  // comprueba aquí que sea un PDF y que no se pase de tamaño.
+  exigirPdf(pdf)
+  return pdf
 }
 
 /** Retira del depósito el PDF de una referencia. De mejor esfuerzo: nunca falla. */
