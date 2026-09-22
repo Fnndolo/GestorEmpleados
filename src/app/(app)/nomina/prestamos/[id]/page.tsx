@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
@@ -7,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Pill } from '@/components/ui-kit'
 import { Progress } from '@/components/ui/progress'
-import { ArrowLeft, Check, Clock, Download } from 'lucide-react'
+import { Check, Clock, Download } from 'lucide-react'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import { PazSalvoBoton } from './paz-salvo-boton'
@@ -38,13 +37,9 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
   return (
     <div className="max-w-3xl">
       <Encabezado
+        volver
         titulo={`Préstamo · ${prestamo.colaborador.nombres} ${prestamo.colaborador.apellidos}`}
         descripcion={prestamo.descripcion ?? 'Detalle de cuotas y saldo.'}
-        acciones={
-          <Button size="sm" asChild>
-            <Link href="/nomina/prestamos"><ArrowLeft className="size-4" /> Volver</Link>
-          </Button>
-        }
       />
 
       <Card className="mb-4"><CardContent className="py-5 space-y-4">

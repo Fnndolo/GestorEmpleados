@@ -1,11 +1,9 @@
-import Link from 'next/link'
 import { tramiteAplica, NoAplica } from '../no-aplica'
 import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { ArrowLeft, Receipt, Download } from 'lucide-react'
+import { Receipt, Download } from 'lucide-react'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
@@ -18,7 +16,7 @@ export default async function MisDesprendiblesPage() {
   if (!usuario.colaboradorId) {
     return (
       <div className="max-w-3xl">
-        <Encabezado titulo="Mis desprendibles" />
+        <Encabezado volver titulo="Mis desprendibles" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
           Tu usuario no está vinculado a una ficha de colaborador. Contacta a Talento Humano.
         </CardContent></Card>
@@ -40,13 +38,9 @@ export default async function MisDesprendiblesPage() {
   return (
     <div className="max-w-3xl">
       <Encabezado
+        volver
         titulo="Mis desprendibles de pago"
         descripcion="Descarga la colilla de cada periodo de nómina. Solo tú y Talento Humano pueden verlas."
-        acciones={
-          <Button size="sm" asChild>
-            <Link href="/autoservicio"><ArrowLeft className="size-4" /> Volver</Link>
-          </Button>
-        }
       />
 
       {liquidaciones.length === 0 ? (

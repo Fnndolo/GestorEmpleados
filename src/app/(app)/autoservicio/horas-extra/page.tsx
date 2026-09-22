@@ -19,7 +19,7 @@ export default async function MisHorasExtraPage() {
   if (!usuario.colaboradorId) {
     return (
       <div className="max-w-3xl">
-        <Encabezado titulo="Mis horas extra" />
+        <Encabezado volver titulo="Mis horas extra" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Tu usuario no está vinculado a una ficha de colaborador.</CardContent></Card>
       </div>
     )
@@ -46,7 +46,7 @@ export default async function MisHorasExtraPage() {
 
   return (
     <div className="max-w-3xl">
-      <Encabezado enLinea titulo="Mis horas extra" />
+      <Encabezado volver enLinea titulo="Mis horas extra" />
       {items.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
           <Timer className="size-8" /><p>No tienes órdenes de pago de horas extra.</p>

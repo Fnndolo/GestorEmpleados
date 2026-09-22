@@ -51,7 +51,7 @@ export default async function AvisosPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="max-w-4xl">
-      <Encabezado enLinea titulo="Avisos" />
+      <Encabezado enLinea volver titulo="Avisos" />
       <AvisosCliente avisos={lector} gestion={gestion} verId={ver ?? null} vistaInicial={vista === 'gestion' && gestor ? 'gestion' : 'avisos'} />
     </div>
   )

@@ -21,7 +21,7 @@ export async function tramiteAplica(colaboradorId: string, tramite: Tramite): Pr
 export function NoAplica({ titulo, motivo }: { titulo: string; motivo: string }) {
   return (
     <div className="max-w-3xl">
-      <Encabezado titulo={titulo} />
+      <Encabezado volver titulo={titulo} />
       <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
         <p className="font-medium text-foreground">Este trámite no aplica a tu contrato</p>
         <p className="mx-auto mt-1.5 max-w-prose">{motivo}</p>

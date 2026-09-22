@@ -25,7 +25,7 @@ export default async function CapacitacionesPage() {
 
   return (
     <div className="max-w-6xl">
-      <Encabezado titulo="Capacitaciones" descripcion="Registro de asistencia, inducción/reinducción y formación." acciones={puedeCrear && <CrearCapacitacion />} />
+      <Encabezado titulo="Capacitaciones" descripcion="Registro de asistencia, inducción/reinducción y formación." acciones={puedeCrear && <CrearCapacitacion />} volver />
       {capacitaciones.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground"><GraduationCap className="size-8" /><p>Sin capacitaciones registradas.</p></CardContent></Card>
       ) : (

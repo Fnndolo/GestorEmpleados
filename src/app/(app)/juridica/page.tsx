@@ -25,7 +25,7 @@ export default async function JuridicaPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="max-w-6xl">
-      <Encabezado titulo="Jurídica" descripcion="Repositorio de documentos legales, procesos disciplinarios, línea ética y habeas data." />
+      <Encabezado titulo="Jurídica" descripcion="Repositorio de documentos legales, procesos disciplinarios, línea ética y habeas data." volver />
       <JuridicaCliente
         tab={tab}
         puedeCrear={puedeCrear}

@@ -76,6 +76,7 @@ export default async function ContratosPage({
   return (
     <div className="max-w-7xl">
       <Encabezado
+        volver
         titulo="Contratación y vinculación"
         descripcion="Contratos laborales por modalidad y contratos de prestación de servicios (OPS)."
         acciones={

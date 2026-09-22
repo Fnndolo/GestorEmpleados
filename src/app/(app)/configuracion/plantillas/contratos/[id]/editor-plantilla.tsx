@@ -225,7 +225,8 @@ export function EditorPlantilla({ valores, puedeGuardar }: { valores: Valores | 
             <FileText className="size-4" /> Ver muestra en PDF
           </VisorPdf>
         )}
-        <Button size="sm" variant="ghost" onClick={() => router.push('/configuracion/plantillas/contratos')}>Volver</Button>
+        {/* Para devolverse está la flecha de la cabecera de Ajustes, que vuelve a
+            donde se vino; aquí ya no va un "Volver" con destino fijo. */}
         {puedeGuardar && (
           <Button size="sm" onClick={guardar} disabled={guardando}>
             {guardando ? <Spinner /> : <Save className="size-4" />} Guardar

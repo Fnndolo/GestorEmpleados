@@ -124,7 +124,7 @@ export default async function VencimientosPage({
 
   return (
     <div className="max-w-5xl">
-      <Encabezado enLinea titulo="Vencimientos" />
+      <Encabezado enLinea titulo="Vencimientos" volver />
 
       {/* Las cifras también llevan al filtro; el chip va en tinta y el color se
           reserva para el estado de cada fila. */}

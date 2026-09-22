@@ -82,6 +82,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
   return (
     <div className="max-w-6xl">
       <Encabezado
+        volver="/contratos?tab=OPS"
         titulo={`OPS ${c.numero}`}
         descripcion={nombreContratista}
         acciones={puedeEditar && vigente && (

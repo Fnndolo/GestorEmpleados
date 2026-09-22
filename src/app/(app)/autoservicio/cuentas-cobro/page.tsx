@@ -31,7 +31,7 @@ const SOPORTE: Record<string, { label: string; clase: string }> = {
 export default async function MisCuentasCobroPage() {
   const usuario = await requerirSesion()
   if (!usuario.colaboradorId) {
-    return <div className="max-w-5xl"><Encabezado titulo="Mis cuentas de cobro" /><Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Tu usuario no está vinculado a una ficha de colaborador.</CardContent></Card></div>
+    return <div className="max-w-5xl"><Encabezado volver titulo="Mis cuentas de cobro" /><Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Tu usuario no está vinculado a una ficha de colaborador.</CardContent></Card></div>
   }
 
   const [cuentas, plantillas] = await Promise.all([
@@ -46,6 +46,7 @@ export default async function MisCuentasCobroPage() {
   return (
     <div className="max-w-5xl">
       <Encabezado
+        volver
         titulo="Mis cuentas de cobro"
         descripcion="Crea y envía tu cuenta de cobro (servicios, comisiones o saldos a tu favor). Contabilidad y gerencia recibirán la notificación."
         acciones={<MiCuentaCobro plantillas={plantillas.map((p) => ({ id: p.id, nombre: p.nombre }))} />}

@@ -1,9 +1,7 @@
-import Link from 'next/link'
 import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { ArrowLeft } from 'lucide-react'
 import { formatFechaISO } from '@/lib/fechas'
 import type { MiFichaInput } from '@/lib/validaciones/colaborador'
 import { MiInformacionForm } from './mi-informacion-form'
@@ -18,7 +16,7 @@ export default async function MiInformacionPage() {
   if (!usuario.colaboradorId) {
     return (
       <div className="max-w-5xl">
-        <Encabezado titulo="Mi información" />
+        <Encabezado volver titulo="Mi información" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Tu usuario no está vinculado a una ficha de colaborador. Contacta a Talento Humano.</CardContent></Card>
       </div>
     )
@@ -71,12 +69,9 @@ export default async function MiInformacionPage() {
 
   return (
     <div className="max-w-5xl">
-      {/* Regreso arriba y sin párrafo: en el celular el texto explicativo
-          empujaba la foto y el formulario fuera de la primera pantalla. */}
-      <Link href="/autoservicio" className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" /> Volver
-      </Link>
-      <Encabezado enLinea titulo="Mi información" />
+      {/* Sin párrafo: en el celular el texto explicativo empujaba la foto y el
+          formulario fuera de la primera pantalla. */}
+      <Encabezado volver enLinea titulo="Mi información" />
       {/* La foto la cambia cada persona: es lo primero que ve el equipo en el
           menú y en las listas. */}
       <Card className="mb-4">

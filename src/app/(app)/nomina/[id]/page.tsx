@@ -111,6 +111,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
   return (
     <div className="max-w-7xl">
       <Encabezado
+        volver
         titulo={periodo.nombre}
         descripcion={`Periodo ${periodo.tipo === 'QUINCENAL' ? 'quincenal' : 'mensual'} · ${periodo.diasPeriodo} días`}
         acciones={<Pill tone={TONO[periodo.estado] ?? 'muted'}>{ESTADO[periodo.estado]}</Pill>}

@@ -1,5 +1,3 @@
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
 import { requerirPermiso } from '@/server/sesion'
 import { urlFotoActivo } from '@/lib/activos-visual'
 import { vinculoDe } from '../no-aplica'
@@ -18,7 +16,7 @@ export default async function MiDotacionPage() {
   if (!usuario.colaboradorId) {
     return (
       <div className="max-w-5xl">
-        <Encabezado enLinea titulo="Mis entregas" />
+        <Encabezado volver enLinea titulo="Mis entregas" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
           Tu usuario no está vinculado a una ficha de colaborador.
         </CardContent></Card>
@@ -51,11 +49,8 @@ export default async function MiDotacionPage() {
 
   return (
     <div className="max-w-5xl">
-      {/* Regreso arriba y sin párrafo: las pestañas ya dicen qué hay. */}
-      <Link href="/autoservicio" className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" /> Volver
-      </Link>
-      <Encabezado enLinea titulo="Mis entregas" />
+      {/* Sin párrafo: las pestañas ya dicen qué hay. */}
+      <Encabezado volver enLinea titulo="Mis entregas" />
       <MiDotacion
         verDotacion={verDotacion}
         verEpp={verEpp}

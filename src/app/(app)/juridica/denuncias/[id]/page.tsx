@@ -37,6 +37,8 @@ export default async function DenunciaPage({ params }: { params: Promise<{ id: s
         titulo={d.asunto ? `${d.asunto} · ${d.codigo}` : `Denuncia ${d.codigo}`}
         descripcion={`${etiquetaReporte(d.tipo)} · ${d.anonima ? 'reporte anónimo' : `reportado por ${d.denuncianteNombre ?? '—'}`}${esAcoso(d.tipo) ? ' · Comité de Convivencia' : ''}`}
         acciones={<Badge variant={d.estado === 'RESUELTA' ? 'default' : 'secondary'}>{ESTADO[d.estado]}</Badge>}
+        // /juridica/denuncias no es página: sin memoria, la flecha vuelve a la pestaña de denuncias.
+        volver="/juridica?tab=denuncias"
       />
 
       <Card className="mb-4"><CardContent className="py-4 space-y-2 text-sm">

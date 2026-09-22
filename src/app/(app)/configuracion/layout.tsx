@@ -56,7 +56,9 @@ export default async function ConfiguracionLayout({ children }: { children: Reac
        de la app (3.5rem) y el relleno del contenedor (3rem). En móvil la página
        se desplaza entera. */
     <div className="max-w-6xl lg:flex lg:max-h-[calc(100dvh-6.5rem)] lg:flex-col lg:overflow-hidden">
-      <CabeceraAjustes />
+      {/* Respaldo de la flecha en las secciones: quien solo tiene permiso de
+          Usuarios no puede entrar a Empresa, así que para él es Inicio. */}
+      <CabeceraAjustes portada={verConfig ? '/configuracion/empresa' : '/inicio'} />
       <div className="grid items-start gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-stretch">
         <RielConfiguracion hrefsVisibles={hrefsVisibles} contadores={contadores} />
         {/* `min-h-0` es imprescindible: sin él un hijo de grid no encoge y el

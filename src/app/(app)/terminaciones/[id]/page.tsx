@@ -68,6 +68,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
         titulo={`${t.colaborador.nombres} ${t.colaborador.apellidos}`}
         descripcion={`${TIPO[t.tipo]} · ${formatFechaLarga(t.fechaRetiro)}`}
         acciones={<Badge variant={t.estado === 'CERRADA' ? 'default' : 'outline'}>{t.estado}</Badge>}
+        volver
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

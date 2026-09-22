@@ -47,7 +47,7 @@ export default async function ReportesPage() {
 
   return (
     <div className="max-w-7xl">
-      <Encabezado titulo="Reportes y tableros" descripcion="Indicadores del personal, cumplimiento documental, contratos y SST." />
+      <Encabezado titulo="Reportes y tableros" descripcion="Indicadores del personal, cumplimiento documental, contratos y SST." volver />
 
       <div className="mb-6 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         <Stat icono={Users} color="sky" valor={String(activos)} label="Personal activo" />

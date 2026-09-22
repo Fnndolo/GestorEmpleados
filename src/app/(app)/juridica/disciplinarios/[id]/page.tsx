@@ -56,6 +56,8 @@ export default async function DisciplinarioPage({ params }: { params: Promise<{ 
             <Badge variant={p.cerrado ? 'secondary' : 'default'}>{ETAPA[p.etapa]}</Badge>
           </div>
         }
+        // /juridica/disciplinarios no es página: sin memoria, la flecha vuelve a la pestaña de disciplinarios.
+        volver="/juridica?tab=disciplinarios"
       />
       <p className="mb-4"><Link href={`/colaboradores/${p.colaborador.id}`} className="text-sm text-primary hover:underline">Ver ficha →</Link></p>
 

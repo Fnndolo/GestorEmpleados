@@ -1,10 +1,9 @@
-import Link from 'next/link'
 import { requerirSesion } from '@/server/sesion'
 import { tramiteAplica, NoAplica } from '../no-aplica'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Gavel, MessageSquareWarning, ArrowLeft } from 'lucide-react'
+import { Gavel, MessageSquareWarning } from 'lucide-react'
 import { formatFechaLarga } from '@/lib/fechas'
 import { fechaBreve } from '@/lib/notificaciones/texto'
 import { Descargos, Apelacion } from './descargos'
@@ -22,7 +21,7 @@ export default async function MisDisciplinariosPage() {
   if (!usuario.colaboradorId) {
     return (
       <div className="max-w-5xl">
-        <Encabezado titulo="Mis procesos disciplinarios" />
+        <Encabezado volver titulo="Mis procesos disciplinarios" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Tu usuario no está vinculado a una ficha de colaborador.</CardContent></Card>
       </div>
     )
@@ -61,10 +60,7 @@ export default async function MisDisciplinariosPage() {
 
   return (
     <div className="max-w-5xl">
-      <Link href="/autoservicio" className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" /> Volver
-      </Link>
-      <Encabezado enLinea titulo="Mis disciplinarios" />
+      <Encabezado volver enLinea titulo="Mis disciplinarios" />
 
       {/* Los llamados de atención van aparte: no son sanciones y no hay nada que
           responder, pero el colaborador tiene derecho a saber qué le registraron. */}

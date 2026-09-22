@@ -14,7 +14,7 @@ export default async function MisDocumentosPage() {
   if (!usuario.colaboradorId) {
     return (
       <div className="max-w-5xl">
-        <Encabezado titulo="Mis documentos" descripcion="" />
+        <Encabezado volver titulo="Mis documentos" descripcion="" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
           Tu usuario no está vinculado a una ficha de colaborador. Contacta a Talento Humano.
         </CardContent></Card>
@@ -82,6 +82,7 @@ export default async function MisDocumentosPage() {
   return (
     <div className="max-w-5xl">
       <Encabezado
+        volver
         titulo="Mis documentos"
         descripcion="Tu expediente: lo que has entregado y lo que te falta. Lo que subas lo revisa Talento Humano."
       />

@@ -1,12 +1,9 @@
 import { notFound, redirect } from 'next/navigation'
-import Link from 'next/link'
 import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { valorParametroVigente } from '@/server/nomina/parametros'
 import { formatFechaISO } from '@/lib/fechas'
 import { Encabezado } from '@/components/shell/encabezado'
-import { Button } from '@/components/ui/button'
-import { ArrowLeft } from 'lucide-react'
 import type { SnapshotContratoLaboral } from '@/server/contratos-laboral-pdf'
 import { FormContrato } from '../../form-contrato'
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
@@ -48,13 +45,9 @@ export default async function EditarContratoPage({ params }: { params: Promise<{
   return (
     <div className="max-w-[1600px]">
       <Encabezado
+        volver
         titulo={`Editar contrato ${c.numero}`}
         descripcion={`${c.colaborador.nombres} ${c.colaborador.apellidos} — editable hasta que alguna de las partes firme; al guardar se regenera el documento.`}
-        acciones={
-          <Button size="sm" asChild>
-            <Link href={`/contratos/${id}`}><ArrowLeft className="size-4" /> Volver al contrato</Link>
-          </Button>
-        }
       />
       <FormContrato
         catalogos={{

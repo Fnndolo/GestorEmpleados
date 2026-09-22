@@ -67,7 +67,7 @@ export default async function EditarColaboradorPage({ params }: { params: Promis
 
   return (
     <div>
-      <Encabezado fijo titulo={`Editar · ${c.nombres} ${c.apellidos}`} descripcion="Actualiza la ficha del colaborador." />
+      <Encabezado fijo volver titulo={`Editar · ${c.nombres} ${c.apellidos}`} descripcion="Actualiza la ficha del colaborador." />
       <FormColaborador catalogos={catalogos} valores={valores} puedeEditarSalud={puedeEditarSalud} />
     </div>
   )

@@ -18,7 +18,7 @@ export default async function MisCapacitacionesPage() {
   if (!usuario.colaboradorId) {
     return (
       <div className="max-w-5xl">
-        <Encabezado titulo="Mis capacitaciones" descripcion="" />
+        <Encabezado volver titulo="Mis capacitaciones" descripcion="" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
           Tu usuario no está vinculado a una ficha de colaborador.
         </CardContent></Card>
@@ -41,6 +41,7 @@ export default async function MisCapacitacionesPage() {
   return (
     <div className="max-w-5xl">
       <Encabezado
+        volver
         titulo="Mis capacitaciones"
         descripcion={`Tu historial de formación (RIT art. 95)${horas > 0 ? ` · ${horas} horas acumuladas` : ''}.`}
       />

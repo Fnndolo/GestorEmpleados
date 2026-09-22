@@ -26,6 +26,7 @@ export default async function NominaPage() {
   return (
     <div className="max-w-6xl">
       <Encabezado
+        volver
         titulo="Nómina"
         descripcion="Liquidación de nómina con conceptos, comisiones, horas extra (Ley 2466) y desprendibles."
         acciones={

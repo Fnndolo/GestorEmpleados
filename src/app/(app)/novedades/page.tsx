@@ -61,7 +61,7 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
 
   return (
     <div className="max-w-7xl">
-      <Encabezado titulo="Novedades" descripcion="Incapacidades, licencias, permisos, vacaciones y bonificaciones." />
+      <Encabezado titulo="Novedades" descripcion="Incapacidades, licencias, permisos, vacaciones y bonificaciones." volver />
 
       {puedeAprobar && (
         <Link

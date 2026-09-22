@@ -18,6 +18,7 @@ import { BannerAvisos } from '@/components/avisos/banner-avisos'
 import { avisosParaUsuario, hrefsNuevos } from '@/server/avisos'
 import { CumpleanosACargo, type CumpleanosACargoItem } from './cumpleanos-a-mi-cargo'
 import { MisSolicitudes, type SolicitudItem, type ComprobanteItem } from './mis-solicitudes'
+import { Encabezado } from '@/components/shell/encabezado'
 
 export const metadata = { title: 'Autoservicio · Smart Gadgets RH' }
 
@@ -112,7 +113,7 @@ export default async function AutoservicioPage() {
   if (!usuario.colaboradorId) {
     return (
       <div className="max-w-7xl">
-        <h1 className="mb-4 text-xl font-bold">Autoservicio</h1>
+        <Encabezado volver titulo="Autoservicio" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
           Tu usuario no está vinculado a una ficha de colaborador. Contacta a Talento Humano.
         </CardContent></Card>
@@ -397,8 +398,6 @@ export default async function AutoservicioPage() {
   return (
     <div className="max-w-7xl">
       <BannerAvisos avisos={avisosNuevos.slice(0, 5).map((a) => ({ id: a.id, titulo: a.titulo, resumen: a.resumen, tipo: a.tipo, enlace: a.enlace }))} />
-      {/* Sin encabezado: el saludo vive en la barra superior y lo pendiente ya
-          lo dicen las cifras y los avisos de cada tarjeta. */}
       {/* Etiquetas de una palabra: con "Días de vacaciones disponibles" el texto
           se partía en tres renglones y estiraba los recuadros de más. La cifra
           grande y el ícono ya dicen de qué se trata. */}

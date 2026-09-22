@@ -25,7 +25,8 @@ export default async function ModuloPage({ params }: { params: Promise<{ slug: s
 
   return (
     <div className="max-w-6xl">
-      <Encabezado titulo={modulo.nombre} descripcion={modulo.descripcion ?? 'Módulo personalizado.'} />
+      {/* /modulos no tiene página propia: si no hay memoria de navegación se vuelve al inicio */}
+      <Encabezado titulo={modulo.nombre} descripcion={modulo.descripcion ?? 'Módulo personalizado.'} volver="/inicio" />
       <ModuloDinamico
         moduloId={modulo.id}
         campos={modulo.campos.map((c) => ({ clave: c.clave, etiqueta: c.etiqueta, tipo: c.tipo, requerido: c.requerido, opciones: c.opciones, mostrarEnTabla: c.mostrarEnTabla }))}

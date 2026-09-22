@@ -11,6 +11,7 @@ export default async function ImportarPage() {
       <Encabezado
         titulo="Importar colaboradores"
         descripcion="Carga masiva desde una plantilla de Excel. Descarga la plantilla, complétala y súbela."
+        volver
       />
       <ImportadorCliente />
     </div>

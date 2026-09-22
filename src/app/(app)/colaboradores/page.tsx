@@ -55,6 +55,7 @@ export default async function ColaboradoresPage({
       <Encabezado
         titulo="Colaboradores"
         enLinea
+        volver
         acciones={
           <div className="flex gap-2">
             <Button size="sm" asChild>

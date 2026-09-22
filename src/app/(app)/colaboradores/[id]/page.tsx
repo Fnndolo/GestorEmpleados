@@ -217,6 +217,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
       <Encabezado
         titulo="Ficha del colaborador"
         enLinea
+        volver
         acciones={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm">

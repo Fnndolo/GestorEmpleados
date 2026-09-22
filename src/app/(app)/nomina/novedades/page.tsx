@@ -1,5 +1,3 @@
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
 import { requerirPermiso } from '@/server/sesion'
 import { esAdministrador } from '@/lib/permisos/tipos'
 import { prisma } from '@/lib/db'
@@ -54,10 +52,7 @@ export default async function NovedadesNominaPage({ searchParams }: { searchPara
 
   return (
     <div className="max-w-6xl">
-      <Link href="/nomina" className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" /> Nómina
-      </Link>
-      <Encabezado enLinea titulo="Novedades" />
+      <Encabezado volver enLinea titulo="Novedades" />
 
       <NovedadesNomina
         hoy={hoyBogotaISO()}

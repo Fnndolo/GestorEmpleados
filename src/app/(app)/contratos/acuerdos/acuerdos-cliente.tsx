@@ -255,6 +255,7 @@ export function AcuerdosCliente({
     <>
       <Encabezado
         enLinea
+        volver
         titulo="Evaluación previa"
         acciones={puedeCrear && (
           <Button size="sm" onClick={abrirNuevo}>

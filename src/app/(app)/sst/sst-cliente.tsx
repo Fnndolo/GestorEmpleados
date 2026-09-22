@@ -8,6 +8,7 @@ import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Papercli
 import { Chip, Pill, Stat, AvatarColaborador, type PillTone } from '@/components/ui-kit'
 import { urlFoto } from '@/lib/foto'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
+import { BotonVolver } from '@/components/shell/volver'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -148,7 +149,6 @@ export function SstCliente(p: Props) {
     setTab(p.tab)
   }
 
-  const router = useRouter()
   const [dialogo, setDialogo] = useState<string | null>(null)
   const [accidenteAbierto, setAccidenteAbierto] = useState<Props['accidentes'][number] | null>(null)
   const [comiteAbierto, setComiteAbierto] = useState<Props['comites'][number] | null>(null)
@@ -301,19 +301,27 @@ export function SstCliente(p: Props) {
        móvil no aplica: ahí la página se desplaza entera, que es lo natural en
        pantalla pequeña. */
     <div className="lg:flex lg:max-h-[calc(100dvh-6.5rem)] lg:flex-col lg:overflow-hidden">
-      {/* Cabecera: la flecha devuelve al tablero (o sale del módulo si ya estás
-          en él) y la ruta, en pequeño, dice dónde estás. El título grande vive
-          dentro del panel, que es donde da jerarquía. */}
+      {/* Cabecera: dentro de una sección la flecha devuelve al tablero (es
+          navegación dentro de esta misma página); en el tablero sale del módulo
+          hacia la pantalla desde la que se llegó (o a Inicio si se abrió directo).
+          La ruta, en pequeño, dice dónde estás. El título grande vive dentro del
+          panel, que es donde da jerarquía. */}
       <div className="mb-3 flex shrink-0 items-center gap-2">
-        <Button
-          size="icon"
-          variant="ghost"
-          className="size-8 shrink-0 text-muted-foreground"
-          aria-label={tab === 'tablero' ? 'Salir de SST' : 'Volver al tablero de SST'}
-          onClick={() => (tab === 'tablero' ? router.push('/') : irA('tablero'))}
-        >
-          <ChevronLeft className="size-[18px]" />
-        </Button>
+        {tab === 'tablero' ? (
+          <BotonVolver fallback="/inicio" etiqueta="Salir de SST" />
+        ) : (
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="size-8 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+            aria-label="Volver al tablero de SST"
+            title="Volver al tablero de SST"
+            onClick={() => irA('tablero')}
+          >
+            <ChevronLeft className="size-[18px]" />
+          </Button>
+        )}
         <nav aria-label="Ruta" className="flex min-w-0 items-center gap-1.5 text-[13.5px] font-semibold">
           <span className="truncate">Seguridad y Salud en el Trabajo</span>
           {tab !== 'tablero' && (

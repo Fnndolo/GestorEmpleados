@@ -1,8 +1,6 @@
-import Link from 'next/link'
 import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
-import { ArrowLeft } from 'lucide-react'
 import { formatFechaCorta } from '@/lib/fechas'
 import { CanalEtico } from './canal-etico'
 import { MisHabeas } from './mis-habeas'
@@ -29,11 +27,8 @@ export default async function AutoservicioJuridicaPage({ searchParams }: { searc
 
   return (
     <div className="max-w-3xl">
-      {/* Regreso arriba y sin párrafo: lo que es cada canal lo dice su tarjeta en una línea. */}
-      <Link href="/autoservicio" className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" /> Volver
-      </Link>
-      <Encabezado enLinea titulo={TITULO[vista]} />
+      {/* Sin párrafo: lo que es cada canal lo dice su tarjeta en una línea. */}
+      <Encabezado volver enLinea titulo={TITULO[vista]} />
 
       <CanalEtico mostrar={vista} />
 

@@ -39,6 +39,7 @@ export default async function TerminacionesPage({
         titulo="Terminaciones y desvinculaciones"
         descripcion="Registro de retiros, liquidación definitiva y paz y salvo por área."
         acciones={puedeCrear && <NuevaTerminacion colaboradorInicial={colaborador} />}
+        volver
       />
       {terminaciones.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">

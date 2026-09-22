@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { Pill, AvatarColaborador, type PillTone } from '@/components/ui-kit'
-import { Receipt, Landmark, Paperclip, ShieldCheck, ShieldAlert, ChevronLeft, ArrowRight } from 'lucide-react'
+import { Receipt, Landmark, Paperclip, ShieldCheck, ShieldAlert, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { fmtCOP } from '@/lib/moneda'
 import { urlFoto } from '@/lib/foto'
@@ -99,8 +99,8 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="max-w-5xl">
-      <Link href="/nomina" className="mb-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"><ChevronLeft className="size-3.5" /> Nómina</Link>
       <Encabezado
+        volver
         titulo="Pagos a contratistas OPS"
         descripcion="Consulta de cuentas de cobro para el pago. Es independiente de la liquidación de nómina laboral: aquí ves cuánto pagar a cada contratista, a qué cuenta y si su seguridad social está en regla."
       />

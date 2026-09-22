@@ -16,7 +16,7 @@ export default async function MisContratosPage() {
   if (!usuario.colaboradorId) {
     return (
       <div className="max-w-5xl">
-        <Encabezado titulo="Mis contratos" />
+        <Encabezado volver titulo="Mis contratos" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Tu usuario no está vinculado a una ficha de colaborador.</CardContent></Card>
       </div>
     )
@@ -144,7 +144,7 @@ export default async function MisContratosPage() {
 
   return (
     <div className="max-w-5xl">
-      <Encabezado enLinea titulo="Mis contratos" />
+      <Encabezado volver enLinea titulo="Mis contratos" />
       {items.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground"><FilePenLine className="size-8" /><p>No tienes contratos registrados.</p></CardContent></Card>
       ) : (

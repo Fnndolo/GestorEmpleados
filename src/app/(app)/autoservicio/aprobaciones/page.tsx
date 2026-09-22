@@ -66,7 +66,7 @@ export default async function AprobacionesPage({ searchParams }: { searchParams:
 
   return (
     <div className="max-w-5xl">
-      <Encabezado enLinea titulo="Aprobaciones" />
+      <Encabezado volver enLinea titulo="Aprobaciones" />
       {/* Dos vistas: lo pendiente y el archivo de lo ya decidido. */}
       <div className="mb-4 flex gap-1.5">
         {[

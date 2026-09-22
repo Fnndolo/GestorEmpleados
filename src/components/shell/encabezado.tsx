@@ -1,13 +1,22 @@
+import { BotonVolver } from '@/components/shell/volver'
+
 export function Encabezado({
   titulo,
   descripcion,
   acciones,
   fijo,
   enLinea,
+  volver,
 }: {
   titulo: string
   descripcion?: string
   acciones?: React.ReactNode
+  /**
+   * Flecha de "atrás" antes del título. Devuelve a la última pantalla desde la
+   * que se llegó (ver `BotonVolver`); `true` usa como respaldo el padre de la
+   * ruta, y una cadena fija ese respaldo (para rutas cuyo padre no es página).
+   */
+  volver?: boolean | string
   /**
    * Título y acciones en una sola fila también en el celular, con menos aire
    * debajo. Para listados donde las acciones son solo iconos y apilarlas
@@ -37,9 +46,12 @@ export function Encabezado({
             : 'mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'
       }
     >
-      <div className="min-w-0 space-y-1">
-        <h1 className={enLinea ? 'truncate text-xl font-semibold tracking-tight sm:text-2xl' : 'text-2xl font-semibold tracking-tight'}>{titulo}</h1>
-        {descripcion && <p className="text-sm text-muted-foreground">{descripcion}</p>}
+      <div className={volver ? 'flex min-w-0 items-start gap-1.5' : 'min-w-0 space-y-1'}>
+        {volver && <BotonVolver fallback={typeof volver === 'string' ? volver : undefined} className="-ml-2 mt-0.5" />}
+        <div className="min-w-0 space-y-1">
+          <h1 className={enLinea ? 'truncate text-xl font-semibold tracking-tight sm:text-2xl' : 'text-2xl font-semibold tracking-tight'}>{titulo}</h1>
+          {descripcion && <p className="text-sm text-muted-foreground">{descripcion}</p>}
+        </div>
       </div>
       {acciones && <div className="flex shrink-0 items-center gap-2">{acciones}</div>}
     </div>

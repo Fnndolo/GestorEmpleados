@@ -15,6 +15,7 @@ import { ActualizacionEnVivo } from '@/components/shell/actualizacion-en-vivo'
 import { BusquedaGlobal } from '@/components/shell/busqueda-global'
 import { RegistrarSW } from '@/components/pwa/registrar-sw'
 import { PlegarLateral, ScriptLateral } from '@/components/shell/plegar-lateral'
+import { HistorialNavegacion } from '@/components/shell/volver'
 import { urlFoto } from '@/lib/foto'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -106,6 +107,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
       {/* Refresca los datos de cualquier pantalla cuando alguien más cambia algo. */}
       <ActualizacionEnVivo />
+      {/* Anota por dónde va la persona, para que la flecha de atrás vuelva a donde vino. */}
+      <HistorialNavegacion />
     </div>
   )
 }

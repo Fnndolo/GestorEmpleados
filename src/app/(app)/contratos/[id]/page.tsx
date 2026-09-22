@@ -83,7 +83,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
 
   return (
     <div className="max-w-6xl">
-      <Encabezado titulo={`Contrato ${c.numero}`} descripcion={`${c.colaborador.nombres} ${c.colaborador.apellidos}`} />
+      <Encabezado volver titulo={`Contrato ${c.numero}`} descripcion={`${c.colaborador.nombres} ${c.colaborador.apellidos}`} />
 
       {discrepancia && (
         <Card className="mb-4 border-amber-500/40 bg-amber-500/5">

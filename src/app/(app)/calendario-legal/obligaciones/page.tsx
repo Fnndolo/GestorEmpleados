@@ -1,9 +1,6 @@
-import Link from 'next/link'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
-import { Button } from '@/components/ui/button'
-import { ArrowLeft } from 'lucide-react'
 import { ObligacionesCliente } from './obligaciones-cliente'
 
 export const metadata = { title: 'Obligaciones legales · Smart Gadgets RH' }
@@ -23,13 +20,9 @@ export default async function ObligacionesPage() {
   return (
     <div className="max-w-6xl">
       <Encabezado
+        volver
         titulo="Catálogo de obligaciones"
         descripcion="Las reglas de recurrencia que alimentan el calendario legal. Al editar una regla se recalculan sus próximas fechas."
-        acciones={
-          <Button size="sm" asChild>
-            <Link href="/calendario-legal"><ArrowLeft className="size-4" /> Volver al calendario</Link>
-          </Button>
-        }
       />
       <ObligacionesCliente
         puedeGestionar={puedeGestionar}
