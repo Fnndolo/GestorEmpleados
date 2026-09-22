@@ -1,8 +1,8 @@
 import 'server-only'
+import { obtenerPdfAdjunto } from '@/server/archivos-temporales'
 import { createHash } from 'node:crypto'
 import { dbAuditado } from '@/lib/auditoria'
 import { subirArchivo } from '@/server/storage'
-import { ErrorNegocio } from '@/server/accion'
 
 /**
  * Guarda la autorización de tratamiento de datos (Ley 1581) firmada en FÍSICO que
@@ -11,20 +11,21 @@ import { ErrorNegocio } from '@/server/accion'
  * PDF del contrato.
  */
 export async function guardarAutorizacionSubida({
-  autorizacionBase64, entidadTipo, entidadId, numero, sedeId, usuarioId,
+  autorizacionBase64, autorizacionRef, entidadTipo, entidadId, numero, sedeId, usuarioId,
 }: {
   autorizacionBase64?: string | null
+  autorizacionRef?: string | null
   entidadTipo: 'Contrato' | 'ContratoOps'
   entidadId: string
   numero: string
   sedeId: string | null
   usuarioId: string
 }): Promise<string | null> {
-  if (!autorizacionBase64) return null
+  if (!autorizacionBase64 && !autorizacionRef) return null
 
-  const base64 = autorizacionBase64.split(',')[1] ?? ''
-  const pdf = Buffer.from(base64, 'base64')
-  if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF de la autorización de datos está vacío.')
+  const pdf = await obtenerPdfAdjunto(
+    { pdfBase64: autorizacionBase64, pdfRef: autorizacionRef }, usuarioId, 'El PDF de la autorización de datos está vacío.',
+  )
 
   const sha256 = createHash('sha256').update(pdf).digest('hex')
   const archivo = await subirArchivo(

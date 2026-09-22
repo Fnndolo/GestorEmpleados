@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
 import { Plus, Pencil, Mail, Upload, Check, X, UserPlus, FileText, RefreshCw, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -72,7 +73,6 @@ const ETIQUETAS_CAMPO: Record<string, string> = {
 
 const TIPOS_DOC = ['CC', 'CE', 'TI', 'PASAPORTE', 'PPT'] as const
 const NINGUNO = '__ninguno__'
-const MAX_PDF_BYTES = 3 * 1024 * 1024
 
 type Formulario = {
   nombres: string; apellidos: string; tipoDocumento: string; numeroDocumento: string
@@ -205,19 +205,15 @@ export function AcuerdosCliente({
   }
 
   async function subirFirmado(a: Acuerdo, file: File) {
-    if (file.size > MAX_PDF_BYTES) {
-      toast.error(`El PDF pesa ${(file.size / 1024 / 1024).toFixed(1)} MB y el máximo son 3 MB.`)
-      return
-    }
+    if (file.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(file.size)); return }
     setOcupado(a.id)
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const r = new FileReader()
-      r.onload = () => resolve(r.result as string)
-      r.onerror = () => reject(new Error('lectura'))
-      r.readAsDataURL(file)
-    }).catch(() => '')
-    if (!base64) { setOcupado(null); toast.error('No se pudo leer el PDF.'); return }
-    const res = await subirAcuerdoFirmado({ id: a.id, pdfBase64: base64 })
+    let pdfRef: string
+    try {
+      pdfRef = await subirPdfTemporal(file)
+    } catch (e) {
+      setOcupado(null); toast.error(e instanceof Error ? e.message : 'No se pudo subir el PDF.'); return
+    }
+    const res = await subirAcuerdoFirmado({ id: a.id, pdfRef })
     setOcupado(null)
     if (res.ok) { toast.success('Acuerdo firmado cargado.'); router.refresh() }
     else toast.error(res.error)

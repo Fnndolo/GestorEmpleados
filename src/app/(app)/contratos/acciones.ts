@@ -10,8 +10,10 @@ import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subid
 import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
 import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
+import { borrarPdfTemporal, obtenerPdfAdjunto } from '@/server/archivos-temporales'
 import { contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema, subirContratoLaboralSchema, subirContratoLaboralParaFirmaSchema, corregirPosicionFirmaLaboralSchema, type SubirContratoLaboralInput } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
+import { pdfAdjuntoCampos } from '@/lib/validaciones/pdf-adjunto'
 import { publicarVencimiento, resolverVencimiento, cancelarVencimiento } from '@/server/vencimientos/servicio'
 import { eliminarDocumento } from '@/server/documentos'
 import { valorParametroVigente } from '@/server/nomina/parametros'
@@ -246,10 +248,8 @@ async function registrarContratoSubido(
     if (dur > 4) throw new ErrorNegocio('El contrato a término fijo no puede superar 4 años.')
   }
 
-  // Decodificar el PDF (data URI base64) a Buffer.
-  const base64 = d.pdfBase64.split(',')[1] ?? ''
-  const pdf = Buffer.from(base64, 'base64')
-  if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+  // El PDF: por referencia al depósito temporal o, en pruebas, en base64.
+  const pdf = await obtenerPdfAdjunto(d, usuario.id)
 
   let periodoPruebaFin: Date | null = null
   if (d.periodoPruebaDias && d.periodoPruebaDias > 0) {
@@ -355,9 +355,10 @@ export const subirContratoExistente = accion(
     const { contrato, numero } = await registrarContratoSubido(d, usuario, { origenPdf: 'SUBIDO' })
 
     await guardarAutorizacionSubida({
-      autorizacionBase64: d.autorizacionBase64,
+      autorizacionBase64: d.autorizacionBase64, autorizacionRef: d.autorizacionRef,
       entidadTipo: 'Contrato', entidadId: contrato.id, numero, sedeId: contrato.sedeId, usuarioId: usuario.id,
     })
+    await Promise.all([borrarPdfTemporal(d.pdfRef), borrarPdfTemporal(d.autorizacionRef)])
 
     const cierre = await cerrarAltaContrato(contrato.id, d.colaboradorId, d.tipo, v(d.cargoId))
     return { id: contrato.id, ...cierre }
@@ -430,6 +431,7 @@ export const subirContratoParaFirma = accion(
     }).catch(() => {})
 
     const cierre = await cerrarAltaContrato(contrato.id, d.colaboradorId, d.tipo, v(d.cargoId))
+    await borrarPdfTemporal(d.pdfRef)
     revalidatePath(`/contratos/${contrato.id}`)
     return { id: contrato.id, documentoId, ...cierre }
   },
@@ -440,16 +442,9 @@ export const subirContratoParaFirma = accion(
  * trabajo (etiquetas "EL TRABAJADOR" / "EL EMPLEADOR"). No guarda nada.
  */
 export const analizarPdfContratoLaboral = accion(
-  {
-    modulo: 'contratos',
-    accion: 'CREAR',
-    schema: z.object({
-      pdfBase64: z.string().startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
-    }),
-  },
-  async (d) => {
-    const pdf = Buffer.from(d.pdfBase64.split(',')[1] ?? '', 'base64')
-    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+  { modulo: 'contratos', accion: 'CREAR', schema: z.object(pdfAdjuntoCampos) },
+  async (d, usuario) => {
+    const pdf = await obtenerPdfAdjunto(d, usuario.id)
     const [posiciones, paginas] = await Promise.all([ubicarFirmasEnPdf(pdf, 'LABORAL'), contarPaginas(pdf)])
     return { paginas, ...posiciones }
   },
@@ -847,8 +842,7 @@ export const agregarOtrosi = accion(
         sede: { select: { nombre: true } },
       },
     })
-    const pdf = Buffer.from(d.pdfBase64.split(',')[1] ?? '', 'base64')
-    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF del otrosí está vacío.')
+    const pdf = await obtenerPdfAdjunto(d, usuario.id, 'El PDF del otrosí está vacío.')
     // El trabajador firma desde su autoservicio: sin usuario de acceso el otrosí
     // quedaría sin firmar para siempre. Se avisa al registrar, no después.
     const usuarioTrabajador = await usuarioDeColaborador(contrato.colaboradorId)
@@ -967,6 +961,7 @@ export const agregarOtrosi = accion(
       evento: 'contrato_pendiente_firma',
     }).catch(() => {})
 
+    await borrarPdfTemporal(d.pdfRef)
     revalidatePath(`/contratos/${d.contratoId}`)
     revalidatePath('/autoservicio/contratos')
     return { id: otrosi.id, numero }
@@ -980,16 +975,9 @@ export const agregarOtrosi = accion(
  * null y la posición se marca a mano.
  */
 export const analizarPdfOtrosi = accion(
-  {
-    modulo: 'contratos',
-    accion: 'EDITAR',
-    schema: z.object({
-      pdfBase64: z.string().startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
-    }),
-  },
-  async (d) => {
-    const pdf = Buffer.from(d.pdfBase64.split(',')[1] ?? '', 'base64')
-    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+  { modulo: 'contratos', accion: 'EDITAR', schema: z.object(pdfAdjuntoCampos) },
+  async (d, usuario) => {
+    const pdf = await obtenerPdfAdjunto(d, usuario.id)
     const [posiciones, paginas] = await Promise.all([ubicarFirmasEnPdf(pdf, 'LABORAL'), contarPaginas(pdf)])
     // En un contrato de trabajo la persona es "EL TRABAJADOR"; la detección lo
     // entrega en la clave `contratista` (la de quien se vincula).

@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
 import { FileCog, Paperclip, Sparkles, Upload } from 'lucide-react'
 import { adjuntarDocumentoGenerado } from '@/app/(app)/documentos-adjuntos-acciones'
 import { regenerarDocumento, type DestinoGenerable } from '@/app/(app)/documentos-regenerar-acciones'
@@ -14,9 +15,6 @@ import { cn } from '@/lib/utils'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-
-/** 3 MB de PDF ≈ 4 MB en base64, el tope del cuerpo de la Server Action. */
-const MAX_PDF_BYTES = 3 * 1024 * 1024
 
 export type DestinoAdjunto =
   | 'certificacion' | 'desprendible' | 'cuentaCobro'
@@ -74,15 +72,6 @@ export function AdjuntarDocumento({
     setArchivo(null)
   }
 
-  async function leerPdf(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = () => reject(new Error('lectura'))
-      reader.readAsDataURL(file)
-    })
-  }
-
   async function generar() {
     setOcupado('generar')
     const res = await regenerarDocumento({ destino: destino as DestinoGenerable, id, plantillaId: plantillaId || undefined })
@@ -96,18 +85,15 @@ export function AdjuntarDocumento({
 
   async function subir() {
     if (!archivo) { toast.error('Selecciona el PDF que quieres subir.'); return }
-    if (archivo.size > MAX_PDF_BYTES) {
-      toast.error(`El PDF pesa ${(archivo.size / 1024 / 1024).toFixed(1)} MB y el máximo son 3 MB. Comprímelo o escanéalo a menor resolución.`)
-      return
-    }
+    if (archivo.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(archivo.size)); return }
     setOcupado('subir')
-    let pdfBase64: string
+    let pdfRef: string
     try {
-      pdfBase64 = await leerPdf(archivo)
-    } catch {
-      setOcupado(null); toast.error('No se pudo leer el PDF.'); return
+      pdfRef = await subirPdfTemporal(archivo)
+    } catch (e) {
+      setOcupado(null); toast.error(e instanceof Error ? e.message : 'No se pudo subir el PDF.'); return
     }
-    const res = await adjuntarDocumentoGenerado({ destino, id, pdfBase64, nombre: archivo.name })
+    const res = await adjuntarDocumentoGenerado({ destino, id, pdfRef, nombre: archivo.name })
     setOcupado(null)
     if (res.ok) {
       toast.success(tieneDocumento ? 'Documento reemplazado por el que subiste.' : 'Documento adjuntado.')

@@ -16,7 +16,7 @@ import { SelectorColaborador } from '@/components/colaboradores/selector-colabor
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { SelectorFirmasPdf, ETIQUETAS_LABORAL, type Posicion } from '@/components/contratos/selector-firmas-pdf'
 import { GenerarAutorizacion } from '@/components/contratos/generar-autorizacion'
-import { leerComoDataUri } from '@/lib/archivos'
+import { leerComoDataUri, MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
 import { fmtCOP } from '@/lib/moneda'
 import { duracionContrato } from '@/lib/fechas'
 import { avisoVinculoAjustado, avisoReactivacion, type AjusteVinculo, type Reactivacion } from '@/lib/vinculo-contrato'
@@ -43,9 +43,6 @@ const TIPOS: { v: ContratoInput['tipo']; l: string }[] = [
   { v: 'APRENDIZAJE_SENA', l: 'Aprendizaje SENA' },
 ]
 
-/** Los PDF viajan en base64 dentro de la acción: el cuerpo no admite más de 4 MB. */
-const MAX_PDF_BYTES = 3 * 1024 * 1024
-
 type Props = {
   catalogos: {
     sedes: { id: string; nombre: string; ciudad: string }[]
@@ -60,7 +57,10 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
   const [guardando, empezar] = useTransition()
   const [analizando, setAnalizando] = useState(false)
 
+  // `pdf` es el data URI para la vista previa (local); `pdfRef` es la referencia
+  // con que el servidor lee el archivo del depósito temporal.
   const [pdf, setPdf] = useState<string | null>(null)
+  const [pdfRef, setPdfRef] = useState<string | null>(null)
   const [archivoPdf, setArchivoPdf] = useState<File | null>(null)
   // Cambia con cada PDF elegido: remonta el selector para que vuelva a la página propuesta.
   const [version, setVersion] = useState(0)
@@ -97,14 +97,27 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
 
   async function alElegirPdf(archivo: File) {
     if (archivo.type !== 'application/pdf') { toast.error('El archivo debe ser un PDF.'); return }
+    if (archivo.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(archivo.size)); return }
     const dataUri = await leerComoDataUri(archivo)
     setPdf(dataUri)
     setArchivoPdf(archivo)
 
+    // El PDF se sube una vez al depósito temporal: la misma referencia sirve
+    // para analizarlo ahora y para crear el contrato después.
+    setAnalizando(true)
+    let ref: string
+    try {
+      ref = await subirPdfTemporal(archivo)
+    } catch (e) {
+      setAnalizando(false); setPdf(null); setArchivoPdf(null)
+      toast.error(e instanceof Error ? e.message : 'No se pudo subir el PDF.')
+      return
+    }
+    setPdfRef(ref)
+
     // La app propone dónde firma cada parte; si el PDF es un escaneo no habrá
     // nada que proponer y se marca a mano sobre el documento.
-    setAnalizando(true)
-    const res = await analizarPdfContratoLaboral({ pdfBase64: dataUri })
+    const res = await analizarPdfContratoLaboral({ pdfRef: ref })
     setAnalizando(false)
     if (!res.ok) { toast.error(res.error ?? 'No se pudo leer el PDF.'); return }
     const d = res.datos
@@ -119,21 +132,17 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
   }
 
   function guardar() {
-    if (!pdf || !archivoPdf) { toast.error('Adjunta el PDF del contrato.'); return }
+    if (!pdf || !archivoPdf || !pdfRef) { toast.error('Adjunta el PDF del contrato.'); return }
     if (!f.colaboradorId) { toast.error('Selecciona al colaborador que va a firmar.'); return }
     if (!f.sedeId) { toast.error('Selecciona la sede.'); return }
     if (!f.fechaInicio) { toast.error('Indica la fecha de inicio.'); return }
     if (f.tipo === 'TERMINO_FIJO' && !f.fechaFin) { toast.error('Un contrato a término fijo requiere fecha de fin.'); return }
     if (f.tipo === 'OBRA_LABOR' && !f.objetoObraLabor.trim()) { toast.error('Indica el objeto de la obra o labor.'); return }
     if (salario <= 0) { toast.error('Indica el salario base.'); return }
-    if (archivoPdf.size > MAX_PDF_BYTES) {
-      toast.error(`El PDF pesa ${(archivoPdf.size / 1024 / 1024).toFixed(1)} MB y el máximo son 3 MB. Comprímelo o escanéalo a menor resolución.`)
-      return
-    }
 
     empezar(async () => {
       const res = await subirContratoParaFirma({
-        pdfBase64: pdf,
+        pdfRef,
         colaboradorId: f.colaboradorId,
         tipo: f.tipo,
         cargoId: f.cargoId,

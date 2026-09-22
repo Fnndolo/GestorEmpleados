@@ -25,6 +25,9 @@ const nextConfig: NextConfig = {
       // Server Action, y el límite por defecto (1 MB) rechazaba cualquier
       // escaneo real. 4 MB es el techo útil: Vercel corta el cuerpo de la
       // petición en 4,5 MB y base64 infla el archivo un 33 %.
+      // Los PDF grandes (contratos, otrosíes, acuerdos, adjuntos) ya NO viajan
+      // por aquí: van a /api/archivos/pdf (hasta 10 MB) y la acción recibe una
+      // referencia (ver src/server/archivos-temporales.ts).
       bodySizeLimit: '4mb',
     },
   },

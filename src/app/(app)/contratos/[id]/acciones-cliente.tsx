@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { leerComoDataUri, MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
 import { CalendarPlus, FilePen, CirclePause, CirclePlay, UserMinus, Paperclip, Trash2 } from 'lucide-react'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -143,9 +144,6 @@ function DialogProrroga({ contratoId, onClose, onDone }: { contratoId: string; o
 
 /** Posición de arranque de la firma cuando el PDF no permite proponer nada (escaneos). */
 const FIRMA_POR_DEFECTO: Omit<Posicion, 'pagina'> = { x: 80, y: 150, ancho: 150, alto: 45 }
-/** 3 MB de PDF ≈ 4 MB en base64, el tope del cuerpo de la Server Action. */
-const MAX_PDF_BYTES = 3 * 1024 * 1024
-
 /**
  * Registrar un otrosí: qué cambia (con sus valores) más el PDF del otrosí, que
  * el trabajador firma desde su autoservicio con la misma lógica del contrato.
@@ -163,7 +161,10 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
   const [fechaFin, setFechaFin] = useState('')
   // El PDF del otrosí y dónde firma el trabajador dentro de él.
   const inputPdf = useRef<HTMLInputElement>(null)
+  // `pdf` es el data URI para la vista previa (local); `pdfRef` es la referencia
+  // con que el servidor lee el archivo del depósito temporal.
   const [pdf, setPdf] = useState<string | null>(null)
+  const [pdfRef, setPdfRef] = useState<string | null>(null)
   const [nombrePdf, setNombrePdf] = useState('')
   const [paginas, setPaginas] = useState(1)
   const [analizando, setAnalizando] = useState(false)
@@ -183,23 +184,27 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
 
   async function alElegirPdf(archivo: File) {
     if (archivo.type !== 'application/pdf') { toast.error('El archivo debe ser un PDF.'); return }
-    if (archivo.size > MAX_PDF_BYTES) {
-      toast.error(`El PDF pesa ${(archivo.size / 1024 / 1024).toFixed(1)} MB y el máximo son 3 MB. Comprímelo o escanéalo a menor resolución.`)
-      return
-    }
-    const dataUri = await new Promise<string>((res, rej) => {
-      const r = new FileReader()
-      r.onload = () => res(String(r.result))
-      r.onerror = () => rej(new Error('No se pudo leer el archivo'))
-      r.readAsDataURL(archivo)
-    })
+    if (archivo.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(archivo.size)); return }
+    const dataUri = await leerComoDataUri(archivo)
     setPdf(dataUri)
     setNombrePdf(archivo.name)
 
+    // El PDF se sube una vez al depósito temporal: la misma referencia sirve
+    // para analizarlo ahora y para registrar el otrosí después.
+    setAnalizando(true)
+    let ref: string
+    try {
+      ref = await subirPdfTemporal(archivo)
+    } catch (e) {
+      setAnalizando(false); setPdf(null)
+      toast.error(e instanceof Error ? e.message : 'No se pudo subir el PDF.')
+      return
+    }
+    setPdfRef(ref)
+
     // La app propone dónde firma el trabajador leyendo el PDF; un escaneo no
     // propone nada y se marca a mano sobre el documento.
-    setAnalizando(true)
-    const res = await analizarPdfOtrosi({ pdfBase64: dataUri })
+    const res = await analizarPdfOtrosi({ pdfRef: ref })
     setAnalizando(false)
     if (!res.ok) { toast.error(res.error ?? 'No se pudo leer el PDF.'); return }
     const d = res.datos as { paginas: number; trabajador: Posicion | null }
@@ -211,7 +216,7 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
   }
 
   async function guardar() {
-    if (!pdf) { toast.error('Adjunta el PDF del otrosí.'); return }
+    if (!pdf || !pdfRef) { toast.error('Adjunta el PDF del otrosí.'); return }
     setG(true)
     const res = await agregarOtrosi({
       contratoId, tiposCambio: tipos as ('SALARIO')[],
@@ -220,7 +225,7 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
       modalidadNueva: (modalidad || undefined) as 'PRESENCIAL' | undefined,
       fechaInicioNueva: duracion ? fechaInicio : '',
       fechaFinNueva: duracion ? fechaFin : '',
-      pdfBase64: pdf,
+      pdfRef,
       posicionFirma: posiciones.contratista,
     })
     setG(false)

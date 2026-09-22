@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado, auditar } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
+import { borrarPdfTemporal, obtenerPdfAdjunto } from '@/server/archivos-temporales'
 import { subirArchivo, eliminarArchivo } from '@/server/storage'
 import { enviarCorreo } from '@/server/notificaciones/correo'
 import { crearUsuarioColaborador } from '@/server/usuarios'
@@ -394,8 +395,8 @@ export const subirAcuerdoFirmado = accion(
   { modulo: 'contratos', accion: 'EDITAR', schema: subirAcuerdoFirmadoSchema },
   async (d, usuario) => {
     const a = await prisma.acuerdoEvaluacion.findUniqueOrThrow({ where: { id: d.id } })
-    const pdf = Buffer.from(d.pdfBase64.split(',')[1] ?? '', 'base64')
-    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF está vacío.')
+    const pdf = await obtenerPdfAdjunto(d, usuario.id, 'El PDF está vacío.')
+    await borrarPdfTemporal(d.pdfRef)
 
     await guardarDocumento(a.id, `${a.numero}-firmado`, pdf, `Acuerdo de evaluación ${a.numero} (firmado)`, usuario.id, a.sedeId)
     await auditar('EDITAR', 'AcuerdoEvaluacion', { registroId: a.id, descripcion: `Acuerdo ${a.numero} firmado y cargado` })

@@ -129,16 +129,15 @@ export async function adjuntarDocumento(opts: {
   destino: DestinoDocumento
   /** Id del registro (la liquidación, la asignación, la prórroga…). */
   id: string
-  /** PDF como data URI base64. */
-  pdfBase64: string
+  /** El PDF ya leído (la acción lo resuelve, venga por referencia o en base64). */
+  pdf: Buffer
   usuarioId: string
   /** Nombre para el expediente; si falta, se usa la etiqueta del destino. */
   nombre?: string | null
 }): Promise<{ documentoId: string }> {
   const def = DESTINOS[opts.destino]
 
-  const base64 = opts.pdfBase64.split(',')[1] ?? ''
-  const pdf = Buffer.from(base64, 'base64')
+  const pdf = opts.pdf
   if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
 
   const registro = await delegado(def.modelo).findUnique({ where: { id: opts.id } })

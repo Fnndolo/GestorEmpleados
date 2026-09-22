@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { exigirPdf, pdfAdjuntoCampos } from './pdf-adjunto'
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Indica una fecha válida')
 
@@ -47,11 +48,7 @@ export const decisionAcuerdoSchema = z.object({
 export type DecisionAcuerdoInput = z.infer<typeof decisionAcuerdoSchema>
 
 /** Carga del acuerdo ya firmado en físico (escaneado). */
-export const subirAcuerdoFirmadoSchema = z.object({
-  id: z.uuid(),
-  pdfBase64: z
-    .string()
-    .min(1, 'Adjunta el PDF firmado')
-    .startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
-})
+export const subirAcuerdoFirmadoSchema = z
+  .object({ id: z.uuid(), ...pdfAdjuntoCampos })
+  .refine(...exigirPdf('Adjunta el PDF firmado'))
 export type SubirAcuerdoFirmadoInput = z.infer<typeof subirAcuerdoFirmadoSchema>

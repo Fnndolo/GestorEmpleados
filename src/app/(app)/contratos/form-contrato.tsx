@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -63,21 +64,10 @@ type DatosColab = { nombre: string; cc: string; ccLugar: string | null; direccio
 
 const fmtCOP = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
 
-// Modo "solo PDF": el archivo viaja como data URI dentro de la Server Action
-// (base64: +33 %) y el cuerpo admite 4 MB, así que el tope útil son 3 MB entre
-// el contrato y la autorización (mismo criterio que «Subir contrato existente»).
-const MAX_PDF_BYTES = 3 * 1024 * 1024
+// Modo "solo PDF": cada archivo se sube aparte al depósito temporal (hasta
+// MAX_PDF_BYTES cada uno) y la acción recibe solo las referencias.
 const INPUT_ARCHIVO =
   'block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90'
-
-function leerComoDataUri(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = () => reject(new Error('lectura'))
-    reader.readAsDataURL(file)
-  })
-}
 
 const TIPOS = [
   { v: 'TERMINO_INDEFINIDO', l: 'Término indefinido' },
@@ -254,23 +244,21 @@ export function FormContrato({
    */
   async function subirConPdf(d: ContratoInput) {
     if (!pdf) { toast.error('Adjunta el PDF del contrato.'); setPanel((s) => new Set(s).add('pdf')); return }
-    const pesoTotal = pdf.size + (autorizacionPdf?.size ?? 0)
-    if (pesoTotal > MAX_PDF_BYTES) {
-      toast.error(`Los PDF suman ${(pesoTotal / 1024 / 1024).toFixed(1)} MB y el máximo son 3 MB en total. Comprímelos o escanéalos a menor resolución.`)
-      return
+    for (const archivo of [pdf, autorizacionPdf]) {
+      if (archivo && archivo.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(archivo.size)); return }
     }
     setGuardando(true)
-    let pdfBase64: string
-    let autorizacionBase64 = ''
+    let pdfRef: string
+    let autorizacionRef = ''
     try {
-      pdfBase64 = await leerComoDataUri(pdf)
-      if (autorizacionPdf) autorizacionBase64 = await leerComoDataUri(autorizacionPdf)
-    } catch {
-      setGuardando(false); toast.error('No se pudo leer el PDF.'); return
+      pdfRef = await subirPdfTemporal(pdf)
+      if (autorizacionPdf) autorizacionRef = await subirPdfTemporal(autorizacionPdf)
+    } catch (e) {
+      setGuardando(false); toast.error(e instanceof Error ? e.message : 'No se pudo subir el PDF.'); return
     }
     // La acción valida con su propio esquema: las claves del documento de plantilla
     // (título, cláusulas…) que trae `d` se descartan.
-    const res = await subirContratoExistente({ ...d, pdfBase64, autorizacionBase64 })
+    const res = await subirContratoExistente({ ...d, pdfRef, autorizacionRef })
     setGuardando(false)
     if (res.ok) {
       toast.success('Contrato registrado con su PDF.')

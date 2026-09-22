@@ -15,7 +15,7 @@ import { SelectorColaborador } from '@/components/colaboradores/selector-colabor
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { SelectorFirmasPdf, type Posicion } from '@/components/contratos/selector-firmas-pdf'
 import { GenerarAutorizacion } from '@/components/contratos/generar-autorizacion'
-import { leerComoDataUri } from '@/lib/archivos'
+import { leerComoDataUri, MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
 import { analizarPdfContratoOps, subirContratoOpsParaFirma } from '../../ops-acciones'
 
 /**
@@ -47,7 +47,10 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
   const [guardando, empezar] = useTransition()
   const [analizando, setAnalizando] = useState(false)
 
+  // `pdf` es el data URI para la vista previa (local); `pdfRef` es la referencia
+  // con que el servidor lee el archivo del depósito temporal.
   const [pdf, setPdf] = useState<string | null>(null)
+  const [pdfRef, setPdfRef] = useState<string | null>(null)
   // El mismo archivo, sin codificar: el visor lo muestra desde el navegador.
   const [archivoPdf, setArchivoPdf] = useState<File | null>(null)
   // Cambia con cada PDF elegido: remonta el selector para que vuelva a la página
@@ -75,15 +78,28 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
 
   async function alElegirPdf(archivo: File) {
     if (archivo.type !== 'application/pdf') { toast.error('El archivo debe ser un PDF.'); return }
+    if (archivo.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(archivo.size)); return }
     const dataUri = await leerComoDataUri(archivo)
     setPdf(dataUri)
     setArchivoPdf(archivo)
     setNombrePdf(archivo.name)
 
+    // El PDF se sube una vez al depósito temporal: la misma referencia sirve
+    // para analizarlo ahora y para crear el contrato después.
+    setAnalizando(true)
+    let ref: string
+    try {
+      ref = await subirPdfTemporal(archivo)
+    } catch (e) {
+      setAnalizando(false); setPdf(null); setArchivoPdf(null)
+      toast.error(e instanceof Error ? e.message : 'No se pudo subir el PDF.')
+      return
+    }
+    setPdfRef(ref)
+
     // La app propone dónde firma cada parte; si el PDF es un escaneo no habrá
     // nada que proponer y se marca a mano sobre el documento.
-    setAnalizando(true)
-    const res = await analizarPdfContratoOps({ pdfBase64: dataUri })
+    const res = await analizarPdfContratoOps({ pdfRef: ref })
     setAnalizando(false)
     if (!res.ok) { toast.error(res.error ?? 'No se pudo leer el PDF.'); return }
     const d = res.datos as { paginas: number; contratista: Posicion | null; contratante: Posicion | null }
@@ -98,14 +114,14 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
   }
 
   function guardar() {
-    if (!pdf) { toast.error('Adjunta el PDF del contrato.'); return }
+    if (!pdf || !pdfRef) { toast.error('Adjunta el PDF del contrato.'); return }
     if (!f.colaboradorId) { toast.error('Selecciona al contratista que va a firmar.'); return }
     if (!f.sedeId) { toast.error('Selecciona la sede.'); return }
     if (!f.fechaInicio || !f.fechaFin) { toast.error('Indica las fechas de inicio y fin.'); return }
 
     empezar(async () => {
       const res = await subirContratoOpsParaFirma({
-        pdfBase64: pdf,
+        pdfRef,
         colaboradorId: f.colaboradorId,
         numero: f.numero,
         cargoId: f.cargoId,

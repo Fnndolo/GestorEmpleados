@@ -10,6 +10,8 @@ import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subid
 import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
 import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
+import { borrarPdfTemporal, obtenerPdfAdjunto } from '@/server/archivos-temporales'
+import { pdfAdjuntoCampos } from '@/lib/validaciones/pdf-adjunto'
 import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, corregirPosicionFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema, cerrarContratoOpsSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { publicarVencimiento, resolverVencimiento } from '@/server/vencimientos/servicio'
@@ -253,10 +255,8 @@ export const crearContratoOps = accion(
 export const subirContratoOpsExistente = accion(
   { modulo: 'contratos', accion: 'CREAR', schema: subirContratoOpsSchema },
   async (d, usuario) => {
-    // Decodificar el PDF (data URI base64) a Buffer.
-    const base64 = d.pdfBase64.split(',')[1] ?? ''
-    const pdf = Buffer.from(base64, 'base64')
-    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+    // El PDF: por referencia al depósito temporal o, en pruebas, en base64.
+    const pdf = await obtenerPdfAdjunto(d, usuario.id)
 
     const numero = v(d.numero) ?? (await siguienteNumeroOps())
     const c = await dbAuditado.contratoOps.create({
@@ -296,9 +296,10 @@ export const subirContratoOpsExistente = accion(
     })
 
     await guardarAutorizacionSubida({
-      autorizacionBase64: d.autorizacionBase64,
+      autorizacionBase64: d.autorizacionBase64, autorizacionRef: d.autorizacionRef,
       entidadTipo: 'ContratoOps', entidadId: c.id, numero, sedeId: c.sedeId, usuarioId: usuario.id,
     })
+    await Promise.all([borrarPdfTemporal(d.pdfRef), borrarPdfTemporal(d.autorizacionRef)])
 
     await publicarVencimientoOps(c.id)
     // La ficha muestra su propio cargo: se alinea con el del contrato (ver alinearCargoFicha).
@@ -716,9 +717,7 @@ export const cambiarEstadoCuenta = accion(
 export const subirContratoOpsParaFirma = accion(
   { modulo: 'contratos', accion: 'CREAR', schema: subirContratoOpsParaFirmaSchema },
   async (d, usuario) => {
-    const base64 = d.pdfBase64.split(',')[1] ?? ''
-    const pdf = Buffer.from(base64, 'base64')
-    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+    const pdf = await obtenerPdfAdjunto(d, usuario.id)
 
     // Sin usuario de acceso el contratista no puede entrar a firmar: se avisa al
     // crear, no cuando alguien se pregunte por qué nunca llegó la firma.
@@ -839,6 +838,7 @@ export const subirContratoOpsParaFirma = accion(
     if (c.colaboradorId) await alinearCargoFicha(c.colaboradorId, c.cargoId)
     revalidatePath('/contratos')
     revalidatePath(`/contratos/ops/${c.id}`)
+    await borrarPdfTemporal(d.pdfRef)
     return { id: c.id, documentoId: documentoOriginal.id }
   },
 )
@@ -1040,16 +1040,9 @@ export const habilitarFirmaContratoOps = accion(
  * texto) devuelve las posiciones en null y la posición se marca a mano.
  */
 export const analizarPdfContratoOps = accion(
-  {
-    modulo: 'contratos',
-    accion: 'CREAR',
-    schema: z.object({
-      pdfBase64: z.string().startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
-    }),
-  },
-  async (d) => {
-    const pdf = Buffer.from(d.pdfBase64.split(',')[1] ?? '', 'base64')
-    if (pdf.byteLength === 0) throw new ErrorNegocio('El PDF adjunto está vacío.')
+  { modulo: 'contratos', accion: 'CREAR', schema: z.object(pdfAdjuntoCampos) },
+  async (d, usuario) => {
+    const pdf = await obtenerPdfAdjunto(d, usuario.id)
     const [posiciones, paginas] = await Promise.all([ubicarFirmasEnPdf(pdf), contarPaginas(pdf)])
     return { paginas, ...posiciones }
   },

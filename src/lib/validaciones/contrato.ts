@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { autorizacionAdjuntaCampos, exigirPdf, pdfAdjuntoCampos } from './pdf-adjunto'
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida')
 const fechaOpc = fecha.optional().or(z.literal(''))
@@ -52,11 +53,12 @@ export const subirContratoLaboralSchema = contratoSchema
     observaciones: true,
   })
   .extend({
-    pdfBase64: z.string().min(1, 'Adjunta el PDF del contrato').startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
+    ...pdfAdjuntoCampos,
     // Autorización de tratamiento de datos (Ley 1581) firmada en físico: opcional,
     // porque no todo contrato antiguo la tiene digitalizada.
-    autorizacionBase64: z.string().startsWith('data:application/pdf', 'La autorización debe ser un PDF').optional().or(z.literal('')),
+    ...autorizacionAdjuntaCampos,
   })
+  .refine(...exigirPdf('Adjunta el PDF del contrato'))
 export type SubirContratoLaboralInput = z.infer<typeof subirContratoLaboralSchema>
 
 export const prorrogaSchema = z.object({
@@ -145,11 +147,12 @@ export const subirContratoOpsSchema = contratoOpsSchema
     // Aquí el objeto SÍ es obligatorio: el contrato viene redactado de fuera, no
     // hay plantilla ni rol pactado de los cuales derivarlo.
     objeto: z.string().trim().min(5, 'Describe el objeto del contrato').max(1000),
-    pdfBase64: z.string().min(1, 'Adjunta el PDF del contrato').startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
+    ...pdfAdjuntoCampos,
     // Autorización de tratamiento de datos (Ley 1581) firmada en físico: opcional,
     // porque no todo contrato antiguo la tiene digitalizada.
-    autorizacionBase64: z.string().startsWith('data:application/pdf', 'La autorización debe ser un PDF').optional().or(z.literal('')),
+    ...autorizacionAdjuntaCampos,
   })
+  .refine(...exigirPdf('Adjunta el PDF del contrato'))
 export type SubirContratoOpsInput = z.infer<typeof subirContratoOpsSchema>
 
 /** Recuadro de firma dentro del PDF subido: puntos PDF, página en base 1. */
@@ -182,10 +185,11 @@ export const otrosiSchema = z
     // Duración: el nuevo periodo pactado, de inicio a fin.
     fechaInicioNueva: fechaOpc,
     fechaFinNueva: fechaOpc,
-    pdfBase64: z.string().min(1, 'Adjunta el PDF del otrosí').startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
+    ...pdfAdjuntoCampos,
     // Dónde firma el trabajador dentro del PDF.
     posicionFirma: posicionFirmaSchema,
   })
+  .refine(...exigirPdf('Adjunta el PDF del otrosí'))
   .superRefine((d, ctx) => {
     if (!d.tiposCambio.includes('DURACION')) return
     if (!d.fechaInicioNueva || !d.fechaFinNueva) {
@@ -218,7 +222,7 @@ export const subirContratoOpsParaFirmaSchema = contratoOpsSchema
     contratistaGenero: true, entregables: true,
   })
   .extend({
-    pdfBase64: z.string().min(1, 'Adjunta el PDF del contrato').startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
+    ...pdfAdjuntoCampos,
     // El contratista es quien firma en su autoservicio: sin ficha no hay a quién
     // pedirle la firma, así que aquí el colaborador SÍ es obligatorio.
     colaboradorId: z.uuid('Selecciona al contratista que va a firmar'),
@@ -233,6 +237,7 @@ export const subirContratoOpsParaFirmaSchema = contratoOpsSchema
     // (ya se recogió aparte).
     generarAutorizacion: z.boolean().optional(),
   })
+  .refine(...exigirPdf('Adjunta el PDF del contrato'))
 export type SubirContratoOpsParaFirmaInput = z.infer<typeof subirContratoOpsParaFirmaSchema>
 
 /**

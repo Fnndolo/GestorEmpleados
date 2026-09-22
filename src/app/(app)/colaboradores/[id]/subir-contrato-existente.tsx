@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
 import { Upload } from 'lucide-react'
 import { subirContratoExistente } from '../../contratos/acciones'
 import { subirContratoOpsExistente } from '../../contratos/ops-acciones'
@@ -19,12 +20,6 @@ import { avisoVinculoAjustado, avisoReactivacion, type AjusteVinculo, type React
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-
-// 3 MB de PDF ≈ 4 MB en base64, el tope del cuerpo de la Server Action
-// (ver serverActions.bodySizeLimit en next.config.ts).
-// Los dos PDF (contrato + autorización) viajan juntos en el mismo cuerpo, así que
-// el tope de 3 MB aplica a la SUMA de ambos.
-const MAX_PDF_BYTES = 3 * 1024 * 1024
 
 /**
  * Quita las flechitas de incremento del <input type="number">. En importes no
@@ -84,36 +79,25 @@ export function SubirContratoExistente({
     setTipo('TERMINO_INDEFINIDO'); setClase('LABORAL')
   }
 
-  async function leerPdf(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = () => reject(new Error('lectura'))
-      reader.readAsDataURL(file)
-    })
-  }
-
   async function guardar() {
     if (!pdf) { toast.error('Adjunta el PDF del contrato.'); return }
-    // El PDF viaja como data URI dentro de la Server Action (base64: +33 %), y
-    // el cuerpo admite 4 MB. Se avisa aquí para no fallar tras la espera.
-    const pesoTotal = pdf.size + (autorizacion?.size ?? 0)
-    if (pesoTotal > MAX_PDF_BYTES) {
-      toast.error(`Los PDF suman ${(pesoTotal / 1024 / 1024).toFixed(1)} MB y el máximo son 3 MB en total. Comprímelos o escanéalos en blanco y negro a menor resolución.`)
-      return
+    // Cada PDF se sube aparte al depósito temporal (hasta 10 MB cada uno); se
+    // avisa aquí para no fallar tras la espera.
+    for (const archivo of [pdf, autorizacion]) {
+      if (archivo && archivo.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(archivo.size)); return }
     }
     if (!fechaInicio) { toast.error('Indica la fecha de inicio.'); return }
     if (clase === 'OPS' && !fechaFin) { toast.error('Un contrato OPS requiere fecha de fin.'); return }
     if (clase === 'LABORAL' && tipo === 'TERMINO_FIJO' && !fechaFin) { toast.error('Un contrato a término fijo requiere fecha de fin.'); return }
 
     setGuardando(true)
-    let pdfBase64: string
-    let autorizacionBase64 = ''
+    let pdfRef: string
+    let autorizacionRef = ''
     try {
-      pdfBase64 = await leerPdf(pdf)
-      if (autorizacion) autorizacionBase64 = await leerPdf(autorizacion)
-    } catch {
-      setGuardando(false); toast.error('No se pudo leer el PDF.'); return
+      pdfRef = await subirPdfTemporal(pdf)
+      if (autorizacion) autorizacionRef = await subirPdfTemporal(autorizacion)
+    } catch (e) {
+      setGuardando(false); toast.error(e instanceof Error ? e.message : 'No se pudo subir el PDF.'); return
     }
 
     const res = clase === 'LABORAL'
@@ -121,15 +105,15 @@ export function SubirContratoExistente({
           colaboradorId, sedeId, cargoId: cargoId ?? '',
           tipo, jornada: 'TIEMPO_COMPLETO', modalidadTrabajo: 'PRESENCIAL', tipoSalario: 'ORDINARIO',
           salarioBase: Number(salario) || 0, tieneAuxTransporte, fechaInicio, fechaFin: fechaFin || '',
-          objetoObraLabor: objetoObra, pdfBase64,
-          autorizacionBase64,
+          objetoObraLabor: objetoObra, pdfRef,
+          autorizacionRef,
         })
       : await subirContratoOpsExistente({
           colaboradorId, sedeId, objeto,
           valorTotal: Number(valorTotal) || 0,
           valorMensual: valorMensual ? Number(valorMensual) : undefined,
-          fechaInicio, fechaFin, pdfBase64,
-          autorizacionBase64,
+          fechaInicio, fechaFin, pdfRef,
+          autorizacionRef,
         })
 
     setGuardando(false)

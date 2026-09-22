@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { exigirPdf, pdfAdjuntoCampos } from '@/lib/validaciones/pdf-adjunto'
+import { borrarPdfTemporal, obtenerPdfAdjunto } from '@/server/archivos-temporales'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { ErrorPermiso } from '@/server/sesion'
 import { adjuntarDocumento, permisoDestino, duenoPuedeAdjuntar, motivoCerrado, type DestinoDocumento } from '@/server/documentos-adjuntos'
@@ -12,12 +14,14 @@ const DESTINOS = [
   'prorroga', 'otrosi',
 ] as const
 
-const schema = z.object({
-  destino: z.enum(DESTINOS),
-  id: z.uuid(),
-  pdfBase64: z.string().min(1, 'Adjunta el PDF').startsWith('data:application/pdf', 'El archivo debe ser un PDF'),
-  nombre: z.string().trim().max(200).optional().or(z.literal('')),
-})
+const schema = z
+  .object({
+    destino: z.enum(DESTINOS),
+    id: z.uuid(),
+    ...pdfAdjuntoCampos,
+    nombre: z.string().trim().max(200).optional().or(z.literal('')),
+  })
+  .refine(...exigirPdf('Adjunta el PDF'))
 
 /**
  * Adjunta un PDF propio en un destino donde el sistema normalmente genera uno.
@@ -45,13 +49,15 @@ export const adjuntarDocumentoGenerado = accion(
       if (comoDueno === 'no-es-suyo') throw new ErrorPermiso(modulo, acc)
     }
 
+    const pdf = await obtenerPdfAdjunto(d, usuario.id)
     const res = await adjuntarDocumento({
       destino,
       id: d.id,
-      pdfBase64: d.pdfBase64,
+      pdf,
       nombre: d.nombre,
       usuarioId: usuario.id,
     })
+    await borrarPdfTemporal(d.pdfRef)
 
     // Las pantallas que muestran estos documentos son varias; se refrescan las
     // que de verdad los listan.
