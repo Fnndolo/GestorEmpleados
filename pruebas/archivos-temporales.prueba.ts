@@ -3,7 +3,8 @@ import { instalarSesionFalsa } from './sesion-falsa'
 
 instalarSesionFalsa()
 
-const { guardarPdfTemporal, leerPdfTemporal, borrarPdfTemporal, obtenerPdfAdjunto } = await import('@/server/archivos-temporales')
+const { guardarPdfTemporal, leerPdfTemporal, borrarPdfTemporal, obtenerPdfAdjunto, prepararSubidaDirecta } = await import('@/server/archivos-temporales')
+const { MAX_PDF_BYTES } = await import('@/lib/archivos')
 const { subirAcuerdoFirmadoSchema } = await import('@/lib/validaciones/acuerdo-evaluacion')
 const { otrosiSchema } = await import('@/lib/validaciones/contrato')
 
@@ -40,11 +41,29 @@ describe('depósito temporal de PDF', () => {
     await borrarPdfTemporal(ref)
   })
 
-  it('rechaza lo que no es PDF y lo que pesa más de 10 MB', async () => {
+  it('rechaza lo que no es PDF, lo vacío y lo que se pasa del tope', async () => {
     await expect(guardarPdfTemporal(Buffer.from('hola'), YO)).rejects.toThrow(/no es un PDF/)
     await expect(guardarPdfTemporal(Buffer.alloc(0), YO)).rejects.toThrow(/vacío/)
-    const pesado = Buffer.concat([PDF, Buffer.alloc(10 * 1024 * 1024)])
-    await expect(guardarPdfTemporal(pesado, YO)).rejects.toThrow(/máximo son 10 MB/)
+    const pesado = Buffer.concat([PDF, Buffer.alloc(MAX_PDF_BYTES)])
+    await expect(guardarPdfTemporal(pesado, YO)).rejects.toThrow(/máximo son 25 MB/)
+    // El mismo tope antes de firmar una subida directa, donde el archivo no se ve.
+    await expect(prepararSubidaDirecta(YO, MAX_PDF_BYTES + 1)).rejects.toThrow(/máximo son 25 MB/)
+    await expect(prepararSubidaDirecta(YO, 0)).rejects.toThrow(/vacío/)
+  })
+
+  it('sin almacenamiento que firme la subida (driver local) no hay subida directa: se cae al servidor', async () => {
+    expect(await prepararSubidaDirecta(YO, 1024)).toBeNull()
+  })
+
+  it('lo que se sube directo se valida al leerlo: si no es un PDF, no pasa', async () => {
+    // Se simula una subida directa: la referencia existe, pero en esa ruta se
+    // dejó cualquier cosa (el servidor no la vio pasar).
+    const { ref } = await guardarPdfTemporal(PDF, YO)
+    const { p } = JSON.parse(Buffer.from(ref.split('.')[0], 'base64url').toString())
+    const { subirArchivoEn } = await import('@/server/storage')
+    await subirArchivoEn(p, Buffer.from('esto no es un pdf'), 'application/pdf')
+    await expect(leerPdfTemporal(ref, YO)).rejects.toThrow(/no es un PDF/)
+    await borrarPdfTemporal(ref)
   })
 
   it('obtenerPdfAdjunto acepta la referencia o el base64 de siempre, y exige alguno', async () => {

@@ -93,3 +93,31 @@ export async function eliminarArchivo(storagePath: string): Promise<void> {
     await unlink(join(DIR_LOCAL, storagePath)).catch(() => {})
   }
 }
+
+/**
+ * URL firmada para que el NAVEGADOR suba un archivo directo al almacenamiento,
+ * sin pasar por el servidor.
+ *
+ * Es la única forma de aceptar archivos grandes en producción: la plataforma
+ * corta el cuerpo de cualquier petición al servidor en ~4,5 MB, así que un
+ * escaneo de 10 MB nunca llegaría. Con esta URL el archivo va del navegador a
+ * Supabase y el servidor solo recibe la ruta.
+ *
+ * Devuelve null con el driver local (en desarrollo no hay límite que esquivar)
+ * o si Supabase no la pudo emitir: quien llama cae a la subida normal.
+ */
+export async function urlSubidaFirmada(storagePath: string): Promise<string | null> {
+  if (DRIVER !== 'supabase') return null
+  try {
+    const supabase = clienteSupabase()
+    const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(storagePath)
+    if (error || !data?.signedUrl) {
+      console.error('No se pudo firmar la subida directa:', error?.message)
+      return null
+    }
+    return data.signedUrl
+  } catch (e) {
+    console.error('No se pudo firmar la subida directa:', e)
+    return null
+  }
+}

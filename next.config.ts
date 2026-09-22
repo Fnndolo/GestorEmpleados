@@ -26,10 +26,15 @@ const nextConfig: NextConfig = {
       // escaneo real. 4 MB es el techo útil: Vercel corta el cuerpo de la
       // petición en 4,5 MB y base64 infla el archivo un 33 %.
       // Los PDF grandes (contratos, otrosíes, acuerdos, adjuntos) ya NO viajan
-      // por aquí: van a /api/archivos/pdf (hasta 10 MB) y la acción recibe una
-      // referencia (ver src/server/archivos-temporales.ts).
+      // por aquí: van a /api/archivos/pdf y la acción recibe una referencia
+      // (ver src/server/archivos-temporales.ts).
       bodySizeLimit: '4mb',
     },
+    // Tope del cuerpo que el proxy deja pasar (por defecto 10 MB). Solo aplica
+    // en desarrollo y al respaldo por el servidor: en producción el archivo
+    // grande va del navegador directo al almacenamiento con una URL firmada,
+    // porque allá el cuerpo se corta en ~4,5 MB pase lo que pase aquí.
+    proxyClientMaxBodySize: '30mb',
   },
   async headers() {
     return [
