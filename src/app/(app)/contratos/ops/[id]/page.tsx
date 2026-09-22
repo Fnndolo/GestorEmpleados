@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatFechaLarga, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { MOTIVO_CIERRE_TEXTO } from '@/lib/contratos-cierre'
 import { CerrarContratoOps } from './cerrar-contrato'
+import { EliminarContratoOps } from './eliminar-contrato'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { fmtCOP } from '@/lib/moneda'
 import { CuentasCobro } from './cuentas-cliente'
@@ -25,6 +26,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
   const { id } = await params
   const usuario = await requerirPermiso('contratos', 'VER')
   const puedeEditar = tienePermiso(usuario, 'contratos', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'contratos', 'ELIMINAR')
   const puedeAprobar = tienePermiso(usuario, 'contratos', 'APROBAR')
 
   const c = await prisma.contratoOps.findUnique({
@@ -265,6 +267,15 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
         puedeEditar={puedeEditar}
         puedeAprobar={puedeAprobar}
       />
+
+      {/* Borrar es para el error de registro —el PDF a la persona equivocada, un
+          duplicado—, no para terminar el contrato: eso es «Cerrar contrato». Por
+          eso va al final, aparte y con confirmación. */}
+      {puedeEliminar && (
+        <Card className="mt-4"><CardContent className="py-4">
+          <EliminarContratoOps contratoId={c.id} numero={c.numero} firmado={Boolean(c.firmaContratistaPath)} />
+        </CardContent></Card>
+      )}
     </div>
   )
 }

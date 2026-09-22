@@ -14,7 +14,9 @@ import { borrarPdfTemporal, obtenerPdfAdjunto } from '@/server/archivos-temporal
 import { pdfAdjuntoCampos } from '@/lib/validaciones/pdf-adjunto'
 import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, corregirPosicionFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema, cerrarContratoOpsSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
-import { publicarVencimiento, resolverVencimiento } from '@/server/vencimientos/servicio'
+import { publicarVencimiento, resolverVencimiento, cancelarVencimiento } from '@/server/vencimientos/servicio'
+import { eliminarDocumento } from '@/server/documentos'
+import { vinculoDeContrato, type TipoContratoLaboral, type TipoVinculo } from '@/lib/vinculo-contrato'
 import { construirDatosPdfContratoOps, construirDatosAutorizacion, generarPdfContratoOps, generarPdfAutorizacionDatos, leerFirmaComoDataUri, type SnapshotContratoOps } from '@/server/contratos-ops-pdf'
 import { fechaLarga } from '@/lib/numero-letras'
 import { aplicarFirmaContratoOps, corregirPosicionFirmaContratoOps as corregirPosicionFirmaOpsServidor } from '@/server/contratos-ops-firma'
@@ -1114,5 +1116,55 @@ export const cerrarContratoOps = accion(
     revalidatePath(`/contratos/ops/${c.id}`)
     revalidatePath('/autoservicio/contratos')
     return { ok: true, accesoRestringido }
+  },
+)
+
+/**
+ * Borra un contrato OPS que se registró por error (el PDF a la persona
+ * equivocada, un duplicado, datos mal puestos antes de mandarlo a firmar).
+ * Solo para eso: un contrato con historia —firmado por el contratista en la
+ * app, o con cuentas de cobro— no se borra; se cierra desde el propio contrato
+ * o se registra el retiro en Terminaciones.
+ *
+ * Se lleva su PDF y su autorización de datos, su alerta de vencimiento, sus
+ * entregables y sus evidencias de firma. Deja la ficha con el vínculo que le
+ * corresponda por los contratos que le queden. Queda en la auditoría quién lo
+ * borró.
+ */
+export const eliminarContratoOps = accion(
+  { modulo: 'contratos', accion: 'ELIMINAR', schema: z.object({ id: z.uuid() }) },
+  async ({ id }) => {
+    const c = await prisma.contratoOps.findUniqueOrThrow({
+      where: { id },
+      include: { _count: { select: { cuentasCobro: true } } },
+    })
+    if (c.firmaContratistaPath) {
+      throw new ErrorNegocio('Este contrato ya lo firmó el contratista en la app: no se borra, se cierra desde el propio contrato.')
+    }
+    if (c._count.cuentasCobro > 0) {
+      throw new ErrorNegocio('Este contrato tiene cuentas de cobro radicadas: no se borra, se cierra desde el propio contrato.')
+    }
+
+    // Sus documentos (contrato, autorización de datos) y su alerta de vencimiento.
+    const docs = await prisma.documento.findMany({ where: { entidadTipo: 'ContratoOps', entidadId: id }, select: { id: true } })
+    for (const d of docs) await eliminarDocumento(d.id)
+    await cancelarVencimiento('ContratoOps', id, 'CONTRATO_OPS')
+    // Entregables y evidencias de firma caen en cascada con el contrato.
+    await dbAuditado.contratoOps.delete({ where: { id } })
+
+    // La ficha vuelve al vínculo de lo que le queda: un laboral activo, u otro OPS.
+    if (c.colaboradorId) {
+      const [laboral, otroOps] = await Promise.all([
+        prisma.contrato.findFirst({ where: { colaboradorId: c.colaboradorId, estado: 'ACTIVO' }, orderBy: { fechaInicio: 'desc' }, select: { tipo: true } }),
+        prisma.contratoOps.findFirst({ where: { colaboradorId: c.colaboradorId, estado: 'ACTIVO' }, select: { id: true } }),
+      ])
+      const vinculo: TipoVinculo | null = laboral ? vinculoDeContrato(laboral.tipo as TipoContratoLaboral) : otroOps ? 'OPS' : null
+      if (vinculo) await dbAuditado.colaborador.update({ where: { id: c.colaboradorId }, data: { tipoVinculo: vinculo } })
+    }
+
+    revalidatePath('/contratos')
+    if (c.colaboradorId) revalidatePath(`/colaboradores/${c.colaboradorId}`)
+    revalidatePath('/autoservicio/contratos')
+    return { colaboradorId: c.colaboradorId, numero: c.numero }
   },
 )
