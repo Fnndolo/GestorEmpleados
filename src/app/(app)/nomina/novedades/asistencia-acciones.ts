@@ -9,7 +9,7 @@ import {
   CODIGOS_ASISTENCIA, ErrorAsistencia, normalizarCedula, rangoDePeriodo, resumenAsistencia,
 } from '@/server/asistencia/cliente'
 import { sincronizarHorasAsistencia } from '@/server/asistencia/horas-asistencia'
-import { enviarResumenDiaAsistencia } from '@/server/asistencia/resumen-dia'
+import { reporteDiaAsistencia } from '@/server/asistencia/resumen-dia'
 import { urlFoto } from '@/lib/foto'
 import {
   generarOrdenPagoHorasExtra, previsualizarOrdenPagoHorasExtra, enviarOrdenHorasExtraAFirma,
@@ -232,11 +232,11 @@ export const marcarPagoPendiente = accion(
 )
 
 /**
- * Botón de prueba: le manda al colaborador, como notificación, lo que
- * AsistencIA le registró HOY (horas extra y recargos). Es el ensayo del aviso
- * diario que después saldrá solo.
+ * Lo que AsistencIA registró HOY de esa persona, para mirarlo aquí mismo
+ * mientras las horas extra están en prueba. No le llega nada al colaborador:
+ * es un reporte para quien está revisando que los números cuadren.
  */
-export const enviarResumenHoy = accion(
+export const verResumenHoy = accion(
   { modulo: 'nomina', accion: 'CREAR', schema: z.object({ colaboradorId: z.uuid() }) },
-  async (d) => enviarResumenDiaAsistencia(d.colaboradorId).catch(traducir),
+  async (d) => reporteDiaAsistencia(d.colaboradorId).catch(traducir),
 )

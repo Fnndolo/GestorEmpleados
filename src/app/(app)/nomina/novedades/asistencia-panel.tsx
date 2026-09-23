@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Timer, RefreshCw, Download, KeyRound, FileText, FilePlus2, FileCheck2, Receipt, Send, MessageSquareText, LockKeyhole } from 'lucide-react'
+import { Timer, RefreshCw, Download, KeyRound, FileText, FilePlus2, FileCheck2, Receipt, Send, ClipboardList, LockKeyhole } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
@@ -19,7 +19,7 @@ import { Chip, Pill, AvatarColaborador } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import {
   consultarHorasAsistencia, traerHorasAsistencia, previsualizarOrdenPago, generarOrdenPago, enviarOrdenAFirma, marcarPagoPagado, marcarPagoPendiente,
-  enviarResumenHoy, type ResumenPantalla, type FilaAsistencia,
+  verResumenHoy, type ResumenPantalla, type FilaAsistencia,
 } from './asistencia-acciones'
 
 /**
@@ -494,32 +494,77 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
   )
 }
 
+const NOMBRE_TIPO_HORA: Record<string, string> = {
+  HED: 'Extra diurna', HEN: 'Extra nocturna', HEDDF: 'Dom/fest. diurna', HENDF: 'Dom/fest. nocturna',
+}
+
+type Reporte = { colaborador: string; fecha: string; tramos: { horaInicio: string; horaFin: string; tipoHora: string; horas: number }[]; totalHoras: number; mensaje: string }
+
 /**
- * Botón de PRUEBA: le manda al colaborador, como notificación, lo que
- * AsistencIA le registró hoy (horas extra y recargos). Es el ensayo del aviso
- * diario que después saldrá solo, por eso va con el ícono de mensaje.
+ * Lo que AsistencIA registró HOY de esa persona, para revisarlo aquí mismo.
+ *
+ * Mientras las horas extra estén en prueba esto no le llega a nadie: es un
+ * reporte para quien está comprobando que los números cuadren. El día que el
+ * módulo salga de pruebas, este mismo texto es el que recibirá el colaborador.
  */
 function BotonResumenHoy({ colaboradorId, nombre }: { colaboradorId: string; nombre: string }) {
-  const [enviando, setEnviando] = useState(false)
+  const [cargando, setCargando] = useState(false)
+  const [reporte, setReporte] = useState<Reporte | null>(null)
 
-  async function enviar() {
-    setEnviando(true)
-    const res = await enviarResumenHoy({ colaboradorId })
-    setEnviando(false)
+  async function ver() {
+    setCargando(true)
+    const res = await verResumenHoy({ colaboradorId })
+    setCargando(false)
     if (!res.ok) { toast.error(res.error, { duration: 8000 }); return }
-    toast.success(`Aviso de prueba enviado a ${nombre}: ${res.datos.mensaje}`, { duration: 8000 })
+    setReporte(res.datos as Reporte)
   }
 
   return (
-    <Button
-      size="icon-sm"
-      variant="secondary"
-      onClick={enviar}
-      disabled={enviando}
-      aria-label="Enviar lo que marcó hoy (prueba)"
-      title="Prueba: mandarle al colaborador, como notificación, lo que AsistencIA le registró hoy"
-    >
-      {enviando ? <Spinner className="size-3.5" /> : <MessageSquareText className="size-3.5" />}
-    </Button>
+    <>
+      <Button
+        size="icon-sm"
+        variant="secondary"
+        onClick={ver}
+        disabled={cargando}
+        aria-label={`Ver lo que ${nombre} registró hoy`}
+        title="Ver lo que AsistencIA le registró hoy (solo para revisar; no se le envía nada)"
+      >
+        {cargando ? <Spinner className="size-3.5" /> : <ClipboardList className="size-3.5" />}
+      </Button>
+
+      <Dialog open={reporte !== null} onOpenChange={(o) => { if (!o) setReporte(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Hoy en AsistencIA · {reporte?.colaborador ?? nombre}</DialogTitle>
+            <DialogDescription>Lo que lleva registrado en el día. Es solo para revisar: al colaborador no le llega nada.</DialogDescription>
+          </DialogHeader>
+
+          {reporte && (reporte.tramos.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">Hoy no tiene horas extra ni recargos registrados.</p>
+          ) : (
+            <div className="space-y-2">
+              <table className="w-full text-sm">
+                <tbody className="divide-y">
+                  {reporte.tramos.map((t, i) => (
+                    <tr key={i}>
+                      <td className="py-1.5 tabular-nums">{t.horaInicio}–{t.horaFin}</td>
+                      <td className="py-1.5 text-muted-foreground">{NOMBRE_TIPO_HORA[t.tipoHora] ?? t.tipoHora}</td>
+                      <td className="py-1.5 text-right font-semibold tabular-nums">{horas(t.horas)}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t font-bold">
+                    <td className="py-1.5" colSpan={2}>Total</td>
+                    <td className="py-1.5 text-right tabular-nums">{horas(reporte.totalHoras)}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="rounded-lg border border-dashed p-2 text-xs text-muted-foreground">
+                Cuando el módulo salga de pruebas, esto es lo que le llegará: &ldquo;{reporte.mensaje}&rdquo;
+              </p>
+            </div>
+          ))}
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

@@ -32,7 +32,7 @@ vi.mock('@/server/asistencia/cliente', async (original) => {
 const { prisma } = await import('@/lib/db')
 const { cerrarPagoPersonaEnAsistencia } = await import('@/server/asistencia/pagos-asistencia')
 const { marcarPagoHorasExtraPagado } = await import('@/server/pago-horas-extra')
-const { enviarResumenHoy } = await import('@/app/(app)/nomina/novedades/asistencia-acciones')
+const { verResumenHoy } = await import('@/app/(app)/nomina/novedades/asistencia-acciones')
 const { hoyBogotaISO } = await import('@/lib/fechas')
 import type { UsuarioSesion } from '@/lib/permisos/tipos'
 
@@ -116,30 +116,43 @@ describe('cierre en AsistencIA al pagar aparte', () => {
   })
 })
 
-describe('aviso de prueba: lo que AsistencIA registró hoy', () => {
-  it('le llega al colaborador con sus tramos de hoy (y no los de otra cédula)', async () => {
+describe('reporte del día: lo que AsistencIA registró hoy', () => {
+  it('trae los tramos de hoy de esa persona (y no los de otra cédula), sin avisarle a nadie', async () => {
     const hoy = hoyBogotaISO()
     simulado.hoy = [
       { documento: colab.cedula, fecha: hoy, horaInicio: '18:00', horaFin: '20:00', tipoHora: 'HED', horas: 2, referenciaExterna: 'a' },
       { documento: '999999999', fecha: hoy, horaInicio: '18:00', horaFin: '23:00', tipoHora: 'HEN', horas: 5, referenciaExterna: 'b' },
     ]
     actuarComo(admin)
-    const res = await enviarResumenHoy({ colaboradorId: colab.id })
+    const res = await verResumenHoy({ colaboradorId: colab.id })
     if (!res.ok) throw new Error(res.error)
-    expect(res.datos.tramos).toBe(1)
+    expect(res.datos.tramos).toHaveLength(1)
+    expect(res.datos.tramos[0]).toMatchObject({ horaInicio: '18:00', horaFin: '20:00', tipoHora: 'HED', horas: 2 })
+    expect(res.datos.totalHoras).toBe(2)
     expect(res.datos.mensaje).toContain('18:00–20:00 extra diurna (2 h). Total: 2 h.')
-    const notif = await prisma.notificacion.findFirst({ where: { userId: colab.usuarioId, evento: 'asistencia_resumen_dia' }, orderBy: { creadoEn: 'desc' } })
-    expect(notif?.titulo).toBe('Tu registro de hoy en AsistencIA')
-    expect(notif?.mensaje).toBe(res.datos.mensaje)
-    expect(notif?.enlace).toBe('/autoservicio/horas-extra')
+    // Mientras las horas extra están en prueba, al colaborador NO le llega nada.
+    const notif = await prisma.notificacion.findFirst({ where: { userId: colab.usuarioId, evento: 'asistencia_resumen_dia' } })
+    expect(notif).toBeNull()
   })
 
-  it('sin tramos hoy, avisa que no hay horas extra registradas', async () => {
+  it('sin tramos hoy, el reporte lo dice y sigue sin avisar a nadie', async () => {
     simulado.hoy = []
     actuarComo(admin)
-    const res = await enviarResumenHoy({ colaboradorId: colab.id })
+    const res = await verResumenHoy({ colaboradorId: colab.id })
     if (!res.ok) throw new Error(res.error)
-    expect(res.datos.tramos).toBe(0)
+    expect(res.datos.tramos).toHaveLength(0)
+    expect(res.datos.totalHoras).toBe(0)
     expect(res.datos.mensaje).toContain('no tienes horas extra ni recargos registrados')
+    expect(await prisma.notificacion.count({ where: { userId: colab.usuarioId, evento: 'asistencia_resumen_dia' } })).toBe(0)
+  })
+
+  it('el envío al colaborador sigue existiendo, listo para cuando salga de pruebas', async () => {
+    const { enviarResumenDiaAsistencia } = await import('@/server/asistencia/resumen-dia')
+    simulado.hoy = [{ documento: colab.cedula, fecha: hoyBogotaISO(), horaInicio: '19:00', horaFin: '21:00', tipoHora: 'HEN', horas: 2, referenciaExterna: 'c' }]
+    const r = await enviarResumenDiaAsistencia(colab.id)
+    expect(r.tramos).toBe(1)
+    const notif = await prisma.notificacion.findFirst({ where: { userId: colab.usuarioId, evento: 'asistencia_resumen_dia' }, orderBy: { creadoEn: 'desc' } })
+    expect(notif?.titulo).toBe('Tu registro de hoy en AsistencIA')
+    expect(notif?.enlace).toBe('/autoservicio/horas-extra')
   })
 })
