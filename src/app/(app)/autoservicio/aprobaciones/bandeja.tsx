@@ -33,6 +33,8 @@ type Solicitud = {
   documentos: { id: string; nombre: string; esImagen: boolean }[]; esCertFinal: boolean
   licenciaDerecho: boolean
   calculoVacaciones: { dias: number; saldo: number; anticipadas: boolean; diasAnticipados: number; advertencias: string[] } | null
+  /** El colaborador autorizó por escrito el descuento de las anticipadas; con cuándo y si su saldo estaba confirmado. */
+  autorizacionAnticipadas: { fecha: string | null; historialConfirmado: boolean } | null
   /** Contrapropuesta de fechas que el colaborador rechazó (solo vacaciones). */
   contrapropuestaRechazada: { fechaInicio: string; fechaFin: string; respuesta: string | null } | null
   /** La solicitud fue devuelta y el colaborador ya corrigió el soporte. */
@@ -168,6 +170,12 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Pide {s.calculoVacaciones.dias} día{s.calculoVacaciones.dias === 1 ? '' : 's'} hábiles · saldo disponible: {s.calculoVacaciones.saldo}
                     {s.calculoVacaciones.anticipadas && ` · ${s.calculoVacaciones.diasAnticipados} anticipado${s.calculoVacaciones.diasAnticipados === 1 ? '' : 's'}`}
+                  </p>
+                )}
+                {s.autorizacionAnticipadas && (
+                  <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                    Autorizó por escrito el descuento de las anticipadas si se retira{s.autorizacionAnticipadas.fecha ? ` (${s.autorizacionAnticipadas.fecha})` : ''}.
+                    {!s.autorizacionAnticipadas.historialConfirmado && ' Su historial de vacaciones aún no está confirmado: revisa el saldo en su ficha antes de aprobar.'}
                   </p>
                 )}
                 {s.contrapropuestaRechazada && (

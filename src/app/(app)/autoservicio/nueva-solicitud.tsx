@@ -20,7 +20,7 @@ import { LICENCIAS, defLicencia, type TipoLicencia } from '@/lib/licencias'
 import { festivosDeRango, esDiaHabil } from '@/lib/dias-habiles'
 import { parseFechaISO } from '@/lib/fechas'
 import { crearSolicitud, editarMiPermiso } from './acciones'
-import { MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO } from '@/lib/vacaciones-config'
+import { textoAutorizacionAnticipadas } from '@/lib/vacaciones-config'
 
 /** Lo que hace falta para abrir el diálogo con un permiso ya pedido y corregirlo. */
 export type EdicionPermiso = {
@@ -77,14 +77,23 @@ function diasHabilesTexto(n: number): string {
   return n === 1 ? '1 día hábil' : `${n} días hábiles`
 }
 
+/** Lo que devuelve el servidor cuando la solicitud necesita la autorización de anticipadas. */
+type PedidoAutorizacion = { dias: number; saldo: number | null; diasAnticipados: number | null }
+
 /**
  * Diálogo de nueva solicitud. Se monta ya abierto y en el trámite que eligió el
  * colaborador desde su tile; el padre lo desmonta al cerrar, así el formulario
  * arranca limpio en cada trámite sin necesidad de resetear a mano.
  */
-export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose }: {
+export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = false, edicion, onClose }: {
   tipoInicial: TipoSol
   saldoVacaciones?: number
+  /**
+   * Si su saldo es confiable (Talento Humano ya cargó su historial): se le
+   * muestra y se compara contra él. Si no, se muestra "—" y es el servidor el
+   * que avisa cuando lo pedido excede lo causado. Ver vacaciones-config.ts.
+   */
+  mostrarSaldo?: boolean
   /** Con esto el diálogo edita un permiso ya pedido en vez de crear uno. */
   edicion?: EdicionPermiso
   onClose: () => void
@@ -98,12 +107,20 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose 
   const [vacIni, setVacIni] = useState('')
   const [vacFin, setVacFin] = useState('')
   const [autorizaAnticipadas, setAutorizaAnticipadas] = useState(false)
+  // El servidor pidió la autorización (lo pedido excede lo causado según sus
+  // cuentas). Se descarta si cambian las fechas: la cifra ya no aplica.
+  const [pedidoAutorizacion, setPedidoAutorizacion] = useState<PedidoAutorizacion | null>(null)
+  const cambiarFechasVac = (ini: string, fin: string) => {
+    setVacIni(ini); setVacFin(fin)
+    setPedidoAutorizacion(null); setAutorizaAnticipadas(false)
+  }
   const diasVac = useMemo(() => diasHabilesInclusivo(vacIni, vacFin), [vacIni, vacFin])
   const saldoVac = saldoVacaciones ?? 0
-  // Mientras se terminan de subir los datos históricos, el saldo no es
-  // confiable: no se compara contra él (ni se pide autorizar "anticipadas"
-  // que en realidad no lo son). Ver vacaciones-config.ts.
-  const vacAnticipadas = MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO && tipo === 'VACACIONES' && diasVac > 0 && diasVac > saldoVac
+  // Con el saldo confiable se sabe de antemano; sin él, lo dice el servidor al enviar.
+  const excedeSaldo = mostrarSaldo && tipo === 'VACACIONES' && diasVac > 0 && diasVac > saldoVac
+  const vacAnticipadas = excedeSaldo || pedidoAutorizacion !== null
+  // Solo los días de esta solicitud: si ya debía días (saldo negativo), no se suman.
+  const diasAnticipadosVac = excedeSaldo ? diasVac - Math.max(saldoVac, 0) : (pedidoAutorizacion?.diasAnticipados ?? null)
   // Permiso (un solo día)
   const [permFecha, setPermFecha] = useState<Date | undefined>(() => {
     const m = edicion && /^(\d{4})-(\d{2})-(\d{2})$/.exec(edicion.fechaInicio)
@@ -192,6 +209,14 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose 
         })
       : await crearSolicitud(payload())
     if (!res.ok) { setG(false); toast.error(res.error); return }
+    // Pide más de lo causado y aún no autorizó: el formulario le muestra la
+    // autorización con las cifras del servidor, sin crear la solicitud todavía.
+    if (!edicion && 'requiereAutorizacion' in res.datos && res.datos.requiereAutorizacion) {
+      setG(false)
+      setPedidoAutorizacion(res.datos.requiereAutorizacion)
+      toast.info('Estas vacaciones serían anticipadas: revisa y autoriza el descuento para enviarlas.')
+      return
+    }
     const solicitudId = edicion ? edicion.solicitudId : (res.datos as { id: string }).id
     if (archivos.length > 0) {
       let fallidos = 0
@@ -243,14 +268,17 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose 
             {tipo === 'VACACIONES' && (
               <>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label>Desde</Label><Input type="date" value={vacIni} onChange={(e) => setVacIni(e.target.value)} /></div>
-                  <div className="space-y-1.5"><Label>Hasta</Label><Input type="date" value={vacFin} onChange={(e) => setVacFin(e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Desde</Label><Input type="date" value={vacIni} onChange={(e) => cambiarFechasVac(e.target.value, vacFin)} /></div>
+                  <div className="space-y-1.5"><Label>Hasta</Label><Input type="date" value={vacFin} onChange={(e) => cambiarFechasVac(vacIni, e.target.value)} /></div>
                 </div>
 
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
                   <CalendarRange className="size-4 shrink-0" />
                   <span>
-                    Disponibles: <strong className="text-foreground">{MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO ? diasHabilesTexto(saldoVac) : "—"}</strong>
+                    {/* Negativo = días tomados anticipados que aún no se causan. */}
+                    {mostrarSaldo && saldoVac < 0
+                      ? <>Debes <strong className="text-foreground">{diasHabilesTexto(-saldoVac)}</strong> tomados anticipados</>
+                      : <>Disponibles: <strong className="text-foreground">{mostrarSaldo ? diasHabilesTexto(saldoVac) : "—"}</strong></>}
                     {diasVac > 0 && <> · Pides <strong className="text-foreground">{diasHabilesTexto(diasVac)}</strong></>}
                   </span>
                 </p>
@@ -262,17 +290,17 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, edicion, onClose 
                       <div>
                         <p className="font-medium">Vacaciones anticipadas</p>
                         <p className="text-muted-foreground">
-                          Estás pidiendo {diasVac - saldoVac} día{diasVac - saldoVac === 1 ? '' : 's'} más de los que has causado.
+                          {diasAnticipadosVac
+                            ? <>{diasAnticipadosVac === diasVac ? 'Todos los días' : `${diasAnticipadosVac} de los ${diasVac} días`} que pides aún no los has causado. </>
+                            : <>Según lo registrado, pides más días de los que has causado. Talento Humano confirmará cuántos al revisar tu historial. </>}
                           La empresa puede concederlas como anticipo, con tu autorización escrita.
                         </p>
                       </div>
                     </div>
                     <label className="flex items-start gap-2">
                       <Checkbox checked={autorizaAnticipadas} onCheckedChange={(v) => setAutorizaAnticipadas(Boolean(v))} className="mt-0.5" />
-                      <span>
-                        Autorizo por escrito que, si me retiro antes de causar estos días, su valor se descuente de mi
-                        liquidación definitiva (RIT art. 69 num. 4)
-                      </span>
+                      {/* El mismo texto que el servidor guarda como evidencia. */}
+                      <span>{textoAutorizacionAnticipadas(diasAnticipadosVac)}</span>
                     </label>
                   </div>
                 )}

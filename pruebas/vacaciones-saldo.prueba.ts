@@ -96,10 +96,10 @@ describe('desde cuándo causa', () => {
 })
 
 describe('días completos', () => {
-  it('saldoEntero es el saldo truncado, nunca redondeado hacia arriba', async () => {
+  it('saldoEntero es el saldo redondeado hacia abajo, nunca hacia arriba', async () => {
     const s = await saldoVacaciones(colaboradorId)
     expect(Number.isInteger(s.saldoEntero)).toBe(true)
-    expect(s.saldoEntero).toBe(Math.trunc(s.saldoExacto) || 0)
+    expect(s.saldoEntero).toBe(Math.floor(s.saldoExacto) || 0)
     expect(s.saldoEntero).toBeLessThanOrEqual(s.saldoExacto)
   })
 })

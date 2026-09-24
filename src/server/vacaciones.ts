@@ -19,8 +19,9 @@ export async function saldoVacaciones(colaboradorId: string, corte?: Date): Prom
    * Días COMPLETOS disponibles: lo que ve el colaborador y Talento Humano.
    *
    * Las vacaciones se toman por días hábiles enteros, así que «1,60 días» no le
-   * dice nada a nadie: se muestra 1. Se trunca (no se redondea) para no anunciar
-   * un día que todavía no se ha causado.
+   * dice nada a nadie: se muestra 1. Se redondea hacia abajo (no al más cercano)
+   * para no anunciar un día que todavía no se ha causado. Negativo = días que
+   * se tomaron anticipados y aún no se han causado.
    */
   saldoEntero: number
   /**
@@ -82,8 +83,10 @@ export async function saldoVacaciones(colaboradorId: string, corte?: Date): Prom
     disfrutadas: redondear(disfrutadasNum),
     pendientesAprobacion: redondear(pendientesNum),
     saldo: redondear(saldoExacto),
-    // `|| 0` evita el «-0» de truncar un negativo pequeño.
-    saldoEntero: Math.trunc(saldoExacto) || 0,
+    // Hacia abajo también en negativo: quien tomó vacaciones anticipadas y debe
+    // 3,4 días debe 4 días completos antes de tener uno libre (truncar diría 3 y
+    // anunciaría un día que no se ha causado). `|| 0` evita el «-0».
+    saldoEntero: Math.floor(saldoExacto) || 0,
     saldoExacto,
     desde,
   }

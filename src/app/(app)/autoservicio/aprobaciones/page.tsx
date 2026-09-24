@@ -13,6 +13,7 @@ import { cuandoSolicitud } from '@/lib/solicitudes-texto'
 import { urlFoto } from '@/lib/foto'
 import { iniciales } from '@/lib/etiquetas'
 import { plazoComprobanteDias } from '@/server/comprobante-permiso'
+import { formatFechaCorta, parseFechaISO } from '@/lib/fechas'
 
 export const metadata = { title: 'Aprobaciones · Smart Gadgets RH' }
 
@@ -100,7 +101,13 @@ export default async function AprobacionesPage({ searchParams }: { searchParams:
                   dias: number; saldo: number; anticipadas: boolean; diasAnticipados: number; advertencias: string[]
                 } | undefined) ?? null
               : null
+            // Evidencia de la autorización del descuento de anticipadas (RIT art. 69 num. 4).
+            const autorizacion = (s.datos as Record<string, unknown>).autorizacionAnticipadas as
+              { fecha?: string; historialConfirmado?: boolean } | undefined
             return {
+              autorizacionAnticipadas: autorizacion
+                ? { fecha: autorizacion.fecha ? formatFechaCorta(parseFechaISO(autorizacion.fecha)) : null, historialConfirmado: !!autorizacion.historialConfirmado }
+                : null,
               id: s.id,
               pasoId: pasoActual.id,
               tipo: s.tipo,

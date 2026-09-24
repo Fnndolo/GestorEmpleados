@@ -103,7 +103,7 @@ function Seccion({
 
 
 export function PanelTramites({
-  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, documentosFaltantes, dotacionPorFirmar, horasExtraPorFirmar, hrefsNuevos = [],
+  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, mostrarSaldoVacaciones = false, documentosFaltantes, dotacionPorFirmar, horasExtraPorFirmar, hrefsNuevos = [],
 }: {
   /** Colaborador con vínculo activo: solo entonces se ofrecen los trámites operativos. */
   activo: boolean
@@ -115,6 +115,8 @@ export function PanelTramites({
   disciplinariosAbiertos: number
   puedeAprobar: boolean
   saldoVacaciones: number
+  /** Si ya se le puede mostrar su saldo (historial de vacaciones cargado). */
+  mostrarSaldoVacaciones?: boolean
   documentosFaltantes: number
   dotacionPorFirmar: number
   /** Órdenes de pago de horas extra (se pagan aparte de la nómina) esperando su firma. */
@@ -260,7 +262,7 @@ export function PanelTramites({
       <Seccion titulo="Canales" items={conNuevo(canales)} onSolicitar={setSolicitar} />
 
       {/* Se monta al abrir para que el formulario arranque limpio en cada trámite. */}
-      {solicitar && <NuevaSolicitud tipoInicial={solicitar} saldoVacaciones={saldoVacaciones} onClose={() => setSolicitar(null)} />}
+      {solicitar && <NuevaSolicitud tipoInicial={solicitar} saldoVacaciones={saldoVacaciones} mostrarSaldo={mostrarSaldoVacaciones} onClose={() => setSolicitar(null)} />}
     </>
   )
 }

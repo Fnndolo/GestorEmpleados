@@ -615,6 +615,11 @@ model Colaborador {
   modalidadTrabajo     ModalidadTrabajo        @default(PRESENCIAL) @map("modalidad_trabajo")
   fechaIngreso         DateTime                @map("fecha_ingreso") @db.Date
   fechaRetiro          DateTime?               @map("fecha_retiro") @db.Date
+  // Talento Humano confirma que ya cargó el historial de vacaciones de la persona
+  // (las tomadas antes de la plataforma). Solo entonces su saldo es confiable y
+  // se le muestra en Autoservicio. Null = aún sin confirmar.
+  vacacionesHistorialCompletoEn    DateTime? @map("vacaciones_historial_completo_en")
+  vacacionesHistorialCompletoPorId String?   @map("vacaciones_historial_completo_por_id") @db.Uuid
   estado               EstadoColaborador       @default(ACTIVO)
   // Dotación
   tallaCamisa          String?                 @map("talla_camisa")

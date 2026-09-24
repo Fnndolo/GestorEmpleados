@@ -44,8 +44,10 @@ export type EvaluacionVacaciones = {
   saldo: number
   /** true si los días solicitados exceden el saldo causado (RIT art. 33). */
   anticipadas: boolean
-  /** Cuántos días quedarían en negativo si se aprueba. */
+  /** Días de ESTA solicitud que no están causados (nunca más que `dias`). */
   diasAnticipados: number
+  /** Días que ya debía por vacaciones anticipadas anteriores (saldo negativo), 0 si no debe. */
+  diasDebidos: number
   /** Advertencias no bloqueantes para el aprobador, cada una con su artículo del RIT. */
   advertencias: string[]
 }
@@ -70,7 +72,11 @@ export async function evaluarSolicitudVacaciones(
 
   const advertencias: string[] = []
   const anticipadas = dias > saldoEntero
-  const diasAnticipados = anticipadas ? dias - saldoEntero : 0
+  // Con saldo negativo (ya debe días de un anticipo anterior) todos los días
+  // pedidos son anticipados, pero solo los de esta solicitud: restar el negativo
+  // los contaba dos veces (debe 4 y pide 6 → decía "10 anticipados").
+  const diasAnticipados = anticipadas ? dias - Math.max(saldoEntero, 0) : 0
+  const diasDebidos = Math.max(-saldoEntero, 0)
 
   // Art. 37 lit. a: al menos un bloque de 6 días hábiles continuos al año.
   if (dias < DIAS_BLOQUE_MINIMO) {
@@ -98,5 +104,5 @@ export async function evaluarSolicitudVacaciones(
     )
   }
 
-  return { dias, saldo, anticipadas, diasAnticipados, advertencias }
+  return { dias, saldo, anticipadas, diasAnticipados, diasDebidos, advertencias }
 }

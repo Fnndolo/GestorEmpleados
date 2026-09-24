@@ -31,6 +31,7 @@ import { EducacionLista } from './educacion-lista'
 import { BotonCertificacion } from './boton-certificacion'
 import { BotonDisciplinario } from './boton-disciplinario'
 import { RegistrarDisfrute } from './registrar-disfrute'
+import { HistorialVacaciones } from './historial-vacaciones'
 import { urlFoto } from '@/lib/foto'
 import { HistorialDisciplinario, type ItemHistorial } from './historial-disciplinario'
 import { formatFechaLarga, formatFechaISO, formatFechaCorta, calcularEdad, antiguedad, hoyBogota, duracionContrato } from '@/lib/fechas'
@@ -302,7 +303,7 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
         {/* Un contrato de prestación de servicios no causa vacaciones. */}
         {!esOps(c.tipoVinculo) && (
           <Stat icono={CalendarRange} color="bg-foreground text-background"
-            valor={`${saldoVac.saldoEntero} días`} label="Vacaciones disponibles" />
+            valor={`${saldoVac.saldoEntero} días`} label={saldoVac.saldoEntero < 0 ? 'Vacaciones anticipadas' : 'Vacaciones disponibles'} />
         )}
       </div>
 
@@ -343,7 +344,12 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
                   <h3 className="text-sm font-bold">Vacaciones</h3>
                 </div>
                 <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
-                  <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Disponibles</dt><dd className="text-sm font-medium">{saldoVac.saldoEntero} días hábiles</dd></div>
+                  {/* Negativo: tomó días anticipados que aún no ha causado. */}
+                  {saldoVac.saldoEntero < 0 ? (
+                    <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Anticipadas por causar</dt><dd className="text-sm font-medium text-amber-700 dark:text-amber-400">Debe {-saldoVac.saldoEntero} días hábiles</dd></div>
+                  ) : (
+                    <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Disponibles</dt><dd className="text-sm font-medium">{saldoVac.saldoEntero} días hábiles</dd></div>
+                  )}
                   <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Causadas</dt><dd className="text-sm">{Math.trunc(saldoVac.causadas)} días</dd></div>
                   <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Disfrutadas</dt><dd className="text-sm">{Math.trunc(saldoVac.disfrutadas)} días</dd></div>
                   <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Causan desde</dt><dd className="text-sm">{formatFechaLarga(saldoVac.desde)}</dd></div>
@@ -352,8 +358,15 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
                   )}
                 </dl>
                 {puedeNovedades && (
-                  <div className="mt-3">
+                  <div className="mt-3 space-y-3">
                     <RegistrarDisfrute colaboradorId={id} hoyISO={formatFechaISO(hoyBogota())} />
+                    <HistorialVacaciones
+                      colaboradorId={id}
+                      // Es un instante (no una fecha de negocio): se lee en hora de Colombia.
+                      completoEn={c.vacacionesHistorialCompletoEn
+                        ? new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', day: '2-digit', month: '2-digit', year: 'numeric' }).format(c.vacacionesHistorialCompletoEn)
+                        : null}
+                    />
                   </div>
                 )}
               </CardContent>

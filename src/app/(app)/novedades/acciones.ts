@@ -251,6 +251,28 @@ export const registrarVacacionesDisfrutadas = accion(
 )
 
 /**
+ * Talento Humano confirma que ya cargó el historial de vacaciones de la persona
+ * (las que tomó antes de la plataforma). Desde ese momento su saldo es confiable
+ * y se le muestra en Autoservicio; antes se ve "—". Se puede deshacer si se
+ * marcó por error o aparece un disfrute sin registrar.
+ */
+export const marcarHistorialVacaciones = accion(
+  { modulo: 'novedades', accion: 'CREAR', schema: z.object({ colaboradorId: z.uuid(), completo: z.boolean() }) },
+  async (d, usuario) => {
+    await exigirVinculoLaboral(d.colaboradorId, 'vacaciones')
+    await dbAuditado.colaborador.update({
+      where: { id: d.colaboradorId },
+      data: d.completo
+        ? { vacacionesHistorialCompletoEn: new Date(), vacacionesHistorialCompletoPorId: usuario.id }
+        : { vacacionesHistorialCompletoEn: null, vacacionesHistorialCompletoPorId: null },
+    })
+    revalidatePath(`/colaboradores/${d.colaboradorId}`)
+    revalidatePath('/autoservicio')
+    return { completo: d.completo }
+  },
+)
+
+/**
  * Vacaciones colectivas (Flujo 2B) — RIT art. 34: "La empresa establecerá la época
  * de vacaciones, ya sea de manera individual o colectiva… notificará al trabajador
  * la fecha de inicio con al menos quince (15) días de anticipación".
@@ -326,7 +348,8 @@ export const registrarVacacionesColectivas = accion(
           fechaInicio: inicio, fechaFin: fin, diasHabiles: dias, estado: 'APROBADA',
           observaciones: [
             `Vacaciones colectivas fijadas por la empresa (RIT art. 34).`,
-            esAnticipada ? `Salida anticipada: ${Math.round((dias - saldoEntero) * 100) / 100} día(s) aún sin causar (RIT art. 33).` : null,
+            // Con saldo negativo (ya debía días) los anticipados son los de esta salida, no más.
+            esAnticipada ? `Salida anticipada: ${dias - Math.max(saldoEntero, 0)} día(s) aún sin causar (RIT art. 33).` : null,
             v(d.observaciones),
           ].filter(Boolean).join(' '),
         },

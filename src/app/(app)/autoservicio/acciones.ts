@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { aplicaTramite, type Tramite } from '@/lib/tramites-vinculo'
-import { parseFechaISO, formatFechaCorta } from '@/lib/fechas'
+import { parseFechaISO, formatFechaCorta, hoyBogotaISO } from '@/lib/fechas'
 import { comprobanteExigido, avisarComprobanteEntregado } from '@/server/comprobante-permiso'
 import { diasHabilesRango } from '@/app/(app)/novedades/acciones'
 import { generarCertificacion } from '@/server/certificaciones'
@@ -14,6 +14,7 @@ import { avisar, avisarPorRol } from '@/server/notificaciones/avisar'
 import { miFichaSchema } from '@/lib/validaciones/colaborador'
 import { TIPOS_LICENCIA, defLicencia, esDerecho } from '@/lib/licencias'
 import { evaluarSolicitudVacaciones } from '@/server/vacaciones-reglas'
+import { saldoVisibleEnAutoservicio, textoAutorizacionAnticipadas } from '@/lib/vacaciones-config'
 import { liquidarVacaciones, desgloseHtml } from '@/server/vacaciones-liquidacion'
 import { usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { fmtCOP } from '@/lib/moneda'
@@ -170,13 +171,39 @@ export const crearSolicitud = accion(
       if (d.fechaFin < d.fechaInicio) throw new ErrorNegocio('La fecha de fin no puede ser anterior a la de inicio.')
       const ev = await evaluarSolicitudVacaciones(colaboradorId, d.fechaInicio, d.fechaFin)
       if (ev.dias === 0) throw new ErrorNegocio('El rango elegido no contiene días hábiles.')
-      if (ev.anticipadas && !d.autorizaDescuentoAnticipadas) {
-        throw new ErrorNegocio(
-          `Solicitas ${ev.dias} días hábiles pero tu saldo causado es de ${ev.saldo}. Los ${ev.diasAnticipados} días serían anticipados: debes autorizar por escrito su descuento en caso de retiro antes de causarlos (RIT art. 69 num. 4).`,
-        )
+      if (ev.anticipadas) {
+        const { vacacionesHistorialCompletoEn } = await prisma.colaborador.findUniqueOrThrow({
+          where: { id: colaboradorId }, select: { vacacionesHistorialCompletoEn: true },
+        })
+        // Sin el historial cargado el saldo no es confiable: no se le dicen cifras
+        // que podrían estar mal, y la autorización cubre lo que resulte anticipado.
+        const confiable = saldoVisibleEnAutoservicio(vacacionesHistorialCompletoEn)
+        // Vacaciones anticipadas sí se pueden pedir, con autorización escrita del
+        // descuento (RIT art. 69 num. 4). Si aún no la dio, no es un error: se le
+        // devuelve lo que necesita para darla y el formulario se la pide.
+        if (!d.autorizaDescuentoAnticipadas) {
+          return {
+            requiereAutorizacion: confiable
+              ? { dias: ev.dias, saldo: ev.saldo, diasAnticipados: ev.diasAnticipados }
+              : { dias: ev.dias, saldo: null, diasAnticipados: null },
+          }
+        }
+        // Evidencia: el texto exacto que aceptó, cuándo, y con qué cifras.
+        datosSolicitud = {
+          ...d,
+          calculoVacaciones: ev,
+          autorizacionAnticipadas: {
+            texto: textoAutorizacionAnticipadas(confiable ? ev.diasAnticipados : null),
+            aceptadaEn: new Date().toISOString(),
+            // El día en Colombia: el instante en UTC pasa al día siguiente después de las 7 p. m.
+            fecha: hoyBogotaISO(),
+            historialConfirmado: confiable,
+          },
+        }
+      } else {
+        // La evaluación queda en la solicitud para que el aprobador la vea y quede auditada.
+        datosSolicitud = { ...d, calculoVacaciones: ev }
       }
-      // La evaluación queda en la solicitud para que el aprobador la vea y quede auditada.
-      datosSolicitud = { ...d, calculoVacaciones: ev }
     }
     const colab = await prisma.colaborador.findUniqueOrThrow({
       where: { id: colaboradorId },
@@ -449,11 +476,15 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
   if (s.tipo === 'VACACIONES' && datos.fechaInicio && datos.fechaFin) {
     const dias = await diasHabilesRango(datos.fechaInicio, datos.fechaFin)
     const datosObj = s.datos as Record<string, unknown>
-    const calculo = datosObj.calculoVacaciones as { anticipadas?: boolean; diasAnticipados?: number } | undefined
+    const calculo = datosObj.calculoVacaciones as { anticipadas?: boolean; diasAnticipados?: number; saldo?: number } | undefined
+    const autorizacion = datosObj.autorizacionAnticipadas as { fecha?: string } | undefined
     // Constancia de vacaciones anticipadas con autorización de descuento (RIT art. 69 num. 4):
     // habilita el descuento en la liquidación definitiva si el retiro ocurre antes de causarlas.
+    // El texto literal que aceptó queda en la solicitud (`autorizacionAnticipadas`).
     const observaciones = calculo?.anticipadas && datosObj.autorizaDescuentoAnticipadas === true
-      ? `Anticipadas: ${calculo.diasAnticipados} día(s) sin causar. El colaborador autorizó por escrito en la solicitud el descuento en caso de retiro (RIT art. 69 num. 4).`
+      ? `Anticipadas: ${calculo.diasAnticipados} día(s) sin causar (saldo al solicitar: ${calculo.saldo ?? '—'}). ` +
+        `El colaborador autorizó por escrito en la solicitud${autorizacion?.fecha ? ` el ${formatFechaCorta(parseFechaISO(autorizacion.fecha))}` : ''} ` +
+        `el descuento en caso de retiro (RIT art. 69 num. 4).`
       : null
     await prisma.vacaciones.create({
       data: {

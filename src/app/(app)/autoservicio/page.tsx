@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 import { documentosFaltantesDe } from '@/server/expediente'
 import { Prisma } from '@/generated/prisma/client'
 import { saldoVacaciones } from '@/server/vacaciones'
-import { MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO } from '@/lib/vacaciones-config'
+import { saldoVisibleEnAutoservicio } from '@/lib/vacaciones-config'
 import { liquidarVacaciones } from '@/server/vacaciones-liquidacion'
 import { Card, CardContent } from '@/components/ui/card'
 import { CalendarRange, Clock, CreditCard } from 'lucide-react'
@@ -122,7 +122,7 @@ export default async function AutoservicioPage() {
   }
 
   const [colab, saldo, solicitudes, disciplinariosAbiertos, opsPorFirmar, ultimoPago, otrosisPorFirmar, horasExtraPorFirmar] = await Promise.all([
-    prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { nombres: true, tipoVinculo: true, estado: true, fechaNacimiento: true, direccion: true, emergenciaNombre: true, epsId: true, afpId: true, bancoId: true, numeroCuenta: true } }),
+    prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { nombres: true, tipoVinculo: true, estado: true, vacacionesHistorialCompletoEn: true, fechaNacimiento: true, direccion: true, emergenciaNombre: true, epsId: true, afpId: true, bancoId: true, numeroCuenta: true } }),
     saldoVacaciones(usuario.colaboradorId),
     prisma.solicitud.findMany({
       where: { colaboradorId: usuario.colaboradorId },
@@ -392,6 +392,8 @@ export default async function AutoservicioPage() {
 
   // Avisos de la plataforma que le tocan y no ha leído: el banner de arriba y
   // el punto de "nuevo" en la casilla del módulo al que apuntan.
+  // Su saldo solo se le muestra cuando Talento Humano ya cargó su historial de vacaciones.
+  const mostrarSaldo = saldoVisibleEnAutoservicio(colab.vacacionesHistorialCompletoEn)
   const avisos = await avisosParaUsuario(usuario)
   const avisosNuevos = avisos.filter((a) => a.vigente && !a.leido)
 
@@ -403,14 +405,15 @@ export default async function AutoservicioPage() {
           grande y el ícono ya dicen de qué se trata. */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {/* El OPS no causa vacaciones: mostrarle "0 días disponibles" confunde más que omitirlo.
-            Mientras se terminan de subir los datos históricos, el saldo calculado no es
-            confiable: mismo recuadro, pero con "—" en vez del número (vacaciones-config.ts). */}
+            Hasta que Talento Humano confirme que cargó su historial, el saldo calculado no es
+            confiable: mismo recuadro, pero con "—" en vez del número (vacaciones-config.ts).
+            En negativo son días que tomó anticipados y aún no ha causado. */}
         {!esOps(colab.tipoVinculo) && (
           <Stat
             icono={CalendarRange}
             color="bg-foreground text-background"
-            valor={MOSTRAR_SALDO_VACACIONES_AUTOSERVICIO ? `${saldo.saldoEntero} día${saldo.saldoEntero === 1 ? "" : "s"}` : "—"}
-            label="Vacaciones"
+            valor={mostrarSaldo ? `${saldo.saldoEntero} día${Math.abs(saldo.saldoEntero) === 1 ? "" : "s"}` : "—"}
+            label={mostrarSaldo && saldo.saldoEntero < 0 ? "Vacaciones anticipadas" : "Vacaciones"}
           />
         )}
         <Stat icono={Clock} color="bg-foreground text-background" valor={String(enTramite)} label="En trámite" />
@@ -441,6 +444,7 @@ export default async function AutoservicioPage() {
         disciplinariosAbiertos={disciplinariosAbiertos}
         puedeAprobar={puedeAprobar}
         saldoVacaciones={saldo.saldoEntero}
+        mostrarSaldoVacaciones={mostrarSaldo}
         documentosFaltantes={documentosFaltantes}
         horasExtraPorFirmar={horasExtraPorFirmar}
         dotacionPorFirmar={dotacionPorFirmar}
