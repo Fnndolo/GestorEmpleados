@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Paperclip, OctagonAlert, Flame, ClipboardCheck, IdCard, Landmark, Scale, CircleCheck, CircleAlert, CircleX, FileWarning, LayoutGrid, ChartLine, ChevronLeft } from 'lucide-react'
+import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Paperclip, OctagonAlert, Flame, ClipboardCheck, IdCard, Landmark, Scale, CircleCheck, FileWarning, LayoutGrid, ChartLine, ChevronLeft, ScrollText, UserCheck, CalendarCheck, CircleAlert } from 'lucide-react'
 import { Chip, Pill, Stat, AvatarColaborador, type PillTone } from '@/components/ui-kit'
 import { urlFoto } from '@/lib/foto'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
@@ -42,6 +42,12 @@ const TITULO_TAB: Record<string, string> = {
   ipevr: 'Matriz de peligros (IPEVR)', profesiograma: 'Profesiograma', emergencias: 'Plan de emergencias',
   inspecciones: 'Inspecciones de seguridad', autoeval: 'Autoevaluación y plan de mejora', indicadores: 'Indicadores de accidentalidad',
 }
+/** Ícono de cada punto del semáforo del tablero (`clave` la manda el servidor). */
+const ICONO_SEMAFORO: Record<string, typeof Landmark> = {
+  politica: ScrollText, responsable: UserCheck, plan: CalendarCheck, autoeval: CircleCheck, matriz: Scale, comites: Users,
+}
+/** Íconos en tinta, como en el resto de la app: el color queda para el estado. */
+const TINTA = 'bg-foreground text-background'
 const CUMPLIMIENTO: Record<string, string> = { CUMPLE: 'Cumple', PARCIAL: 'Parcial', NO_CUMPLE: 'No cumple' }
 const TIPO_NOVEDAD_ARL: Record<string, string> = { AFILIACION: 'Afiliación', RETIRO: 'Retiro', TRASLADO_ARL: 'Traslado de ARL', CAMBIO_CLASE_RIESGO: 'Cambio de clase de riesgo', OTRA: 'Otra' }
 const TONO_CUMPLIMIENTO: Record<string, PillTone> = { CUMPLE: 'ok', PARCIAL: 'warn', NO_CUMPLE: 'bad' }
@@ -96,7 +102,7 @@ type Props = {
   brigadistas: { id: string; colaborador: string; rol: string; sede: string | null }[]
   simulacros: { id: string; fecha: string; tipo: string; participantes: number | null; observaciones: string | null; documentoId: string | null; sede: string | null }[]
   inspecciones: { id: string; fecha: string; tipo: string; area: string | null; hallazgos: string; responsable: string | null; estado: string; fechaCierre: string | null; documentoId: string | null; sede: string | null }[]
-  semaforo: { label: string; estado: 'ok' | 'warn' | 'bad'; detalle: string; tab: string }[]
+  semaforo: { clave: string; label: string; estado: 'ok' | 'warn' | 'bad'; detalle: string; tab: string }[]
   estructura: {
     politica: { id: string; titulo: string; firmadaEn: string | null } | null
     politicasDisponibles: { id: string; titulo: string; esSgSst: boolean }[]
@@ -268,13 +274,13 @@ export function SstCliente(p: Props) {
                 tabIndex={activo ? 0 : -1}
                 onClick={() => irA(it.tab)}
                 className={cn(
-                  'relative flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-[13.5px] transition-colors lg:w-full',
+                  'relative flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+                  'lg:w-full lg:rounded-lg lg:py-2 lg:text-[13.5px] lg:font-normal',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-                  // En móvil son pastillas sueltas; en escritorio, filas de menú.
-                  'border bg-card lg:border-0 lg:bg-transparent',
+                  // En móvil, píldoras como las pestañas del resto de la app; en escritorio, filas de menú.
                   activo
-                    ? 'border-primary font-semibold text-foreground lg:bg-card lg:shadow-sm'
-                    : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                    ? 'bg-primary text-primary-foreground lg:bg-card lg:font-semibold lg:text-foreground lg:shadow-sm'
+                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground lg:bg-transparent lg:hover:bg-accent/60',
                 )}
               >
                 {activo && (
@@ -322,15 +328,14 @@ export function SstCliente(p: Props) {
             <ChevronLeft className="size-[18px]" />
           </Button>
         )}
-        <nav aria-label="Ruta" className="flex min-w-0 items-center gap-1.5 text-[13.5px] font-semibold">
-          <span className="truncate">Seguridad y Salud en el Trabajo</span>
-          {tab !== 'tablero' && (
-            <>
-              <span className="font-normal text-muted-foreground">›</span>
-              <span className="truncate font-medium text-muted-foreground">{TITULO_TAB[tab] ?? 'SST'}</span>
-            </>
-          )}
-        </nav>
+        {/* Un solo título, como el encabezado del resto de la app: antes una ruta
+            pequeña arriba y otro título grande en el panel decían lo mismo. */}
+        <h1 className="min-w-0 flex-1 truncate text-xl font-semibold tracking-tight sm:text-2xl">
+          {tab === 'tablero' ? 'SST' : TITULO_TAB[tab] ?? 'SST'}
+        </h1>
+        {p.puedeCrear && !['tablero', 'emergencias', 'estructura', 'indicadores'].includes(tab) && (
+          <Button size="sm" className="shrink-0" onClick={() => setDialogo(tab)}><Plus className="size-4" /> Nuevo</Button>
+        )}
       </div>
 
       <div className="grid items-start gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-stretch">
@@ -340,17 +345,11 @@ export function SstCliente(p: Props) {
           imprescindible: sin él, un hijo de grid no encoge y el overflow se
           escapa al documento. */}
       <div className="space-y-4 lg:min-h-0 lg:overflow-y-auto lg:pb-6 lg:pr-1">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-2xl font-bold tracking-tight">{TITULO_TAB[tab] ?? 'Tablero'}</h1>
-          {p.puedeCrear && !['tablero', 'emergencias', 'estructura', 'indicadores', 'autoeval'].includes(tab) && <Button size="sm" onClick={() => setDialogo(tab)}><Plus className="size-4" /> Nuevo</Button>}
-          {p.puedeCrear && tab === 'autoeval' && <Button size="sm" onClick={() => setDialogo('autoeval')}><Plus className="size-4" /> Nuevo</Button>}
-        </div>
-
       {tab === 'tablero' && (
         <div className="space-y-5">
           <div className="grid items-start gap-3 lg:grid-cols-2">
             {/* Semáforo de cumplimiento documental del SG-SST */}
-            <Card><CardContent className="p-0">
+            <Card className="py-0"><CardContent className="p-0">
               <div className="flex items-center justify-between px-3 pt-3 pb-1">
                 <p className="text-sm font-medium">Cumplimiento documental</p>
                 <Pill tone={p.semaforo.every((s) => s.estado === 'ok') ? 'ok' : p.semaforo.some((s) => s.estado === 'bad') ? 'bad' : 'warn'}>
@@ -360,10 +359,11 @@ export function SstCliente(p: Props) {
               <div className="divide-y">
                 {p.semaforo.map((s) => (
                   <button key={s.label} type="button" onClick={() => irA(s.tab)} className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
-                    {s.estado === 'ok' ? <CircleCheck className="size-5 shrink-0 text-emerald-600" />
-                      : s.estado === 'warn' ? <CircleAlert className="size-5 shrink-0 text-amber-500" />
-                      : <CircleX className="size-5 shrink-0 text-destructive" />}
-                    <div className="min-w-0 flex-1"><p className="text-sm font-medium">{s.label}</p><p className="text-xs text-muted-foreground">{s.detalle}</p></div>
+                    <Chip icono={ICONO_SEMAFORO[s.clave] ?? Landmark} color={TINTA} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{s.label}</p>
+                      {s.detalle && <p className="text-xs text-muted-foreground">{s.detalle}</p>}
+                    </div>
                     <Pill tone={s.estado === 'ok' ? 'ok' : s.estado === 'warn' ? 'warn' : 'bad'}>{s.estado === 'ok' ? 'Al día' : s.estado === 'warn' ? 'Atención' : 'Falta'}</Pill>
                   </button>
                 ))}
@@ -373,20 +373,24 @@ export function SstCliente(p: Props) {
             {/* Contadores + accidentalidad */}
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <Stat icono={Users} color="sky" valor={p.headcount} label="Trabajadores activos" />
-                <Stat icono={FileWarning} color="rose" valor={furatPendientes} label="FURAT pendientes" onClick={() => irA('accidentes')} className={furatPendientes > 0 ? 'border-destructive/40 bg-destructive/5' : undefined} />
-                <Stat icono={Stethoscope} color="rose" valor={examenesVencidos} label="Exámenes vencidos" onClick={() => irA('examenes')} />
-                <Stat icono={HardHat} color="amber" valor={eppSinFirma} label="EPP sin firma" onClick={() => irA('epp')} />
+                <Stat icono={Users} color={TINTA} valor={p.headcount} label="Trabajadores" />
+                <Stat icono={FileWarning} color={TINTA} valor={furatPendientes} label="FURAT pendientes" onClick={() => irA('accidentes')} className={furatPendientes > 0 ? 'border-destructive/40 bg-destructive/5' : undefined} />
+                <Stat icono={Stethoscope} color={TINTA} valor={examenesVencidos} label="Exámenes vencidos" onClick={() => irA('examenes')} className={examenesVencidos > 0 ? 'border-destructive/40 bg-destructive/5' : undefined} />
+                <Stat icono={HardHat} color={TINTA} valor={eppSinFirma} label="EPP sin firma" onClick={() => irA('epp')} className={eppSinFirma > 0 ? 'border-amber-500/40 bg-amber-500/5' : undefined} />
               </div>
               <button type="button" onClick={() => irA('indicadores')} className="block w-full text-left">
-                <Card className="transition-colors hover:bg-accent/40"><CardContent className="py-4">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-sm font-medium">Accidentalidad y ausentismo</p>
-                    {p.indicadores.length > 0
-                      ? <p className="text-xs text-muted-foreground">{MES[p.indicadores[0].mes]} {p.indicadores[0].anio} · IF {p.indicadores[0].frecuencia} · IS {p.indicadores[0].severidad} · aus. {p.indicadores[0].ausentismo}%</p>
-                      : <p className="text-xs text-muted-foreground">Sin meses registrados</p>}
+                <Card className="py-0 transition-colors hover:bg-accent/40"><CardContent className="py-3">
+                  <div className="flex items-center gap-3">
+                    <Chip icono={ChartLine} color={TINTA} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">Accidentalidad y ausentismo</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {p.indicadores.length > 0
+                          ? `${MES[p.indicadores[0].mes]} ${p.indicadores[0].anio} · IF ${p.indicadores[0].frecuencia} · IS ${p.indicadores[0].severidad} · ausentismo ${p.indicadores[0].ausentismo}%`
+                          : 'Sin meses registrados'}
+                      </p>
+                    </div>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{p.indicadores.length} mes{p.indicadores.length === 1 ? '' : 'es'} registrado{p.indicadores.length === 1 ? '' : 's'} · índices de frecuencia, severidad y ausentismo</p>
                 </CardContent></Card>
               </button>
             </div>
@@ -445,7 +449,7 @@ export function SstCliente(p: Props) {
       {tab === 'matriz' && (p.normas.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.normas.map((n) => (
           <button key={n.id} type="button" onClick={() => setNormaAbierta(n)} className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent/40">
-            <Chip icono={Scale} color="violet" />
+            <Chip icono={Scale} color={TINTA} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">{n.norma}</p>
               <p className="truncate text-xs text-muted-foreground">{n.tema}</p>
@@ -532,7 +536,7 @@ export function SstCliente(p: Props) {
       {tab === 'comites' && (p.comites.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.comites.map((c) => (
           <button key={c.id} type="button" onClick={() => setComiteAbierto(c)} className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent/40">
-            <Chip icono={Users} color="teal" />
+            <Chip icono={Users} color={TINTA} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">{TIPO_COMITE[c.tipo]}</p>
               <p className="text-xs text-muted-foreground">{c.miembros.length} miembro{c.miembros.length === 1 ? '' : 's'} · {c.reuniones.length} reunión{c.reuniones.length === 1 ? '' : 'es'}</p>
@@ -570,7 +574,7 @@ export function SstCliente(p: Props) {
       {tab === 'ipevr' && (p.peligros.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.peligros.map((pe) => (
           <div key={pe.id} className="flex items-start gap-3 p-3">
-            <Chip icono={ShieldAlert} color="rose" />
+            <Chip icono={ShieldAlert} color={TINTA} />
             <div className="flex-1 min-w-0 space-y-0.5">
               <p className="font-medium text-sm">{pe.peligro} <span className="font-normal text-muted-foreground">— {pe.riesgo}</span></p>
               <p className="text-xs text-muted-foreground">
@@ -592,7 +596,7 @@ export function SstCliente(p: Props) {
       {tab === 'profesiograma' && (p.profesiogramas.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.profesiogramas.map((pr) => (
           <div key={pr.id} className="space-y-1 p-3">
-            <div className="flex items-center gap-3"><Chip icono={IdCard} color="indigo" /><p className="text-sm font-medium">{pr.cargo}</p></div>
+            <div className="flex items-center gap-3"><Chip icono={IdCard} color={TINTA} /><p className="text-sm font-medium">{pr.cargo}</p></div>
             <p className="pl-11 text-xs text-muted-foreground"><b>Riesgos:</b> {pr.riesgosExpuestos}</p>
             <p className="pl-11 text-xs text-muted-foreground"><b>Exámenes requeridos:</b> {pr.examenesRequeridos}</p>
             <p className="pl-11 text-xs text-muted-foreground"><b>Aptitudes:</b> {pr.aptitudesRequeridas}</p>
@@ -612,7 +616,7 @@ export function SstCliente(p: Props) {
       {tab === 'inspecciones' && (p.inspecciones.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.inspecciones.map((i) => (
           <button key={i.id} type="button" onClick={() => setInspeccionAbierta(i)} className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent/40">
-            <Chip icono={ClipboardCheck} color="teal" />
+            <Chip icono={ClipboardCheck} color={TINTA} />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">{i.tipo}{i.area ? ` — ${i.area}` : ''}</p>
               <p className="text-xs text-muted-foreground">{formatFechaCorta(new Date(i.fecha))}{i.sede ? ` · ${i.sede}` : ''} · {i.hallazgos}</p>
@@ -1261,7 +1265,7 @@ function EstructuraSgsst({ estructura, puedeEditar }: { estructura: Props['estru
   return (
     <div className="space-y-3">
       <Card><CardContent className="flex flex-wrap items-center gap-3 py-4">
-        <Chip icono={Landmark} color="sky" />
+        <Chip icono={Landmark} color={TINTA} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Política del SG-SST</p>
           {e.politica ? (
@@ -1276,7 +1280,7 @@ function EstructuraSgsst({ estructura, puedeEditar }: { estructura: Props['estru
       </CardContent></Card>
 
       <Card><CardContent className="flex flex-wrap items-center gap-3 py-4">
-        <Chip icono={IdCard} color="teal" />
+        <Chip icono={IdCard} color={TINTA} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Responsable del SG-SST</p>
           {e.responsable ? (
@@ -1295,7 +1299,7 @@ function EstructuraSgsst({ estructura, puedeEditar }: { estructura: Props['estru
       </CardContent></Card>
 
       <Card><CardContent className="flex flex-wrap items-center gap-3 py-4">
-        <Chip icono={ClipboardCheck} color="violet" />
+        <Chip icono={ClipboardCheck} color={TINTA} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Plan de trabajo anual {e.anioActual}</p>
           {e.plan ? (

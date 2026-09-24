@@ -117,46 +117,48 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
   // Semáforo de cumplimiento documental del SG-SST (D.1072 art. 2.2.4.6.8)
   type EstadoSem = 'ok' | 'warn' | 'bad'
   const normasCumple = normas.filter((n) => n.cumplimiento === 'CUMPLE').length
-  const semaforo: { label: string; estado: EstadoSem; detalle: string; tab: string }[] = [
+  // `clave` elige el ícono en el cliente. `detalle` va vacío cuando solo repetiría
+  // lo que ya dice la etiqueta "Falta".
+  const semaforo: { clave: string; label: string; estado: EstadoSem; detalle: string; tab: string }[] = [
     {
-      label: 'Política del SG-SST firmada', tab: 'estructura',
+      clave: 'politica', label: 'Política del SG-SST firmada', tab: 'estructura',
       estado: politicaSgsst?.firmadaEn ? 'ok' : politicaSgsst ? 'warn' : 'bad',
       detalle: politicaSgsst
         ? politicaSgsst.firmadaEn ? `"${politicaSgsst.titulo}" · firmada el ${formatFechaISO(politicaSgsst.firmadaEn)}` : `"${politicaSgsst.titulo}" sin fecha de firma`
-        : 'No se ha vinculado la política (se sube en Jurídica, categoría Política).',
+        : 'Se sube en Jurídica, categoría Política.',
     },
     {
-      label: 'Responsable del SG-SST designado', tab: 'estructura',
+      clave: 'responsable', label: 'Responsable del SG-SST designado', tab: 'estructura',
       estado: responsableSgsst ? (responsableSgsst.cartaDocId ? 'ok' : 'warn') : 'bad',
       detalle: responsableSgsst
         ? `${responsableSgsst.colaborador.nombres} ${responsableSgsst.colaborador.apellidos} · desde ${formatFechaISO(responsableSgsst.fechaDesignacion)}${responsableSgsst.cartaDocId ? '' : ' · falta la carta de designación'}`
-        : 'Nadie ha sido designado formalmente.',
+        : '',
     },
     {
-      label: `Plan de trabajo anual ${anio}`, tab: 'estructura',
+      clave: 'plan', label: `Plan de trabajo anual ${anio}`, tab: 'estructura',
       estado: planTrabajo ? (planTrabajo.documentoId ? 'ok' : 'warn') : 'bad',
       detalle: planTrabajo
         ? `Avance ${planTrabajo.avancePct}%${planTrabajo.documentoId ? '' : ' · falta adjuntar el PDF del plan'}`
-        : 'No se ha registrado el plan de este año.',
+        : '',
     },
     {
-      label: 'Autoevaluación y plan de mejora', tab: 'autoeval',
+      clave: 'autoeval', label: 'Autoevaluación y plan de mejora', tab: 'autoeval',
       estado: !autoeval ? 'bad'
         : autoeval.anio < anio - 1 ? 'warn'
         : autoeval.acciones.some((a) => !a.cumplida && a.fechaLimite < hoy) ? 'warn'
         : 'ok',
-      detalle: !autoeval ? 'Sin autoevaluación registrada.'
+      detalle: !autoeval ? ''
         : `Última: ${autoeval.anio} (${Number(autoeval.puntaje)}%)` + (autoeval.acciones.length
           ? ` · plan de mejora: ${autoeval.acciones.filter((a) => a.cumplida).length}/${autoeval.acciones.length} acciones cumplidas${autoeval.acciones.some((a) => !a.cumplida && a.fechaLimite < hoy) ? ' (hay vencidas)' : ''}`
           : ' · sin acciones de mejora registradas'),
     },
     {
-      label: 'Matriz legal (normograma)', tab: 'matriz',
+      clave: 'matriz', label: 'Matriz legal (normograma)', tab: 'matriz',
       estado: normas.length === 0 ? 'bad' : normasCumple === normas.length ? 'ok' : normasCumple > 0 ? 'warn' : 'bad',
-      detalle: normas.length === 0 ? 'Sin normas registradas.' : `${normasCumple} de ${normas.length} normas en estado "Cumple".`,
+      detalle: normas.length === 0 ? '' : `${normasCumple} de ${normas.length} normas en estado "Cumple".`,
     },
     {
-      label: 'Comités (COPASST / Convivencia)', tab: 'comites',
+      clave: 'comites', label: 'Comités (COPASST / Convivencia)', tab: 'comites',
       estado: comiteEstado.tono === 'emerald' ? 'ok' : comiteEstado.tono === 'amber' ? 'warn' : 'bad',
       detalle: comiteEstado.label,
     },
