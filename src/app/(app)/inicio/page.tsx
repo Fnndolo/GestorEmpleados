@@ -3,7 +3,7 @@ import { requerirSesion, tienePermiso } from '@/server/sesion'
 import { hrefsVisibles } from '@/lib/navegacion'
 import { prisma } from '@/lib/db'
 import { Card, CardContent } from '@/components/ui/card'
-import { Users, Building2, Bell, ShieldCheck, AlertCircle, type LucideIcon } from 'lucide-react'
+import { Bell, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { hoyBogota, formatFechaCorta } from '@/lib/fechas'
 import { BannerPush } from '@/components/pwa/banner-push'
@@ -71,14 +71,15 @@ export default async function InicioPage() {
       : null
 
   // Cada indicador va con su permiso; a quien no le toca ninguno, no ve la fila.
+  // Solo la cifra y una palabra: con ícono y rótulo largo ocupaban dos filas.
   // Solo el de vencimientos cambia de color, y solo cuando hay vencidos: es un estado, no una categoría.
-  const indicadores: { icono: LucideIcon; alerta?: boolean; valor: string; label: string }[] = []
-  if (verUsuarios) indicadores.push({ icono: Users, valor: String(usuarios), label: 'Usuarios activos' })
-  if (verConfiguracion) indicadores.push({ icono: Building2, valor: String(sedes), label: 'Sedes activas' })
+  const indicadores: { alerta?: boolean; valor: string; label: string; href?: string }[] = []
+  if (verUsuarios) indicadores.push({ valor: String(usuarios), label: 'Usuarios' })
+  if (verConfiguracion) indicadores.push({ valor: String(sedes), label: 'Sedes' })
   if (verVencimientos) {
-    indicadores.push({ icono: Bell, alerta: vencidos > 0, valor: String(vencimientos.length), label: 'Vencimientos próximos' })
+    indicadores.push({ alerta: vencidos > 0, valor: String(vencimientos.length), label: 'Vencimientos', href: '/vencimientos' })
   } else if (verConfiguracion) {
-    indicadores.push({ icono: ShieldCheck, valor: String(roles), label: 'Roles configurados' })
+    indicadores.push({ valor: String(roles), label: 'Roles' })
   }
 
   const avisosNuevos = (await avisosParaUsuario(usuario)).filter((a) => a.vigente && !a.leido).slice(0, 5)
@@ -100,15 +101,9 @@ export default async function InicioPage() {
       <BannerAvisos avisos={avisosNuevos} />
 
       {indicadores.length > 0 && (
-        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-          {indicadores.map((ind, i) => (
-            <Stat
-              key={ind.label}
-              {...ind}
-              // El último de una fila impar ocupa las dos columnas en móvil para no dejar hueco.
-              className={i === indicadores.length - 1 && indicadores.length % 2 === 1 ? 'col-span-2 sm:col-span-1' : undefined}
-            />
-          ))}
+        // Todas en una sola fila, también en el celular (son solo una cifra y una palabra).
+        <div className={cn('mt-4 grid gap-2.5 sm:max-w-lg', COLUMNAS[indicadores.length])}>
+          {indicadores.map((ind) => <Cifra key={ind.label} {...ind} />)}
         </div>
       )}
 
@@ -162,22 +157,19 @@ export default async function InicioPage() {
   )
 }
 
-function Stat({ icono: Icono, alerta, valor, label, className }: {
-  icono: LucideIcon; alerta?: boolean; valor: string; label: string; className?: string
-}) {
-  return (
-    <div className={cn('flex items-center gap-3 rounded-xl border bg-card p-3.5', className)}>
-      <span className={cn(
-        'grid size-9 shrink-0 place-items-center rounded-[10px]',
-        alerta ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-foreground text-background',
-      )}>
-        <Icono className="size-[19px]" />
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-[22px] font-bold leading-none tracking-tight tabular-nums">{valor}</p>
-        <p className="mt-1 text-[11.5px] text-muted-foreground">{label}</p>
-      </div>
-    </div>
+const COLUMNAS: Record<number, string> = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' }
+
+/** Cifra de un vistazo: el número y una palabra. En rosa cuando es una alerta (vencidos). */
+function Cifra({ alerta, valor, label, href }: { alerta?: boolean; valor: string; label: string; href?: string }) {
+  const contenido = (
+    <>
+      <p className={cn('truncate text-[22px] font-bold leading-none tracking-tight tabular-nums', alerta && 'text-rose-600 dark:text-rose-400')}>{valor}</p>
+      <p className="mt-1 truncate text-xs text-muted-foreground">{label}</p>
+    </>
   )
+  const clase = cn('block min-w-0 rounded-xl border bg-card px-3.5 py-3', alerta && 'border-rose-500/30 bg-rose-500/5')
+  return href
+    ? <Link href={href} className={cn(clase, 'transition-colors hover:bg-accent/40')}>{contenido}</Link>
+    : <div className={clase}>{contenido}</div>
 }
 
