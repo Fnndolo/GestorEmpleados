@@ -7,6 +7,7 @@ export function Encabezado({
   fijo,
   enLinea,
   volver,
+  centro,
 }: {
   titulo: string
   descripcion?: string
@@ -35,7 +36,27 @@ export function Encabezado({
    * salto que se quiere evitar. El relleno propio devuelve el aire por dentro.
    */
   fijo?: boolean
+  /**
+   * Contenido centrado entre el título y las acciones (p. ej. el buscador del
+   * listado). En pantallas anchas (xl) queda al centro de la fila; en las más
+   * angostas baja a una fila propia a todo el ancho, debajo del título: con el
+   * menú lateral abierto no cabe al lado sin aplastar el título.
+   */
+  centro?: React.ReactNode
 }) {
+  if (centro) {
+    return (
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 xl:grid xl:grid-cols-[1fr_minmax(16rem,28rem)_1fr]">
+        {/* Sin min-w-0: el título entero marca el ancho mínimo de su columna. */}
+        <div className={volver ? 'flex items-start gap-1.5' : undefined}>
+          {volver && <BotonVolver fallback={typeof volver === 'string' ? volver : undefined} className="-ml-2 mt-0.5" />}
+          <h1 className="whitespace-nowrap text-xl font-semibold tracking-tight sm:text-2xl">{titulo}</h1>
+        </div>
+        <div className="order-last w-full sm:max-w-md xl:order-none xl:max-w-none">{centro}</div>
+        {acciones && <div className="flex shrink-0 items-center gap-2 xl:justify-self-end">{acciones}</div>}
+      </div>
+    )
+  }
   return (
     <div
       className={

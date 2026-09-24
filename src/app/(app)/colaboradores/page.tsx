@@ -5,7 +5,7 @@ import { whereColaboradores, filtroBusquedaColaborador } from '@/server/consulta
 import { Encabezado } from '@/components/shell/encabezado'
 import { Button } from '@/components/ui/button'
 import { Plus, Network, Upload } from 'lucide-react'
-import { ListaColaboradores } from './lista-cliente'
+import { ListaColaboradores, BuscadorColaboradores } from './lista-cliente'
 import type { Prisma } from '@/generated/prisma/client'
 
 export const metadata = { title: 'Colaboradores · Smart Gadgets RH' }
@@ -50,12 +50,14 @@ export default async function ColaboradoresPage({
   }
   totalPorVinculo['TODOS'] = total
 
+  const tabs = VINCULOS.map((v) => ({ valor: v, conteo: totalPorVinculo[v] ?? 0 }))
+
   return (
     <div className="max-w-[1600px]">
       <Encabezado
         titulo="Colaboradores"
-        enLinea
         volver
+        centro={<BuscadorColaboradores tabs={tabs} tabActivo={tab} busqueda={q} />}
         acciones={
           <div className="flex gap-2">
             <Button size="sm" asChild>
@@ -89,7 +91,7 @@ export default async function ColaboradoresPage({
           estado: c.estado,
           fotoPath: c.fotoPath,
         }))}
-        tabs={VINCULOS.map((v) => ({ valor: v, conteo: totalPorVinculo[v] ?? 0 }))}
+        tabs={tabs}
         tabActivo={tab}
         busqueda={q}
       />

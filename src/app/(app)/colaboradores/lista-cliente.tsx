@@ -36,53 +36,67 @@ const ESTADO_VARIANTE: Record<string, 'default' | 'secondary' | 'outline'> = {
   ACTIVO: 'default', INACTIVO: 'secondary', RETIRADO: 'outline',
 }
 
-export function ListaColaboradores({
-  colaboradores, tabs, tabActivo, busqueda,
-}: {
-  colaboradores: Colaborador[]; tabs: Tab[]; tabActivo: string; busqueda: string
-}) {
+/** Navegación del listado: la pestaña y la búsqueda viven en la URL. */
+function useNavegar() {
   const router = useRouter()
-  const [q, setQ] = useState(busqueda)
   const [, startTransition] = useTransition()
-
-  function navegar(tab: string, texto: string) {
+  return (tab: string, texto: string) => {
     const params = new URLSearchParams()
     if (tab !== 'TODOS') params.set('tab', tab)
     if (texto.trim()) params.set('q', texto.trim())
     startTransition(() => router.push(`/colaboradores${params.toString() ? `?${params}` : ''}`))
   }
+}
+
+/**
+ * Buscador del listado, en el encabezado (al centro en escritorio). En el
+ * celular lleva al lado el filtro por vínculo en la misma fila: apilados
+ * gastaban dos renglones antes de ver a la primera persona.
+ */
+export function BuscadorColaboradores({ tabs, tabActivo, busqueda }: { tabs: Tab[]; tabActivo: string; busqueda: string }) {
+  const navegar = useNavegar()
+  const [q, setQ] = useState(busqueda)
+
+  return (
+    <div className="flex gap-2">
+      <div className="relative min-w-0 flex-1">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && navegar(tabActivo, q)}
+          placeholder="Nombre o documento"
+          className="pl-9"
+        />
+      </div>
+      <div className="sm:hidden">
+        <Select value={tabActivo} onValueChange={(v) => navegar(v, q)}>
+          <SelectTrigger className="w-36" aria-label="Filtrar por vínculo">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {tabs.map((t) => (
+              <SelectItem key={t.valor} value={t.valor}>
+                {TAB_LABEL[t.valor]} ({t.conteo})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
+}
+
+export function ListaColaboradores({
+  colaboradores, tabs, tabActivo, busqueda,
+}: {
+  colaboradores: Colaborador[]; tabs: Tab[]; tabActivo: string; busqueda: string
+}) {
+  const navegar = useNavegar()
+  const q = busqueda
 
   return (
     <div className="space-y-3">
-      {/* Búsqueda y, en el celular, el filtro por vínculo en la misma fila:
-          apilados gastaban dos renglones antes de ver a la primera persona. */}
-      <div className="flex gap-2 sm:max-w-md">
-        <div className="relative min-w-0 flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && navegar(tabActivo, q)}
-            placeholder="Nombre o documento"
-            className="pl-9"
-          />
-        </div>
-        <div className="sm:hidden">
-          <Select value={tabActivo} onValueChange={(v) => navegar(v, q)}>
-            <SelectTrigger className="w-36" aria-label="Filtrar por vínculo">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {tabs.map((t) => (
-                <SelectItem key={t.valor} value={t.valor}>
-                  {TAB_LABEL[t.valor]} ({t.conteo})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
       <div className="hidden gap-1.5 overflow-x-auto pb-1 sm:flex">
         {tabs.map((t) => (
           <button
