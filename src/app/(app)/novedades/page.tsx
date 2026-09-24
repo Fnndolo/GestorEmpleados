@@ -6,7 +6,8 @@ import { NovedadesCliente } from './novedades-cliente'
 import { formatFechaISO, formatFechaCorta, hoyBogota } from '@/lib/fechas'
 import { situacionComprobante } from '@/lib/comprobante-permiso'
 import Link from 'next/link'
-import { Inbox, ChevronRight } from 'lucide-react'
+import { Inbox } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { urlFoto } from '@/lib/foto'
 
 export const metadata = { title: 'Novedades · Smart Gadgets RH' }
@@ -20,9 +21,9 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
   const filtroSede = sede ? { colaborador: { sedeId: sede } } : {}
   const incCol = { colaborador: { select: { nombres: true, apellidos: true, id: true, fotoPath: true } } }
 
-  // Acceso directo a la bandeja de aprobaciones para RRHH: la página vive en
-  // /autoservicio/aprobaciones (los jefes llegan por Autoservicio), pero desde
-  // aquí se muestra el conteo de solicitudes pendientes por resolver.
+  // Acceso directo a la bandeja de aprobaciones para RRHH (icono junto al título):
+  // la página vive en /autoservicio/aprobaciones (los jefes llegan por
+  // Autoservicio), pero desde aquí se muestra el conteo de pendientes.
   const puedeAprobar = tienePermiso(usuario, 'autoservicio', 'APROBAR')
   const aprobacionesPendientes = puedeAprobar
     ? await prisma.solicitud.count({ where: { estado: 'EN_APROBACION', pasos: { some: { estado: 'PENDIENTE' } } } })
@@ -61,41 +62,29 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
 
   return (
     <div className="max-w-7xl">
-      <Encabezado titulo="Novedades" descripcion="Incapacidades, licencias, permisos, vacaciones y bonificaciones." volver />
-
-      {puedeAprobar && (
-        <Link
-          href="/autoservicio/aprobaciones"
-          className={
-            aprobacionesPendientes > 0
-              ? 'mb-4 flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 transition-colors hover:bg-amber-500/10'
-              : 'mb-4 flex items-center gap-3 rounded-xl border bg-card px-4 py-3 transition-colors hover:bg-accent/40'
-          }
-        >
-          <span
-            className={
-              aprobacionesPendientes > 0
-                ? 'grid size-9 shrink-0 place-items-center rounded-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                : 'grid size-9 shrink-0 place-items-center rounded-[10px] bg-violet-500/12 text-violet-600 dark:text-violet-400'
-            }
-          >
-            <Inbox className="size-[19px]" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium">
-              {aprobacionesPendientes > 0
-                ? `${aprobacionesPendientes} solicitud${aprobacionesPendientes === 1 ? '' : 'es'} de autoservicio por aprobar`
-                : 'Bandeja de aprobaciones'}
-            </span>
-            <span className="block text-xs text-muted-foreground">
-              {aprobacionesPendientes > 0
-                ? 'Vacaciones, permisos, incapacidades y licencias esperando decisión.'
-                : 'No hay solicitudes pendientes por resolver.'}
-            </span>
-          </span>
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-        </Link>
-      )}
+      <Encabezado
+        titulo="Novedades"
+        volver
+        enLinea
+        acciones={puedeAprobar && (
+          // Bandeja de aprobaciones como icono, con el conteo encima (como la campana):
+          // la tarjeta con texto ocupaba una fila entera aunque no hubiera nada pendiente.
+          <Button asChild variant="outline" size="icon" className="relative">
+            <Link
+              href="/autoservicio/aprobaciones"
+              title={aprobacionesPendientes > 0 ? `${aprobacionesPendientes} por aprobar` : 'Bandeja de aprobaciones'}
+              aria-label={aprobacionesPendientes > 0 ? `Bandeja de aprobaciones: ${aprobacionesPendientes} por aprobar` : 'Bandeja de aprobaciones'}
+            >
+              <Inbox className="size-5" />
+              {aprobacionesPendientes > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium text-white">
+                  {aprobacionesPendientes > 9 ? '9+' : aprobacionesPendientes}
+                </span>
+              )}
+            </Link>
+          </Button>
+        )}
+      />
 
       <NovedadesCliente
         tab={tab}

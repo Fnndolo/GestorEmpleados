@@ -22,6 +22,40 @@ export type ItemAcordeon = {
   extra?: React.ReactNode
 }
 
+/** A partir de este largo un valor es "texto" (un motivo, una observación) y no un dato. */
+const LARGO_TEXTO = 40
+
+/**
+ * Detalle del ítem: los datos cortos (fecha, días, origen…) juntos en una fila
+ * compacta, y los textos largos debajo a todo el ancho. En una cuadrícula de
+ * columnas iguales la fecha se quedaba con un tercio de la fila y el motivo,
+ * que es lo que más se lee, apretado en otro tercio.
+ */
+function Campos({ campos }: { campos: ItemAcordeon['campos'] }) {
+  const cortos = campos.filter((c) => c.valor.length <= LARGO_TEXTO)
+  const largos = campos.filter((c) => c.valor.length > LARGO_TEXTO)
+  return (
+    <dl className="space-y-3">
+      {cortos.length > 0 && (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:flex sm:flex-wrap sm:gap-x-10">
+          {cortos.map((cpo) => (
+            <div key={cpo.label} className="min-w-0">
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{cpo.label}</dt>
+              <dd className="text-sm">{cpo.valor}</dd>
+            </div>
+          ))}
+        </div>
+      )}
+      {largos.map((cpo) => (
+        <div key={cpo.label}>
+          <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{cpo.label}</dt>
+          <dd className="max-w-4xl text-sm leading-relaxed break-words whitespace-pre-line">{cpo.valor}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 /**
  * Lista con detalle expandible (acordeón) — el patrón de "Mi actividad" de
  * autoservicio: fila compacta con chip de categoría (y foto si aplica), al
@@ -69,16 +103,7 @@ export function ListaAcordeon({ items, chip }: {
             </div>
             {expandida && (
               <div className="space-y-3 border-t border-dashed bg-muted/20 px-4 py-3 animate-in fade-in slide-in-from-top-1 duration-150">
-                {x.campos.length > 0 && (
-                  <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-                    {x.campos.map((cpo) => (
-                      <div key={cpo.label} className="min-w-0">
-                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{cpo.label}</dt>
-                        <dd className="text-sm">{cpo.valor}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
+                {x.campos.length > 0 && <Campos campos={x.campos} />}
                 {x.extra}
               </div>
             )}

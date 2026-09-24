@@ -273,21 +273,50 @@ function ComprobantePermiso({ permisoId, c, puedeEditar }: { permisoId: string; 
 
   return (
     <div className="rounded-lg border bg-card p-3 text-xs">
-      <div className="flex flex-wrap items-center gap-2">
-        <FileCheck className="size-4 shrink-0 text-muted-foreground" />
-        <p className="text-[13px] font-medium">Comprobante de asistencia</p>
-        <Pill tone={et.tone}>{et.label}</Pill>
-        {c.docId && (
-          <VisorPdf documentoId={c.docId} titulo="Comprobante de asistencia" className="inline-flex items-center gap-1 text-primary hover:underline">
-            <Paperclip className="size-3.5" /> Ver archivo
-          </VisorPdf>
+      {/* En pantallas anchas los botones van a la derecha del texto, no en una fila aparte. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <FileCheck className="size-4 shrink-0 text-muted-foreground" />
+            <p className="text-[13px] font-medium">Comprobante de asistencia</p>
+            <Pill tone={et.tone}>{et.label}</Pill>
+            {c.docId && (
+              <VisorPdf documentoId={c.docId} titulo="Comprobante de asistencia" className="inline-flex items-center gap-1 text-primary hover:underline">
+                <Paperclip className="size-3.5" /> Ver archivo
+              </VisorPdf>
+            )}
+          </div>
+          <p className="mt-1 text-muted-foreground">{descripcion[c.situacion]}</p>
+          {c.nota && (
+            <p className="mt-1 text-muted-foreground">{c.situacion === 'VERIFICADO' ? 'Observación' : 'Devuelto'}: &ldquo;{c.nota}&rdquo;</p>
+          )}
+        </div>
+        {puedeEditar && !devolviendo && (
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            {c.situacion === 'NO_REQUERIDO' && (
+              <Button size="sm" disabled={g} onClick={() => correr(() => cambiarExigenciaComprobante({ permisoId, exigir: true }), 'Se le pidió el comprobante al colaborador.')}>
+                {g ? <Spinner /> : <FileCheck className="size-4" />} Pedir comprobante
+              </Button>
+            )}
+            {(c.situacion === 'PENDIENTE' || c.situacion === 'VENCIDO') && (
+              <Button size="sm" disabled={g} onClick={() => correr(() => cambiarExigenciaComprobante({ permisoId, exigir: false }), 'Ya no se exige el comprobante.')}>
+                {g ? <Spinner /> : <X className="size-4" />} Dejar de exigir
+              </Button>
+            )}
+            {c.situacion === 'ENTREGADO' && (
+              <>
+                <Button size="sm" disabled={g} onClick={() => setDevolviendo(true)}>
+                  <X className="size-4" /> No sirve
+                </Button>
+                <Button size="sm" disabled={g} onClick={() => correr(() => verificarComprobantePermiso({ permisoId, valido: true }), 'Comprobante verificado.')}>
+                  {g ? <Spinner /> : <Check className="size-4" />} Aceptar
+                </Button>
+              </>
+            )}
+          </div>
         )}
       </div>
-      <p className="mt-1 text-muted-foreground">{descripcion[c.situacion]}</p>
-      {c.nota && (
-        <p className="mt-1 text-muted-foreground">{c.situacion === 'VERIFICADO' ? 'Observación' : 'Devuelto'}: &ldquo;{c.nota}&rdquo;</p>
-      )}
-      {puedeEditar && (devolviendo ? (
+      {puedeEditar && devolviendo && (
         <div className="mt-2 space-y-2">
           <Textarea rows={2} placeholder="¿Por qué no sirve? El colaborador verá este motivo." value={nota} onChange={(e) => setNota(e.target.value)} />
           <div className="flex justify-end gap-2">
@@ -300,30 +329,7 @@ function ComprobantePermiso({ permisoId, c, puedeEditar }: { permisoId: string; 
             </Button>
           </div>
         </div>
-      ) : (
-        <div className="mt-2 flex flex-wrap justify-end gap-2">
-          {c.situacion === 'NO_REQUERIDO' && (
-            <Button size="sm" disabled={g} onClick={() => correr(() => cambiarExigenciaComprobante({ permisoId, exigir: true }), 'Se le pidió el comprobante al colaborador.')}>
-              {g ? <Spinner /> : <FileCheck className="size-4" />} Pedir comprobante
-            </Button>
-          )}
-          {(c.situacion === 'PENDIENTE' || c.situacion === 'VENCIDO') && (
-            <Button size="sm" disabled={g} onClick={() => correr(() => cambiarExigenciaComprobante({ permisoId, exigir: false }), 'Ya no se exige el comprobante.')}>
-              {g ? <Spinner /> : <X className="size-4" />} Dejar de exigir
-            </Button>
-          )}
-          {c.situacion === 'ENTREGADO' && (
-            <>
-              <Button size="sm" disabled={g} onClick={() => setDevolviendo(true)}>
-                <X className="size-4" /> No sirve
-              </Button>
-              <Button size="sm" disabled={g} onClick={() => correr(() => verificarComprobantePermiso({ permisoId, valido: true }), 'Comprobante verificado.')}>
-                {g ? <Spinner /> : <Check className="size-4" />} Aceptar
-              </Button>
-            </>
-          )}
-        </div>
-      ))}
+      )}
     </div>
   )
 }
