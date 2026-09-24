@@ -10,7 +10,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Chip, Pill, Stat, type PillTone } from '@/components/ui-kit'
+import { Chip, Pill, Stat, AvatarColaborador, type PillTone } from '@/components/ui-kit'
+import { urlFoto } from '@/lib/foto'
 import { hoyBogota } from '@/lib/fechas'
 import { fechaBreve } from '@/lib/notificaciones/texto'
 import type { Prisma } from '@/generated/prisma/client'
@@ -76,27 +77,28 @@ export default async function VencimientosPage({
     take: 500,
   })
 
-  // Pre-cargar documentos para mapear el enlace al colaborador correspondiente
-  const docIds = vencimientos
-    .filter((v) => v.entidadTipo === 'Documento')
-    .map((v) => v.entidadId)
-
-  const documentos = await prisma.documento.findMany({
-    where: { id: { in: docIds } },
-    select: { id: true, entidadTipo: true, entidadId: true },
+  // De qué colaborador es cada vencimiento (si es de alguien): para su foto, su
+  // nombre y el enlace a su ficha. Mismas reglas que los avisos (despachador).
+  const idsDe = (tipo: string) => vencimientos.filter((v) => v.entidadTipo === tipo).map((v) => v.entidadId)
+  const [documentos, contratos, contratosOps, examenes] = await Promise.all([
+    prisma.documento.findMany({ where: { id: { in: idsDe('Documento') }, entidadTipo: 'Colaborador' }, select: { id: true, entidadId: true } }),
+    prisma.contrato.findMany({ where: { id: { in: idsDe('Contrato') } }, select: { id: true, colaboradorId: true } }),
+    prisma.contratoOps.findMany({ where: { id: { in: idsDe('ContratoOps') } }, select: { id: true, colaboradorId: true } }),
+    prisma.examenMedico.findMany({ where: { id: { in: idsDe('ExamenMedico') } }, select: { id: true, colaboradorId: true } }),
+  ])
+  const colaboradorPorEntidad = new Map<string, string>([
+    ...documentos.map((d) => [d.id, d.entidadId] as [string, string]),
+    ...contratos.map((c) => [c.id, c.colaboradorId] as [string, string]),
+    ...contratosOps.filter((c) => c.colaboradorId).map((c) => [c.id, c.colaboradorId!] as [string, string]),
+    ...examenes.map((e) => [e.id, e.colaboradorId] as [string, string]),
+  ])
+  const colaboradorDe = (v: { entidadTipo: string; entidadId: string }) =>
+    v.entidadTipo === 'Colaborador' ? v.entidadId : colaboradorPorEntidad.get(v.entidadId) ?? null
+  const colaboradores = await prisma.colaborador.findMany({
+    where: { id: { in: [...new Set(vencimientos.map(colaboradorDe).filter((id): id is string => !!id))] } },
+    select: { id: true, nombres: true, apellidos: true, fotoPath: true },
   })
-  const docsMap = new Map(documentos.map((d) => [d.id, d]))
-
-  // Pre-cargar contratos para mapear el enlace al colaborador correspondiente
-  const contratoIds = vencimientos
-    .filter((v) => v.entidadTipo === 'Contrato')
-    .map((v) => v.entidadId)
-
-  const contratos = await prisma.contrato.findMany({
-    where: { id: { in: contratoIds } },
-    select: { id: true, colaboradorId: true },
-  })
-  const contratosMap = new Map(contratos.map((c) => [c.id, c]))
+  const colaboradoresMap = new Map(colaboradores.map((c) => [c.id, c]))
 
   const hoy = hoyBogota()
   const en30 = new Date(hoy); en30.setUTCDate(en30.getUTCDate() + 30)
@@ -163,13 +165,27 @@ export default async function VencimientosPage({
               <Card><CardContent className="divide-y p-0">
                 {g.items.map((v) => {
                   const origen = ORIGEN[v.origen] ?? { etiqueta: v.origen, icono: Bell }
+                  const colabId = colaboradorDe(v)
+                  const colab = colabId ? colaboradoresMap.get(colabId) : undefined
+                  const nombre = colab ? `${colab.nombres} ${colab.apellidos}` : null
+                  const cuando = `${v.urgencia === 'vencido' ? 'venció el' : 'vence el'} ${fechaBreve(v.fechaVencimiento)}`
                   const contenido = (
                     <div className="flex items-center gap-3 p-3">
-                      <Chip icono={origen.icono} color="bg-foreground text-background" className="size-9 rounded-[10px]" iconClassName="size-[18px]" />
+                      {colab && nombre ? (
+                        // De una persona: su foto (con el ícono de qué vence en la esquina)
+                        // y su nombre al frente. Al final del título se cortaba en el celular.
+                        <span className="relative shrink-0">
+                          <AvatarColaborador nombre={nombre} fotoUrl={urlFoto(colab.id, colab.fotoPath, true)} className="size-9" />
+                          <Chip icono={origen.icono} color="bg-foreground text-background" className="absolute -right-1 -bottom-1 size-[18px] rounded-full ring-2 ring-card" iconClassName="size-2.5" />
+                        </span>
+                      ) : (
+                        <Chip icono={origen.icono} color="bg-foreground text-background" className="size-9 rounded-[10px]" iconClassName="size-[18px]" />
+                      )}
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">{v.titulo}</p>
+                        <p className="truncate text-sm font-semibold">{nombre ?? v.titulo}</p>
                         <p className="truncate text-xs text-muted-foreground">
-                          {origen.etiqueta} · {v.urgencia === 'vencido' ? 'venció el' : 'vence el'} {fechaBreve(v.fechaVencimiento)}
+                          {/* Con persona, la fecha va primero: al final se cortaba en el celular. */}
+                          {nombre ? `${fechaBreve(v.fechaVencimiento)} · ${sinNombre(v.titulo)}` : `${origen.etiqueta} · ${cuando}`}
                         </p>
                       </div>
                       <Pill tone={TONO[v.urgencia]}>
@@ -179,7 +195,7 @@ export default async function VencimientosPage({
                       </Pill>
                     </div>
                   )
-                  const enlace = enlaceVenc(v.entidadTipo, v.entidadId, docsMap, contratosMap)
+                  const enlace = colabId ? `/colaboradores/${colabId}` : null
                   return enlace
                     ? <Link key={v.id} href={enlace} className="block transition-colors hover:bg-accent/40">{contenido}</Link>
                     : <div key={v.id}>{contenido}</div>
@@ -193,24 +209,11 @@ export default async function VencimientosPage({
   )
 }
 
-function enlaceVenc(
-  entidadTipo: string,
-  entidadId: string,
-  docsMap: Map<string, { entidadTipo: string; entidadId: string }>,
-  contratosMap: Map<string, { colaboradorId: string }>,
-): string | null {
-  if (entidadTipo === 'Colaborador') return `/colaboradores/${entidadId}`
-  if (entidadTipo === 'Documento') {
-    const doc = docsMap.get(entidadId)
-    if (doc && doc.entidadTipo === 'Colaborador') {
-      return `/colaboradores/${doc.entidadId}`
-    }
-  }
-  if (entidadTipo === 'Contrato') {
-    const contrato = contratosMap.get(entidadId)
-    if (contrato) {
-      return `/colaboradores/${contrato.colaboradorId}`
-    }
-  }
-  return null
+/**
+ * El título sin el nombre de la persona: los títulos terminan en " — Nombre",
+ * y con la foto y el nombre ya al frente de la fila repetirlo sobra.
+ */
+function sinNombre(titulo: string): string {
+  const i = titulo.lastIndexOf(' — ')
+  return i > 0 ? titulo.slice(0, i) : titulo
 }
