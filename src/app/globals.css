@@ -180,13 +180,14 @@
 
    Va SIN @layer a propósito: el CSS sin capa gana a todas las capas de
    Tailwind, y aquí hace falta vencer a la utilidad `lg:flex` del <aside> y a
-   `lg:grid-cols-[260px_1fr]` del contenedor. En @layer components perdería. */
+   `lg:grid-cols-[260px_minmax(0,1fr)]` del contenedor. En @layer components perdería.
+   minmax(0,1fr) y no 1fr: 1fr deja que un texto largo sin partir ensanche la página. */
 :root[data-lateral='oculto'] .cascaron-lateral {
   display: none;
 }
 @media (min-width: 1024px) {
   :root[data-lateral='oculto'] .cascaron {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   /* El botón de reabrir solo aparece cuando el menú está plegado: mientras está
      abierto, el que manda es el que vive junto al logo. */

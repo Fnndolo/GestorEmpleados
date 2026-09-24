@@ -47,7 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .map((m) => ({ slug: m.slug, nombre: m.nombre }))
 
   return (
-    <div className="cascaron min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
+    <div className="cascaron min-h-screen lg:grid lg:grid-cols-[260px_minmax(0,1fr)]">
       <RegistrarSW />
       <ScriptLateral />
 
@@ -69,7 +69,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Columna principal */}
-      <div className="flex flex-col min-h-screen">
+      {/* min-w-0 (y minmax(0,1fr) arriba): sin ellos, un texto largo en una sola
+          línea (p. ej. el motivo de un permiso con `truncate`) ensancha la columna
+          y toda la página se sale por la derecha. */}
+      <div className="flex min-w-0 flex-col min-h-screen">
         {/* Barra superior */}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
           <PlegarLateral variante="barra" />

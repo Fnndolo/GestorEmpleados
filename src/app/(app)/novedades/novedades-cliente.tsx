@@ -27,9 +27,10 @@ import {
   verificarComprobantePermiso, cambiarExigenciaComprobante,
 } from './acciones'
 
+// Permisos primero: es la novedad que más se pide (y la pestaña por defecto).
 const TABS = [
-  { v: 'vacaciones', l: 'Vacaciones' }, { v: 'incapacidades', l: 'Incapacidades' },
-  { v: 'licencias', l: 'Licencias' }, { v: 'permisos', l: 'Permisos' }, { v: 'bonificaciones', l: 'Bonificaciones' },
+  { v: 'permisos', l: 'Permisos' }, { v: 'vacaciones', l: 'Vacaciones' }, { v: 'incapacidades', l: 'Incapacidades' },
+  { v: 'licencias', l: 'Licencias' }, { v: 'bonificaciones', l: 'Bonificaciones' },
 ]
 
 const TIPO_INCAP: Record<string, string> = {

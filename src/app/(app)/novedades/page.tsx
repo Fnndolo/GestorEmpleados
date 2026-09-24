@@ -13,7 +13,7 @@ export const metadata = { title: 'Novedades · Smart Gadgets RH' }
 
 export default async function NovedadesPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const usuario = await requerirPermiso('novedades', 'VER')
-  const { tab = 'vacaciones' } = await searchParams
+  const { tab = 'permisos' } = await searchParams
   const puedeCrear = tienePermiso(usuario, 'novedades', 'CREAR')
   const puedeEditar = tienePermiso(usuario, 'novedades', 'EDITAR')
   const sede = await sedeActualId()

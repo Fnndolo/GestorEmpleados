@@ -45,7 +45,7 @@ export function ListaAcordeon({ items, chip }: {
                 type="button"
                 onClick={() => setAbierta(expandida ? null : x.id)}
                 aria-expanded={expandida}
-                className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                className="flex min-w-56 flex-1 items-center gap-3 p-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 {/* La foto identifica a la persona mejor que el ícono de categoría: con
                     avatar, el chip de color sobra (y compite por el mismo espacio). */}
@@ -62,8 +62,10 @@ export function ListaAcordeon({ items, chip }: {
               </button>
               {/* Envuelve en su propia fila si no cabe: la Card recorta lo que se
                   sale (overflow-hidden por las esquinas redondeadas), así que sin
-                  esto las píldoras de la derecha quedaban cortadas a mitad de palabra. */}
-              {x.derecha && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 py-1">{x.derecha}</div>}
+                  esto las píldoras de la derecha quedaban cortadas a mitad de palabra.
+                  El min-w-56 del botón decide cuándo: si el nombre y el detalle no
+                  tendrían ni eso, las píldoras bajan en vez de aplastar el texto. */}
+              {x.derecha && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 py-1 pl-3">{x.derecha}</div>}
             </div>
             {expandida && (
               <div className="space-y-3 border-t border-dashed bg-muted/20 px-4 py-3 animate-in fade-in slide-in-from-top-1 duration-150">
