@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, CircleCheck, Paperclip, TreePalm, Stethoscope, File, Clock, CreditCard, Check, X, FileCheck, type LucideIcon } from 'lucide-react'
+import { Plus, Search, CircleCheck, Paperclip, TreePalm, Stethoscope, File, Clock, CreditCard, Check, X, FileCheck, type LucideIcon } from 'lucide-react'
 import { Pill, type PillTone, type ChipColor } from '@/components/ui-kit'
 import { ETIQUETA_COMPROBANTE, type SituacionComprobante } from '@/lib/comprobante-permiso'
 import { ListaAcordeon } from '@/components/ui-kit/lista-acordeon'
@@ -97,14 +97,51 @@ function OrigenSoporte({ autoservicio, docId }: { autoservicio: boolean; docId: 
   )
 }
 
-export function NovedadesCliente({ tab, datos, puedeCrear, puedeEditar }: { tab: string; datos: Datos; puedeCrear: boolean; puedeEditar: boolean }) {
+/**
+ * Buscador de novedades por persona (nombre, apellidos o documento), en el
+ * encabezado. Va por URL (`?q=`) y filtra todas las pestañas.
+ */
+export function BuscadorNovedades({ tab, busqueda }: { tab: string; busqueda: string }) {
+  const router = useRouter()
+  const [q, setQ] = useState(busqueda)
+  const buscar = (texto: string) => {
+    const p = new URLSearchParams({ tab })
+    if (texto.trim()) p.set('q', texto.trim())
+    router.push(`/novedades?${p}`)
+  }
+  return (
+    <div className="relative">
+      <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && buscar(q)}
+        placeholder="Buscar por nombre o documento"
+        className="pl-9 pr-9"
+        aria-label="Buscar novedades de una persona"
+      />
+      {busqueda && (
+        <button
+          type="button"
+          onClick={() => { setQ(''); buscar('') }}
+          className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label="Quitar búsqueda"
+        >
+          <X className="size-4" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+export function NovedadesCliente({ tab, busqueda = '', datos, puedeCrear, puedeEditar }: { tab: string; busqueda?: string; datos: Datos; puedeCrear: boolean; puedeEditar: boolean }) {
   const [dialogo, setDialogo] = useState<string | null>(null)
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <FiltroTabs tabs={TABS.map((t) => ({ valor: t.v, label: t.l }))} activo={tab} basePath="/novedades" />
+          <FiltroTabs tabs={TABS.map((t) => ({ valor: t.v, label: t.l }))} activo={tab} basePath="/novedades" conservar={busqueda ? { q: busqueda } : undefined} />
         </div>
         {puedeCrear && <Button size="sm" onClick={() => setDialogo(tab)}><Plus className="size-4" /> Registrar</Button>}
       </div>

@@ -2,7 +2,8 @@ import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { sedeActualId } from '@/server/sede-actual'
 import { Encabezado } from '@/components/shell/encabezado'
-import { NovedadesCliente } from './novedades-cliente'
+import { NovedadesCliente, BuscadorNovedades } from './novedades-cliente'
+import { filtroBusquedaColaborador } from '@/server/consultas/colaboradores'
 import { formatFechaISO, formatFechaCorta, hoyBogota } from '@/lib/fechas'
 import { situacionComprobante } from '@/lib/comprobante-permiso'
 import Link from 'next/link'
@@ -12,13 +13,15 @@ import { urlFoto } from '@/lib/foto'
 
 export const metadata = { title: 'Novedades · Smart Gadgets RH' }
 
-export default async function NovedadesPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function NovedadesPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string }> }) {
   const usuario = await requerirPermiso('novedades', 'VER')
-  const { tab = 'permisos' } = await searchParams
+  const { tab = 'permisos', q = '' } = await searchParams
   const puedeCrear = tienePermiso(usuario, 'novedades', 'CREAR')
   const puedeEditar = tienePermiso(usuario, 'novedades', 'EDITAR')
   const sede = await sedeActualId()
-  const filtroSede = sede ? { colaborador: { sedeId: sede } } : {}
+  // Sede activa y, si se buscó a alguien, solo sus novedades (nombre, apellidos o documento).
+  const filtroColab = { ...(sede ? { sedeId: sede } : {}), ...filtroBusquedaColaborador(q) }
+  const filtroSede = Object.keys(filtroColab).length ? { colaborador: filtroColab } : {}
   const incCol = { colaborador: { select: { nombres: true, apellidos: true, id: true, fotoPath: true } } }
 
   // Acceso directo a la bandeja de aprobaciones para RRHH (icono junto al título):
@@ -65,7 +68,7 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
       <Encabezado
         titulo="Novedades"
         volver
-        enLinea
+        centro={<BuscadorNovedades tab={tab} busqueda={q} />}
         acciones={puedeAprobar && (
           // Bandeja de aprobaciones como icono, con el conteo encima (como la campana):
           // la tarjeta con texto ocupaba una fila entera aunque no hubiera nada pendiente.
@@ -88,6 +91,7 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
 
       <NovedadesCliente
         tab={tab}
+        busqueda={q}
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
         datos={{
