@@ -69,6 +69,7 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
         titulo="Novedades"
         volver
         centro={<BuscadorNovedades tab={tab} busqueda={q} />}
+        centroEnLinea
         acciones={puedeAprobar && (
           // Bandeja de aprobaciones como icono, con el conteo encima (como la campana):
           // la tarjeta con texto ocupaba una fila entera aunque no hubiera nada pendiente.

@@ -21,6 +21,7 @@ import { SelectorColaborador } from '@/components/colaboradores/selector-colabor
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { FiltroTabs } from '@/components/shell/filtro-tabs'
 import { useBusquedaEnVivo } from '@/hooks/use-busqueda-en-vivo'
+import { cn } from '@/lib/utils'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import {
@@ -87,7 +88,7 @@ const CHIP_NOV: Record<string, { icono: LucideIcon; color: ChipColor }> = {
 function OrigenSoporte({ autoservicio, docId }: { autoservicio: boolean; docId: string | null }) {
   if (!autoservicio && !docId) return null
   return (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="flex flex-wrap items-center gap-2">
       {autoservicio && <Badge variant="outline" className="text-[10px]">Autoservicio</Badge>}
       {docId && (
         <VisorPdf documentoId={docId} titulo="Soporte" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
@@ -114,12 +115,14 @@ export function BuscadorNovedades({ tab, busqueda }: { tab: string; busqueda: st
   const [q, setQ] = useBusquedaEnVivo(busqueda, buscar)
   return (
     <div className="relative">
-      <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground sm:left-3" />
       <Input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Buscar por nombre o documento"
-        className="pl-9 pr-9"
+        // Corto: en el celular el buscador comparte la fila con el título.
+        placeholder="Nombre o cédula"
+        // El espacio de la X solo cuando hay texto: vacío, el texto guía necesita ese lugar.
+        className={cn('h-8 pl-8 text-sm sm:h-9 sm:pl-9', q ? 'pr-8 sm:pr-9' : 'pr-2')}
         aria-label="Buscar novedades de una persona"
       />
       {q && (
@@ -164,7 +167,7 @@ export function NovedadesCliente({ tab, busqueda = '', datos, puedeCrear, puedeE
               { label: 'Origen', valor: x.desdeAutoservicio ? 'Autoservicio' : 'Registro de RRHH' },
             ],
             derecha: (
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <OrigenSoporte autoservicio={x.desdeAutoservicio} docId={x.soporteDocId} />
                 <Pill tone={TONO_ESTADO[x.estado] ?? 'muted'}>{ESTADO_VAC[x.estado]}</Pill>
               </div>
@@ -217,10 +220,13 @@ export function NovedadesCliente({ tab, busqueda = '', datos, puedeCrear, puedeE
   )
 }
 
-/** ListaAcordeon del kit con estado vacío de la pestaña. */
+/**
+ * ListaAcordeon del kit con estado vacío de la pestaña. Compacta en el celular:
+ * foto, nombre y sus etiquetas; la fecha y el motivo quedan en el detalle.
+ */
 function Lista(props: React.ComponentProps<typeof ListaAcordeon>) {
   if (props.items.length === 0) return <Vacio />
-  return <ListaAcordeon {...props} />
+  return <ListaAcordeon compactoEnMovil {...props} />
 }
 
 function ListaBonificaciones({ items, puedeEditar }: { items: Datos['bonificaciones']; puedeEditar: boolean }) {
@@ -271,7 +277,7 @@ function ListaPermisos({ items, puedeEditar }: { items: Datos['permisos']; puede
             { label: 'Origen', valor: x.desdeAutoservicio ? 'Autoservicio' : 'Registro de RRHH' },
           ],
           derecha: (
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <OrigenSoporte autoservicio={x.desdeAutoservicio} docId={x.soporteDocId} />
               {x.comprobante.situacion !== 'NO_REQUERIDO' && <Pill tone={et.tone}>{et.label}</Pill>}
             </div>

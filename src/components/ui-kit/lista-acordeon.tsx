@@ -61,10 +61,16 @@ function Campos({ campos }: { campos: ItemAcordeon['campos'] }) {
  * autoservicio: fila compacta con chip de categoría (y foto si aplica), al
  * presionar se expande su detalle y se cierra la anterior.
  */
-export function ListaAcordeon({ items, chip }: {
+export function ListaAcordeon({ items, chip, compactoEnMovil = false }: {
   items: ItemAcordeon[]
   /** Chip por defecto para toda la lista (cada ítem puede traer el suyo). */
   chip?: { icono: LucideIcon; color: ChipColor | string }
+  /**
+   * En el celular, fila mínima: foto, nombre y debajo del nombre lo de la
+   * derecha (origen, soporte, estado). El subtítulo se oculta: está en el
+   * detalle al expandir. En pantallas anchas no cambia nada.
+   */
+  compactoEnMovil?: boolean
 }) {
   const [abierta, setAbierta] = useState<string | null>(null)
   return (
@@ -90,7 +96,7 @@ export function ListaAcordeon({ items, chip }: {
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{x.titulo}</p>
-                  <p className="truncate text-xs text-muted-foreground">{x.sub}</p>
+                  <p className={cn('truncate text-xs text-muted-foreground', compactoEnMovil && 'hidden sm:block')}>{x.sub}</p>
                 </div>
                 <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expandida && 'rotate-180')} />
               </button>
@@ -99,7 +105,18 @@ export function ListaAcordeon({ items, chip }: {
                   esto las píldoras de la derecha quedaban cortadas a mitad de palabra.
                   El min-w-56 del botón decide cuándo: si el nombre y el detalle no
                   tendrían ni eso, las píldoras bajan en vez de aplastar el texto. */}
-              {x.derecha && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 py-1 pl-3">{x.derecha}</div>}
+              {/* Compacto en el celular: siempre en su propia línea, alineada bajo el
+                  nombre (pl-14 = relleno + foto + separación del botón). */}
+              {x.derecha && (
+                <div className={cn(
+                  'flex flex-wrap items-center gap-2',
+                  compactoEnMovil
+                    ? 'order-last -mt-2 basis-full pb-2.5 pl-14 sm:order-none sm:mt-0 sm:basis-auto sm:shrink-0 sm:justify-end sm:py-1 sm:pl-3'
+                    : 'shrink-0 justify-end py-1 pl-3',
+                )}>
+                  {x.derecha}
+                </div>
+              )}
             </div>
             {expandida && (
               <div className="space-y-3 border-t border-dashed bg-muted/20 px-4 py-3 animate-in fade-in slide-in-from-top-1 duration-150">

@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils'
 import { BotonVolver } from '@/components/shell/volver'
 
 export function Encabezado({
@@ -8,6 +9,7 @@ export function Encabezado({
   enLinea,
   volver,
   centro,
+  centroEnLinea,
 }: {
   titulo: string
   descripcion?: string
@@ -43,16 +45,25 @@ export function Encabezado({
    * menú lateral abierto no cabe al lado sin aplastar el título.
    */
   centro?: React.ReactNode
+  /**
+   * El `centro` se queda en la fila del título también en el celular, en vez de
+   * bajar a una fila propia. Para cuando las acciones son solo un ícono y el
+   * centro es un buscador compacto (Novedades): así no gasta un renglón.
+   */
+  centroEnLinea?: boolean
 }) {
   if (centro) {
     return (
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 xl:grid xl:grid-cols-[1fr_minmax(16rem,28rem)_1fr]">
+      <div className={cn(
+        'mb-4 flex items-center justify-between gap-3 xl:grid xl:grid-cols-[1fr_minmax(16rem,28rem)_1fr]',
+        centroEnLinea ? 'gap-2 sm:gap-3' : 'flex-wrap',
+      )}>
         {/* Sin min-w-0: el título entero marca el ancho mínimo de su columna. */}
         <div className={volver ? 'flex items-start gap-1.5' : undefined}>
           {volver && <BotonVolver fallback={typeof volver === 'string' ? volver : undefined} className="-ml-2 mt-0.5" />}
           <h1 className="whitespace-nowrap text-xl font-semibold tracking-tight sm:text-2xl">{titulo}</h1>
         </div>
-        <div className="order-last w-full sm:max-w-md xl:order-none xl:max-w-none">{centro}</div>
+        <div className={centroEnLinea ? 'min-w-0 flex-1 sm:max-w-md xl:max-w-none' : 'order-last w-full sm:max-w-md xl:order-none xl:max-w-none'}>{centro}</div>
         {acciones && <div className="flex shrink-0 items-center gap-2 xl:justify-self-end">{acciones}</div>}
       </div>
     )
