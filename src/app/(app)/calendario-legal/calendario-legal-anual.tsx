@@ -88,16 +88,19 @@ export function CalendarioLegalAnual({
         <div className="flex items-center gap-2">
           {hoy.anio !== anio && (
             <Link href="/calendario-legal" className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
-              <CalendarDays className="size-3.5" /> Ir a hoy
+              <CalendarDays className="size-3.5" /> Hoy
             </Link>
           )}
           {puedeGenerar && (
             <>
+              {/* Solo ícono en el celular: con el texto, "Generar" se salía de la pantalla. */}
               <Button size="sm" asChild>
-                <Link href="/calendario-legal/obligaciones"><Settings2 className="size-4" /> Gestionar obligaciones</Link>
+                <Link href="/calendario-legal/obligaciones" aria-label="Gestionar obligaciones" title="Gestionar obligaciones">
+                  <Settings2 className="size-4" /> <span className="hidden sm:inline">Gestionar obligaciones</span>
+                </Link>
               </Button>
-              <Button size="sm" onClick={generar} disabled={generando}>
-                {generando ? <Spinner /> : <RefreshCw className="size-4" />} Generar próximas fechas
+              <Button size="sm" onClick={generar} disabled={generando} aria-label="Generar próximas fechas" title="Generar próximas fechas">
+                {generando ? <Spinner /> : <RefreshCw className="size-4" />} <span className="hidden sm:inline">Generar próximas fechas</span>
               </Button>
             </>
           )}
@@ -106,7 +109,7 @@ export function CalendarioLegalAnual({
 
       {mesExpandido === null ? (
         /* ── Vista anual: 12 tarjetas de resumen ── */
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
           {MESES.map((nombre, idx) => {
             const mes = idx + 1
             const lista = porMes.get(mes) ?? []
@@ -123,32 +126,32 @@ export function CalendarioLegalAnual({
                 type="button"
                 onClick={() => setMesExpandido(mes)}
                 className={cn(
-                  'group flex flex-col rounded-xl border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'group flex flex-col rounded-xl border bg-card p-3 text-left transition-all sm:p-4 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   esMesActual && 'border-primary/50 ring-1 ring-primary/20',
                 )}
               >
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="font-semibold">{nombre}</span>
+                <div className="mb-2 flex items-center justify-between sm:mb-3">
+                  <span className="text-sm font-semibold sm:text-base">{nombre}</span>
                   <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
                 </div>
 
                 {vencidas > 0 && (
-                  <div className="mb-2 flex items-center gap-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 dark:bg-red-500/10 dark:text-red-300">
-                    <TriangleAlert className="size-4 shrink-0" />
-                    <span>{vencidas} {vencidas === 1 ? 'obligación vencida' : 'obligaciones vencidas'}</span>
+                  <div className="mb-2 flex items-center gap-1.5 rounded-lg bg-red-50 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-500/10 dark:text-red-300">
+                    <TriangleAlert className="size-3.5 shrink-0" />
+                    <span>{vencidas} {vencidas === 1 ? 'vencida' : 'vencidas'}</span>
                   </div>
                 )}
 
                 {lista.length === 0 ? (
-                  <p className="flex-1 text-sm text-muted-foreground/70">Sin obligaciones</p>
+                  <p className="flex-1 text-sm text-muted-foreground/60" aria-label="Sin obligaciones">—</p>
                 ) : (
                   <ul className="flex-1 space-y-1.5">
                     {[...pendientesPorCat.entries()].map(([c, n]) => {
                       const C = cat(c)
                       const Icono = C.icono
                       return (
-                        <li key={c} className="flex items-center gap-2 text-sm">
-                          <span className={cn('flex size-6 shrink-0 items-center justify-center rounded-md', C.soft)}>
+                        <li key={c} className="flex items-center gap-2 text-xs sm:text-sm">
+                          <span className={cn('flex size-5 shrink-0 items-center justify-center rounded-md sm:size-6', C.soft)}>
                             <Icono className={cn('size-3.5', C.text)} />
                           </span>
                           <span>{n} {C.nombre.toLowerCase()}</span>
@@ -156,8 +159,8 @@ export function CalendarioLegalAnual({
                       )
                     })}
                     {cumplidas > 0 && (
-                      <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-emerald-50 dark:bg-emerald-500/10">
+                      <li className="flex items-center gap-2 text-xs text-muted-foreground sm:text-sm">
+                        <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-emerald-50 sm:size-6 dark:bg-emerald-500/10">
                           <CircleCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
                         </span>
                         <span>{cumplidas} {cumplidas === 1 ? 'cumplida' : 'cumplidas'}</span>
@@ -166,7 +169,6 @@ export function CalendarioLegalAnual({
                   </ul>
                 )}
 
-                <span className="mt-3 text-xs font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">Ver mes →</span>
               </button>
             )
           })}
@@ -270,7 +272,7 @@ function MesExpandido({
                 <div
                   key={i}
                   className={cn(
-                    'group relative min-h-[76px] rounded-lg border p-1.5 transition-colors',
+                    'group relative min-h-11 rounded-lg border p-1 transition-colors sm:min-h-[76px] sm:p-1.5',
                     finde && 'bg-muted/30',
                     evs.length > 0 && !tieneVencida && 'border-transparent',
                     evs[0] && !tieneVencida && cat(evs[0].categoria).soft,
@@ -279,7 +281,15 @@ function MesExpandido({
                   )}
                 >
                   <span className={cn('text-xs font-medium', esHoy(dia) && 'flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground')}>{dia}</span>
-                  <div className="mt-1 space-y-0.5">
+                  {/* Celular: un punto por obligación; los nombres, en la lista de abajo. */}
+                  {evs.length > 0 && (
+                    <div className="mt-0.5 flex flex-wrap gap-0.5 sm:hidden">
+                      {evs.map((e, j) => (
+                        <span key={j} className={cn('size-1.5 rounded-full', e.vencida ? 'bg-red-500' : e.cumplida ? 'bg-emerald-500' : cat(e.categoria).dot)} />
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-1 hidden space-y-0.5 sm:block">
                     {evs.slice(0, 3).map((e, j) => (
                       <div
                         key={j}
@@ -316,9 +326,10 @@ function MesExpandido({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className={cn('truncate text-sm font-medium', o.cumplida && 'line-through opacity-60')}>{o.nombre}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {C.nombre} · vence el {o.dia} de {MESES[mes - 1].toLowerCase()}
-                    {o.fuente ? ` · ${o.fuente}` : ''}
+                  <p className="truncate text-xs text-muted-foreground">
+                    {C.nombre} · {o.dia} de {MESES[mes - 1].toLowerCase()}
+                    {/* La norma que la exige: solo en pantallas anchas. */}
+                    {o.fuente && <span className="hidden sm:inline"> · {o.fuente}</span>}
                   </p>
                 </div>
                 {o.cumplida ? (

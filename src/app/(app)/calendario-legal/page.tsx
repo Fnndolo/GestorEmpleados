@@ -16,14 +16,11 @@ export default async function CalendarioLegalPage({ searchParams }: { searchPara
   const hoy = { anio: hoyD.getUTCFullYear(), mes: hoyD.getUTCMonth() + 1, dia: hoyD.getUTCDate() }
   const anio = anioParam && /^\d{4}$/.test(anioParam) ? Number(anioParam) : hoy.anio
 
-  const [ocurrencias, totalObligaciones] = await Promise.all([
-    prisma.ocurrenciaObligacion.findMany({
-      where: { fechaLimite: { gte: new Date(Date.UTC(anio, 0, 1)), lte: new Date(Date.UTC(anio, 11, 31)) } },
-      include: { obligacion: { select: { nombre: true, categoria: true, fuenteLegal: true } } },
-      orderBy: { fechaLimite: 'asc' },
-    }),
-    prisma.obligacionLegal.count({ where: { activa: true } }),
-  ])
+  const ocurrencias = await prisma.ocurrenciaObligacion.findMany({
+    where: { fechaLimite: { gte: new Date(Date.UTC(anio, 0, 1)), lte: new Date(Date.UTC(anio, 11, 31)) } },
+    include: { obligacion: { select: { nombre: true, categoria: true, fuenteLegal: true } } },
+    orderBy: { fechaLimite: 'asc' },
+  })
 
   const items = ocurrencias.map((o) => ({
     id: o.id,
@@ -38,11 +35,9 @@ export default async function CalendarioLegalPage({ searchParams }: { searchPara
 
   return (
     <div className="max-w-7xl">
-      <Encabezado
-        volver
-        titulo="Calendario de obligaciones legales"
-        descripcion={`${totalObligaciones} obligaciones recurrentes (societarias, tributarias, laborales, habeas data y SST) con alertas automáticas. Haz clic en un mes para verlo en detalle.`}
-      />
+      {/* Título corto y sin descripción: en el celular ocupaban media pantalla
+          antes de llegar al primer mes. */}
+      <Encabezado volver enLinea titulo="Calendario legal" />
       <CalendarioLegalAnual anio={anio} items={items} hoy={hoy} puedeEditar={puedeEditar} puedeGenerar={puedeGenerar} />
     </div>
   )
