@@ -13,6 +13,8 @@ import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta, formatFechaLarga, formatFechaISO, hoyBogota, parseFechaISO } from '@/lib/fechas'
 import { defLicencia } from '@/lib/licencias'
 import { situacionComprobante } from '@/lib/comprobante-permiso'
+import { comprobanteVencidoDe } from '@/server/comprobante-permiso'
+import { fechaBreve } from '@/lib/notificaciones/texto'
 import { PanelTramites } from './panel-tramites'
 import { BannerAvisos } from '@/components/avisos/banner-avisos'
 import { avisosParaUsuario, hrefsNuevos } from '@/server/avisos'
@@ -392,6 +394,8 @@ export default async function AutoservicioPage() {
 
   // Avisos de la plataforma que le tocan y no ha leído: el banner de arriba y
   // el punto de "nuevo" en la casilla del módulo al que apuntan.
+  // Comprobante de un permiso vencido sin entregar: no puede pedir otro hasta subirlo.
+  const debeComprobante = await comprobanteVencidoDe(usuario.colaboradorId)
   // Su saldo solo se le muestra cuando Talento Humano ya cargó su historial de vacaciones.
   const mostrarSaldo = saldoVisibleEnAutoservicio(colab.vacacionesHistorialCompletoEn)
   const avisos = await avisosParaUsuario(usuario)
@@ -445,6 +449,7 @@ export default async function AutoservicioPage() {
         puedeAprobar={puedeAprobar}
         saldoVacaciones={saldo.saldoEntero}
         mostrarSaldoVacaciones={mostrarSaldo}
+        bloqueoPermiso={debeComprobante ? { fecha: fechaBreve(debeComprobante.fecha), vence: fechaBreve(debeComprobante.vence) } : null}
         documentosFaltantes={documentosFaltantes}
         horasExtraPorFirmar={horasExtraPorFirmar}
         dotacionPorFirmar={dotacionPorFirmar}

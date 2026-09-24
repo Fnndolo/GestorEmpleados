@@ -7,7 +7,7 @@ import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { aplicaTramite, type Tramite } from '@/lib/tramites-vinculo'
 import { parseFechaISO, formatFechaCorta, hoyBogotaISO } from '@/lib/fechas'
-import { comprobanteExigido, avisarComprobanteEntregado } from '@/server/comprobante-permiso'
+import { comprobanteExigido, avisarComprobanteEntregado, comprobanteVencidoDe } from '@/server/comprobante-permiso'
 import { diasHabilesRango } from '@/app/(app)/novedades/acciones'
 import { generarCertificacion } from '@/server/certificaciones'
 import { avisar, avisarPorRol } from '@/server/notificaciones/avisar'
@@ -163,6 +163,17 @@ export const crearSolicitud = accion(
     const tramite = TRAMITE_DE[d.tipo]
     if (tramite) await exigirTramiteAplicable(colaboradorId, tramite)
     if (d.tipo === 'LICENCIA' && !d.licenciaTipo) throw new ErrorNegocio('Indica el tipo de licencia.')
+
+    // Quien no entregó a tiempo el comprobante de un permiso no pide otro hasta
+    // subirlo (o hasta que Talento Humano deje de exigirlo).
+    if (d.tipo === 'PERMISO') {
+      const debe = await comprobanteVencidoDe(colaboradorId)
+      if (debe) {
+        throw new ErrorNegocio(
+          `No puedes pedir otro permiso: falta el comprobante de tu permiso del ${fechaBreve(debe.fecha)}, que vencía el ${fechaBreve(debe.vence)}. Súbelo desde "Mi actividad reciente" y podrás pedirlo.`,
+        )
+      }
+    }
 
     // Vacaciones: aplicar las reglas del RIT (cap. 9) antes de crear la solicitud.
     let datosSolicitud: Record<string, unknown> = { ...d }

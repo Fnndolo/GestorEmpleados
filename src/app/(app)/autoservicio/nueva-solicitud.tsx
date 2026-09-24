@@ -85,7 +85,7 @@ type PedidoAutorizacion = { dias: number; saldo: number | null; diasAnticipados:
  * colaborador desde su tile; el padre lo desmonta al cerrar, así el formulario
  * arranca limpio en cada trámite sin necesidad de resetear a mano.
  */
-export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = false, edicion, onClose }: {
+export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = false, bloqueoPermiso, edicion, onClose }: {
   tipoInicial: TipoSol
   saldoVacaciones?: number
   /**
@@ -94,6 +94,12 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
    * que avisa cuando lo pedido excede lo causado. Ver vacaciones-config.ts.
    */
   mostrarSaldo?: boolean
+  /**
+   * Permiso cuyo comprobante venció sin entregarse (fechas ya formateadas):
+   * mientras exista no se puede pedir otro permiso. El servidor lo exige igual;
+   * aquí se explica antes de que llene el formulario.
+   */
+  bloqueoPermiso?: { fecha: string; vence: string } | null
   /** Con esto el diálogo edita un permiso ya pedido en vez de crear uno. */
   edicion?: EdicionPermiso
   onClose: () => void
@@ -249,6 +255,34 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
         : 'Solicitud enviada. Quedó en aprobación de tu jefe inmediato.',
     )
     onClose(); router.refresh()
+  }
+
+  if (tipo === 'PERMISO' && !edicion && bloqueoPermiso) {
+    return (
+      <Dialog open onOpenChange={(o) => !o && onClose()}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Aún no puedes pedir otro permiso</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-start gap-3 rounded-lg border border-rose-500/40 bg-rose-500/5 p-3 text-sm">
+            <TriangleAlert className="mt-0.5 size-5 shrink-0 text-rose-600 dark:text-rose-400" />
+            <div className="space-y-1.5">
+              <p>
+                Falta el comprobante de asistencia de tu permiso del <strong>{bloqueoPermiso.fecha}</strong>.
+                El plazo para subirlo venció el <strong>{bloqueoPermiso.vence}</strong>.
+              </p>
+              <p className="text-muted-foreground">
+                Súbelo desde <strong className="text-foreground">Mi actividad reciente</strong>, aquí mismo en Autoservicio,
+                y podrás pedir tu permiso.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={onClose}>Entendido</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
   }
 
   const permiteAdjunto = tipo === 'PERMISO' || tipo === 'VACACIONES' || tipo === 'INCAPACIDAD' || tipo === 'LICENCIA'

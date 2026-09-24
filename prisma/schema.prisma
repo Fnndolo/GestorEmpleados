@@ -1677,7 +1677,8 @@ model Permiso {
   // trámite por el que pidió el permiso. Lo exige (o no) quien aprueba o registra
   // el permiso; el plazo en días hábiles sale de ConfiguracionEmpresa. El archivo
   // vive en Documento (entidadTipo "Permiso"). Si el plazo vence sin entrega, el
-  // cron avisa a Talento Humano: por ahora no hay otra consecuencia.
+  // cron avisa a Talento Humano y al colaborador, y este no puede pedir otro
+  // permiso hasta subirlo (ver comprobanteVencidoDe).
   comprobanteEstado          EstadoComprobantePermiso @default(NO_REQUERIDO) @map("comprobante_estado")
   comprobanteVence           DateTime?                @map("comprobante_vence") @db.Date
   comprobanteEntregadoEn     DateTime?                @map("comprobante_entregado_en")

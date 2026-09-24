@@ -42,6 +42,21 @@ export async function comprobanteExigido(fechaPermiso: Date): Promise<{ comproba
   return { comprobanteEstado: 'PENDIENTE', comprobanteVence: vence }
 }
 
+/**
+ * El permiso (el más antiguo) cuyo comprobante se exigió y no se entregó dentro
+ * del plazo. Mientras exista, el colaborador no puede pedir otro permiso desde
+ * Autoservicio: se desbloquea al subirlo, o si Talento Humano deja de exigirlo.
+ * Dentro del plazo no bloquea: todavía está a tiempo.
+ */
+export async function comprobanteVencidoDe(colaboradorId: string): Promise<{ fecha: Date; vence: Date } | null> {
+  const p = await prisma.permiso.findFirst({
+    where: { colaboradorId, comprobanteEstado: 'PENDIENTE', comprobanteVence: { lt: hoyBogota() } },
+    orderBy: { fecha: 'asc' },
+    select: { fecha: true, comprobanteVence: true },
+  })
+  return p ? { fecha: p.fecha, vence: p.comprobanteVence! } : null
+}
+
 /** Le dice al colaborador que debe subir el comprobante y hasta cuándo. */
 export async function avisarComprobanteRequerido(colaboradorId: string, fechaPermiso: Date, vence: Date): Promise<void> {
   const usuarioId = await usuarioDeColaborador(colaboradorId)
@@ -84,8 +99,9 @@ export async function avisarComprobanteRevisado(colaboradorId: string, fechaPerm
 }
 
 /**
- * Cron diario: permisos con comprobante pendiente cuyo plazo ya venció. Por
- * ahora la única consecuencia es avisar a Talento Humano; el aviso se repite una
+ * Cron diario: permisos con comprobante pendiente cuyo plazo ya venció. Se
+ * avisa a Talento Humano y al propio colaborador (que además no puede pedir otro
+ * permiso mientras tanto: ver `comprobanteVencidoDe`). El aviso se repite una
  * vez por semana por permiso (dedupeKey con el número de semana) hasta que el
  * colaborador entregue el comprobante o Talento Humano deje de exigirlo.
  */
@@ -108,11 +124,25 @@ export async function alertarComprobantesPermisoVencidos(): Promise<{ vencidos: 
     const vence = p.comprobanteVence!
     const dias = Math.floor((hoy.getTime() - vence.getTime()) / 86_400_000)
     const persona = nombreCorto(p.colaborador.nombres, p.colaborador.apellidos)
+    // Al colaborador: el recordatorio y la consecuencia, para que no se entere
+    // recién cuando intente pedir el siguiente permiso.
+    const usuarioColab = await usuarioDeColaborador(p.colaboradorId)
+    if (usuarioColab) {
+      await notificarUsuario(
+        usuarioColab,
+        `Sube el comprobante de tu permiso del ${fechaBreve(p.fecha)}`,
+        `El plazo venció el ${fechaBreve(vence)}. Hasta que lo subas no puedes pedir otro permiso · Se sube desde "Mi actividad reciente".`,
+        '/autoservicio',
+        `comprobante_permiso_vencido_colab:${p.id}:${semana}`,
+        'comprobante_permiso_vencido',
+        p.colaboradorId,
+      )
+    }
     for (const u of destinatarios) {
       await notificarUsuario(
         u.id,
         `${persona} no ha entregado el comprobante de su permiso`,
-        `Permiso del ${fechaBreve(p.fecha)} · Plazo vencido el ${fechaBreve(vence)} (hace ${dias} día${dias === 1 ? '' : 's'}).`,
+        `Permiso del ${fechaBreve(p.fecha)} · Plazo vencido el ${fechaBreve(vence)} (hace ${dias} día${dias === 1 ? '' : 's'}). No puede pedir otro permiso hasta entregarlo.`,
         '/novedades?tab=permisos',
         `comprobante_permiso_vencido:${p.id}:${u.id}:${semana}`,
         'comprobante_permiso_vencido',
