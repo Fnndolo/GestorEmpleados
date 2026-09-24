@@ -17,14 +17,17 @@ export function FiltroTabs({
   activo,
   basePath,
   paramName = 'tab',
+  conservar,
 }: {
   tabs: FiltroTab[]
   activo: string
   basePath: string
   paramName?: string
+  /** Otros parámetros de la URL que no se pierden al cambiar de pestaña (p. ej. el orden elegido). */
+  conservar?: Record<string, string>
 }) {
   const router = useRouter()
-  const href = (valor: string) => `${basePath}?${paramName}=${valor}`
+  const href = (valor: string) => `${basePath}?${new URLSearchParams({ ...conservar, [paramName]: valor })}`
 
   return (
     <>

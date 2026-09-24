@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { FileText, ChevronRight, FileExclamationPoint, Receipt, ClipboardCheck, UserMinus } from 'lucide-react'
 import { NuevoContrato, type ClaseNuevo } from './nuevo-contrato'
 import { CerrarContratoOps } from './ops/[id]/cerrar-contrato'
+import { OrdenContratosMenu, type OrdenContratos } from './orden-contratos'
 import { Chip, Pill, AvatarColaborador, type PillTone } from '@/components/ui-kit'
 import { FiltroTabs } from '@/components/shell/filtro-tabs'
 import { formatFechaCorta, formatFechaISO, hoyBogota } from '@/lib/fechas'
@@ -47,10 +48,11 @@ const ESTADO_CONTRATO: Record<string, string> = {
 export default async function ContratosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; nuevo?: string }>
+  searchParams: Promise<{ tab?: string; nuevo?: string; orden?: string }>
 }) {
   const usuario = await requerirPermiso('contratos', 'VER')
-  const { tab = 'TODOS', nuevo } = await searchParams
+  const { tab = 'TODOS', nuevo, orden: ordenParam } = await searchParams
+  const orden: OrdenContratos = ordenParam === 'ingreso' ? 'ingreso' : 'nombre'
   const puedeCrear = tienePermiso(usuario, 'contratos', 'CREAR')
   const puedeEditar = tienePermiso(usuario, 'contratos', 'EDITAR')
   const sede = await sedeActualId()
@@ -81,11 +83,18 @@ export default async function ContratosPage({
     take: 200,
   }) : []
 
-  // "Todos": laborales y OPS en una sola lista, del más reciente al más antiguo.
+  // Laborales y OPS en una sola lista ("Todos" los mezcla), en el orden elegido:
+  // por nombre (A–Z) o por fecha de ingreso del colaborador (la más reciente
+  // primero). Un contratista OPS sin ficha no tiene ni lo uno ni lo otro: al final.
   const filas = [
-    ...contratosLaboral.map((c) => ({ id: c.id, creadoEn: c.creadoEn, fila: <FilaLaboral key={c.id} c={c} puedeEditar={puedeEditar} mostrarTipo={todos} /> })),
-    ...contratosOps.map((c) => ({ id: c.id, creadoEn: c.creadoEn, fila: <FilaOps key={c.id} c={c} puedeEditar={puedeEditar} hoy={hoy} mostrarTipo={todos} /> })),
-  ].sort((a, b) => b.creadoEn.getTime() - a.creadoEn.getTime())
+    ...contratosLaboral.map((c) => ({ colab: c.colaborador, fila: <FilaLaboral key={c.id} c={c} puedeEditar={puedeEditar} mostrarTipo={todos} /> })),
+    ...contratosOps.map((c) => ({ colab: c.colaborador, fila: <FilaOps key={c.id} c={c} puedeEditar={puedeEditar} hoy={hoy} mostrarTipo={todos} /> })),
+  ].sort((a, b) => {
+    if (!a.colab || !b.colab) return a.colab ? -1 : b.colab ? 1 : 0
+    const porNombre = `${a.colab.nombres} ${a.colab.apellidos}`.localeCompare(`${b.colab.nombres} ${b.colab.apellidos}`, 'es', { sensitivity: 'base' })
+    if (orden === 'ingreso') return b.colab.fechaIngreso.getTime() - a.colab.fechaIngreso.getTime() || porNombre
+    return porNombre
+  })
 
   return (
     <div className="max-w-7xl">
@@ -118,9 +127,12 @@ export default async function ContratosPage({
         </Link>
       )}
 
-      {/* Pestañas (móvil: desplegable) */}
-      <div className="mb-4">
-        <FiltroTabs tabs={TABS} activo={tab} basePath="/contratos" />
+      {/* Pestañas (móvil: desplegable) y, al lado, el orden de la lista */}
+      <div className="mb-4 flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <FiltroTabs tabs={TABS} activo={tab} basePath="/contratos" conservar={orden === 'nombre' ? undefined : { orden }} />
+        </div>
+        <OrdenContratosMenu orden={orden} />
       </div>
 
       {filas.length === 0 ? <Vacio /> : (
