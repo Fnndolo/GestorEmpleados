@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Search, ChevronRight } from 'lucide-react'
@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useBusquedaEnVivo } from '@/hooks/use-busqueda-en-vivo'
 import { TIPO_VINCULO_CORTO, MODALIDAD_TRABAJO, ESTADO_COLABORADOR, iniciales, colorAvatar } from '@/lib/etiquetas'
 import { urlFoto } from '@/lib/foto'
 
@@ -36,15 +37,19 @@ const ESTADO_VARIANTE: Record<string, 'default' | 'secondary' | 'outline'> = {
   ACTIVO: 'default', INACTIVO: 'secondary', RETIRADO: 'outline',
 }
 
-/** Navegación del listado: la pestaña y la búsqueda viven en la URL. */
+/**
+ * Navegación del listado: la pestaña y la búsqueda viven en la URL. Mientras se
+ * escribe se usa replace (cada letra no debe quedar como un paso de "atrás").
+ */
 function useNavegar() {
   const router = useRouter()
   const [, startTransition] = useTransition()
-  return (tab: string, texto: string) => {
+  return (tab: string, texto: string, reemplazar = false) => {
     const params = new URLSearchParams()
     if (tab !== 'TODOS') params.set('tab', tab)
     if (texto.trim()) params.set('q', texto.trim())
-    startTransition(() => router.push(`/colaboradores${params.toString() ? `?${params}` : ''}`))
+    const url = `/colaboradores${params.toString() ? `?${params}` : ''}`
+    startTransition(() => (reemplazar ? router.replace(url, { scroll: false }) : router.push(url)))
   }
 }
 
@@ -55,7 +60,8 @@ function useNavegar() {
  */
 export function BuscadorColaboradores({ tabs, tabActivo, busqueda }: { tabs: Tab[]; tabActivo: string; busqueda: string }) {
   const navegar = useNavegar()
-  const [q, setQ] = useState(busqueda)
+  // Filtra mientras se escribe, sin tener que presionar Enter.
+  const [q, setQ] = useBusquedaEnVivo(busqueda, (texto) => navegar(tabActivo, texto, true))
 
   return (
     <div className="flex gap-2">
@@ -64,7 +70,6 @@ export function BuscadorColaboradores({ tabs, tabActivo, busqueda }: { tabs: Tab
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && navegar(tabActivo, q)}
           placeholder="Nombre o documento"
           className="pl-9"
         />

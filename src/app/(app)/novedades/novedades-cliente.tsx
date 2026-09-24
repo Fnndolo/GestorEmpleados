@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { FiltroTabs } from '@/components/shell/filtro-tabs'
+import { useBusquedaEnVivo } from '@/hooks/use-busqueda-en-vivo'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import {
@@ -99,31 +100,32 @@ function OrigenSoporte({ autoservicio, docId }: { autoservicio: boolean; docId: 
 
 /**
  * Buscador de novedades por persona (nombre, apellidos o documento), en el
- * encabezado. Va por URL (`?q=`) y filtra todas las pestañas.
+ * encabezado. Filtra mientras se escribe; va por URL (`?q=`) y filtra todas
+ * las pestañas.
  */
 export function BuscadorNovedades({ tab, busqueda }: { tab: string; busqueda: string }) {
   const router = useRouter()
-  const [q, setQ] = useState(busqueda)
+  // replace, no push: cada letra no debe quedar como un paso de "atrás".
   const buscar = (texto: string) => {
     const p = new URLSearchParams({ tab })
     if (texto.trim()) p.set('q', texto.trim())
-    router.push(`/novedades?${p}`)
+    router.replace(`/novedades?${p}`, { scroll: false })
   }
+  const [q, setQ] = useBusquedaEnVivo(busqueda, buscar)
   return (
     <div className="relative">
       <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && buscar(q)}
         placeholder="Buscar por nombre o documento"
         className="pl-9 pr-9"
         aria-label="Buscar novedades de una persona"
       />
-      {busqueda && (
+      {q && (
         <button
           type="button"
-          onClick={() => { setQ(''); buscar('') }}
+          onClick={() => setQ('')}
           className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
           aria-label="Quitar búsqueda"
         >
