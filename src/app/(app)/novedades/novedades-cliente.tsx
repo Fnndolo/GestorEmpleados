@@ -18,6 +18,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { FiltroTabs } from '@/components/shell/filtro-tabs'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
@@ -88,9 +89,9 @@ function OrigenSoporte({ autoservicio, docId }: { autoservicio: boolean; docId: 
     <div className="flex items-center gap-2 shrink-0">
       {autoservicio && <Badge variant="outline" className="text-[10px]">Autoservicio</Badge>}
       {docId && (
-        <a href={`/api/documentos/${docId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+        <VisorPdf documentoId={docId} titulo="Soporte" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
           <Paperclip className="size-3.5" /> Soporte
-        </a>
+        </VisorPdf>
       )}
     </div>
   )
@@ -277,9 +278,9 @@ function ComprobantePermiso({ permisoId, c, puedeEditar }: { permisoId: string; 
         <p className="text-[13px] font-medium">Comprobante de asistencia</p>
         <Pill tone={et.tone}>{et.label}</Pill>
         {c.docId && (
-          <a href={`/api/documentos/${c.docId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+          <VisorPdf documentoId={c.docId} titulo="Comprobante de asistencia" className="inline-flex items-center gap-1 text-primary hover:underline">
             <Paperclip className="size-3.5" /> Ver archivo
-          </a>
+          </VisorPdf>
         )}
       </div>
       <p className="mt-1 text-muted-foreground">{descripcion[c.situacion]}</p>
