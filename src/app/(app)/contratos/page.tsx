@@ -26,12 +26,19 @@ function AvatarColab({ c }: { c: { id: string; nombres: string; apellidos: strin
 }
 
 const TABS = [
+  { valor: 'TODOS', label: 'Todos' },
   { valor: 'OPS', label: 'OPS' },
   { valor: 'TERMINO_FIJO', label: 'Término fijo' },
   { valor: 'TERMINO_INDEFINIDO', label: 'Indefinido' },
   { valor: 'OBRA_LABOR', label: 'Obra/labor' },
   { valor: 'APRENDIZAJE_SENA', label: 'Aprendizaje' },
+  { valor: 'PRACTICA', label: 'Práctica' },
 ]
+
+/** Modalidad escrita en la fila cuando la pestaña "Todos" mezcla contratos. */
+const TIPO_CONTRATO: Record<string, string> = {
+  TERMINO_FIJO: 'Término fijo', TERMINO_INDEFINIDO: 'Indefinido', OBRA_LABOR: 'Obra/labor', APRENDIZAJE_SENA: 'Aprendizaje', PRACTICA: 'Práctica',
+}
 
 const ESTADO_CONTRATO: Record<string, string> = {
   BORRADOR: 'Borrador', ACTIVO: 'Activo', FIRMADO: 'Firmado', SUSPENDIDO: 'Suspendido', TERMINADO: 'Terminado',
@@ -43,11 +50,12 @@ export default async function ContratosPage({
   searchParams: Promise<{ tab?: string; nuevo?: string }>
 }) {
   const usuario = await requerirPermiso('contratos', 'VER')
-  const { tab = 'TERMINO_INDEFINIDO', nuevo } = await searchParams
+  const { tab = 'TODOS', nuevo } = await searchParams
   const puedeCrear = tienePermiso(usuario, 'contratos', 'CREAR')
   const puedeEditar = tienePermiso(usuario, 'contratos', 'EDITAR')
   const sede = await sedeActualId()
   const esOps = tab === 'OPS'
+  const todos = tab === 'TODOS'
   const hoy = hoyBogota()
 
   // El alta se llena en una ventana sobre esta lista; sus catálogos se cargan
@@ -60,25 +68,30 @@ export default async function ContratosPage({
   })
 
   const contratosLaboral = esOps ? [] : await prisma.contrato.findMany({
-    where: { tipo: tab as 'TERMINO_FIJO', ...(sede ? { sedeId: sede } : {}) },
+    where: { ...(todos ? {} : { tipo: tab as 'TERMINO_FIJO' }), ...(sede ? { sedeId: sede } : {}) },
     include: { colaborador: true, cargo: true, sede: true },
     orderBy: { creadoEn: 'desc' },
     take: 200,
   })
 
-  const contratosOps = esOps ? await prisma.contratoOps.findMany({
+  const contratosOps = esOps || todos ? await prisma.contratoOps.findMany({
     where: { ...(sede ? { sedeId: sede } : {}) },
     include: { colaborador: true, sede: true, _count: { select: { cuentasCobro: true } } },
     orderBy: { creadoEn: 'desc' },
     take: 200,
   }) : []
 
+  // "Todos": laborales y OPS en una sola lista, del más reciente al más antiguo.
+  const filas = [
+    ...contratosLaboral.map((c) => ({ id: c.id, creadoEn: c.creadoEn, fila: <FilaLaboral key={c.id} c={c} puedeEditar={puedeEditar} mostrarTipo={todos} /> })),
+    ...contratosOps.map((c) => ({ id: c.id, creadoEn: c.creadoEn, fila: <FilaOps key={c.id} c={c} puedeEditar={puedeEditar} hoy={hoy} mostrarTipo={todos} /> })),
+  ].sort((a, b) => b.creadoEn.getTime() - a.creadoEn.getTime())
+
   return (
     <div className="max-w-7xl">
       <Encabezado
         volver
         titulo="Contratación y vinculación"
-        descripcion="Contratos laborales por modalidad y contratos de prestación de servicios (OPS)."
         acciones={
           <div className="flex flex-wrap gap-2">
             <Button size="sm" asChild>
@@ -110,75 +123,88 @@ export default async function ContratosPage({
         <FiltroTabs tabs={TABS} activo={tab} basePath="/contratos" />
       </div>
 
-      {/* Cada fila es un enlace al detalle "estirado" sobre toda la fila (el
-          ::after del nombre), y la acción de cierre va encima (z-10): así se
-          cierra desde la lista sin anidar un botón dentro de un <a>. */}
-      {esOps ? (
-        contratosOps.length === 0 ? <Vacio /> : (
-          <Card><CardContent className="p-0 divide-y">
-            {contratosOps.map((c) => {
-              const vigente = c.estado === 'ACTIVO' || c.estado === 'FIRMADO'
-              return (
-                <div key={c.id} data-contrato={c.numero} className="relative flex flex-wrap items-center gap-3 p-3 transition-colors hover:bg-accent/40">
-                  {c.colaborador ? <AvatarColab c={c.colaborador} /> : <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">?</div>}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">
-                      <Link href={`/contratos/ops/${c.id}`} className="after:absolute after:inset-0">
-                        {c.colaborador ? `${c.colaborador.nombres} ${c.colaborador.apellidos}` : 'Contratista sin ficha'}
-                      </Link>
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">{c.numero} · {c.objeto}</p>
-                  </div>
-                  <div className="hidden text-right sm:block">
-                    <p className="text-sm font-medium tabular-nums">{fmtCOP(Number(c.valorTotal))}</p>
-                    <p className="text-xs text-muted-foreground">{c._count.cuentasCobro} cuenta(s)</p>
-                  </div>
-                  <Pill tone={TONO_CONTRATO[c.estado] ?? 'muted'}>{ESTADO_CONTRATO[c.estado] ?? c.estado}</Pill>
-                  {puedeEditar && vigente && (
-                    <div className="relative z-10">
-                      <CerrarContratoOps contratoId={c.id} numero={c.numero} fechaFin={formatFechaISO(c.fechaFin)} vencido={c.fechaFin < hoy} hoy={formatFechaISO(hoy)} compacto />
-                    </div>
-                  )}
-                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                </div>
-              )
-            })}
-          </CardContent></Card>
-        )
-      ) : (
-        contratosLaboral.length === 0 ? <Vacio /> : (
-          <Card><CardContent className="p-0 divide-y">
-            {contratosLaboral.map((c) => (
-              <div key={c.id} data-contrato={c.numero} className="relative flex flex-wrap items-center gap-3 p-3 transition-colors hover:bg-accent/40">
-                <AvatarColab c={c.colaborador} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    <Link href={`/contratos/${c.id}`} className="after:absolute after:inset-0">
-                      {c.colaborador.nombres} {c.colaborador.apellidos}
-                    </Link>
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {c.numero} · {c.cargo?.nombre ?? 'Sin cargo'}
-                    {c.fechaFin && ` · vence ${formatFechaCorta(c.fechaFin)}`}
-                  </p>
-                </div>
-                <span className="hidden text-sm font-medium tabular-nums sm:block">{fmtCOP(Number(c.salarioBase))}</span>
-                <Pill tone={TONO_CONTRATO[c.estado] ?? 'muted'}>{ESTADO_CONTRATO[c.estado]}</Pill>
-                {/* Un laboral no se "cierra": se termina en Terminaciones (liquidación,
-                    paz y salvo). Desde aquí se llega con la persona ya elegida. */}
-                {puedeEditar && c.estado === 'ACTIVO' && (
-                  <Button size="sm" variant="ghost" className="relative z-10 text-muted-foreground hover:text-foreground" asChild>
-                    <Link href={`/terminaciones?colaborador=${c.colaboradorId}`} aria-label={`Terminar contrato ${c.numero}`}>
-                      <UserMinus className="size-4" /> <span className="hidden sm:inline">Terminar</span>
-                    </Link>
-                  </Button>
-                )}
-                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-              </div>
-            ))}
-          </CardContent></Card>
-        )
+      {filas.length === 0 ? <Vacio /> : (
+        <Card><CardContent className="p-0 divide-y">
+          {filas.map((f) => f.fila)}
+        </CardContent></Card>
       )}
+    </div>
+  )
+}
+
+type ColabFila = { id: string; nombres: string; apellidos: string; fotoPath: string | null }
+
+/*
+ * Cada fila es un enlace al detalle "estirado" sobre toda la fila (el ::after
+ * del nombre), y la acción de cierre va encima (z-10): así se cierra desde la
+ * lista sin anidar un botón dentro de un <a>.
+ */
+
+function FilaOps({ c, puedeEditar, hoy, mostrarTipo }: {
+  c: { id: string; numero: string; objeto: string; estado: string; valorTotal: unknown; fechaFin: Date; colaborador: ColabFila | null; _count: { cuentasCobro: number } }
+  puedeEditar: boolean
+  hoy: Date
+  mostrarTipo: boolean
+}) {
+  const vigente = c.estado === 'ACTIVO' || c.estado === 'FIRMADO'
+  return (
+    <div data-contrato={c.numero} className="relative flex flex-wrap items-center gap-3 p-3 transition-colors hover:bg-accent/40">
+      {c.colaborador ? <AvatarColab c={c.colaborador} /> : <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">?</div>}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">
+          <Link href={`/contratos/ops/${c.id}`} className="after:absolute after:inset-0">
+            {c.colaborador ? `${c.colaborador.nombres} ${c.colaborador.apellidos}` : 'Contratista sin ficha'}
+          </Link>
+        </p>
+        <p className="truncate text-xs text-muted-foreground">{mostrarTipo && 'OPS · '}{c.numero} · {c.objeto}</p>
+      </div>
+      <div className="hidden text-right sm:block">
+        <p className="text-sm font-medium tabular-nums">{fmtCOP(Number(c.valorTotal))}</p>
+        <p className="text-xs text-muted-foreground">{c._count.cuentasCobro} cuenta(s)</p>
+      </div>
+      <Pill tone={TONO_CONTRATO[c.estado] ?? 'muted'}>{ESTADO_CONTRATO[c.estado] ?? c.estado}</Pill>
+      {puedeEditar && vigente && (
+        <div className="relative z-10">
+          <CerrarContratoOps contratoId={c.id} numero={c.numero} fechaFin={formatFechaISO(c.fechaFin)} vencido={c.fechaFin < hoy} hoy={formatFechaISO(hoy)} compacto />
+        </div>
+      )}
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+    </div>
+  )
+}
+
+function FilaLaboral({ c, puedeEditar, mostrarTipo }: {
+  c: { id: string; numero: string; tipo: string; estado: string; salarioBase: unknown; fechaFin: Date | null; colaboradorId: string; colaborador: ColabFila; cargo: { nombre: string } | null }
+  puedeEditar: boolean
+  mostrarTipo: boolean
+}) {
+  return (
+    <div data-contrato={c.numero} className="relative flex flex-wrap items-center gap-3 p-3 transition-colors hover:bg-accent/40">
+      <AvatarColab c={c.colaborador} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">
+          <Link href={`/contratos/${c.id}`} className="after:absolute after:inset-0">
+            {c.colaborador.nombres} {c.colaborador.apellidos}
+          </Link>
+        </p>
+        <p className="truncate text-xs text-muted-foreground">
+          {mostrarTipo && `${TIPO_CONTRATO[c.tipo] ?? c.tipo} · `}
+          {c.numero} · {c.cargo?.nombre ?? 'Sin cargo'}
+          {c.fechaFin && ` · vence ${formatFechaCorta(c.fechaFin)}`}
+        </p>
+      </div>
+      <span className="hidden text-sm font-medium tabular-nums sm:block">{fmtCOP(Number(c.salarioBase))}</span>
+      <Pill tone={TONO_CONTRATO[c.estado] ?? 'muted'}>{ESTADO_CONTRATO[c.estado]}</Pill>
+      {/* Un laboral no se "cierra": se termina en Terminaciones (liquidación,
+          paz y salvo). Desde aquí se llega con la persona ya elegida. */}
+      {puedeEditar && c.estado === 'ACTIVO' && (
+        <Button size="sm" variant="ghost" className="relative z-10 text-muted-foreground hover:text-foreground" asChild>
+          <Link href={`/terminaciones?colaborador=${c.colaboradorId}`} aria-label={`Terminar contrato ${c.numero}`}>
+            <UserMinus className="size-4" /> <span className="hidden sm:inline">Terminar</span>
+          </Link>
+        </Button>
+      )}
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
     </div>
   )
 }
