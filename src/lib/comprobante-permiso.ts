@@ -43,11 +43,15 @@ export function situacionComprobante(estado: EstadoComprobante, vence: Date | nu
   return estado
 }
 
-/** Etiqueta y tono (mismos tonos que `Pill` del ui-kit) por situación. */
-export const ETIQUETA_COMPROBANTE: Record<SituacionComprobante, { label: string; tone: 'ok' | 'info' | 'warn' | 'bad' | 'muted' }> = {
-  NO_REQUERIDO: { label: 'Sin comprobante', tone: 'muted' },
-  PENDIENTE: { label: 'Comprobante pendiente', tone: 'warn' },
-  VENCIDO: { label: 'Comprobante vencido', tone: 'bad' },
-  ENTREGADO: { label: 'Comprobante por verificar', tone: 'info' },
-  VERIFICADO: { label: 'Comprobante verificado', tone: 'ok' },
+/**
+ * Etiqueta y tono (mismos tonos que `Pill` del ui-kit) por situación. `corto`
+ * es para el celular, con el ícono de comprobante al lado: la etiqueta entera
+ * no cabe en la misma línea que "Autoservicio" y "Soporte".
+ */
+export const ETIQUETA_COMPROBANTE: Record<SituacionComprobante, { label: string; corto: string; tone: 'ok' | 'info' | 'warn' | 'bad' | 'muted' }> = {
+  NO_REQUERIDO: { label: 'Sin comprobante', corto: 'No exigido', tone: 'muted' },
+  PENDIENTE: { label: 'Comprobante pendiente', corto: 'Pendiente', tone: 'warn' },
+  VENCIDO: { label: 'Comprobante vencido', corto: 'Vencido', tone: 'bad' },
+  ENTREGADO: { label: 'Comprobante por verificar', corto: 'Por verificar', tone: 'info' },
+  VERIFICADO: { label: 'Comprobante verificado', corto: 'Verificado', tone: 'ok' },
 }

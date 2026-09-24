@@ -279,7 +279,14 @@ function ListaPermisos({ items, puedeEditar }: { items: Datos['permisos']; puede
           derecha: (
             <div className="flex flex-wrap items-center gap-2">
               <OrigenSoporte autoservicio={x.desdeAutoservicio} docId={x.soporteDocId} />
-              {x.comprobante.situacion !== 'NO_REQUERIDO' && <Pill tone={et.tone}>{et.label}</Pill>}
+              {x.comprobante.situacion !== 'NO_REQUERIDO' && (
+                // En el celular, ícono + texto corto: así cabe en la línea de las otras etiquetas.
+                <Pill tone={et.tone} className="inline-flex items-center gap-1">
+                  <FileCheck className="size-3 sm:hidden" aria-hidden />
+                  <span className="sm:hidden" title={et.label}>{et.corto}</span>
+                  <span className="hidden sm:inline">{et.label}</span>
+                </Pill>
+              )}
             </div>
           ),
           extra: <ComprobantePermiso permisoId={x.id} c={x.comprobante} puedeEditar={puedeEditar} />,
