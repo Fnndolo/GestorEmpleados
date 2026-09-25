@@ -89,11 +89,7 @@ export default async function CumpleanosPage() {
 
   return (
     <div className="max-w-5xl">
-      <Encabezado
-        titulo="Cumpleaños"
-        descripcion="Los de este mes y el siguiente. A cada uno se le asigna quien organiza la celebración; esa persona sube después las facturas y aquí se revisan."
-        volver
-      />
+      <Encabezado titulo="Cumpleaños" volver enLinea />
       <CumpleanosCliente
         filas={filas}
         rezagadas={rezagadas}

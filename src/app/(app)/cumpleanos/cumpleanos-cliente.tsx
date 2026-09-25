@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Cake, UserPlus, Eye, CircleCheck, Undo2, Trash2 } from 'lucide-react'
+import { Cake, UserPlus, UserPen, Eye, CircleCheck, Undo2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -16,7 +16,8 @@ import { SelectorColaborador } from '@/components/colaboradores/selector-colabor
 import { SoportesLista, type SoporteDoc } from '@/app/(app)/juridica/_ui'
 import { colorAvatar, iniciales } from '@/lib/etiquetas'
 import { fmtCOP } from '@/lib/moneda'
-import { formatFechaCorta, formatFechaLarga, parseFechaISO } from '@/lib/fechas'
+import { formatFechaCorta, parseFechaISO } from '@/lib/fechas'
+import { fechaBreve } from '@/lib/notificaciones/texto'
 import { asignarEncargadoCumpleanos, cancelarCelebracionCumpleanos, revisarFacturasCumpleanos } from './acciones'
 import { urlFoto } from '@/lib/foto'
 
@@ -92,8 +93,8 @@ export function CumpleanosCliente({ filas, rezagadas, hoy, sinFechaNacimiento, p
   return (
     <div className="space-y-6">
       {sinFechaNacimiento > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {sinFechaNacimiento} colaborador{sinFechaNacimiento === 1 ? '' : 'es'} activo{sinFechaNacimiento === 1 ? '' : 's'} sin fecha de nacimiento en la ficha: no aparece{sinFechaNacimiento === 1 ? '' : 'n'} aquí hasta completarla.
+        <p className="text-xs text-muted-foreground" title="No aparecen aquí hasta completar la ficha">
+          {sinFechaNacimiento} sin fecha de nacimiento
         </p>
       )}
 
@@ -144,42 +145,43 @@ function Lista({ filas, hoy, permisos, onAsignar, onRevisar }: {
   }
 
   return (
-    <Card><CardContent className="divide-y p-0">
+    <Card className="py-0"><CardContent className="divide-y p-0">
       {filas.map((f) => {
         const c = f.celebracion
         const esHoy = f.fecha === hoy
         return (
-          <div key={f.clave} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-3">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <AvatarColab c={f.colaborador} />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">
-                  {f.colaborador.nombres} {f.colaborador.apellidos}
-                  {f.edad != null && <span className="font-normal text-muted-foreground"> · cumple {f.edad}</span>}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  <span className={esHoy ? 'font-semibold text-rose-600 dark:text-rose-400' : undefined}>
-                    {esHoy ? 'Hoy' : formatFechaLarga(parseFechaISO(f.fecha))}
-                  </span>
-                  {' · '}{f.colaborador.sede}{f.colaborador.cargo ? ` · ${f.colaborador.cargo}` : ''}
-                  {c && <> · Encargado: <span className="text-foreground">{c.encargado.nombre}</span></>}
-                </p>
+          // Una fila: foto, nombre y debajo fecha corta · edad · estado; las
+          // acciones a la derecha (solo ícono en el celular). El mes ya va en el
+          // título del grupo, y sede y cargo solo en pantallas anchas.
+          <div key={f.clave} className="flex items-center gap-3 p-3">
+            <AvatarColab c={f.colaborador} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{f.colaborador.nombres} {f.colaborador.apellidos}</p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+                <span className={esHoy ? 'font-semibold text-rose-600 dark:text-rose-400' : undefined}>
+                  {esHoy ? 'Hoy' : fechaBreve(parseFechaISO(f.fecha)!)}
+                </span>
+                {f.edad != null && <span>· {f.edad} años</span>}
+                <span className="hidden sm:inline">· {f.colaborador.sede}{f.colaborador.cargo ? ` · ${f.colaborador.cargo}` : ''}</span>
+                {c ? (
+                  <Pill tone={ESTADO[c.estado].tono}>{ESTADO[c.estado].texto}</Pill>
+                ) : (
+                  <Pill tone={f.pasado ? 'muted' : 'warn'}>Sin encargado</Pill>
+                )}
               </div>
+              {c && <p className="mt-0.5 truncate text-xs text-muted-foreground">Encargado: <span className="text-foreground">{c.encargado.nombre}</span></p>}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              {c ? (
-                <Pill tone={ESTADO[c.estado].tono}>{ESTADO[c.estado].texto}</Pill>
-              ) : (
-                <Pill tone={f.pasado ? 'muted' : 'warn'}>Sin encargado</Pill>
-              )}
+            <div className="flex shrink-0 items-center gap-1">
               {!c && permisos.crear && (
-                <Button size="sm" onClick={() => onAsignar(f)} aria-label={`Asignar encargado a ${f.colaborador.nombres} ${f.colaborador.apellidos}`}>
-                  <UserPlus className="size-4" /> Asignar encargado
+                <Button size="sm" onClick={() => onAsignar(f)} aria-label={`Asignar encargado a ${f.colaborador.nombres} ${f.colaborador.apellidos}`} title="Asignar encargado">
+                  <UserPlus className="size-4" /> <span className="hidden sm:inline">Asignar encargado</span>
                 </Button>
               )}
               {c?.estado === 'ASIGNADA' && permisos.crear && (
-                <Button size="sm" onClick={() => onAsignar(f)}>Cambiar</Button>
+                <Button size="sm" variant="outline" onClick={() => onAsignar(f)} aria-label="Cambiar encargado" title="Cambiar encargado">
+                  <UserPen className="size-4" /> <span className="hidden sm:inline">Cambiar</span>
+                </Button>
               )}
               {c?.estado === 'ASIGNADA' && permisos.eliminar && (
                 <Button size="sm" variant="ghost" onClick={() => cancelar(f)} disabled={cancelando === f.clave} aria-label="Cancelar el encargo">
@@ -187,10 +189,10 @@ function Lista({ filas, hoy, permisos, onAsignar, onRevisar }: {
                 </Button>
               )}
               {c?.estado === 'FACTURAS_ENTREGADAS' && (
-                <Button size="sm" onClick={() => onRevisar(f)}><Eye className="size-4" /> Revisar facturas</Button>
+                <Button size="sm" onClick={() => onRevisar(f)} aria-label="Revisar facturas" title="Revisar facturas"><Eye className="size-4" /> <span className="hidden sm:inline">Revisar facturas</span></Button>
               )}
               {c?.estado === 'CERRADA' && (
-                <Button size="sm" onClick={() => onRevisar(f)}><Eye className="size-4" /> Ver facturas</Button>
+                <Button size="sm" variant="outline" onClick={() => onRevisar(f)} aria-label="Ver facturas" title="Ver facturas"><Eye className="size-4" /> <span className="hidden sm:inline">Ver facturas</span></Button>
               )}
             </div>
           </div>
