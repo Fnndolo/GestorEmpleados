@@ -81,7 +81,8 @@ export default async function NovedadesNominaPage({ searchParams }: { searchPara
         }))}
         asistencia={{ conectada: Boolean(conexion), url: conexion ? `${conexion.url}/admin?tab=equipo` : null }}
         esAdmin={esAdministrador(usuario)}
-        grupoInicial={grupo === 'horas' || grupo === 'conceptos' ? grupo : 'comisiones'}
+        // Horas extra primero: es lo que más se consulta aquí.
+        grupoInicial={grupo === 'comisiones' || grupo === 'conceptos' ? grupo : 'horas'}
       />
     </div>
   )

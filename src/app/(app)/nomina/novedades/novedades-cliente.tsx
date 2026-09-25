@@ -58,8 +58,8 @@ type Props = {
 
 /** `c`: rótulo corto para el celular, donde el largo partía la pestaña en dos líneas. */
 const GRUPOS = [
-  { v: 'comisiones', l: 'Comisiones', c: 'Comisiones' },
   { v: 'horas', l: 'Horas extra y recargos', c: 'Horas extra' },
+  { v: 'comisiones', l: 'Comisiones', c: 'Comisiones' },
   { v: 'conceptos', l: 'Otros conceptos', c: 'Otros' },
 ] as const
 type Grupo = (typeof GRUPOS)[number]['v']

@@ -106,21 +106,17 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
 
   return (
     <>
-      <Card className="mb-3">
+      <Card className="mb-3 py-0">
         <CardContent className="p-3">
-          <div className="flex items-start gap-2.5">
-            <Chip icono={Timer} color="bg-foreground text-background" className="size-9 shrink-0 rounded-[10px]" iconClassName="size-[18px]" />
-            <div className="min-w-0 flex-1">
-              <p className="flex flex-wrap items-center gap-2 text-sm font-bold">
-                AsistencIA
-                <Pill tone={conectada ? 'ok' : 'warn'}>{conectada ? 'Conectada' : 'Sin conectar'}</Pill>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {conectada ? 'Horas extra y recargos calculados de las marcaciones.' : 'Control de asistencia sin conectar.'}
-              </p>
-            </div>
+          {/* Encabezado en una línea: de dónde salen las horas y si hay conexión. */}
+          <div className="flex items-center gap-2">
+            <Chip icono={Timer} color="bg-foreground text-background" className="size-7 shrink-0 rounded-lg" iconClassName="size-4" />
+            <p className="text-sm font-bold">AsistencIA</p>
+            {conectada
+              ? <span className="size-2 rounded-full bg-emerald-500" title="Conectada" aria-label="Conectada" />
+              : <Pill tone="warn">Sin conectar</Pill>}
             {esAdmin && (
-              <Button size="icon" asChild aria-label="Clave de API (Ajustes)" title="Clave de API (Ajustes → Integraciones)">
+              <Button size="icon" variant="ghost" className="ml-auto size-8" asChild aria-label="Clave de API (Ajustes)" title="Clave de API (Ajustes → Integraciones)">
                 <Link href="/configuracion/integraciones"><KeyRound className="size-4" /></Link>
               </Button>
             )}
@@ -139,14 +135,15 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
             </div>
           ) : (
             <>
-              {/* El período de pago, como lo liquida nómina: mes y quincena. Una sola
-                  franja: a la izquierda qué período, a la derecha qué hacer con él. */}
-              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-2">
+              {/* El período de pago, como lo liquida nómina: mes y quincena. En el
+                  celular: mes y acciones en una fila, la quincena debajo; sin recuadro,
+                  para que la lista quede más arriba. */}
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
                 <Select value={mes} onValueChange={setMes}>
-                  <SelectTrigger className="h-8 w-40 bg-card text-xs" aria-label="Mes"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 min-w-0 flex-1 text-xs sm:w-40 sm:flex-none" aria-label="Mes"><SelectValue /></SelectTrigger>
                   <SelectContent>{meses.map((m) => <SelectItem key={m.valor} value={m.valor}>{m.etiqueta}</SelectItem>)}</SelectContent>
                 </Select>
-                <div className="flex h-8 items-center gap-1.5" role="group" aria-label="Quincena">
+                <div className="order-last flex h-8 basis-full items-center gap-1.5 sm:order-none sm:basis-auto" role="group" aria-label="Quincena">
                   {([[1, '1 – 15'], [2, '16 – fin'], [null, 'Todo el mes']] as const).map(([q, l]) => (
                     <button
                       key={String(q)}
@@ -154,20 +151,20 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
                       onClick={() => setQuincena(q)}
                       aria-pressed={quincena === q}
                       className={cn(
-                        'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
-                        quincena === q ? 'bg-foreground text-background' : 'border bg-card text-muted-foreground hover:bg-accent',
+                        'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                        quincena === q ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent',
                       )}
                     >
                       {l}
                     </button>
                   ))}
                 </div>
-                <div className="ml-auto flex items-center gap-2">
-                  <Button size="icon" onClick={() => setVersion((v) => v + 1)} disabled={cargando} aria-label="Actualizar" title="Volver a consultar">
+                <div className="flex shrink-0 items-center gap-1.5 sm:ml-auto">
+                  <Button size="icon" variant="outline" className="size-8" onClick={() => setVersion((v) => v + 1)} disabled={cargando} aria-label="Actualizar" title="Volver a consultar">
                     {cargando ? <Spinner /> : <RefreshCw className="size-4" />}
                   </Button>
-                  <Button onClick={traer} disabled={trayendo || cargando || !datos || datos.filas.length === 0}>
-                    {trayendo ? <Spinner /> : <Download className="size-4" />} Traer a la nómina
+                  <Button size="sm" onClick={traer} disabled={trayendo || cargando || !datos || datos.filas.length === 0} aria-label="Traer a la nómina" title="Traer a la nómina">
+                    {trayendo ? <Spinner /> : <Download className="size-4" />} <span className="hidden sm:inline">Traer a la nómina</span>
                   </Button>
                 </div>
               </div>
