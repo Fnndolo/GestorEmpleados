@@ -253,7 +253,7 @@ export function SstCliente(p: Props) {
         '-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1',
         // En escritorio el menú tiene su PROPIO desplazamiento: rueda sobre él y
         // el contenido de la derecha no se mueve, y al revés.
-        'lg:mx-0 lg:min-h-0 lg:flex-col lg:gap-px lg:overflow-y-auto lg:overflow-x-visible lg:px-0 lg:pb-4 lg:pr-2',
+        'lg:relative lg:mx-0 lg:min-h-0 lg:flex-col lg:gap-px lg:overflow-y-auto lg:overflow-x-visible lg:px-0 lg:pb-4 lg:pr-2',
       )}
     >
       {GRUPOS.map((g) => (
@@ -344,7 +344,9 @@ export function SstCliente(p: Props) {
       {/* El contenido también tiene su propio desplazamiento. `min-h-0` es
           imprescindible: sin él, un hijo de grid no encoge y el overflow se
           escapa al documento. */}
-      <div className="space-y-4 lg:min-h-0 lg:overflow-y-auto lg:pb-6 lg:pr-1">
+      {/* `relative`: sin él los absolutos de adentro (input oculto de los Checkbox)
+          se escapan del panel y alargan la página. Ver configuracion/layout.tsx. */}
+      <div className="space-y-4 lg:relative lg:min-h-0 lg:overflow-y-auto lg:pb-6 lg:pr-1">
       {tab === 'tablero' && (
         <div className="space-y-5">
           <div className="grid items-start gap-3 lg:grid-cols-2">

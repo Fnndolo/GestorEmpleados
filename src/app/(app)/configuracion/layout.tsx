@@ -62,8 +62,11 @@ export default async function ConfiguracionLayout({ children }: { children: Reac
       <div className="grid items-start gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-stretch">
         <RielConfiguracion hrefsVisibles={hrefsVisibles} contadores={contadores} />
         {/* `min-h-0` es imprescindible: sin él un hijo de grid no encoge y el
-            desbordamiento se escapa al documento. */}
-        <div className="min-w-0 lg:min-h-0 lg:overflow-y-auto lg:pb-6 lg:pr-1">{children}</div>
+            desbordamiento se escapa al documento. Y `relative` también: los
+            elementos absolutos de adentro (el input oculto de cada Checkbox) toman
+            como referencia el primer ancestro posicionado; sin este, se salían del
+            panel, alargaban la página y dejaban una franja vacía abajo. */}
+        <div className="min-w-0 lg:relative lg:min-h-0 lg:overflow-y-auto lg:pb-6 lg:pr-1">{children}</div>
       </div>
     </div>
   )

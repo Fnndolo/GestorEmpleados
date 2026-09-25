@@ -33,7 +33,7 @@ export function RielConfiguracion({ hrefsVisibles, contadores }: {
         '-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1',
         // En escritorio el menú tiene su propio desplazamiento: la rueda mueve
         // solo aquello sobre lo que está el puntero.
-        'lg:mx-0 lg:min-h-0 lg:flex-col lg:gap-5 lg:overflow-y-auto lg:overflow-x-visible lg:px-0 lg:pb-4 lg:pr-2',
+        'lg:relative lg:mx-0 lg:min-h-0 lg:flex-col lg:gap-5 lg:overflow-y-auto lg:overflow-x-visible lg:px-0 lg:pb-4 lg:pr-2',
       )}
     >
       {GRUPOS.map((g) => {
