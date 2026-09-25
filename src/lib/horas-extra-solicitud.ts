@@ -6,6 +6,13 @@
 /** Límites legales (CST art. 22 Ley 50 de 1990): 2 horas extra al día y 12 a la semana. */
 export const LIMITE_HORAS_EXTRA_DIA = 2
 export const LIMITE_HORAS_EXTRA_SEMANA = 12
+/**
+ * ¿El soporte es obligatorio? Por ahora no (decisión de empresa, 2026-09-25):
+ * se puede adjuntar, pero se envía y se aprueba sin él. Poner en `true` para
+ * exigirlo otra vez al pedir y al aprobar.
+ */
+export const SOPORTE_HORAS_EXTRA_OBLIGATORIO = false
+
 /** Hasta cuántos días hábiles después de hacerlas se pueden pedir (decisión de empresa). */
 export const DIAS_HABILES_POSTERIOR = 3
 

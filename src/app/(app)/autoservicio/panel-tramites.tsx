@@ -148,10 +148,10 @@ export function PanelTramites({
       clave: 'permiso', icono: Clock,
       titulo: 'Pedir permiso', corto: 'Permiso', desc: 'Por día o por horas', sol: 'PERMISO' as TipoSol,
     },
-    // Autorización para quedarse: antes, o hasta 3 días hábiles después (con soporte).
+    // Autorización para quedarse: antes, o hasta 3 días hábiles después.
     activo && aplica('horasExtra') && {
       clave: 'horas-extra-pedir', icono: ClockPlus,
-      titulo: 'Pedir horas extra', corto: 'Horas extra', desc: 'Con soporte; tu jefe y RRHH aprueban', sol: 'HORAS_EXTRA' as TipoSol,
+      titulo: 'Pedir horas extra', corto: 'Horas extra', desc: 'Tu jefe y RRHH aprueban', sol: 'HORAS_EXTRA' as TipoSol,
     },
     // La certificación laboral sigue disponible aunque esté retirado (habeas data).
     {

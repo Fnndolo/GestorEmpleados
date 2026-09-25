@@ -21,7 +21,7 @@ import { festivosDeRango, esDiaHabil } from '@/lib/dias-habiles'
 import { parseFechaISO } from '@/lib/fechas'
 import { crearSolicitud, editarMiPermiso } from './acciones'
 import { textoAutorizacionAnticipadas } from '@/lib/vacaciones-config'
-import { horasEntreHoras, DIAS_HABILES_POSTERIOR, LIMITE_HORAS_EXTRA_DIA } from '@/lib/horas-extra-solicitud'
+import { horasEntreHoras, DIAS_HABILES_POSTERIOR, LIMITE_HORAS_EXTRA_DIA, SOPORTE_HORAS_EXTRA_OBLIGATORIO } from '@/lib/horas-extra-solicitud'
 
 /** Lo que hace falta para abrir el diálogo con un permiso ya pedido y corregirlo. */
 export type EdicionPermiso = {
@@ -185,7 +185,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
       if (!permFecha) return 'Elige el día de las horas extra.'
       if (heIni >= heFin) return 'La hora de inicio debe ser anterior a la hora de fin.'
       if (!motivo.trim()) return 'Escribe el motivo de las horas extra.'
-      if (archivos.length === 0) return 'Adjunta el soporte que justifica las horas extra (obligatorio).'
+      if (SOPORTE_HORAS_EXTRA_OBLIGATORIO && archivos.length === 0) return 'Adjunta el soporte que justifica las horas extra (obligatorio).'
     } else if (tipo === 'PERMISO') {
       if (!permFecha) return 'Selecciona el día del permiso en el calendario.'
       if (permModo === 'HORAS' && permIni >= permFin) return 'La hora de inicio debe ser anterior a la hora de fin.'
@@ -308,7 +308,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
   }
 
   const permiteAdjunto = tipo === 'PERMISO' || tipo === 'HORAS_EXTRA' || tipo === 'VACACIONES' || tipo === 'INCAPACIDAD' || tipo === 'LICENCIA'
-  const adjuntoObligatorio = tipo === 'INCAPACIDAD' || tipo === 'HORAS_EXTRA' || (tipo === 'LICENCIA' && !!lic?.requiereSoporte)
+  const adjuntoObligatorio = tipo === 'INCAPACIDAD' || (tipo === 'HORAS_EXTRA' && SOPORTE_HORAS_EXTRA_OBLIGATORIO) || (tipo === 'LICENCIA' && !!lic?.requiereSoporte)
 
   return (
     <>

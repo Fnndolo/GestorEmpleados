@@ -15,7 +15,7 @@ import { miFichaSchema } from '@/lib/validaciones/colaborador'
 import { TIPOS_LICENCIA, defLicencia, esDerecho } from '@/lib/licencias'
 import { evaluarSolicitudVacaciones } from '@/server/vacaciones-reglas'
 import { calcularLimitesHorasExtra, fechaMinimaHorasExtra } from '@/server/horas-extra-autorizacion'
-import { horasEntreHoras, DIAS_HABILES_POSTERIOR } from '@/lib/horas-extra-solicitud'
+import { horasEntreHoras, DIAS_HABILES_POSTERIOR, SOPORTE_HORAS_EXTRA_OBLIGATORIO } from '@/lib/horas-extra-solicitud'
 import { saldoVisibleEnAutoservicio, textoAutorizacionAnticipadas } from '@/lib/vacaciones-config'
 import { liquidarVacaciones, desgloseHtml } from '@/server/vacaciones-liquidacion'
 import { usuarioDeColaborador } from '@/server/notificaciones/avisar'
@@ -180,8 +180,8 @@ export const crearSolicitud = accion(
     // Vacaciones: aplicar las reglas del RIT (cap. 9) antes de crear la solicitud.
     let datosSolicitud: Record<string, unknown> = { ...d }
 
-    // Horas extra: un día, desde–hasta, motivo y soporte (el soporte se adjunta
-    // justo después de crear la solicitud y se exige al aprobar). Se puede pedir
+    // Horas extra: un día, desde–hasta, motivo y soporte (por ahora opcional; se
+    // adjunta justo después de crear la solicitud). Se puede pedir
     // antes o hasta 3 días hábiles después; el límite legal no bloquea: queda
     // calculado para que el aprobador vea la alerta.
     if (d.tipo === 'HORAS_EXTRA') {
@@ -398,9 +398,9 @@ export const resolverPaso = accion(
     const puede = await usuarioPuedeResolver(usuario, paso)
     if (!puede) throw new ErrorNegocio('No tienes permiso para aprobar este paso.')
 
-    // Horas extra: el soporte es obligatorio. Se adjunta después de crear la
-    // solicitud, así que se verifica aquí, antes de aprobar.
-    if (d.aprobar && paso.solicitud.tipo === 'HORAS_EXTRA') {
+    // Horas extra: si el soporte es obligatorio (ver SOPORTE_HORAS_EXTRA_OBLIGATORIO),
+    // se verifica aquí, antes de aprobar: se adjunta después de crear la solicitud.
+    if (SOPORTE_HORAS_EXTRA_OBLIGATORIO && d.aprobar && paso.solicitud.tipo === 'HORAS_EXTRA') {
       const soportes = await prisma.documento.count({ where: { entidadTipo: 'Solicitud', entidadId: paso.solicitudId } })
       if (soportes === 0) throw new ErrorNegocio('Esta solicitud de horas extra no tiene soporte adjunto: no se puede aprobar. Recházala para que la pida de nuevo con el soporte.')
     }
