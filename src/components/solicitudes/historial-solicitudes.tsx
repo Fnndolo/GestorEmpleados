@@ -5,7 +5,6 @@ import { ChevronDown, CalendarRange, Clock, HeartPulse, FileBadge, CalendarClock
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Pill } from '@/components/ui-kit'
 import { colorAvatar } from '@/lib/etiquetas'
@@ -54,7 +53,6 @@ export function HistorialSolicitudes({ items, conColaborador = false, vacio = 'S
   vacio?: string
 }) {
   const [abierta, setAbierta] = useState<string | null>(null)
-  const [imagenAmpliada, setImagenAmpliada] = useState<{ id: string; nombre: string } | null>(null)
   if (items.length === 0) {
     return <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">{vacio}</CardContent></Card>
   }
@@ -122,39 +120,21 @@ export function HistorialSolicitudes({ items, conColaborador = false, vacio = 'S
                   </ul>
                 )}
                 {s.resultado && <p className="text-xs text-muted-foreground">{s.resultado}</p>}
+                {/* Soporte como en Novedades → Permisos: solo el clip; al tocarlo se abre
+                    en el visor emergente, sin miniaturas que ocupen la tarjeta. */}
                 {s.documentos.length > 0 && (
-                  <div>
-                    <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Soportes</p>
-                    <div className="flex flex-wrap items-start gap-2">
-                      {s.documentos.map((d) =>
-                        d.esImagen ? (
-                          <button
-                            key={d.id}
-                            type="button"
-                            onClick={() => setImagenAmpliada(d)}
-                            className="group/img overflow-hidden rounded-lg border bg-muted/30 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            title={`${d.nombre} — clic para ampliar`}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={`/api/documentos/${d.id}`}
-                              alt={d.nombre}
-                              className="h-28 w-36 object-contain transition-transform group-hover/img:scale-105"
-                              loading="lazy"
-                            />
-                          </button>
-                        ) : (
-                          <VisorPdf
-                            key={d.id}
-                            documentoId={d.id}
-                            titulo={d.nombre}
-                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                          >
-                            <Paperclip className="size-3.5" /> {d.nombre}
-                          </VisorPdf>
-                        ),
-                      )}
-                    </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {s.documentos.map((d, i) => (
+                      <VisorPdf
+                        key={d.id}
+                        documentoId={d.id}
+                        titulo={d.nombre}
+                        mimeType={d.esImagen ? 'image/*' : undefined}
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                      >
+                        <Paperclip className="size-3.5" /> Soporte{s.documentos.length > 1 ? ` ${i + 1}` : ''}
+                      </VisorPdf>
+                    ))}
                   </div>
                 )}
               </div>
@@ -163,18 +143,6 @@ export function HistorialSolicitudes({ items, conColaborador = false, vacio = 'S
         )
       })}
 
-      {/* Ampliación del soporte de imagen, sin salir del historial. */}
-      <Dialog open={imagenAmpliada !== null} onOpenChange={(o) => { if (!o) setImagenAmpliada(null) }}>
-        <DialogContent className="max-w-[calc(100%-2.5rem)] sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="truncate pr-6 text-base">{imagenAmpliada?.nombre}</DialogTitle>
-          </DialogHeader>
-          {imagenAmpliada && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={`/api/documentos/${imagenAmpliada.id}`} alt={imagenAmpliada.nombre} className="max-h-[70vh] w-full rounded-lg object-contain" />
-          )}
-        </DialogContent>
-      </Dialog>
     </CardContent></Card>
   )
 }
