@@ -47,7 +47,8 @@ const OTRA = '__otra__'
 const SIN_ENLACE = '__ninguno__'
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-const fechaLarga = (iso: string) => { const d = new Date(iso); return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}` }
+/** "21 sep 2026": cabe en la línea de las etiquetas. */
+const fechaCorta = (iso: string) => { const d = new Date(iso); return `${d.getDate()} ${MESES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}` }
 
 // La captura la sirve nuestra ruta con sesión, no un CDN.
 // eslint-disable-next-line @next/next/no-img-element
@@ -108,31 +109,32 @@ export function AvisosCliente({ avisos, gestion, verId, vistaInicial }: {
       {vista === 'avisos' && (
         ordenados.length === 0 ? (
           <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
-            <Megaphone className="mx-auto mb-2 size-6" /> Sin avisos por ahora. Aquí aparecerá lo nuevo de la app y cómo usarlo.
+            <Megaphone className="mx-auto mb-2 size-6" /> Sin avisos por ahora.
           </CardContent></Card>
         ) : (
-          <Card><CardContent className="divide-y p-0">
+          <Card className="py-0"><CardContent className="divide-y p-0">
             {ordenados.map((a) => {
               const exp = abierto === a.id
               return (
-                <div key={a.id} id={`aviso-${a.id}`} className="p-3">
-                  <button type="button" onClick={() => setAbierto(exp ? null : a.id)} aria-expanded={exp} className="flex w-full items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                // Acordeón, como la gestión: cerrado, título y etiquetas en dos
+                // líneas; el texto completo, al abrirlo.
+                <div key={a.id} id={`aviso-${a.id}`}>
+                  <button type="button" onClick={() => setAbierto(exp ? null : a.id)} aria-expanded={exp} className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
                     <span className={cn('grid size-9 shrink-0 place-items-center rounded-[10px]', a.leido ? 'bg-foreground/8 text-muted-foreground' : 'bg-foreground text-background')}>
                       <Megaphone className="size-[18px]" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-sm font-bold">{a.titulo}</span>
+                      <span className={cn('block text-sm', exp ? 'font-semibold' : 'truncate', !a.leido && 'font-semibold')}>{a.titulo}</span>
+                      <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
                         <Pill tone={tonoTipoAviso(a.tipo)}>{etiquetaTipoAviso(a.tipo)}</Pill>
                         {!a.leido && <Pill tone="warn">Sin leer</Pill>}
+                        <span className="text-[11px] text-muted-foreground">{fechaCorta(a.publicadoEn)}</span>
                       </span>
-                      {!exp && <span className="mt-0.5 block text-xs text-muted-foreground">{a.resumen}</span>}
-                      <span className="block text-[11px] text-muted-foreground">{fechaLarga(a.publicadoEn)}</span>
                     </span>
                     <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', exp && 'rotate-180')} />
                   </button>
                   {exp && (
-                    <div className="mt-3 space-y-3 border-t pt-3">
+                    <div className="space-y-3 border-t border-dashed bg-muted/20 px-3 py-3 animate-in fade-in slide-in-from-top-1 duration-150">
                       <CuerpoAviso detalle={a.detalle ?? a.resumen} imagenUrl={a.imagenUrl} enlace={a.enlace} titulo={a.titulo} />
                       {!a.leido && (
                         <div className="flex justify-end">
