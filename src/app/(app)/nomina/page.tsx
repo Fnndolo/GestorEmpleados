@@ -27,22 +27,23 @@ export default async function NominaPage() {
     <div className="max-w-6xl">
       <Encabezado
         volver
+        enLinea
         titulo="Nómina"
-        descripcion="Liquidación de nómina con conceptos, comisiones, horas extra (Ley 2466) y desprendibles."
+        // En el celular los botones son solo íconos, en la misma fila del título.
         acciones={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2">
             {/* Antes del periodo: las comisiones y horas se registran cuando
                 ocurren, no cuando alguien abre la nómina del mes. */}
             {puedeCrear && (
               <Button size="sm" asChild>
-                <Link href="/nomina/novedades"><Coins className="size-4" /> Novedades</Link>
+                <Link href="/nomina/novedades" aria-label="Novedades" title="Novedades"><Coins className="size-4" /> <span className="hidden sm:inline">Novedades</span></Link>
               </Button>
             )}
             <Button size="sm" asChild>
-              <Link href="/nomina/ops"><Receipt className="size-4" /> Pagos OPS</Link>
+              <Link href="/nomina/ops" aria-label="Pagos OPS" title="Pagos OPS"><Receipt className="size-4" /> <span className="hidden sm:inline">Pagos OPS</span></Link>
             </Button>
             <Button size="sm" asChild>
-              <Link href="/nomina/prestamos"><HandCoins className="size-4" /> Préstamos</Link>
+              <Link href="/nomina/prestamos" aria-label="Préstamos" title="Préstamos"><HandCoins className="size-4" /> <span className="hidden sm:inline">Préstamos</span></Link>
             </Button>
             {puedeCrear && <CrearPeriodo />}
           </div>
@@ -52,7 +53,7 @@ export default async function NominaPage() {
       {periodos.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
           <Wallet className="size-8" />
-          <p>Aún no hay periodos de nómina. Crea el primero.</p>
+          <p>Aún no hay periodos de nómina.</p>
         </CardContent></Card>
       ) : (
         <Card><CardContent className="p-0 divide-y">

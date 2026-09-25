@@ -33,7 +33,7 @@ export function CrearPeriodo() {
 
   return (
     <>
-      <Button size="sm" onClick={() => setAbierto(true)}><Plus className="size-4" /> Nuevo periodo</Button>
+      <Button size="sm" onClick={() => setAbierto(true)} aria-label="Nuevo periodo" title="Nuevo periodo"><Plus className="size-4" /> <span className="hidden sm:inline">Nuevo periodo</span></Button>
       <Dialog open={abierto} onOpenChange={setAbierto}>
         <DialogContent>
           <DialogHeader><DialogTitle>Nuevo periodo de nómina</DialogTitle></DialogHeader>
