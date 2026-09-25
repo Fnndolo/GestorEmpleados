@@ -76,6 +76,8 @@ export function AvisosCliente({ avisos, gestion, verId, vistaInicial }: {
   const [vista, setVista] = useState<'avisos' | 'gestion'>(vistaInicial)
   const [abierto, setAbierto] = useState<string | null>(verId)
   const [marcando, setMarcando] = useState<string | null>(null)
+  // "Nuevo aviso" vive en la fila de las pestañas; el diálogo lo abre la gestión.
+  const [crear, setCrear] = useState(false)
 
   async function entendido(id: string) {
     setMarcando(id)
@@ -91,10 +93,15 @@ export function AvisosCliente({ avisos, gestion, verId, vistaInicial }: {
   return (
     <div>
       {gestion && (
-        <div className="mb-3 flex gap-1.5">
+        <div className="mb-3 flex items-center gap-1.5">
           {([['avisos', 'Avisos'], ['gestion', 'Gestión']] as const).map(([v, l]) => (
-            <button key={v} type="button" onClick={() => setVista(v)} className={cn('rounded-full px-3 py-1 text-xs font-semibold transition-colors', vista === v ? 'bg-foreground text-background' : 'border bg-card text-muted-foreground hover:bg-accent')}>{l}</button>
+            <button key={v} type="button" onClick={() => setVista(v)} className={cn('rounded-full px-3 py-1.5 text-sm font-medium transition-colors', vista === v ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent')}>{l}</button>
           ))}
+          {vista === 'gestion' && (
+            <Button size="sm" className="ml-auto" onClick={() => setCrear(true)} aria-label="Nuevo aviso" title="Nuevo aviso">
+              <Plus className="size-4" /> <span className="hidden sm:inline">Nuevo aviso</span>
+            </Button>
+          )}
         </div>
       )}
 
@@ -143,14 +150,18 @@ export function AvisosCliente({ avisos, gestion, verId, vistaInicial }: {
         )
       )}
 
-      {vista === 'gestion' && gestion && <GestionAvisos gestion={gestion} />}
+      {vista === 'gestion' && gestion && <GestionAvisos gestion={gestion} crear={crear} onCrearCerrado={() => setCrear(false)} />}
     </div>
   )
 }
 
-function GestionAvisos({ gestion }: { gestion: Gestion }) {
+function GestionAvisos({ gestion, crear, onCrearCerrado }: { gestion: Gestion; crear: boolean; onCrearCerrado: () => void }) {
   const router = useRouter()
-  const [dialogo, setDialogo] = useState<{ modo: 'nuevo' } | { modo: 'editar'; aviso: AvisoGestion } | null>(null)
+  const [editando, setEditando] = useState<AvisoGestion | null>(null)
+  const dialogo = crear ? { modo: 'nuevo' as const } : editando ? { modo: 'editar' as const, aviso: editando } : null
+  const cerrarDialogo = () => { setEditando(null); onCrearCerrado() }
+  // Acordeón: cerrado se ve título, estado y lecturas; abierto, el texto y las acciones.
+  const [abierto, setAbierto] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [lecturas, setLecturas] = useState<{ id: string; total: number; leidos: string[]; pendientes: string[] } | null>(null)
 
@@ -171,57 +182,71 @@ function GestionAvisos({ gestion }: { gestion: Gestion }) {
 
   return (
     <>
-      <div className="mb-3 flex justify-end">
-        <Button size="sm" onClick={() => setDialogo({ modo: 'nuevo' })}><Plus className="size-4" /> Nuevo aviso</Button>
-      </div>
       {gestion.avisos.length === 0 ? (
-        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Aún no hay avisos. Crea el primero: un módulo nuevo, una mejora o un cambio, y publícalo cuando esté listo.</CardContent></Card>
+        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Aún no hay avisos.</CardContent></Card>
       ) : (
-        <Card><CardContent className="divide-y p-0">
+        <Card className="py-0"><CardContent className="divide-y p-0">
           {gestion.avisos.map((a) => {
             const est = ESTADO[a.estado] ?? ESTADO.BORRADOR
             const trabajando = ocupado === a.id
+            const exp = abierto === a.id
             return (
-              <div key={a.id} className="p-3">
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold">
-                      {a.titulo} <Pill tone={est.tone}>{est.texto}</Pill> <Pill tone={tonoTipoAviso(a.tipo)}>{etiquetaTipoAviso(a.tipo)}</Pill>
-                    </p>
-                    <p className="text-xs text-muted-foreground">{a.resumen}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Para: {a.audienciaTexto}{a.publicadoEn ? ` · publicado ${a.publicadoEn}` : ''}{a.vigenteHasta ? ` · destacado hasta ${a.vigenteHasta}` : ''}{a.imagenUrl ? ' · con captura' : ''}
-                    </p>
-                    {a.estado === 'PUBLICADO' && (
-                      <button type="button" onClick={() => verLecturas(a)} className="mt-1 text-[11px] font-semibold text-primary hover:underline">
-                        Visto por {a.leidos} de {a.total}
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5">
+              <div key={a.id}>
+                <button
+                  type="button"
+                  onClick={() => setAbierto(exp ? null : a.id)}
+                  aria-expanded={exp}
+                  className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-accent/40"
+                >
+                  <span className={cn('grid size-9 shrink-0 place-items-center rounded-[10px]', a.estado === 'PUBLICADO' ? 'bg-foreground text-background' : 'bg-foreground/8 text-muted-foreground')}>
+                    <Megaphone className="size-[18px]" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{a.titulo}</span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                      <Pill tone={est.tone}>{est.texto}</Pill>
+                      <Pill tone={tonoTipoAviso(a.tipo)}>{etiquetaTipoAviso(a.tipo)}</Pill>
+                      {a.estado === 'PUBLICADO' && <span className="text-[11px] text-muted-foreground tabular-nums">{a.leidos}/{a.total} vistos</span>}
+                    </span>
+                  </span>
+                  <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', exp && 'rotate-180')} />
+                </button>
+                {exp && (
+                <div className="space-y-2 border-t border-dashed bg-muted/20 px-3 py-3 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <p className="text-sm">{a.resumen}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Para: {a.audienciaTexto}{a.publicadoEn ? ` · publicado ${a.publicadoEn}` : ''}{a.vigenteHasta ? ` · destacado hasta ${a.vigenteHasta}` : ''}{a.imagenUrl ? ' · con imagen' : ''}
+                  </p>
+                  {a.estado === 'PUBLICADO' && (
+                    <button type="button" onClick={() => verLecturas(a)} className="text-[11px] font-semibold text-primary hover:underline">
+                      Ver quién lo ha visto ({a.leidos} de {a.total})
+                    </button>
+                  )}
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
                   {a.estado !== 'ARCHIVADO' && (
-                    <Button size="icon" variant="outline" onClick={() => setDialogo({ modo: 'editar', aviso: a })} disabled={trabajando} aria-label="Editar" title="Editar"><Pencil className="size-4" /></Button>
+                    <Button size="icon" variant="outline" onClick={() => setEditando(a)} disabled={trabajando} aria-label="Editar" title="Editar"><Pencil className="size-4" /></Button>
                   )}
                   {a.estado === 'BORRADOR' && (
                     <>
                       <Button size="icon" variant="outline" onClick={() => { if (confirm('¿Eliminar este borrador?')) ejecutar(a.id, () => eliminarAviso({ id: a.id }), () => 'Borrador eliminado.') }} disabled={trabajando} aria-label="Eliminar" title="Eliminar"><Trash2 className="size-4" /></Button>
-                      <Button size="sm" onClick={() => { if (confirm(`¿Publicar «${a.titulo}» para: ${a.audienciaTexto}? Cada persona recibirá la notificación.`)) ejecutar(a.id, () => publicarAviso({ id: a.id }), (d) => `Publicado y notificado a ${(d as { notificados: number }).notificados} persona(s).`) }} disabled={trabajando}>
-                        {trabajando ? <Spinner /> : <Send className="size-4" />} Publicar
+                      <Button size="sm" onClick={() => { if (confirm(`¿Publicar «${a.titulo}» para: ${a.audienciaTexto}? Cada persona recibirá la notificación.`)) ejecutar(a.id, () => publicarAviso({ id: a.id }), (d) => `Publicado y notificado a ${(d as { notificados: number }).notificados} persona(s).`) }} disabled={trabajando} aria-label="Publicar" title="Publicar">
+                        {trabajando ? <Spinner /> : <Send className="size-4" />} <span className="hidden sm:inline">Publicar</span>
                       </Button>
                     </>
                   )}
                   {a.estado === 'PUBLICADO' && (
                     <>
-                      <Button size="sm" variant="outline" onClick={() => ejecutar(a.id, () => reavisar({ id: a.id }), (d) => `Reenviado a ${(d as { notificados: number }).notificados} persona(s) que no lo habían leído.`)} disabled={trabajando} title="Volver a notificar a quienes no lo han leído">
-                        {trabajando ? <Spinner /> : <RefreshCw className="size-4" />} Re-avisar
+                      <Button size="sm" variant="outline" onClick={() => ejecutar(a.id, () => reavisar({ id: a.id }), (d) => `Reenviado a ${(d as { notificados: number }).notificados} persona(s) que no lo habían leído.`)} disabled={trabajando} title="Re-avisar a quienes no lo han leído" aria-label="Re-avisar">
+                        {trabajando ? <Spinner /> : <RefreshCw className="size-4" />} <span className="hidden sm:inline">Re-avisar</span>
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => { if (confirm('¿Archivar? Dejará de mostrarse a todos.')) ejecutar(a.id, () => archivarAviso({ id: a.id }), () => 'Aviso archivado.') }} disabled={trabajando}>
-                        <Archive className="size-4" /> Archivar
+                      <Button size="sm" variant="outline" onClick={() => { if (confirm('¿Archivar? Dejará de mostrarse a todos.')) ejecutar(a.id, () => archivarAviso({ id: a.id }), () => 'Aviso archivado.') }} disabled={trabajando} aria-label="Archivar" title="Archivar">
+                        <Archive className="size-4" /> <span className="hidden sm:inline">Archivar</span>
                       </Button>
                     </>
                   )}
                 </div>
+                </div>
+                )}
               </div>
             )
           })}
@@ -232,8 +257,8 @@ function GestionAvisos({ gestion }: { gestion: Gestion }) {
         <DialogAviso
           gestion={gestion}
           aviso={dialogo.modo === 'editar' ? dialogo.aviso : null}
-          onClose={() => setDialogo(null)}
-          onDone={() => { setDialogo(null); router.refresh() }}
+          onClose={cerrarDialogo}
+          onDone={() => { cerrarDialogo(); router.refresh() }}
         />
       )}
       {lecturas && (
