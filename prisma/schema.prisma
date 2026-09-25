@@ -2649,6 +2649,8 @@ enum TipoAviso {
   NUEVO_MODULO
   MEJORA
   CAMBIO
+  // Un mensaje de la empresa (texto), no algo nuevo de la app.
+  COMUNICADO
 
   @@map("tipo_aviso")
 }

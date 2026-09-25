@@ -4,16 +4,16 @@ import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, ChevronDown, Check, ArrowRight, Send, Pencil, Archive, Trash2, RefreshCw, Camera, X, Eye, Megaphone } from 'lucide-react'
+import { Plus, ChevronDown, Check, ArrowRight, Send, Pencil, Archive, Trash2, RefreshCw, Camera, X, Megaphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { Pill, type PillTone } from '@/components/ui-kit'
 import { TIPOS_AVISO, etiquetaTipoAviso, tonoTipoAviso, bloquesDetalle, type Audiencia } from '@/lib/avisos'
@@ -44,6 +44,7 @@ const RUTAS = [
   ['/nomina/novedades', 'Nómina · Novedades'], ['/activos', 'Activos y dotación'], ['/colaboradores', 'Colaboradores'],
 ] as const
 const OTRA = '__otra__'
+const SIN_ENLACE = '__ninguno__'
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const fechaLarga = (iso: string) => { const d = new Date(iso); return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}` }
@@ -118,14 +119,14 @@ export function AvisosCliente({ avisos, gestion, verId, vistaInicial }: {
                         <Pill tone={tonoTipoAviso(a.tipo)}>{etiquetaTipoAviso(a.tipo)}</Pill>
                         {!a.leido && <Pill tone="warn">Sin leer</Pill>}
                       </span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">{a.resumen}</span>
+                      {!exp && <span className="mt-0.5 block text-xs text-muted-foreground">{a.resumen}</span>}
                       <span className="block text-[11px] text-muted-foreground">{fechaLarga(a.publicadoEn)}</span>
                     </span>
                     <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', exp && 'rotate-180')} />
                   </button>
                   {exp && (
                     <div className="mt-3 space-y-3 border-t pt-3">
-                      <CuerpoAviso detalle={a.detalle} imagenUrl={a.imagenUrl} enlace={a.enlace} titulo={a.titulo} />
+                      <CuerpoAviso detalle={a.detalle ?? a.resumen} imagenUrl={a.imagenUrl} enlace={a.enlace} titulo={a.titulo} />
                       {!a.leido && (
                         <div className="flex justify-end">
                           <Button size="sm" variant="ghost" onClick={() => entendido(a.id)} disabled={marcando === a.id}>
@@ -253,33 +254,39 @@ function GestionAvisos({ gestion }: { gestion: Gestion }) {
 function DialogAviso({ gestion, aviso, onClose, onDone }: { gestion: Gestion; aviso: AvisoGestion | null; onClose: () => void; onDone: () => void }) {
   const router = useRouter()
   const [titulo, setTitulo] = useState(aviso?.titulo ?? '')
-  const [resumen, setResumen] = useState(aviso?.resumen ?? '')
-  const [detalle, setDetalle] = useState(aviso?.detalle ?? '')
-  const [tipo, setTipo] = useState(aviso?.tipo ?? 'NUEVO_MODULO')
+  // Un solo texto. Los avisos viejos traían resumen y "cómo se usa" por separado:
+  // se juntan (sin repetir el resumen si el detalle ya empieza con él).
+  const [comentario, setComentario] = useState(() => {
+    if (!aviso) return ''
+    if (!aviso.detalle) return aviso.resumen
+    const inicio = aviso.resumen.replace(/…$/, '')
+    return aviso.detalle.replace(/\s+/g, ' ').startsWith(inicio) ? aviso.detalle : `${aviso.resumen}\n\n${aviso.detalle}`
+  })
+  const [tipo, setTipo] = useState(aviso?.tipo ?? 'COMUNICADO')
   const enlaceInicial = aviso?.enlace ?? ''
   const conocido = RUTAS.some(([r]) => r === enlaceInicial)
-  const [rutaSel, setRutaSel] = useState(enlaceInicial ? (conocido ? enlaceInicial : OTRA) : '')
+  const [rutaSel, setRutaSel] = useState(enlaceInicial ? (conocido ? enlaceInicial : OTRA) : SIN_ENLACE)
   const [rutaLibre, setRutaLibre] = useState(conocido ? '' : enlaceInicial)
   const [vigenteHasta, setVigenteHasta] = useState(aviso?.vigenteHasta ?? '')
   const [roles, setRoles] = useState<string[]>(aviso?.audiencia.roles ?? [])
-  const [vinculos, setVinculos] = useState<('LABORAL' | 'OPS')[]>(aviso?.audiencia.vinculos ?? [])
+  const [vinculos, setVinculos] = useState<string[]>(aviso?.audiencia.vinculos ?? [])
   const [sedeIds, setSedeIds] = useState<string[]>(aviso?.audiencia.sedeIds ?? [])
   const [guardando, setGuardando] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [imagenUrl, setImagenUrl] = useState(aviso?.imagenUrl ?? null)
   const inputImagen = useRef<HTMLInputElement>(null)
 
-  const alternar = <T,>(lista: T[], v: T, set: (x: T[]) => void) => set(lista.includes(v) ? lista.filter((x) => x !== v) : [...lista, v])
-
   async function guardar() {
-    const enlace = rutaSel === OTRA ? rutaLibre.trim() : rutaSel
-    const datos = { titulo, resumen, detalle, tipo: tipo as 'NUEVO_MODULO' | 'MEJORA' | 'CAMBIO', enlace, vigenteHasta, audiencia: { roles, vinculos, sedeIds } }
+    const enlace = rutaSel === OTRA ? rutaLibre.trim() : rutaSel === SIN_ENLACE ? '' : rutaSel
+    const datos = {
+      titulo, comentario, tipo: tipo as 'COMUNICADO' | 'NUEVO_MODULO' | 'MEJORA' | 'CAMBIO', enlace, vigenteHasta,
+      audiencia: { roles, vinculos: vinculos as ('LABORAL' | 'OPS')[], sedeIds },
+    }
     setGuardando(true)
     const res = aviso ? await editarAviso({ id: aviso.id, ...datos }) : await crearAviso(datos)
     setGuardando(false)
     if (!res.ok) { toast.error(res.error, { duration: 8000 }); return }
-    if (aviso) { toast.success('Aviso guardado.'); onDone(); return }
-    toast.success('Guardado como borrador. Agrégale la captura si quieres y publícalo desde la lista.')
+    toast.success(aviso ? 'Aviso guardado.' : 'Guardado como borrador. Publícalo desde la lista.')
     onDone()
   }
 
@@ -293,12 +300,12 @@ function DialogAviso({ gestion, aviso, onClose, onDone }: { gestion: Gestion; av
       fd.append('archivo', new File([reducida], archivo.name, { type: reducida.type || archivo.type }))
       const resp = await fetch(`/api/avisos/${aviso.id}/imagen`, { method: 'POST', body: fd })
       const j = await resp.json().catch(() => ({}))
-      if (!resp.ok) throw new Error(j.error ?? 'No se pudo subir la captura.')
+      if (!resp.ok) throw new Error(j.error ?? 'No se pudo subir la imagen.')
       setImagenUrl(`/api/avisos/${aviso.id}/imagen?v=${Date.now()}`)
-      toast.success('Captura guardada.')
+      toast.success('Imagen guardada.')
       router.refresh()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo subir la captura.')
+      toast.error(e instanceof Error ? e.message : 'No se pudo subir la imagen.')
     } finally {
       setSubiendo(false)
     }
@@ -309,79 +316,60 @@ function DialogAviso({ gestion, aviso, onClose, onDone }: { gestion: Gestion; av
     setSubiendo(true)
     const resp = await fetch(`/api/avisos/${aviso.id}/imagen`, { method: 'DELETE' })
     setSubiendo(false)
-    if (!resp.ok) { toast.error('No se pudo quitar la captura.'); return }
+    if (!resp.ok) { toast.error('No se pudo quitar la imagen.'); return }
     setImagenUrl(null); router.refresh()
   }
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{aviso ? 'Editar aviso' : 'Nuevo aviso'}</DialogTitle>
-          <DialogDescription>Lo que verá cada persona en la app: qué es y cómo se usa.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-            <div className="space-y-1.5"><Label htmlFor="av-titulo">Título <span className="text-destructive">*</span></Label><Input id="av-titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} maxLength={120} placeholder="Ej.: Ya puedes ver tus entregas en el celular" autoFocus /></div>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <div className="space-y-1.5"><Label htmlFor="av-titulo">Título <span className="text-destructive">*</span></Label><Input id="av-titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} maxLength={120} autoFocus /></div>
             <div className="space-y-1.5"><Label>Tipo</Label>
-              <Select value={tipo} onValueChange={setTipo}><SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
+              <Select value={tipo} onValueChange={setTipo}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
                 <SelectContent>{TIPOS_AVISO.map((t) => <SelectItem key={t.valor} value={t.valor}>{t.etiqueta}</SelectItem>)}</SelectContent></Select>
             </div>
           </div>
-          <div className="space-y-1.5"><Label htmlFor="av-resumen">Resumen <span className="text-destructive">*</span></Label><Textarea id="av-resumen" rows={2} value={resumen} onChange={(e) => setResumen(e.target.value)} maxLength={300} placeholder="Una o dos líneas: qué cambia para la persona." /></div>
           <div className="space-y-1.5">
-            <Label htmlFor="av-detalle">Cómo se usa</Label>
-            <Textarea id="av-detalle" rows={6} value={detalle} onChange={(e) => setDetalle(e.target.value)} maxLength={4000} placeholder={'Pasos cortos. Una línea por paso; empieza con "- " para viñeta.\n- Entra a Autoservicio → Mis entregas\n- Toca Firmar y dibuja tu firma'} />
+            <Label htmlFor="av-comentario">Comentario <span className="text-destructive">*</span></Label>
+            <Textarea id="av-comentario" rows={5} value={comentario} onChange={(e) => setComentario(e.target.value)} maxLength={4000} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5"><Label>Lleva al módulo</Label>
-              <Select value={rutaSel} onValueChange={setRutaSel}><SelectTrigger className="w-full"><SelectValue placeholder="Sin enlace" /></SelectTrigger>
-                <SelectContent>{RUTAS.map(([r, l]) => <SelectItem key={r} value={r}>{l}</SelectItem>)}<SelectItem value={OTRA}>Otra ruta…</SelectItem></SelectContent></Select>
-              {rutaSel === OTRA && <Input value={rutaLibre} onChange={(e) => setRutaLibre(e.target.value)} placeholder="/ruta/de/la/app" />}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0 space-y-1.5"><Label>Lleva al módulo</Label>
+              <Select value={rutaSel} onValueChange={setRutaSel}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SIN_ENLACE}>Ninguno</SelectItem>
+                  {RUTAS.map(([r, l]) => <SelectItem key={r} value={r}>{l}</SelectItem>)}
+                  <SelectItem value={OTRA}>Otra ruta…</SelectItem>
+                </SelectContent></Select>
             </div>
-            <div className="space-y-1.5"><Label htmlFor="av-hasta">Destacar hasta</Label><Input id="av-hasta" type="date" value={vigenteHasta} onChange={(e) => setVigenteHasta(e.target.value)} /><p className="text-[11px] text-muted-foreground">Después queda solo en el historial.</p></div>
+            <div className="min-w-0 space-y-1.5"><Label htmlFor="av-hasta">Destacar hasta</Label><Input id="av-hasta" type="date" value={vigenteHasta} onChange={(e) => setVigenteHasta(e.target.value)} /></div>
+          </div>
+          {rutaSel === OTRA && <Input value={rutaLibre} onChange={(e) => setRutaLibre(e.target.value)} placeholder="/ruta/de/la/app" />}
+
+          {/* Para quién: tres desplegables. Vacío = todos; lo marcado se cruza. */}
+          <div className="space-y-1.5">
+            <Label>Para quién</Label>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <SelectorVarios titulo="roles" todos="Todos los roles" opciones={gestion.roles.map((r) => ({ valor: r, etiqueta: r }))} valores={roles} onChange={setRoles} />
+              <SelectorVarios titulo="vínculos" todos="Todos los vínculos" opciones={[{ valor: 'LABORAL', etiqueta: 'Vínculo laboral' }, { valor: 'OPS', etiqueta: 'Contratistas OPS' }]} valores={vinculos} onChange={setVinculos} />
+              <SelectorVarios titulo="sedes" todos="Todas las sedes" opciones={gestion.sedes.map((s) => ({ valor: s.id, etiqueta: s.nombre }))} valores={sedeIds} onChange={setSedeIds} />
+            </div>
           </div>
 
-          <fieldset className="space-y-2 rounded-lg border p-3">
-            <legend className="px-1 text-xs font-bold">Para quién</legend>
-            <p className="text-[11px] text-muted-foreground">Sin marcar nada, es para todos. Lo marcado se cruza: rol y vínculo y sede.</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <p className="mb-1 text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">Roles</p>
-                <div className="space-y-1">{gestion.roles.map((r) => (
-                  <label key={r} className="flex items-center gap-2 text-sm"><Checkbox checked={roles.includes(r)} onCheckedChange={() => alternar(roles, r, setRoles)} /> {r}</label>
-                ))}</div>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <p className="mb-1 text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">Vínculo</p>
-                  <label className="flex items-center gap-2 text-sm"><Checkbox checked={vinculos.includes('LABORAL')} onCheckedChange={() => alternar(vinculos, 'LABORAL', setVinculos)} /> Vínculo laboral</label>
-                  <label className="flex items-center gap-2 text-sm"><Checkbox checked={vinculos.includes('OPS')} onCheckedChange={() => alternar(vinculos, 'OPS', setVinculos)} /> Contratistas OPS</label>
-                </div>
-                <div>
-                  <p className="mb-1 text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">Sedes</p>
-                  <div className="space-y-1">{gestion.sedes.map((s) => (
-                    <label key={s.id} className="flex items-center gap-2 text-sm"><Checkbox checked={sedeIds.includes(s.id)} onCheckedChange={() => alternar(sedeIds, s.id, setSedeIds)} /> {s.nombre}</label>
-                  ))}</div>
-                </div>
-              </div>
+          {aviso && (
+            <div className="flex flex-wrap items-center gap-2">
+              {imagenUrl && <Captura src={imagenUrl} alt="Imagen del aviso" />}
+              <Button type="button" size="sm" variant="outline" onClick={() => inputImagen.current?.click()} disabled={subiendo}>
+                {subiendo ? <Spinner /> : <Camera className="size-4" />} {imagenUrl ? 'Cambiar imagen' : 'Agregar imagen'}
+              </Button>
+              {imagenUrl && <Button type="button" size="sm" variant="ghost" onClick={quitarImagen} disabled={subiendo}><X className="size-4" /> Quitar</Button>}
+              <input ref={inputImagen} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) subirImagen(f); e.target.value = '' }} />
             </div>
-          </fieldset>
-
-          {aviso ? (
-            <div className="space-y-1.5">
-              <Label>Captura de pantalla</Label>
-              {imagenUrl && <Captura src={imagenUrl} alt="Captura del aviso" />}
-              <div className="flex gap-2">
-                <Button type="button" size="sm" variant="outline" onClick={() => inputImagen.current?.click()} disabled={subiendo}>
-                  {subiendo ? <Spinner /> : <Camera className="size-4" />} {imagenUrl ? 'Cambiar captura' : 'Subir captura'}
-                </Button>
-                {imagenUrl && <Button type="button" size="sm" variant="ghost" onClick={quitarImagen} disabled={subiendo}><X className="size-4" /> Quitar</Button>}
-                <input ref={inputImagen} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) subirImagen(f); e.target.value = '' }} />
-              </div>
-            </div>
-          ) : (
-            <p className="text-[11px] text-muted-foreground"><Eye className="mr-1 inline size-3.5" />La captura de pantalla se agrega después de guardar, al editar el borrador.</p>
           )}
         </div>
         <DialogFooter>
@@ -390,5 +378,36 @@ function DialogAviso({ gestion, aviso, onClose, onDone }: { gestion: Gestion; av
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Desplegable de varias opciones (casillas). Sin nada marcado muestra `todos`. */
+function SelectorVarios({ titulo, todos, opciones, valores, onChange }: {
+  titulo: string; todos: string; opciones: { valor: string; etiqueta: string }[]; valores: string[]; onChange: (v: string[]) => void
+}) {
+  const elegidas = opciones.filter((o) => valores.includes(o.valor))
+  const texto = elegidas.length === 0 ? todos : elegidas.length === 1 ? elegidas[0].etiqueta : `${elegidas.length} ${titulo}`
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="outline" className="w-full justify-between font-normal">
+          <span className={cn('truncate', elegidas.length === 0 && 'text-muted-foreground')}>{texto}</span>
+          <ChevronDown className="size-4 shrink-0 opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-72 w-(--radix-dropdown-menu-trigger-width) min-w-48 overflow-y-auto">
+        {opciones.map((o) => (
+          <DropdownMenuCheckboxItem
+            key={o.valor}
+            checked={valores.includes(o.valor)}
+            // Que no se cierre al marcar: normalmente se eligen varias.
+            onSelect={(e) => e.preventDefault()}
+            onCheckedChange={(c) => onChange(c ? [...valores, o.valor] : valores.filter((v) => v !== o.valor))}
+          >
+            {o.etiqueta}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

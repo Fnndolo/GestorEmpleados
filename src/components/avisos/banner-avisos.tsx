@@ -42,12 +42,12 @@ export function BannerAvisos({ avisos }: { avisos: AvisoBanner[] }) {
         <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-foreground text-background"><Megaphone className="size-[18px]" /></span>
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">
-            Nuevo en la app <Pill tone={tonoTipoAviso(a.tipo)}>{etiquetaTipoAviso(a.tipo)}</Pill>
+            {a.tipo === 'COMUNICADO' ? 'Comunicado' : <>Nuevo en la app <Pill tone={tonoTipoAviso(a.tipo)}>{etiquetaTipoAviso(a.tipo)}</Pill></>}
           </p>
           <p className="mt-0.5 text-sm font-bold leading-tight">{a.titulo}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{a.resumen}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Button size="sm" asChild><Link href={`/avisos?ver=${a.id}`}>Ver cómo funciona <ArrowRight className="size-4" /></Link></Button>
+            <Button size="sm" asChild><Link href={`/avisos?ver=${a.id}`}>{a.tipo === 'COMUNICADO' ? 'Leer' : 'Ver cómo funciona'} <ArrowRight className="size-4" /></Link></Button>
             <Button size="sm" variant="ghost" onClick={entendido} disabled={marcando}>{marcando ? <Spinner /> : <Check className="size-4" />} Entendido</Button>
             {avisos.length > 1 && (
               <span className="ml-auto flex items-center gap-1" aria-label={`Aviso ${indice + 1} de ${avisos.length}`}>

@@ -22,6 +22,7 @@ export type PerfilAudiencia = {
 }
 
 export const TIPOS_AVISO = [
+  { valor: 'COMUNICADO', etiqueta: 'Comunicado', tone: 'info' },
   { valor: 'NUEVO_MODULO', etiqueta: 'Nuevo módulo', tone: 'ok' },
   { valor: 'MEJORA', etiqueta: 'Mejora', tone: 'info' },
   { valor: 'CAMBIO', etiqueta: 'Cambio importante', tone: 'warn' },

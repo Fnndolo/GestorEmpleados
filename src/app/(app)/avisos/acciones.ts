@@ -27,9 +27,9 @@ const gestor = (u: UsuarioSesion) => {
 
 const avisoSchema = z.object({
   titulo: z.string().trim().min(3, 'Escribe el título.').max(120),
-  resumen: z.string().trim().min(3, 'Escribe el resumen.').max(300),
-  detalle: z.string().trim().max(4000).optional().or(z.literal('')),
-  tipo: z.enum(['NUEVO_MODULO', 'MEJORA', 'CAMBIO']),
+  // Un solo texto: sirve igual para un comunicado que para contar algo nuevo.
+  comentario: z.string().trim().min(3, 'Escribe el comentario.').max(4000),
+  tipo: z.enum(['COMUNICADO', 'NUEVO_MODULO', 'MEJORA', 'CAMBIO']),
   enlace: z.string().trim().max(200).regex(/^(\/[^\s]*)?$/, 'El enlace debe ser una ruta de la app, como /autoservicio/dotacion.').optional().or(z.literal('')),
   vigenteHasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
   audiencia: z.object({
@@ -39,10 +39,21 @@ const avisoSchema = z.object({
   }),
 })
 
+/**
+ * Lo que se ve en la tarjeta, la campana y la notificación: el comentario
+ * recortado. El texto completo va en `detalle` y se lee al abrir el aviso.
+ */
+function resumenDe(comentario: string, max = 200): string {
+  const plano = comentario.replace(/\s+/g, ' ').trim()
+  if (plano.length <= max) return plano
+  const corte = plano.slice(0, max)
+  return `${corte.slice(0, corte.lastIndexOf(' ') > max * 0.6 ? corte.lastIndexOf(' ') : max)}…`
+}
+
 const datosAviso = (d: z.infer<typeof avisoSchema>) => ({
   titulo: d.titulo,
-  resumen: d.resumen,
-  detalle: d.detalle || null,
+  resumen: resumenDe(d.comentario),
+  detalle: d.comentario,
   tipo: d.tipo,
   enlace: d.enlace || null,
   vigenteHasta: parseFechaISO(d.vigenteHasta || null),

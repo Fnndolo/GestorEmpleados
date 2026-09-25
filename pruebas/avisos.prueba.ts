@@ -43,14 +43,14 @@ afterAll(async () => {
 describe('avisos de la plataforma', () => {
   it('un empleado no puede crear avisos', async () => {
     actuarComo(empleado)
-    const res = await crearAviso({ titulo: `${MARCA} no`, resumen: 'x', detalle: '', tipo: 'MEJORA', enlace: '', vigenteHasta: '', audiencia: { roles: [], vinculos: [], sedeIds: [] } })
+    const res = await crearAviso({ titulo: `${MARCA} no`, comentario: 'xxx', tipo: 'MEJORA', enlace: '', vigenteHasta: '', audiencia: { roles: [], vinculos: [], sedeIds: [] } })
     expect(res.ok).toBe(false)
   })
 
   it('el administrador lo crea como borrador y al publicarlo notifica solo a la audiencia (vínculo laboral)', async () => {
     actuarComo(admin)
     const creado = await crearAviso({
-      titulo: `${MARCA} Mis entregas`, resumen: 'Ya puedes firmar tus entregas desde el celular.', detalle: '- Entra a Mis entregas\n- Toca Firmar',
+      titulo: `${MARCA} Mis entregas`, comentario: 'Ya puedes firmar tus entregas desde el celular.\n- Entra a Mis entregas\n- Toca Firmar',
       tipo: 'NUEVO_MODULO', enlace: '/autoservicio/dotacion', vigenteHasta: '', audiencia: { roles: [], vinculos: ['LABORAL'], sedeIds: [] },
     })
     if (!creado.ok) throw new Error(creado.error)
