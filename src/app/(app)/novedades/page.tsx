@@ -1,9 +1,8 @@
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { sedeActualId } from '@/server/sede-actual'
 import { Encabezado } from '@/components/shell/encabezado'
 import { NovedadesCliente, BuscadorNovedades } from './novedades-cliente'
-import { filtroBusquedaColaborador } from '@/server/consultas/colaboradores'
+import { filtroBusquedaColaborador, whereColaboradores } from '@/server/consultas/colaboradores'
 import { formatFechaISO, formatFechaCorta, hoyBogota } from '@/lib/fechas'
 import { situacionComprobante } from '@/lib/comprobante-permiso'
 import Link from 'next/link'
@@ -18,10 +17,11 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
   const { tab = 'permisos', q = '' } = await searchParams
   const puedeCrear = tienePermiso(usuario, 'novedades', 'CREAR')
   const puedeEditar = tienePermiso(usuario, 'novedades', 'EDITAR')
-  const sede = await sedeActualId()
-  // Sede activa y, si se buscó a alguien, solo sus novedades (nombre, apellidos o documento).
-  const filtroColab = { ...(sede ? { sedeId: sede } : {}), ...filtroBusquedaColaborador(q) }
-  const filtroSede = Object.keys(filtroColab).length ? { colaborador: filtroColab } : {}
+  // Alcance del permiso de Novedades (un jefe: solo su equipo; sedes asignadas;
+  // toda la empresa) + la sede activa + la búsqueda. Antes solo se filtraba por
+  // sede, y un jefe veía las novedades de toda la empresa (incapacidades incluidas).
+  const filtroColab = await whereColaboradores(usuario, filtroBusquedaColaborador(q), { modulo: 'novedades', accion: 'VER' })
+  const filtroSede = { colaborador: filtroColab }
   const incCol = { colaborador: { select: { nombres: true, apellidos: true, id: true, fotoPath: true } } }
 
   // Acceso directo a la bandeja de aprobaciones para RRHH (icono junto al título):
@@ -29,7 +29,13 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
   // Autoservicio), pero desde aquí se muestra el conteo de pendientes.
   const puedeAprobar = tienePermiso(usuario, 'autoservicio', 'APROBAR')
   const aprobacionesPendientes = puedeAprobar
-    ? await prisma.solicitud.count({ where: { estado: 'EN_APROBACION', pasos: { some: { estado: 'PENDIENTE' } } } })
+    ? await prisma.solicitud.count({
+        where: {
+          estado: 'EN_APROBACION', pasos: { some: { estado: 'PENDIENTE' } },
+          // Solo las de su alcance de aprobación (un jefe: su equipo).
+          colaborador: await whereColaboradores(usuario, {}, { modulo: 'autoservicio', accion: 'APROBAR' }),
+        },
+      })
     : 0
 
   const [vacaciones, incapacidades, licencias, permisos, bonificaciones, horasExtra] = await Promise.all([

@@ -1,6 +1,9 @@
 import 'server-only'
 import type { Prisma } from '@/generated/prisma/client'
 import { alcanceDe, type UsuarioSesion } from '@/server/sesion'
+import { prisma } from '@/lib/db'
+import { ErrorNegocio } from '@/server/accion'
+import type { Accion, ModuloClave } from '@/lib/permisos/modulos'
 import { sedeActualId } from '@/server/sede-actual'
 import { normalizarTexto } from '@/lib/texto'
 
@@ -15,9 +18,11 @@ export async function whereColaboradores(
   // Se usa en vistas de detalle (ficha) donde la seguridad la da el ALCANCE, no
   // la sede seleccionada — así un rol TODAS_SEDES puede abrir a cualquiera aunque
   // tenga una sede puesta en el shell, sin exponer datos fuera de su alcance.
-  opts: { ignorarSedeActiva?: boolean } = {},
+  // `modulo`/`accion`: de qué permiso sale el alcance. Por defecto el de ver
+  // Colaboradores; Novedades usa el suyo (un jefe ve las de su equipo).
+  opts: { ignorarSedeActiva?: boolean; modulo?: ModuloClave; accion?: Accion } = {},
 ): Promise<Prisma.ColaboradorWhereInput> {
-  const alcance = alcanceDe(usuario, 'colaboradores', 'VER') ?? 'PROPIO'
+  const alcance = alcanceDe(usuario, opts.modulo ?? 'colaboradores', opts.accion ?? 'VER') ?? 'PROPIO'
   const sedeActiva = opts.ignorarSedeActiva ? null : await sedeActualId()
 
   const cond: Prisma.ColaboradorWhereInput = { ...extra }
@@ -80,4 +85,21 @@ export function filtroBusquedaColaborador(q: string): Prisma.ColaboradorWhereInp
       ],
     }],
   }
+}
+
+/**
+ * Exige que el colaborador esté dentro del alcance del permiso (`modulo`,
+ * `accion`) del usuario: su equipo, sus sedes o toda la empresa. Para las
+ * acciones que reciben un colaboradorId: sin esto, quien puede crear para su
+ * equipo podría crear para cualquiera con solo cambiar el id.
+ */
+export async function exigirColaboradorEnAlcance(
+  usuario: UsuarioSesion,
+  colaboradorId: string,
+  modulo: ModuloClave,
+  accion: Accion,
+): Promise<void> {
+  const where = await whereColaboradores(usuario, { id: colaboradorId }, { ignorarSedeActiva: true, modulo, accion })
+  const c = await prisma.colaborador.findFirst({ where, select: { id: true } })
+  if (!c) throw new ErrorNegocio('Esa persona no está dentro de tu alcance: solo puedes gestionar novedades de tu equipo o sedes.')
 }

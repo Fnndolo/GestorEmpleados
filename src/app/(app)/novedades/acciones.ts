@@ -6,6 +6,8 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
+import { alcanceDe } from '@/server/sesion'
+import { exigirColaboradorEnAlcance } from '@/server/consultas/colaboradores'
 import {
   incapacidadSchema, licenciaSchema, permisoSchema, vacacionesSchema, bonificacionSchema,
 } from '@/lib/validaciones/novedades'
@@ -42,7 +44,8 @@ export async function diasHabilesRango(ini: string, fin: string): Promise<number
 
 export const registrarIncapacidad = accion(
   { modulo: 'novedades', accion: 'CREAR', schema: incapacidadSchema },
-  async (d) => {
+  async (d, usuario) => {
+    await exigirColaboradorEnAlcance(usuario, d.colaboradorId, 'novedades', 'CREAR')
     if (parseFechaISO(d.fechaFin)! < parseFechaISO(d.fechaInicio)!) throw new ErrorNegocio('La fecha de fin no puede ser anterior al inicio.')
     await dbAuditado.incapacidad.create({
       data: {
@@ -59,7 +62,8 @@ export const registrarIncapacidad = accion(
 
 export const registrarLicencia = accion(
   { modulo: 'novedades', accion: 'CREAR', schema: licenciaSchema },
-  async (d) => {
+  async (d, usuario) => {
+    await exigirColaboradorEnAlcance(usuario, d.colaboradorId, 'novedades', 'CREAR')
     await dbAuditado.licencia.create({
       data: {
         colaboradorId: d.colaboradorId, tipo: d.tipo,
@@ -88,7 +92,8 @@ async function exigirVinculoLaboral(colaboradorId: string, novedad: 'vacaciones'
 
 export const registrarPermiso = accion(
   { modulo: 'novedades', accion: 'CREAR', schema: permisoSchema },
-  async (d) => {
+  async (d, usuario) => {
+    await exigirColaboradorEnAlcance(usuario, d.colaboradorId, 'novedades', 'CREAR')
     await exigirVinculoLaboral(d.colaboradorId, 'permiso')
     const fecha = parseFechaISO(d.fecha)!
     // Comprobante de asistencia: se pide salvo que quien registra lo desmarque.
@@ -119,6 +124,7 @@ export const verificarComprobantePermiso = accion(
   },
   async (d, usuario) => {
     const p = await prisma.permiso.findUniqueOrThrow({ where: { id: d.permisoId } })
+    await exigirColaboradorEnAlcance(usuario, p.colaboradorId, 'novedades', 'EDITAR')
     if (p.comprobanteEstado !== 'ENTREGADO') throw new ErrorNegocio('Este permiso no tiene un comprobante por verificar.')
     const nota = v(d.nota)
     if (!d.valido && !nota) throw new ErrorNegocio('Explica por qué el comprobante no sirve, para que el colaborador sepa qué subir.')
@@ -147,8 +153,9 @@ export const verificarComprobantePermiso = accion(
  */
 export const cambiarExigenciaComprobante = accion(
   { modulo: 'novedades', accion: 'EDITAR', schema: z.object({ permisoId: z.uuid(), exigir: z.boolean() }) },
-  async (d) => {
+  async (d, usuario) => {
     const p = await prisma.permiso.findUniqueOrThrow({ where: { id: d.permisoId } })
+    await exigirColaboradorEnAlcance(usuario, p.colaboradorId, 'novedades', 'EDITAR')
     if (d.exigir) {
       if (p.comprobanteEstado !== 'NO_REQUERIDO') throw new ErrorNegocio('Este permiso ya exige comprobante.')
       const comprobante = await comprobanteExigido(p.fecha)
@@ -170,7 +177,8 @@ export const cambiarExigenciaComprobante = accion(
 
 export const registrarVacaciones = accion(
   { modulo: 'novedades', accion: 'CREAR', schema: vacacionesSchema },
-  async (d) => {
+  async (d, usuario) => {
+    await exigirColaboradorEnAlcance(usuario, d.colaboradorId, 'novedades', 'CREAR')
     await exigirVinculoLaboral(d.colaboradorId, 'vacaciones')
     // Cuando la empresa fija la época de vacaciones debe notificar al trabajador con
     // al menos 15 días de anticipación (RIT art. 34, en concordancia con el art. 187 CST).
@@ -215,7 +223,8 @@ export const registrarVacaciones = accion(
  */
 export const registrarVacacionesDisfrutadas = accion(
   { modulo: 'novedades', accion: 'CREAR', schema: vacacionesSchema },
-  async (d) => {
+  async (d, usuario) => {
+    await exigirColaboradorEnAlcance(usuario, d.colaboradorId, 'novedades', 'CREAR')
     await exigirVinculoLaboral(d.colaboradorId, 'vacaciones')
     const inicio = parseFechaISO(d.fechaInicio)!
     const fin = parseFechaISO(d.fechaFin)!
@@ -259,6 +268,7 @@ export const registrarVacacionesDisfrutadas = accion(
 export const marcarHistorialVacaciones = accion(
   { modulo: 'novedades', accion: 'CREAR', schema: z.object({ colaboradorId: z.uuid(), completo: z.boolean() }) },
   async (d, usuario) => {
+    await exigirColaboradorEnAlcance(usuario, d.colaboradorId, 'novedades', 'CREAR')
     await exigirVinculoLaboral(d.colaboradorId, 'vacaciones')
     await dbAuditado.colaborador.update({
       where: { id: d.colaboradorId },
@@ -294,8 +304,14 @@ export const registrarVacacionesColectivas = accion(
       observaciones: z.string().max(500).optional(),
     }),
   },
-  async (d) => {
+  async (d, usuario) => {
     if (d.alcance === 'SEDE' && !d.sedeId) throw new ErrorNegocio('Selecciona la sede.')
+    const alcanceUsuario = alcanceDe(usuario, 'novedades', 'CREAR')
+    if (alcanceUsuario !== 'TODAS_SEDES') {
+      if (alcanceUsuario !== 'SEDES_ASIGNADAS' || d.alcance !== 'SEDE' || !d.sedeId || !usuario.sedeIds.includes(d.sedeId)) {
+        throw new ErrorNegocio('Las vacaciones colectivas de toda la empresa o de un área solo las registra Talento Humano; con sedes asignadas, solo para una de tus sedes.')
+      }
+    }
     if (d.alcance === 'AREA' && !d.areaId) throw new ErrorNegocio('Selecciona el área.')
     const inicio = parseFechaISO(d.fechaInicio)!
     const fin = parseFechaISO(d.fechaFin)!
@@ -392,11 +408,12 @@ export const interrumpirVacaciones = accion(
       motivo: z.string().min(5).max(500),
     }),
   },
-  async (d) => {
+  async (d, usuario) => {
     const vac = await prisma.vacaciones.findUniqueOrThrow({
       where: { id: d.vacacionesId },
       include: { colaborador: { select: { usuarioId: true } } },
     })
+    await exigirColaboradorEnAlcance(usuario, vac.colaboradorId, 'novedades', 'EDITAR')
     if (vac.estado !== 'EN_DISFRUTE' && vac.estado !== 'APROBADA') {
       throw new ErrorNegocio('Solo se pueden interrumpir vacaciones aprobadas o en disfrute.')
     }
@@ -452,11 +469,12 @@ export const reanudarVacaciones = accion(
       fechaFin: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     }),
   },
-  async (d) => {
+  async (d, usuario) => {
     const origen = await prisma.vacaciones.findUniqueOrThrow({
       where: { id: d.vacacionesId },
       include: { colaborador: { select: { usuarioId: true } } },
     })
+    await exigirColaboradorEnAlcance(usuario, origen.colaboradorId, 'novedades', 'CREAR')
     if (!origen.observaciones?.includes('RIT art. 36')) {
       throw new ErrorNegocio('Este registro no corresponde a unas vacaciones interrumpidas.')
     }
@@ -496,7 +514,8 @@ export const reanudarVacaciones = accion(
 
 export const registrarBonificacion = accion(
   { modulo: 'novedades', accion: 'CREAR', schema: bonificacionSchema },
-  async (d) => {
+  async (d, usuario) => {
+    await exigirColaboradorEnAlcance(usuario, d.colaboradorId, 'novedades', 'CREAR')
     await dbAuditado.bonificacion.create({
       data: {
         colaboradorId: d.colaboradorId, concepto: d.concepto, valor: d.valor,
@@ -510,7 +529,9 @@ export const registrarBonificacion = accion(
 
 export const marcarBonificacionPagada = accion(
   { modulo: 'novedades', accion: 'EDITAR', schema: z.object({ id: z.uuid() }) },
-  async ({ id }) => {
+  async ({ id }, usuario) => {
+    const bono = await prisma.bonificacion.findUniqueOrThrow({ where: { id }, select: { colaboradorId: true } })
+    await exigirColaboradorEnAlcance(usuario, bono.colaboradorId, 'novedades', 'EDITAR')
     await dbAuditado.bonificacion.update({
       where: { id },
       data: { estadoPago: 'PAGADO', fechaPago: hoyBogota() },
