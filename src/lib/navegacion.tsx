@@ -10,7 +10,8 @@ import {
   HeartPulse,
   ChartColumn,
   Settings,
-  Bell,
+  AlarmClock,
+  CalendarCheck2,
   GraduationCap,
   ClipboardCheck,
   Cake,
@@ -41,7 +42,8 @@ export const SECCIONES: SeccionNav[] = [
     titulo: 'General',
     items: [
       { titulo: 'Inicio', href: '/inicio', icono: LayoutDashboard, enMovil: true },
-      { titulo: 'Vencimientos', href: '/vencimientos', icono: Bell, modulo: 'vencimientos', enMovil: true },
+      // La campana es de las notificaciones (barra superior); vencimientos lleva su propio ícono.
+      { titulo: 'Vencimientos', href: '/vencimientos', icono: AlarmClock, modulo: 'vencimientos', enMovil: true },
     ],
   },
   {
@@ -62,7 +64,7 @@ export const SECCIONES: SeccionNav[] = [
     titulo: 'Cumplimiento',
     items: [
       { titulo: 'Jurídica', href: '/juridica', icono: Scale, modulo: 'juridica' },
-      { titulo: 'Calendario legal', href: '/calendario-legal', icono: CalendarClock, modulo: 'calendario_legal' },
+      { titulo: 'Calendario legal', href: '/calendario-legal', icono: CalendarCheck2, modulo: 'calendario_legal' },
       { titulo: 'SST', href: '/sst', icono: HeartPulse, modulo: 'sst' },
     ],
   },

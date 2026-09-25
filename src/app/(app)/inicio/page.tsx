@@ -3,7 +3,7 @@ import { requerirSesion, tienePermiso } from '@/server/sesion'
 import { hrefsVisibles } from '@/lib/navegacion'
 import { prisma } from '@/lib/db'
 import { Card, CardContent } from '@/components/ui/card'
-import { Bell, AlertCircle } from 'lucide-react'
+import { AlarmClock, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { hoyBogota, formatFechaCorta } from '@/lib/fechas'
 import { BannerPush } from '@/components/pwa/banner-push'
@@ -131,7 +131,7 @@ export default async function InicioPage() {
               return (
                 <div key={v.id} className="flex items-center gap-3 p-3">
                   <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
-                    {vencido ? <AlertCircle className="size-4" /> : <Bell className="size-4" />}
+                    {vencido ? <AlertCircle className="size-4" /> : <AlarmClock className="size-4" />}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{v.titulo}</p>
