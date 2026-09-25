@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Timer, RefreshCw, Download, KeyRound, FileText, FilePlus2, FileCheck2, Receipt, Send, ClipboardList, LockKeyhole } from 'lucide-react'
+import { Timer, RefreshCw, Download, KeyRound, FileText, FilePlus2, FileCheck2, Receipt, Send, ClipboardList, LockKeyhole, ChevronDown } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
@@ -58,6 +58,8 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
   // La quincena en curso: hasta el 15 la primera, después la segunda.
   const [quincena, setQuincena] = useState<1 | 2 | null>(Number(hoy.slice(8, 10)) <= 15 ? 1 : 2)
   const [trayendo, setTrayendo] = useState(false)
+  // Celular: la persona abierta en el acordeón (por documento).
+  const [abierta, setAbierta] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
   // La respuesta lleva la clave del período que la pidió: si no coincide con
   // el período elegido, es que todavía se está consultando.
@@ -176,7 +178,58 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
                 datos.filas.length === 0 ? (
                   <p className="mt-3 py-4 text-center text-sm text-muted-foreground">Sin horas extra del {datos.desde} al {datos.hasta}.</p>
                 ) : (
-                  <div className="mt-3 overflow-x-auto">
+                  <>
+                  {/* Celular: acordeón. Cerrada, la persona muestra lo que se mira de un
+                      vistazo (horas y valor); el resto se despliega. La tabla no cabía y
+                      partía los nombres letra por letra. */}
+                  <div className="mt-3 divide-y sm:hidden">
+                    {datos.filas.map((f) => {
+                      const abiertaEsta = abierta === f.documento
+                      const detalle = CODIGOS.filter((c) => f.horas[c]).map((c) => `${ETIQUETA[c]} ${horas(f.horas[c])}`).join(' · ')
+                      return (
+                        <div key={f.documento}>
+                          <button
+                            type="button"
+                            onClick={() => setAbierta(abiertaEsta ? null : f.documento)}
+                            aria-expanded={abiertaEsta}
+                            className="flex w-full items-center gap-2.5 py-2.5 text-left"
+                          >
+                            <AvatarColaborador nombre={f.nombre} fotoUrl={f.fotoUrl} />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold">{f.nombre}</p>
+                              <p className="text-xs text-muted-foreground tabular-nums">{horas(f.horasExtra)}</p>
+                            </div>
+                            <span className="shrink-0 text-sm font-semibold tabular-nums">
+                              {f.valor == null ? <span className="font-normal text-muted-foreground">—</span> : fmtCOP(f.valor)}
+                            </span>
+                            <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', abiertaEsta && 'rotate-180')} />
+                          </button>
+                          {abiertaEsta && (
+                            <div className="mb-2.5 space-y-2 rounded-lg bg-muted/40 p-3 text-xs animate-in fade-in slide-in-from-top-1 duration-150">
+                              <p className="text-muted-foreground">{f.documento}{f.sede ? ` · ${f.sede}` : ''}</p>
+                              {detalle && <p>{detalle}</p>}
+                              {f.colaboradorId
+                                ? <p className="text-muted-foreground">{f.registrados}/{f.tramos} en nómina{f.periodos.length ? ` (${f.periodos.join(', ')})` : ''}</p>
+                                : <Pill tone="bad">Sin ficha activa aquí</Pill>}
+                              {f.colaboradorId && (
+                                <div className="flex items-center justify-between gap-2 border-t pt-2">
+                                  <span className="font-medium">Pago (aparte)</span>
+                                  <AccionesPago colaboradorId={f.colaboradorId} mes={mes} quincena={quincena} nombre={f.nombre} pagoLocal={f.pagoLocal} sinHoras={f.horasExtra <= 0 || f.valor == null} />
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {t && (
+                      <div className="flex items-center justify-between py-2.5 text-sm font-bold">
+                        <span>Total · {datos.filas.length} persona{datos.filas.length === 1 ? '' : 's'}</span>
+                        <span className="tabular-nums">{horas(t.horasExtra)} · {fmtCOP(t.valor)}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-3 hidden overflow-x-auto sm:block">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -242,6 +295,7 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
                       {datos.sinFicha > 0 && ` ${datos.sinFicha} cédula(s) no tienen ficha activa aquí: revísalas antes de traer.`}
                     </p>
                   </div>
+                  </>
                 )
               )}
             </>
