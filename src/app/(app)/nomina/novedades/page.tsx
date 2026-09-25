@@ -28,11 +28,8 @@ export default async function NovedadesNominaPage({ searchParams }: { searchPara
   const nomColab = { colaborador: { select: { nombres: true, apellidos: true } } }
   const conPeriodo = { periodo: { select: { nombre: true } } }
 
-  const [comisiones, horas, novedadesConcepto, conceptos, contratos] = await Promise.all([
+  const [comisiones, novedadesConcepto, conceptos, contratos] = await Promise.all([
     prisma.comision.findMany({
-      include: { ...nomColab, ...conPeriodo }, orderBy: [{ fecha: 'desc' }, { creadoEn: 'desc' }], take: LIMITE,
-    }),
-    prisma.novedadHoras.findMany({
       include: { ...nomColab, ...conPeriodo }, orderBy: [{ fecha: 'desc' }, { creadoEn: 'desc' }], take: LIMITE,
     }),
     prisma.novedadConcepto.findMany({
@@ -68,11 +65,6 @@ export default async function NovedadesNominaPage({ searchParams }: { searchPara
           id: c.id, colaborador: nombre(c), fecha: formatFechaISO(c.fecha), tipo: c.tipo,
           baseCalculo: Number(c.baseCalculo), valor: Number(c.valor),
           descripcion: c.descripcion, pagadaEn: c.periodo?.nombre ?? null,
-        }))}
-        horas={horas.map((h) => ({
-          id: h.id, colaborador: nombre(h), fecha: formatFechaISO(h.fecha), tipoHora: h.tipoHora,
-          horas: Number(h.horas), horaInicio: h.horaInicio, horaFin: h.horaFin,
-          pagadaEn: h.periodo?.nombre ?? null,
         }))}
         conceptosNovedades={novedadesConcepto.map((n) => ({
           id: n.id, colaborador: nombre(n), fecha: formatFechaISO(n.fecha),

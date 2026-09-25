@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Coins, Clock, BadgeDollarSign, Trash2, ExternalLink } from 'lucide-react'
+import { Plus, Coins, BadgeDollarSign, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,7 +23,6 @@ import { PanelAsistencia } from './asistencia-panel'
 export type ColaboradorOpcion = { id: string; nombre: string }
 export type ConceptoOpcion = { id: string; nombre: string; tipo: string; valorFijo: number | null }
 export type ComisionItem = { id: string; colaborador: string; fecha: string; tipo: string; baseCalculo: number; valor: number; descripcion: string | null; pagadaEn: string | null }
-export type HoraItem = { id: string; colaborador: string; fecha: string; tipoHora: string; horas: number; horaInicio: string; horaFin: string; pagadaEn: string | null }
 export type ConceptoNovedadItem = { id: string; colaborador: string; fecha: string; concepto: string; tipo: string; valor: number; pagadaEn: string | null }
 
 const TIPO_CONCEPTO: Record<string, string> = { DEVENGADO: 'Devengado', DEDUCCION: 'Deducción' }
@@ -46,7 +45,6 @@ type Props = {
   colaboradores: ColaboradorOpcion[]
   conceptos: ConceptoOpcion[]
   comisiones: ComisionItem[]
-  horas: HoraItem[]
   conceptosNovedades: ConceptoNovedadItem[]
   /** Conexión con AsistencIA (control de asistencia): de ahí llegan las horas. */
   asistencia: { conectada: boolean; url: string | null }
@@ -141,47 +139,7 @@ export function NovedadesNomina(p: Props) {
       )}
 
       {grupo === 'horas' && (
-        <>
-          <PanelAsistencia conectada={p.asistencia.conectada} esAdmin={p.esAdmin} hoy={p.hoy} />
-
-          <h2 className="mb-2 text-[13px] font-bold">Registradas en la nómina</h2>
-          {p.horas.length === 0 ? <Vacia texto="Aún no hay horas extra ni recargos registrados." /> : (
-            <Card><CardContent className="divide-y p-0">
-              {p.horas.map((h) => (
-                <div key={h.id} className="flex items-center gap-3 p-3">
-                  <Chip icono={Clock} color="bg-foreground text-background" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{h.colaborador}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {h.fecha}{h.horaInicio !== '00:00' ? ` · ${h.horaInicio}–${h.horaFin}` : ''}
-                    </p>
-                  </div>
-                  <span className="text-sm font-medium tabular-nums">{h.horas} h</span>
-                  <Pill tone="info">{TIPO_HORA[h.tipoHora] ?? h.tipoHora}</Pill>
-                  <EstadoPago pagadaEn={h.pagadaEn} />
-                </div>
-              ))}
-            </CardContent></Card>
-          )}
-
-          {/* Trazabilidad: de dónde salen estas horas. Se abre en otra pestaña
-              porque es una aplicación distinta (control de asistencia). */}
-          {p.asistencia.url && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              Las horas marcadas llegan del sistema de control de asistencia.{' '}
-              <a
-                href={p.asistencia.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 font-medium text-primary underline underline-offset-2 hover:no-underline"
-              >
-                Ver marcaciones y jornadas
-                <ExternalLink className="size-3" aria-hidden />
-                <span className="sr-only">(se abre en una pestaña nueva)</span>
-              </a>
-            </p>
-          )}
-        </>
+        <PanelAsistencia conectada={p.asistencia.conectada} esAdmin={p.esAdmin} hoy={p.hoy} />
       )}
 
       {grupo === 'conceptos' && (
