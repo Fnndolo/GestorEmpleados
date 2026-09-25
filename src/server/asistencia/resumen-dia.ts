@@ -112,3 +112,36 @@ export async function enviarJornadasDelDia(fechaISO: string, solo?: string): Pro
   }
   return resultado
 }
+
+/**
+ * Aviso de PRUEBA: le manda a una persona de la plataforma (cédula o parte del
+ * nombre) una jornada de ejemplo, para ver cómo llega a la app sin depender de
+ * que marque en AsistencIA. No deja clave de "ya enviado" del día real.
+ */
+export async function enviarJornadaDePrueba(fechaISO: string, persona: string): Promise<{ enviado: boolean; colaborador?: string; motivo?: string }> {
+  const palabras = persona.trim().split(/\s+/)
+  const colab = await prisma.colaborador.findFirst({
+    where: {
+      OR: [
+        { numeroDocumento: persona.trim() },
+        { AND: palabras.map((p) => ({ OR: [{ nombres: { contains: p, mode: 'insensitive' as const } }, { apellidos: { contains: p, mode: 'insensitive' as const } }] })) },
+      ],
+    },
+    select: { id: true, nombres: true, apellidos: true, usuarioId: true },
+  })
+  if (!colab) return { enviado: false, motivo: 'No hay colaborador con ese nombre o cédula.' }
+  const nombre = `${colab.nombres} ${colab.apellidos}`
+  if (!colab.usuarioId) return { enviado: false, colaborador: nombre, motivo: 'No tiene usuario en la plataforma.' }
+
+  const texto = textoJornadaDia(fechaISO, {
+    trabajado: { segundos: 10 * 3600 + 13 * 60 },
+    marcaciones: [
+      { tipo: 'entrada', texto: '08:02 a. m.', automatica: false },
+      { tipo: 'salida', texto: '09:15 p. m.', automatica: false },
+    ],
+    novedades: [{ texto: '(Aviso de prueba: estos registros son de ejemplo.)' }],
+  }, [{ horaInicio: '19:00', horaFin: '21:00', tipoHora: 'HEN', horas: 2 }])
+  await notificarUsuario(colab.usuarioId, texto.titulo, texto.mensaje, '/autoservicio', `asistencia_jornada_prueba:${colab.id}:${Date.now()}`, 'asistencia_resumen_dia', colab.id)
+  await enviarPush(colab.usuarioId, { titulo: texto.titulo, mensaje: texto.mensaje, enlace: '/autoservicio' }).catch(() => {})
+  return { enviado: true, colaborador: nombre }
+}

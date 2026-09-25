@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { enviarJornadasDelDia } from '@/server/asistencia/resumen-dia'
+import { enviarJornadasDelDia, enviarJornadaDePrueba } from '@/server/asistencia/resumen-dia'
 import { conexionAsistencia, ErrorAsistencia } from '@/server/asistencia/cliente'
 import { hoyBogota, formatFechaISO } from '@/lib/fechas'
 
@@ -15,11 +15,19 @@ export const maxDuration = 300
  * Protegido con CRON_SECRET. `?fecha=AAAA-MM-DD` repite un día puntual (no
  * duplica: cada aviso lleva su clave por persona y día). `?persona=` (cédula o
  * parte del nombre) lo manda solo a esa persona, para probar sin avisarle a todos.
+ * Con `&prueba=1` le manda una jornada de EJEMPLO a esa persona de la plataforma,
+ * aunque no marque en AsistencIA (para ver cómo llega el aviso).
  */
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
   if (process.env.NODE_ENV === 'production' && auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+  const pruebaPara = req.nextUrl.searchParams.get('prueba') === '1' ? req.nextUrl.searchParams.get('persona')?.trim() : null
+  if (pruebaPara) {
+    const ayerPrueba = hoyBogota()
+    ayerPrueba.setUTCDate(ayerPrueba.getUTCDate() - 1)
+    return NextResponse.json({ ok: true, prueba: true, ...(await enviarJornadaDePrueba(formatFechaISO(ayerPrueba), pruebaPara)) })
   }
   if (!(await conexionAsistencia())) {
     return NextResponse.json({ ok: true, omitido: 'AsistencIA no está conectada.' })
