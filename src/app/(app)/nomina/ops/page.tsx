@@ -99,35 +99,31 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="max-w-5xl">
-      <Encabezado
-        volver
-        titulo="Pagos a contratistas OPS"
-        descripcion="Consulta de cuentas de cobro para el pago. Es independiente de la liquidación de nómina laboral: aquí ves cuánto pagar a cada contratista, a qué cuenta y si su seguridad social está en regla."
-      />
+      {/* Mismo nombre que el botón de Nómina que trae aquí; sin descripción. */}
+      <Encabezado volver enLinea titulo="Pagos OPS" />
 
-      {/* Total por pagar */}
-      <Card className="mb-4 border-primary/30 bg-primary/5">
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Total por pagar (cuentas aprobadas)</p>
-            <p className="text-2xl font-semibold tabular-nums">{fmtCOP(totalPorPagar)}</p>
+      {/* Total por pagar (cuentas aprobadas) */}
+      <Card className="mb-4 py-0">
+        <CardContent className="flex items-center justify-between gap-3 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">Por pagar</p>
+            <p className="truncate text-2xl font-bold tabular-nums">{fmtCOP(totalPorPagar)}</p>
           </div>
-          <div className="text-right">
-            <p className="text-sm font-medium">{aprobadas._count} cuenta{aprobadas._count === 1 ? '' : 's'}</p>
-            <p className="text-xs text-muted-foreground">esperando pago</p>
-          </div>
+          <p className="shrink-0 text-sm text-muted-foreground">
+            <b className="text-foreground tabular-nums">{aprobadas._count}</b> cuenta{aprobadas._count === 1 ? '' : 's'}
+          </p>
         </CardContent>
       </Card>
 
-      {/* Filtros */}
-      <div className="mb-4 flex flex-wrap gap-1.5">
+      {/* Filtros: mismas pestañas que el resto de la app */}
+      <div className="mb-4 flex gap-1.5 overflow-x-auto">
         {(Object.keys(VISTAS) as VistaKey[]).map((k) => (
           <Link
             key={k}
             href={`/nomina/ops?ver=${k}`}
             className={cn(
-              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-              vista === k ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent/40',
+              'shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+              vista === k ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent',
             )}
           >
             {VISTAS[k].label}
@@ -138,9 +134,9 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
       {filas.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
           <Receipt className="size-8" />
-          <p>No hay cuentas de cobro en «{VISTAS[vista].label}».</p>
+          <p>Sin cuentas en «{VISTAS[vista].label}».</p>
           <Link href="/contratos/cuentas-cobro" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-            Ir a gestionar cuentas de cobro <ArrowRight className="size-3.5" />
+            Cuentas de cobro <ArrowRight className="size-3.5" />
           </Link>
         </CardContent></Card>
       ) : (
