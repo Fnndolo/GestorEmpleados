@@ -87,9 +87,8 @@ export async function enviarResumenDiaAsistencia(colaboradorId: string): Promise
 export async function enviarJornadasDelDia(fechaISO: string, solo?: string): Promise<{
   fecha: string; jornadas: number; enviados: number; yaEnviados: number; sinUsuario: number; sinFicha: number
 }> {
-  const [jornadas, tramos, colaboradores] = await Promise.all([
+  const [jornadas, colaboradores] = await Promise.all([
     jornadasDelDiaAsistencia(fechaISO),
-    tramosAsistencia({ desde: fechaISO, hasta: fechaISO }),
     prisma.colaborador.findMany({ where: { estado: 'ACTIVO' }, select: { id: true, numeroDocumento: true, usuarioId: true } }),
   ])
   const porCedula = new Map(colaboradores.map((c) => [normalizarCedula(c.numeroDocumento), c]))
@@ -105,7 +104,7 @@ export async function enviarJornadasDelDia(fechaISO: string, solo?: string): Pro
     const dedupeKey = `asistencia_jornada:${colab.id}:${fechaISO}`
     if (await prisma.notificacion.findUnique({ where: { dedupeKey }, select: { id: true } })) { resultado.yaEnviados++; continue }
 
-    const texto = textoJornadaDia(fechaISO, j, tramos.filter((t) => normalizarCedula(t.documento) === cedula))
+    const texto = textoJornadaDia(fechaISO, j)
     await notificarUsuario(colab.usuarioId, texto.titulo, texto.mensaje, '/autoservicio', dedupeKey, 'asistencia_resumen_dia', colab.id)
     await enviarPush(colab.usuarioId, { titulo: texto.titulo, mensaje: texto.mensaje, enlace: '/autoservicio' }).catch(() => {})
     resultado.enviados++
@@ -136,11 +135,12 @@ export async function enviarJornadaDePrueba(fechaISO: string, persona: string): 
   const texto = textoJornadaDia(fechaISO, {
     trabajado: { segundos: 10 * 3600 + 13 * 60 },
     marcaciones: [
-      { tipo: 'entrada', texto: '08:02 a. m.', automatica: false },
-      { tipo: 'salida', texto: '09:15 p. m.', automatica: false },
+      { tipo: 'entrada', texto: '08:02 a. m.' },
+      { tipo: 'salida', texto: '12:30 p. m.' },
+      { tipo: 'entrada', texto: '01:45 p. m.' },
+      { tipo: 'salida', texto: '09:15 p. m.' },
     ],
-    novedades: [{ texto: '(Aviso de prueba: estos registros son de ejemplo.)' }],
-  }, [{ horaInicio: '19:00', horaFin: '21:00', tipoHora: 'HEN', horas: 2 }])
+  })
   await notificarUsuario(colab.usuarioId, texto.titulo, texto.mensaje, '/autoservicio', `asistencia_jornada_prueba:${colab.id}:${Date.now()}`, 'asistencia_resumen_dia', colab.id)
   await enviarPush(colab.usuarioId, { titulo: texto.titulo, mensaje: texto.mensaje, enlace: '/autoservicio' }).catch(() => {})
   return { enviado: true, colaborador: nombre }

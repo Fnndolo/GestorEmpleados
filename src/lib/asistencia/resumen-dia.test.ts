@@ -23,38 +23,23 @@ describe('textoResumenDia', () => {
 })
 
 describe('textoJornadaDia', () => {
-  const jornada = {
-    trabajado: { segundos: 36780 },
-    marcaciones: [
-      { tipo: 'entrada' as const, texto: '08:02 a. m.', automatica: false },
-      { tipo: 'salida' as const, texto: '07:15 p. m.', automatica: false },
-    ],
-    novedades: [],
-  }
-
-  it('titula con el día en letras y lista entradas, salidas y lo trabajado', () => {
-    const r = textoJornadaDia('2026-09-24', jornada, [])
+  it('titula con el día en letras y lista entradas, salidas y lo trabajado, nada más', () => {
+    const r = textoJornadaDia('2026-09-24', {
+      trabajado: { segundos: 36780 },
+      marcaciones: [{ tipo: 'entrada', texto: '08:02 a. m.' }, { tipo: 'salida', texto: '09:15 p. m.' }],
+    })
     expect(r.titulo).toBe('Tu jornada del jueves 24 de septiembre')
-    expect(r.mensaje).toBe('Entrada 08:02 a. m. · Salida 07:15 p. m. · Trabajaste 10 h 13 min.')
+    expect(r.mensaje).toBe('Entrada 08:02 a. m. · Salida 09:15 p. m. · Trabajaste 10 h 13 min')
   })
 
-  it('suma las horas extra del día y las novedades', () => {
-    const r = textoJornadaDia(
-      '2026-09-24',
-      { ...jornada, novedades: [{ texto: 'Tu entrada fue a las 08:02 a. m. y tu horario empieza a las 08:00 a. m.' }] },
-      [{ horaInicio: '19:00', horaFin: '21:00', tipoHora: 'HEN', horas: 2 }],
-    )
-    expect(r.mensaje).toBe(
-      'Entrada 08:02 a. m. · Salida 07:15 p. m. · Trabajaste 10 h 13 min · Horas extra: 19:00–21:00 extra nocturna (2 h). Tu entrada fue a las 08:02 a. m. y tu horario empieza a las 08:00 a. m.',
-    )
-  })
-
-  it('marca la salida que puso el sistema porque no se marcó', () => {
+  it('lista todos los registros cuando hay varios', () => {
     const r = textoJornadaDia('2026-09-24', {
       trabajado: { segundos: 1800 },
-      marcaciones: [{ tipo: 'entrada', texto: '06:00 p. m.', automatica: false }, { tipo: 'salida', texto: '06:30 p. m.', automatica: true }],
-      novedades: [],
-    }, [])
-    expect(r.mensaje).toBe('Entrada 06:00 p. m. · Salida 06:30 p. m. (automática) · Trabajaste 30 min.')
+      marcaciones: [
+        { tipo: 'entrada', texto: '08:00 a. m.' }, { tipo: 'salida', texto: '12:00 p. m.' },
+        { tipo: 'entrada', texto: '02:00 p. m.' }, { tipo: 'salida', texto: '02:30 p. m.' },
+      ],
+    })
+    expect(r.mensaje).toBe('Entrada 08:00 a. m. · Salida 12:00 p. m. · Entrada 02:00 p. m. · Salida 02:30 p. m. · Trabajaste 30 min')
   })
 })

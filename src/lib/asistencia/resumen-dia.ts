@@ -32,8 +32,7 @@ export function textoResumenDia(fechaISO: string, tramos: TramoDia[]): { titulo:
 /** Jornada del día (lo que antes llegaba por correo desde AsistencIA). */
 export type JornadaDia = {
   trabajado: { segundos: number }
-  marcaciones: { tipo: 'entrada' | 'salida'; texto: string; automatica: boolean }[]
-  novedades: { texto: string }[]
+  marcaciones: { tipo: 'entrada' | 'salida'; texto: string }[]
 }
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
@@ -48,24 +47,17 @@ function duracion(seg: number): string {
 }
 
 /**
- * La notificación "tu jornada del día": entradas y salidas, tiempo trabajado,
- * horas extra y recargos (que el correo de AsistencIA no traía) y novedades.
+ * La notificación "tu jornada del día": solo las entradas y salidas (todas las
+ * que haya) y el tiempo trabajado; nada más (decisión de empresa, 2026-09-25).
  * Reemplaza el correo diario: le llega al colaborador a su app (campana + push).
  */
-export function textoJornadaDia(fechaISO: string, jornada: JornadaDia, tramos: TramoDia[]): { titulo: string; mensaje: string } {
+export function textoJornadaDia(fechaISO: string, jornada: JornadaDia): { titulo: string; mensaje: string } {
   const d = new Date(`${fechaISO}T12:00:00Z`)
   const titulo = `Tu jornada del ${DIAS[d.getUTCDay()]} ${d.getUTCDate()} de ${MESES[d.getUTCMonth()]}`
-  const marcas = jornada.marcaciones.map((m) =>
-    `${m.tipo === 'entrada' ? 'Entrada' : 'Salida'} ${m.texto}${m.automatica ? ' (automática)' : ''}`)
-  const partes = [
+  const marcas = jornada.marcaciones.map((m) => `${m.tipo === 'entrada' ? 'Entrada' : 'Salida'} ${m.texto}`)
+  const mensaje = [
     marcas.length ? marcas.join(' · ') : 'Sin marcaciones',
     `Trabajaste ${duracion(jornada.trabajado.segundos)}`,
-  ]
-  if (tramos.length) {
-    const orden = [...tramos].sort((a, b) => a.horaInicio.localeCompare(b.horaInicio))
-    const total = orden.reduce((s, t) => s + t.horas, 0)
-    partes.push(`Horas extra: ${orden.map((t) => `${t.horaInicio}–${t.horaFin} ${NOMBRE_TIPO[t.tipoHora] ?? t.tipoHora}`).join(', ')} (${horasTexto(total)})`)
-  }
-  const mensaje = `${partes.join(' · ')}.${jornada.novedades.length ? ` ${jornada.novedades.map((n) => n.texto).join(' ')}` : ''}`
+  ].join(' · ')
   return { titulo, mensaje }
 }
