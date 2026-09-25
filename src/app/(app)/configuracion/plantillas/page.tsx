@@ -41,7 +41,7 @@ export default async function PlantillasPage({ searchParams }: { searchParams: P
     emailContacto: empresa?.emailContacto ?? null,
   }
   const estadoDe = (a: { personalizada: boolean; actualizadoEn: Date | null }) =>
-    a.actualizadoEn ? `Personalizado · ${formatFechaCorta(a.actualizadoEn)}` : 'Texto de la aplicación'
+    a.actualizadoEn ? `Personalizado · ${formatFechaCorta(a.actualizadoEn)}` : 'De la app'
 
   // Los textos editables: actas de Mis entregas, orden de pago de horas extra y certificaciones.
   const textos = Object.fromEntries(
@@ -62,10 +62,7 @@ export default async function PlantillasPage({ searchParams }: { searchParams: P
 
   return (
     <div className="max-w-4xl">
-      <Encabezado
-        titulo="Plantillas de documentos"
-        descripcion="Documentos que la aplicación genera sola. Aquí se edita su texto y se ve cómo quedan, sin tocar código."
-      />
+      <Encabezado enLinea titulo="Plantillas de documentos" />
       <DocumentosPlantillas
         abrirInicial={abrirInicial}
         puedeEditar={puedeEditar}

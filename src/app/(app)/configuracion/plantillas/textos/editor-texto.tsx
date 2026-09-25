@@ -116,23 +116,20 @@ export function EditorTexto({
         </button>
       </div>
 
-      <div className={cn('self-start', vista === 'preview' && 'hidden xl:block')}>
+      {/* min-w-0 en las celdas: una celda de grid no encoge por debajo de su contenido, y
+          la hoja (816 px) no se escalaba al ancho del celular. */}
+      <div className={cn('min-w-0 self-start', vista === 'preview' && 'hidden xl:block')}>
         <Card><CardContent className="space-y-4 py-4">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium">Texto del documento</p>
-            <Badge variant={personalizada ? 'default' : 'secondary'}>{personalizada ? 'Personalizado' : 'De la aplicación'}</Badge>
-            {cambiado && <Badge variant="outline">Cambios sin guardar</Badge>}
+            <Badge variant={personalizada ? 'default' : 'secondary'}>{personalizada ? 'Personalizado' : 'De la app'}</Badge>
+            {cambiado && <Badge variant="outline">Sin guardar</Badge>}
           </div>
 
           {/* Papel membretado o encabezado sencillo: se ve al instante en la vista previa. */}
           <div className="flex items-start justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2.5">
             <div className="min-w-0">
               <Label htmlFor={`${id}-membrete`} className="text-sm font-medium">Papel membretado</Label>
-              <p className="text-xs text-muted-foreground">
-                {usaMembrete
-                  ? 'El PDF va sobre el papel membretado de Ajustes (logo, marca de agua y pie de contacto).'
-                  : 'Sin membrete: la app pone un encabezado sencillo con el nombre de la empresa y el NIT, y el pie con la razón social.'}
-              </p>
+              <p className="text-xs text-muted-foreground">{usaMembrete ? 'Con logo y pie de contacto' : 'Encabezado sencillo con nombre y NIT'}</p>
             </div>
             <Switch id={`${id}-membrete`} checked={usaMembrete} onCheckedChange={setUsaMembrete} disabled={!puedeEditar} aria-label="Usar papel membretado" />
           </div>
@@ -140,7 +137,6 @@ export function EditorTexto({
           <div className="space-y-1.5">
             <Label htmlFor={`${id}-titulo`}>Título</Label>
             <Input id={`${id}-titulo`} value={titulo} onChange={(e) => setTitulo(e.target.value)} disabled={!puedeEditar} spellCheck lang="es" />
-            <p className="text-xs text-muted-foreground">Sale en mayúsculas, como en todos los documentos.</p>
           </div>
 
           <div className="space-y-1.5">
@@ -155,18 +151,10 @@ export function EditorTexto({
               spellCheck lang="es"
               className="text-sm leading-relaxed"
             />
-            <p className="text-xs text-muted-foreground">
-              Cada línea es un párrafo. Para resaltar, escribe <code>**negrita**</code> o <code>__subrayado__</code>.
-              Para listas, empieza la línea con <code>- </code> (viñeta), <code>✓ </code> (casilla) o <code>1. </code> (numeración);
-              con <code>~ </code> la línea va en letra pequeña debajo de la firma.
-              Lo que va entre <code>[[ ]]</code> solo sale si sus variables tienen valor (así se evita &quot;en su cargo de&quot; sin cargo).
-              {def.tabla && <> La línea <code>[tabla]</code> marca dónde va la tabla que arma la app; si no está, va después del primer párrafo.</>}
-            </p>
-            <p className="text-xs text-muted-foreground">{def.fijo}</p>
           </div>
 
           <div>
-            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Variables (clic para insertar)</p>
+            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Variables</p>
             <div className="flex flex-wrap gap-1.5">
               {def.tabla && (
                 <button
@@ -192,31 +180,39 @@ export function EditorTexto({
                 </button>
               ))}
             </div>
-            <ul className="mt-2 grid gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground sm:grid-cols-2">
+            {/* Instrucciones y qué es cada variable: plegadas, para que el editor no sea un muro de texto. */}
+            <details className="mt-2 text-[11px] text-muted-foreground">
+              <summary className="cursor-pointer select-none font-medium text-foreground">¿Cómo dar formato?</summary>
+              <p className="mt-1.5">
+                Cada línea es un párrafo. <code>**negrita**</code>, <code>__subrayado__</code>. Listas: <code>- </code> viñeta, <code>✓ </code> casilla, <code>1. </code> numeración; <code>~ </code> letra pequeña bajo la firma.
+                Lo que va entre <code>[[ ]]</code> solo sale si sus variables tienen valor.{def.tabla && <> <code>[tabla]</code> marca dónde va la tabla.</>} {def.fijo}
+              </p>
+              <ul className="mt-1.5 grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
               {def.tabla && <li><span className="font-mono text-foreground">[tabla]</span> · {def.tabla}</li>}
               {def.variables.map((v) => (
                 <li key={v.clave}><span className="font-mono text-foreground">{v.clave}</span> · {v.descripcion}</li>
               ))}
-            </ul>
+              </ul>
+            </details>
           </div>
 
           {puedeEditar && (
             <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={restaurar} disabled={guardando || (!personalizada && !cambiado)}>
-                <RotateCcw className="size-4" /> Texto de la aplicación
+              {/* Solo ícono en el celular. */}
+              <Button variant="ghost" size="sm" onClick={restaurar} disabled={guardando || (!personalizada && !cambiado)} aria-label="Volver al texto de la aplicación" title="Volver al texto de la aplicación">
+                <RotateCcw className="size-4" /> <span className="hidden sm:inline">Texto de la aplicación</span>
               </Button>
-              <Button size="sm" onClick={guardar} disabled={guardando || !cambiado || !valido}>
-                {guardando ? <Spinner /> : <Save className="size-4" />} Guardar
+              <Button size="sm" onClick={guardar} disabled={guardando || !cambiado || !valido} aria-label="Guardar" title="Guardar">
+                {guardando ? <Spinner /> : <Save className="size-4" />} <span className="hidden sm:inline">Guardar</span>
               </Button>
             </div>
           )}
         </CardContent></Card>
       </div>
 
-      <div className={cn('space-y-2', vista === 'editar' && 'hidden xl:block')}>
+      <div className={cn('min-w-0 space-y-2', vista === 'editar' && 'hidden xl:block')}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>Vista previa con datos de muestra</span>
             {def.variantes.length > 0 && (
               <Select value={variante} onValueChange={setVariante}>
                 <SelectTrigger size="sm" className="h-7 w-auto text-xs"><SelectValue /></SelectTrigger>
@@ -228,7 +224,7 @@ export function EditorTexto({
           </div>
           {/* El PDF real (texto guardado + datos de muestra) se abre aquí mismo, en el visor embebido. */}
           <VisorPdf url={urlMuestra} titulo={`Muestra · ${def.nombre}`} className={buttonVariants({ size: 'sm' })}>
-            <FileText className="size-4" /> PDF de muestra{cambiado ? ' (texto guardado)' : ''}
+            <FileText className="size-4" /> <span className="hidden sm:inline">PDF de muestra{cambiado ? ' (texto guardado)' : ''}</span>
           </VisorPdf>
         </div>
         {/* Vive dentro de una ventana emergente que ya hace scroll: sin sticky ni alto fijo. */}

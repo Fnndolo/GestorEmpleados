@@ -102,12 +102,13 @@ export function EditorAutorizacion({
         </button>
       </div>
 
-      <div className={cn('self-start', vista === 'preview' && 'hidden xl:block')}>
+      {/* min-w-0 en las celdas: una celda de grid no encoge por debajo de su contenido, y
+          la hoja (816 px) no se escalaba al ancho del celular. */}
+      <div className={cn('min-w-0 self-start', vista === 'preview' && 'hidden xl:block')}>
         <Card><CardContent className="space-y-4 py-4">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium">Texto del documento</p>
-            <Badge variant={personalizada ? 'default' : 'secondary'}>{personalizada ? 'Personalizado' : 'De la aplicación'}</Badge>
-            {cambiado && <Badge variant="outline">Cambios sin guardar</Badge>}
+            <Badge variant={personalizada ? 'default' : 'secondary'}>{personalizada ? 'Personalizado' : 'De la app'}</Badge>
+            {cambiado && <Badge variant="outline">Sin guardar</Badge>}
           </div>
 
           <div className="space-y-1.5">
@@ -127,16 +128,10 @@ export function EditorAutorizacion({
               spellCheck lang="es"
               className="text-sm leading-relaxed"
             />
-            <p className="text-xs text-muted-foreground">
-              Cada línea es un párrafo. Para resaltar, escribe <code>**negrita**</code> o <code>__subrayado__</code>.
-              Para listas, empieza la línea con <code>- </code> (viñeta), <code>✓ </code> (casilla) o <code>1. </code> (numeración);
-              con <code>~ </code> la línea va en letra pequeña debajo de la firma.
-              Los datos de la persona y de la empresa se llenan solos con las variables; el bloque de firma lo agrega la app.
-            </p>
           </div>
 
           <div>
-            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Variables (clic para insertar)</p>
+            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Variables</p>
             <div className="flex flex-wrap gap-1.5">
               {VARIABLES_AUTORIZACION.map((v) => (
                 <button
@@ -151,30 +146,38 @@ export function EditorAutorizacion({
                 </button>
               ))}
             </div>
-            <ul className="mt-2 grid gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground sm:grid-cols-2">
+            {/* Instrucciones y qué es cada variable: plegadas, para que el editor no sea un muro de texto. */}
+            <details className="mt-2 text-[11px] text-muted-foreground">
+              <summary className="cursor-pointer select-none font-medium text-foreground">¿Cómo dar formato?</summary>
+              <p className="mt-1.5">
+                Cada línea es un párrafo. <code>**negrita**</code>, <code>__subrayado__</code>. Listas: <code>- </code> viñeta, <code>✓ </code> casilla, <code>1. </code> numeración; <code>~ </code> letra pequeña bajo la firma.
+                 Los datos se llenan solos con las variables; la firma la agrega la app.
+              </p>
+            <ul className="mt-1.5 grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
               {VARIABLES_AUTORIZACION.map((v) => (
                 <li key={v.clave}><span className="font-mono text-foreground">{v.clave}</span> · {v.descripcion}</li>
               ))}
             </ul>
+            </details>
           </div>
 
           {puedeEditar && (
             <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={restaurar} disabled={guardando || (!personalizada && !cambiado)}>
-                <RotateCcw className="size-4" /> Texto de la aplicación
+              {/* Solo ícono en el celular. */}
+              <Button variant="ghost" size="sm" onClick={restaurar} disabled={guardando || (!personalizada && !cambiado)} aria-label="Volver al texto de la aplicación" title="Volver al texto de la aplicación">
+                <RotateCcw className="size-4" /> <span className="hidden sm:inline">Texto de la aplicación</span>
               </Button>
-              <Button size="sm" onClick={guardar} disabled={guardando || !cambiado || !valido}>
-                {guardando ? <Spinner /> : <Save className="size-4" />} Guardar
+              <Button size="sm" onClick={guardar} disabled={guardando || !cambiado || !valido} aria-label="Guardar" title="Guardar">
+                {guardando ? <Spinner /> : <Save className="size-4" />} <span className="hidden sm:inline">Guardar</span>
               </Button>
             </div>
           )}
         </CardContent></Card>
       </div>
 
-      <div className={cn('space-y-2', vista === 'editar' && 'hidden xl:block')}>
+      <div className={cn('min-w-0 space-y-2', vista === 'editar' && 'hidden xl:block')}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>Vista previa con datos de muestra</span>
             <Select value={genero} onValueChange={(v) => setGenero(v as 'FEMENINO' | 'MASCULINO')}>
               <SelectTrigger size="sm" className="h-7 w-auto text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -189,7 +192,7 @@ export function EditorAutorizacion({
             titulo={`Muestra · Autorización de datos · ${vinculo === 'LABORAL' ? 'Contrato laboral' : 'Contrato OPS'}`}
             className={buttonVariants({ size: 'sm' })}
           >
-            <FileText className="size-4" /> PDF de muestra{cambiado ? ' (texto guardado)' : ''}
+            <FileText className="size-4" /> <span className="hidden sm:inline">PDF de muestra{cambiado ? ' (texto guardado)' : ''}</span>
           </VisorPdf>
         </div>
         {/* Vive dentro de una ventana emergente que ya hace scroll: sin sticky ni alto fijo. */}

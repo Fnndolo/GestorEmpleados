@@ -3,12 +3,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import {
-  FileSignature, FileText, Receipt, ScrollText, ChevronRight, Eye, FileBadge, Laptop, Undo2, Shirt, HardHat, Clock, type LucideIcon,
+  FileSignature, FileText, Receipt, ScrollText, Pencil, Eye, FileBadge, Laptop, Undo2, Shirt, HardHat, Clock, type LucideIcon,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { enfocarDialogo } from '@/components/ui-kit'
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
@@ -127,7 +126,7 @@ export function DocumentosPlantillas({
 
   const n = cuentasCobro.plantillas.length
   const estado: Record<string, string> = {
-    membrete: membrete.tieneMembrete ? 'Propio' : 'De la aplicación',
+    membrete: membrete.tieneMembrete ? 'Propio' : 'De la app',
     autorizacion: autorizacion.estado,
     'autorizacion-laboral': autorizacionLaboral.estado,
     'cuentas-cobro': `${n} plantilla${n === 1 ? '' : 's'}`,
@@ -138,79 +137,40 @@ export function DocumentosPlantillas({
 
   return (
     <>
-      <Card><CardContent className="p-0">
+      {/* Una fila por plantilla: ícono, nombre y estado; a la derecha solo íconos
+          (ver muestra, editar). La descripción, solo en pantallas anchas. */}
+      <Card className="py-0"><CardContent className="p-0">
         {GRUPOS.map((g) => (
           <div key={g.titulo} className="border-b last:border-b-0">
             <p className="bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.titulo}</p>
             <div className="divide-y">
               {g.filas.map((f) => (
-                <div key={f.clave} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-primary/10 text-primary">
-                      <f.icono className="size-[19px]" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                        <span>{f.titulo}</span>
-                        <Badge variant="secondary" className="text-[10px]">{estado[f.clave]}</Badge>
-                      </p>
-                      <p className="text-xs text-muted-foreground">{f.desc}</p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 gap-2 sm:justify-end">
-                    {f.muestra && (
-                      <VisorPdf url={f.muestra} titulo={`Muestra · ${f.titulo}`} className={buttonVariants({ size: 'sm' })}>
-                        <Eye className="size-4" /> Muestra PDF
-                      </VisorPdf>
-                    )}
-                    <Button size="sm" onClick={() => setAbierto(f.clave)}>
-                      {puedeEditar ? 'Editar' : 'Ver'} <ChevronRight className="size-4" />
-                    </Button>
-                  </div>
-                </div>
+                <FilaPlantilla
+                  key={f.clave}
+                  icono={f.icono} titulo={f.titulo} desc={f.desc} estado={estado[f.clave]}
+                  muestra={f.muestra}
+                  editar={{ etiqueta: puedeEditar ? 'Editar' : 'Ver', onClick: () => setAbierto(f.clave) }}
+                />
               ))}
 
               {g.titulo === 'Vinculación' && GENERAR_CONTRATOS_DESDE_PLANTILLA && (
-                <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-primary/10 text-primary">
-                      <FileText className="size-[19px]" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                        <span>Contratos</span>
-                        <Badge variant="secondary" className="text-[10px]">{plantillasContrato} plantilla{plantillasContrato === 1 ? '' : 's'}</Badge>
-                      </p>
-                      <p className="text-xs text-muted-foreground">Texto de los contratos laborales y OPS que se redactan dentro de la app.</p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 gap-2 sm:justify-end">
-                    <VisorPdf url="/api/configuracion/membrete/muestra?tipo=contrato-ops" titulo="Muestra · Contrato OPS" className={buttonVariants({ size: 'sm' })}>
-                      <Eye className="size-4" /> Muestra PDF
-                    </VisorPdf>
-                    <Link href="/configuracion/plantillas/contratos" className={buttonVariants({ size: 'sm' })}>
-                      Editar <ChevronRight className="size-4" />
-                    </Link>
-                  </div>
-                </div>
+                <FilaPlantilla
+                  icono={FileText} titulo="Contratos" desc="Texto de los contratos laborales y OPS que se redactan dentro de la app."
+                  estado={`${plantillasContrato} plantilla${plantillasContrato === 1 ? '' : 's'}`}
+                  muestra="/api/configuracion/membrete/muestra?tipo=contrato-ops"
+                  editar={{ etiqueta: 'Editar', href: '/configuracion/plantillas/contratos' }}
+                />
               )}
             </div>
           </div>
         ))}
       </CardContent></Card>
 
-      <p className="mt-3 text-xs text-muted-foreground">
-        Los desprendibles de nómina y los acuerdos de evaluación previa también los genera la app, pero su texto todavía no se edita desde aquí.
-      </p>
-
       {/* Papel membretado */}
       <Dialog open={abierto === 'membrete'} onOpenChange={(o) => !o && cerrar()}>
-        <DialogContent onOpenAutoFocus={enfocarDialogo} className="max-h-[92dvh] overflow-y-auto sm:max-w-4xl">
+        <DialogContent onOpenAutoFocus={enfocarDialogo} aria-describedby={undefined} className="max-h-[92dvh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Papel membretado</DialogTitle>
-            <DialogDescription>
-              Fondo de los documentos legales: contratos, autorizaciones de tratamiento de datos y acuerdos de evaluación previa.
-            </DialogDescription>
           </DialogHeader>
           <MembretePanel tieneMembrete={membrete.tieneMembrete} puedeEditar={puedeEditar} pie={membrete.pie} />
         </DialogContent>
@@ -218,12 +178,9 @@ export function DocumentosPlantillas({
 
       {/* Autorización de datos · OPS */}
       <Dialog open={abierto === 'autorizacion'} onOpenChange={(o) => !o && cerrar()}>
-        <DialogContent onOpenAutoFocus={enfocarDialogo} className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl">
+        <DialogContent onOpenAutoFocus={enfocarDialogo} aria-describedby={undefined} className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl">
           <DialogHeader>
             <DialogTitle>Autorización de datos · Contrato OPS</DialogTitle>
-            <DialogDescription>
-              La firma el contratista al vincularse (Ley 1581 de 2012) y se genera junto con su contrato de prestación de servicios. Los cambios aplican desde el siguiente documento que se genere.
-            </DialogDescription>
           </DialogHeader>
           <EditorAutorizacion
             vinculo="OPS"
@@ -237,12 +194,9 @@ export function DocumentosPlantillas({
 
       {/* Autorización de datos · Laboral */}
       <Dialog open={abierto === 'autorizacion-laboral'} onOpenChange={(o) => !o && cerrar()}>
-        <DialogContent onOpenAutoFocus={enfocarDialogo} className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl">
+        <DialogContent onOpenAutoFocus={enfocarDialogo} aria-describedby={undefined} className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl">
           <DialogHeader>
             <DialogTitle>Autorización de datos · Contrato laboral</DialogTitle>
-            <DialogDescription>
-              La firma el trabajador al vincularse (Ley 1581 de 2012) y se genera junto con su contrato de trabajo. Los cambios aplican desde el siguiente documento que se genere.
-            </DialogDescription>
           </DialogHeader>
           <EditorAutorizacion
             vinculo="LABORAL"
@@ -256,12 +210,9 @@ export function DocumentosPlantillas({
 
       {/* Cuentas de cobro */}
       <Dialog open={abierto === 'cuentas-cobro'} onOpenChange={(o) => !o && cerrar()}>
-        <DialogContent onOpenAutoFocus={enfocarDialogo} className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl">
+        <DialogContent onOpenAutoFocus={enfocarDialogo} aria-describedby={undefined} className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Plantillas de cuenta de cobro</DialogTitle>
-            <DialogDescription>
-              Distintas plantillas (días laborados, bonos, servicios…) con logo y texto. Cada una tiene vista previa al instante y muestra en PDF.
-            </DialogDescription>
           </DialogHeader>
           <PlantillasCliente plantillas={cuentasCobro.plantillas} empresa={cuentasCobro.empresa} />
         </DialogContent>
@@ -269,14 +220,11 @@ export function DocumentosPlantillas({
 
       {/* Textos editables: un solo diálogo, con el editor del texto abierto. */}
       <Dialog open={textoAbierto !== null} onOpenChange={(o) => !o && cerrar()}>
-        <DialogContent onOpenAutoFocus={enfocarDialogo} className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl">
+        <DialogContent onOpenAutoFocus={enfocarDialogo} aria-describedby={undefined} className="max-h-[92dvh] overflow-y-auto sm:max-w-6xl">
           {textoAbierto && (
             <>
               <DialogHeader>
                 <DialogTitle>{TEXTOS[textoAbierto].nombre}</DialogTitle>
-                <DialogDescription>
-                  {TEXTOS[textoAbierto].descripcion} Los cambios aplican desde el siguiente documento que se genere.
-                </DialogDescription>
               </DialogHeader>
               <EditorTexto
                 key={textoAbierto}
@@ -291,5 +239,42 @@ export function DocumentosPlantillas({
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+/** Fila de la lista: ícono, nombre y estado; ver muestra y editar como íconos. */
+function FilaPlantilla({ icono: Icono, titulo, desc, estado, muestra, editar }: {
+  icono: LucideIcon; titulo: string; desc: string; estado: string; muestra: string | null
+  editar: { etiqueta: string; onClick?: () => void; href?: string }
+}) {
+  const icono = buttonVariants({ variant: 'ghost', size: 'icon' })
+  return (
+    <div className="flex items-center gap-3 p-3">
+      <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-foreground text-background">
+        <Icono className="size-[18px]" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{titulo}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {estado}<span className="hidden sm:inline"> · {desc}</span>
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center">
+        {muestra && (
+          <VisorPdf url={muestra} titulo={`Muestra · ${titulo}`} className={icono}>
+            <Eye className="size-4" /><span className="sr-only">Ver muestra en PDF</span>
+          </VisorPdf>
+        )}
+        {editar.href ? (
+          <Link href={editar.href} className={icono} aria-label={`${editar.etiqueta} ${titulo}`} title={editar.etiqueta}>
+            <Pencil className="size-4" />
+          </Link>
+        ) : (
+          <Button variant="ghost" size="icon" onClick={editar.onClick} aria-label={`${editar.etiqueta} ${titulo}`} title={editar.etiqueta}>
+            <Pencil className="size-4" />
+          </Button>
+        )}
+      </div>
+    </div>
   )
 }

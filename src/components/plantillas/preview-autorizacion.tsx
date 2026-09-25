@@ -161,9 +161,13 @@ export function PreviewAutorizacion({
 
   return (
     <div className="space-y-4">
-      {/* Medidor: mismo ancho y fuente que la hoja; sin alto para no estirar el panel. */}
-      <div aria-hidden ref={medidor} style={{ ...ESTILO_TEXTO, width: ANCHO_TEXTO, height: 0, overflow: 'hidden', visibility: 'hidden' }}>
-        {bloques.map((b) => <div key={b.key}>{b.nodo}</div>)}
+      {/* Medidor: mismo ancho y fuente que la hoja, para calcular las páginas. Va
+          absoluto dentro de una caja de alto 0 que recorta: si ocupara su ancho
+          (624 px) estiraría el panel y en el celular la hoja no se achicaría. */}
+      <div className="relative h-0 overflow-hidden">
+        <div aria-hidden ref={medidor} className="absolute left-0 top-0" style={{ ...ESTILO_TEXTO, width: ANCHO_TEXTO, height: 0, overflow: 'hidden', visibility: 'hidden' }}>
+          {bloques.map((b) => <div key={b.key}>{b.nodo}</div>)}
+        </div>
       </div>
 
       {hojas.map((hoja, n) => (
