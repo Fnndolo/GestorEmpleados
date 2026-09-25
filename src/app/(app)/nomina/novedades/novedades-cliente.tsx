@@ -56,10 +56,11 @@ type Props = {
   grupoInicial: Grupo
 }
 
+/** `c`: rótulo corto para el celular, donde el largo partía la pestaña en dos líneas. */
 const GRUPOS = [
-  { v: 'comisiones', l: 'Comisiones' },
-  { v: 'horas', l: 'Horas extra y recargos' },
-  { v: 'conceptos', l: 'Otros conceptos' },
+  { v: 'comisiones', l: 'Comisiones', c: 'Comisiones' },
+  { v: 'horas', l: 'Horas extra y recargos', c: 'Horas extra' },
+  { v: 'conceptos', l: 'Otros conceptos', c: 'Otros' },
 ] as const
 type Grupo = (typeof GRUPOS)[number]['v']
 
@@ -99,32 +100,33 @@ export function NovedadesNomina(p: Props) {
 
   return (
     <section>
-      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          {pendientes === 0
-            ? 'Todo lo registrado ya se pagó en algún periodo.'
-            : `${pendientes} sin pagar · las recogerá el próximo periodo que cubra su fecha.`}
-        </p>
-        <Button size="sm" onClick={() => setDialogo(grupo)}>
-          <Plus className="size-4" /> Agregar
+      {/* Pestañas y "Agregar" en una sola fila (en el celular, "+" solo). */}
+      <div className="mb-1.5 flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto">
+          {GRUPOS.map((g) => (
+            <button
+              key={g.v}
+              type="button"
+              onClick={() => setGrupo(g.v)}
+              className={cn(
+                'shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+                grupo === g.v ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent',
+              )}
+            >
+              <span className="sm:hidden">{g.c}</span>
+              <span className="hidden sm:inline">{g.l}</span>
+            </button>
+          ))}
+        </div>
+        <Button size="sm" className="shrink-0" onClick={() => setDialogo(grupo)} aria-label="Agregar" title="Agregar">
+          <Plus className="size-4" /> <span className="hidden sm:inline">Agregar</span>
         </Button>
       </div>
-
-      <div className="mb-3 flex gap-1.5">
-        {GRUPOS.map((g) => (
-          <button
-            key={g.v}
-            type="button"
-            onClick={() => setGrupo(g.v)}
-            className={cn(
-              'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
-              grupo === g.v ? 'bg-foreground text-background' : 'border bg-card text-muted-foreground hover:bg-accent',
-            )}
-          >
-            {g.l}
-          </button>
-        ))}
-      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        {pendientes === 0
+          ? 'Todo ya se pagó.'
+          : <>{pendientes} sin pagar<span className="hidden sm:inline"> · las recogerá el próximo periodo que cubra su fecha</span>.</>}
+      </p>
 
       {grupo === 'comisiones' && (
         p.comisiones.length === 0 ? <Vacia texto="Aún no hay comisiones registradas." /> : (
