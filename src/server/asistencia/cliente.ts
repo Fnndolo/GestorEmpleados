@@ -68,6 +68,21 @@ export type ResumenAsistencia = {
   empleados: EmpleadoResumenAsistencia[]
 }
 
+/**
+ * La jornada de una persona en un día, tal como la entrega GET /api/resumen-diario:
+ * lo mismo que AsistencIA mandaba por correo cada noche (marcaciones, tiempo
+ * trabajado y novedades como "no marcó salida" o "llegó tarde").
+ */
+export type JornadaAsistencia = {
+  documento: string | null
+  nombre: string
+  sede: string | null
+  horario: { entrada: string; salida: string } | null
+  trabajado: { segundos: number; texto: string }
+  marcaciones: { tipo: 'entrada' | 'salida'; hora: string; texto: string; automatica: boolean }[]
+  novedades: { clase: string; texto: string }[]
+}
+
 /** Período de pago tal como lo entiende AsistencIA: mes y, opcional, quincena. */
 export type PeriodoAsistencia = { mes: string; quincena?: 1 | 2 | null } | { desde: string; hasta: string }
 
@@ -162,6 +177,12 @@ async function llamar<T>(ruta: string, init: RequestInit = {}, conexion?: { url:
 export async function resumenAsistencia(periodo: PeriodoAsistencia, conexion?: { url: string; clave: string }): Promise<ResumenAsistencia> {
   const r = await llamar<ResumenAsistencia>(`/api/horas/resumen?${query(periodo)}`, {}, conexion)
   return { desde: r.desde, hasta: r.hasta, totales: r.totales, empleados: r.empleados ?? [] }
+}
+
+/** Las jornadas de un día (de quienes marcaron), para el resumen diario de cada persona. */
+export async function jornadasDelDiaAsistencia(fecha: string): Promise<JornadaAsistencia[]> {
+  const r = await llamar<{ resumenes: JornadaAsistencia[] }>(`/api/resumen-diario?fecha=${fecha}`)
+  return r.resumenes ?? []
 }
 
 /** Tramo a tramo: fecha, horas, tipo, referencia. Es lo que se registra como novedad. */

@@ -147,7 +147,7 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
   // Vencimientos / automáticas (incluye alertas de documentos y de obligaciones del calendario legal)
   { clave: 'vencimiento_alerta', etiqueta: 'Alerta de vencimiento', descripcion: 'Aviso automático de un vencimiento u obligación legal próxima (10 días hábiles antes y última alerta).', modulo: 'Vencimientos' },
   // Nómina · AsistencIA
-  { clave: 'asistencia_resumen_dia', etiqueta: 'Resumen del día en AsistencIA', descripcion: 'Se le manda al colaborador lo que AsistencIA le registró hoy (horas extra y recargos). Por ahora se envía a mano, como prueba, desde Nómina → Horas extra.', modulo: 'Nómina' },
+  { clave: 'asistencia_resumen_dia', etiqueta: 'Tu jornada del día (AsistencIA)', descripcion: 'Cada noche, a cada colaborador que marcó: sus entradas y salidas, el tiempo trabajado, las horas extra y las novedades del día (reemplaza el correo diario de AsistencIA).', modulo: 'Nómina' },
   // Plataforma
   { clave: 'aviso_publicado', etiqueta: 'Aviso de la plataforma', descripcion: 'Talento Humano o el administrador publican un aviso: un módulo nuevo, una mejora o un cambio importante.', modulo: 'Plataforma' },
 ]

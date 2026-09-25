@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/alertas",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/jornada-asistencia",
+      "schedule": "0 6 * * *"
     }
   ]
 }

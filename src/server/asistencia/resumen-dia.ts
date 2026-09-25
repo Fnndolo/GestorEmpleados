@@ -1,9 +1,10 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
 import { ErrorNegocio } from '@/server/accion'
-import { normalizarCedula, tramosAsistencia, type TramoAsistencia } from '@/server/asistencia/cliente'
-import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
-import { textoResumenDia } from '@/lib/asistencia/resumen-dia'
+import { normalizarCedula, tramosAsistencia, jornadasDelDiaAsistencia, type TramoAsistencia } from '@/server/asistencia/cliente'
+import { avisar, notificarUsuario, usuarioDeColaborador } from '@/server/notificaciones/avisar'
+import { enviarPush } from '@/server/notificaciones/push'
+import { textoResumenDia, textoJornadaDia } from '@/lib/asistencia/resumen-dia'
 import { hoyBogotaISO } from '@/lib/fechas'
 
 /**
@@ -68,4 +69,41 @@ export async function enviarResumenDiaAsistencia(colaboradorId: string): Promise
     colaboradorId,
   })
   return { tramos: tramos.length, mensaje: texto.mensaje }
+}
+
+/**
+ * Cron de cada noche (≈1:00 a. m.): la jornada del día que terminó, a cada
+ * colaborador que marcó en AsistencIA, como notificación en su app (campana +
+ * push). Reemplaza el correo diario que mandaba AsistencIA por Gmail.
+ *
+ * Se consulta AsistencIA por API (jornadas y horas extra del día) y se cruza por
+ * cédula. Idempotente: la notificación lleva una clave por persona y día, así
+ * que correrlo otra vez no la duplica (ni vuelve a mandar el push).
+ */
+export async function enviarJornadasDelDia(fechaISO: string): Promise<{
+  fecha: string; jornadas: number; enviados: number; yaEnviados: number; sinUsuario: number; sinFicha: number
+}> {
+  const [jornadas, tramos, colaboradores] = await Promise.all([
+    jornadasDelDiaAsistencia(fechaISO),
+    tramosAsistencia({ desde: fechaISO, hasta: fechaISO }),
+    prisma.colaborador.findMany({ where: { estado: 'ACTIVO' }, select: { id: true, numeroDocumento: true, usuarioId: true } }),
+  ])
+  const porCedula = new Map(colaboradores.map((c) => [normalizarCedula(c.numeroDocumento), c]))
+  const resultado = { fecha: fechaISO, jornadas: jornadas.length, enviados: 0, yaEnviados: 0, sinUsuario: 0, sinFicha: 0 }
+
+  for (const j of jornadas) {
+    const cedula = normalizarCedula(j.documento)
+    const colab = porCedula.get(cedula)
+    if (!colab) { resultado.sinFicha++; continue }
+    if (!colab.usuarioId) { resultado.sinUsuario++; continue }
+
+    const dedupeKey = `asistencia_jornada:${colab.id}:${fechaISO}`
+    if (await prisma.notificacion.findUnique({ where: { dedupeKey }, select: { id: true } })) { resultado.yaEnviados++; continue }
+
+    const texto = textoJornadaDia(fechaISO, j, tramos.filter((t) => normalizarCedula(t.documento) === cedula))
+    await notificarUsuario(colab.usuarioId, texto.titulo, texto.mensaje, '/autoservicio', dedupeKey, 'asistencia_resumen_dia', colab.id)
+    await enviarPush(colab.usuarioId, { titulo: texto.titulo, mensaje: texto.mensaje, enlace: '/autoservicio' }).catch(() => {})
+    resultado.enviados++
+  }
+  return resultado
 }
