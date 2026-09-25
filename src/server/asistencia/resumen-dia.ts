@@ -80,7 +80,11 @@ export async function enviarResumenDiaAsistencia(colaboradorId: string): Promise
  * cédula. Idempotente: la notificación lleva una clave por persona y día, así
  * que correrlo otra vez no la duplica (ni vuelve a mandar el push).
  */
-export async function enviarJornadasDelDia(fechaISO: string): Promise<{
+/**
+ * `solo`: manda solo a esa persona (cédula, o parte del nombre como sale en
+ * AsistencIA), para probar con alguien sin avisarle a todos.
+ */
+export async function enviarJornadasDelDia(fechaISO: string, solo?: string): Promise<{
   fecha: string; jornadas: number; enviados: number; yaEnviados: number; sinUsuario: number; sinFicha: number
 }> {
   const [jornadas, tramos, colaboradores] = await Promise.all([
@@ -93,6 +97,7 @@ export async function enviarJornadasDelDia(fechaISO: string): Promise<{
 
   for (const j of jornadas) {
     const cedula = normalizarCedula(j.documento)
+    if (solo && cedula !== normalizarCedula(solo) && !j.nombre.toLowerCase().includes(solo.toLowerCase())) continue
     const colab = porCedula.get(cedula)
     if (!colab) { resultado.sinFicha++; continue }
     if (!colab.usuarioId) { resultado.sinUsuario++; continue }

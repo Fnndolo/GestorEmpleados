@@ -13,7 +13,8 @@ export const maxDuration = 300
  * notificación en la app. Reemplaza el correo diario que mandaba AsistencIA.
  *
  * Protegido con CRON_SECRET. `?fecha=AAAA-MM-DD` repite un día puntual (no
- * duplica: cada aviso lleva su clave por persona y día).
+ * duplica: cada aviso lleva su clave por persona y día). `?persona=` (cédula o
+ * parte del nombre) lo manda solo a esa persona, para probar sin avisarle a todos.
  */
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
@@ -29,8 +30,10 @@ export async function GET(req: NextRequest) {
   ayer.setUTCDate(ayer.getUTCDate() - 1)
   const fecha = pedida && /^\d{4}-\d{2}-\d{2}$/.test(pedida) ? pedida : formatFechaISO(ayer)
 
+  const persona = req.nextUrl.searchParams.get('persona')?.trim() || undefined
+
   try {
-    return NextResponse.json({ ok: true, ...(await enviarJornadasDelDia(fecha)) })
+    return NextResponse.json({ ok: true, ...(await enviarJornadasDelDia(fecha, persona)) })
   } catch (e) {
     const mensaje = e instanceof ErrorAsistencia ? e.message : String(e)
     console.error('[cron jornada-asistencia]', mensaje)
