@@ -4,13 +4,14 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Bell, CheckCheck, X } from 'lucide-react'
+import { Bell, CheckCheck, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { colorAvatar } from '@/lib/etiquetas'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { marcarLeidas } from '@/app/(app)/notificaciones-acciones'
 import { ActivarPush } from './activar-push'
+import { cn } from '@/lib/utils'
 
 // Los pop-ups (toast) son solo para escritorio; en móvil se usa la notificación
 // del sistema (push), que además llega con la app cerrada.
@@ -74,6 +75,9 @@ function haceCuanto(iso: string): string {
   return `${d.getDate()} ${MES_CORTO[d.getMonth()]}`
 }
 
+/** Mensajes más largos que esto se recortan a 2 líneas y se amplían al tocarlos. */
+const LARGO_AMPLIABLE = 80
+
 /** Creada hoy según el reloj del dispositivo. */
 function esDeHoy(iso: string): boolean {
   return new Date(iso).toDateString() === new Date().toDateString()
@@ -85,6 +89,10 @@ export function Campana({ verVencimientos = false }: { verVencimientos?: boolean
   const [noLeidas, setNoLeidas] = useState(0)
   const [notifs, setNotifs] = useState<Notif[]>([])
   const [abierto, setAbierto] = useState(false)
+  // Notificaciones ampliadas en la lista (las largas se ven completas al tocarlas).
+  const [ampliadas, setAmpliadas] = useState<Set<string>>(new Set())
+  const alternar = (id: string) =>
+    setAmpliadas((prev) => { const s = new Set(prev); if (s.has(id)) s.delete(id); else s.add(id); return s })
   // ids ya vistos: para mostrar toast SOLO de lo que llega nuevo (no en la primera carga)
   const vistos = useRef<Set<string> | null>(null)
 
@@ -227,25 +235,52 @@ export function Campana({ verVencimientos = false }: { verVencimientos?: boolean
                 <ul className="divide-y">
                   {g.lista.map((n) => {
                     const detalle = textoPlano(n.mensaje)
+                    const ampliable = detalle.length > LARGO_AMPLIABLE
+                    const ampliada = ampliadas.has(n.id)
                     const contenido = (
                       <div className={`flex gap-2.5 px-3 py-2.5 ${!n.leida ? 'bg-accent/40' : ''}`}>
                         <Quien persona={n.persona} />
                         <div className="min-w-0 flex-1">
                           <p className="text-[13px] font-semibold leading-snug">{n.titulo}</p>
-                          {detalle && <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{detalle}</p>}
+                          {detalle && (ampliada ? (
+                            // Completo: cada parte ("Entrada …", "Salida …") en su renglón.
+                            <ul className="mt-1 space-y-0.5 text-xs leading-snug text-muted-foreground">
+                              {detalle.split(' · ').map((parte, i) => <li key={i}>{parte}</li>)}
+                            </ul>
+                          ) : (
+                            <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{detalle}</p>
+                          ))}
                         </div>
-                        <time dateTime={n.creadoEn} className="shrink-0 pt-0.5 text-[11px] tabular-nums text-muted-foreground">
-                          {haceCuanto(n.creadoEn)}
-                        </time>
+                        <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+                          <time dateTime={n.creadoEn} className="text-[11px] tabular-nums text-muted-foreground">
+                            {haceCuanto(n.creadoEn)}
+                          </time>
+                          {ampliable && <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', ampliada && 'rotate-180')} aria-hidden />}
+                        </div>
                       </div>
                     )
                     return (
-                      <li key={n.id}>
-                        {n.enlace ? (
+                      <li key={n.id} className={!n.leida && ampliable ? 'bg-accent/40' : undefined}>
+                        {ampliable ? (
+                          // Larga: tocarla la amplía (o la recoge) en vez de navegar.
+                          <button
+                            type="button"
+                            onClick={() => alternar(n.id)}
+                            aria-expanded={ampliada}
+                            className="block w-full text-left hover:bg-accent/60"
+                          >
+                            {contenido}
+                          </button>
+                        ) : n.enlace ? (
                           <Link href={n.enlace} onClick={() => setAbierto(false)} className="block hover:bg-accent/60">
                             {contenido}
                           </Link>
                         ) : contenido}
+                        {ampliable && ampliada && n.enlace && (
+                          <Link href={n.enlace} onClick={() => setAbierto(false)} className="-mt-1 mb-2 ml-[54px] inline-block text-xs font-medium text-primary hover:underline">
+                            Abrir
+                          </Link>
+                        )}
                       </li>
                     )
                   })}
