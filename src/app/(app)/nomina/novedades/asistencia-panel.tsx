@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Timer, RefreshCw, Download, KeyRound, FileText, FilePlus2, FileCheck2, Receipt, Send, ClipboardList, LockKeyhole, ChevronDown } from 'lucide-react'
+import { RefreshCw, Download, KeyRound, FileText, FilePlus2, FileCheck2, Receipt, Send, ClipboardList, LockKeyhole, ChevronDown } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { cn } from '@/lib/utils'
-import { Chip, Pill, AvatarColaborador } from '@/components/ui-kit'
+import { Pill, AvatarColaborador } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import {
   consultarHorasAsistencia, traerHorasAsistencia, previsualizarOrdenPago, generarOrdenPago, enviarOrdenAFirma, marcarPagoPagado, marcarPagoPendiente,
@@ -108,22 +108,11 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
     <>
       <Card className="mb-3 py-0">
         <CardContent className="p-3">
-          {/* Encabezado en una línea: de dónde salen las horas y si hay conexión. */}
-          <div className="flex items-center gap-2">
-            <Chip icono={Timer} color="bg-foreground text-background" className="size-7 shrink-0 rounded-lg" iconClassName="size-4" />
-            <p className="text-sm font-bold">AsistencIA</p>
-            {conectada
-              ? <span className="size-2 rounded-full bg-emerald-500" title="Conectada" aria-label="Conectada" />
-              : <Pill tone="warn">Sin conectar</Pill>}
-            {esAdmin && (
-              <Button size="icon" variant="ghost" className="ml-auto size-8" asChild aria-label="Clave de API (Ajustes)" title="Clave de API (Ajustes → Integraciones)">
-                <Link href="/configuracion/integraciones"><KeyRound className="size-4" /></Link>
-              </Button>
-            )}
-          </div>
-
+          {/* Sin encabezado: la conexión se maneja en Ajustes → Integraciones, así que
+              aquí solo va la llave (con punto verde si está conectada) al final de
+              la fila de filtros. */}
           {!conectada ? (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">
                 {esAdmin
                   ? 'Conecta la clave de API de la empresa en Ajustes → Integraciones para ver aquí las horas extra de cada período y traerlas a la nómina.'
@@ -138,7 +127,7 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
               {/* El período de pago, como lo liquida nómina: mes y quincena. En el
                   celular: mes y acciones en una fila, la quincena debajo; sin recuadro,
                   para que la lista quede más arriba. */}
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Select value={mes} onValueChange={setMes}>
                   <SelectTrigger className="h-8 min-w-0 flex-1 text-xs sm:w-40 sm:flex-none" aria-label="Mes"><SelectValue /></SelectTrigger>
                   <SelectContent>{meses.map((m) => <SelectItem key={m.valor} value={m.valor}>{m.etiqueta}</SelectItem>)}</SelectContent>
@@ -166,6 +155,14 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
                   <Button size="sm" onClick={traer} disabled={trayendo || cargando || !datos || datos.filas.length === 0} aria-label="Traer a la nómina" title="Traer a la nómina">
                     {trayendo ? <Spinner /> : <Download className="size-4" />} <span className="hidden sm:inline">Traer a la nómina</span>
                   </Button>
+                  {esAdmin && (
+                    <Button size="icon" variant="ghost" className="relative size-8" asChild aria-label="AsistencIA conectada · Clave de API (Ajustes)" title="AsistencIA conectada · Clave de API (Ajustes → Integraciones)">
+                      <Link href="/configuracion/integraciones">
+                        <KeyRound className="size-4" />
+                        <span className="absolute right-1 top-1 size-2 rounded-full bg-emerald-500 ring-2 ring-card" />
+                      </Link>
+                    </Button>
+                  )}
                 </div>
               </div>
 
