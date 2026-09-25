@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Search, CircleCheck, Paperclip, TreePalm, Stethoscope, File, Clock, CreditCard, Check, X, FileCheck, type LucideIcon } from 'lucide-react'
+import { Plus, Search, CircleCheck, ClockPlus, Paperclip, TreePalm, Stethoscope, File, Clock, CreditCard, Check, X, FileCheck, type LucideIcon } from 'lucide-react'
 import { Pill, type PillTone, type ChipColor } from '@/components/ui-kit'
 import { ETIQUETA_COMPROBANTE, type SituacionComprobante } from '@/lib/comprobante-permiso'
 import { ListaAcordeon } from '@/components/ui-kit/lista-acordeon'
@@ -32,7 +32,7 @@ import {
 
 // Permisos primero: es la novedad que más se pide (y la pestaña por defecto).
 const TABS = [
-  { v: 'permisos', l: 'Permisos' }, { v: 'vacaciones', l: 'Vacaciones' }, { v: 'incapacidades', l: 'Incapacidades' },
+  { v: 'permisos', l: 'Permisos' }, { v: 'horas-extra', l: 'Horas extra' }, { v: 'vacaciones', l: 'Vacaciones' }, { v: 'incapacidades', l: 'Incapacidades' },
   { v: 'licencias', l: 'Licencias' }, { v: 'bonificaciones', l: 'Bonificaciones' },
 ]
 
@@ -73,6 +73,7 @@ type Datos = {
   licencias: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; tipo: string; fechaInicio: string; fechaFin: string; dias: number; remunerada: boolean }[]
   permisos: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; fecha: string; diaCompleto: boolean; horas: number | null; motivo: string; desdeAutoservicio: boolean; soporteDocId: string | null; comprobante: ComprobanteNov }[]
   bonificaciones: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; concepto: string; valor: number; constitutivoSalario: boolean; estadoPago: string; fechaPago: string | null }[]
+  horasExtra: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; fecha: string; horaInicio: string; horaFin: string; horas: number; motivo: string; posterior: boolean; soporteDocId: string | null }[]
 }
 
 /** Ícono y color por tipo de novedad — mismo lenguaje visual que "Mi actividad" de autoservicio. */
@@ -81,6 +82,7 @@ const CHIP_NOV: Record<string, { icono: LucideIcon; color: ChipColor }> = {
   incapacidades: { icono: Stethoscope, color: 'rose' },
   licencias: { icono: File, color: 'violet' },
   permisos: { icono: Clock, color: 'sky' },
+  'horas-extra': { icono: ClockPlus, color: 'ink' },
   bonificaciones: { icono: CreditCard, color: 'ink' },
 }
 
@@ -148,7 +150,7 @@ export function NovedadesCliente({ tab, busqueda = '', datos, puedeCrear, puedeE
         <div className="min-w-0 flex-1">
           <FiltroTabs tabs={TABS.map((t) => ({ valor: t.v, label: t.l }))} activo={tab} basePath="/novedades" conservar={busqueda ? { q: busqueda } : undefined} />
         </div>
-        {puedeCrear && <Button size="sm" onClick={() => setDialogo(tab)}><Plus className="size-4" /> Registrar</Button>}
+        {puedeCrear && tab !== 'horas-extra' && <Button size="sm" onClick={() => setDialogo(tab)}><Plus className="size-4" /> Registrar</Button>}
       </div>
 
       {tab === 'vacaciones' && (
@@ -214,6 +216,30 @@ export function NovedadesCliente({ tab, busqueda = '', datos, puedeCrear, puedeE
       )}
       {tab === 'permisos' && <ListaPermisos items={datos.permisos} puedeEditar={puedeEditar} />}
       {tab === 'bonificaciones' && <ListaBonificaciones items={datos.bonificaciones} puedeEditar={puedeEditar} />}
+      {tab === 'horas-extra' && (
+        <Lista
+          chip={CHIP_NOV['horas-extra']}
+          items={datos.horasExtra.map((x) => ({
+            id: x.id,
+            titulo: x.colaborador,
+            avatar: { colaboradorId: x.colaboradorId, fotoUrl: x.fotoUrl, nombre: x.colaborador },
+            sub: `${formatFechaCorta(new Date(x.fecha))} · ${x.horaInicio}–${x.horaFin} · ${x.horas} h · ${x.motivo}`,
+            campos: [
+              { label: 'Fecha', valor: formatFechaCorta(new Date(x.fecha)) },
+              { label: 'Horario', valor: `${x.horaInicio}–${x.horaFin}` },
+              { label: 'Horas', valor: String(x.horas) },
+              { label: 'Pedidas', valor: x.posterior ? 'Después' : 'Antes' },
+              { label: 'Motivo', valor: x.motivo },
+            ],
+            derecha: (
+              <div className="flex flex-wrap items-center gap-2">
+                <OrigenSoporte autoservicio docId={x.soporteDocId} />
+                <Pill tone="ok">{x.horas} h</Pill>
+              </div>
+            ),
+          }))}
+        />
+      )}
 
       {dialogo && <DialogRegistro tab={dialogo} onClose={() => setDialogo(null)} />}
     </div>

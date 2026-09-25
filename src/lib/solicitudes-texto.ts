@@ -7,7 +7,7 @@ import { defLicencia } from '@/lib/licencias'
 import { fechaBreve, rangoBreve, dias as diasTexto } from '@/lib/notificaciones/texto'
 
 export const TIPO_SOLICITUD: Record<string, string> = {
-  VACACIONES: 'Vacaciones', PERMISO: 'Permiso', INCAPACIDAD: 'Incapacidad', CERTIFICACION_LABORAL: 'Certificación', LICENCIA: 'Licencia',
+  VACACIONES: 'Vacaciones', PERMISO: 'Permiso', HORAS_EXTRA: 'Horas extra', INCAPACIDAD: 'Incapacidad', CERTIFICACION_LABORAL: 'Certificación', LICENCIA: 'Licencia',
 }
 
 export const ESTADO_SOLICITUD: Record<string, string> = {
@@ -35,6 +35,10 @@ export function cuandoSolicitud(tipo: string, datos: Record<string, string>, dia
     return datos.permisoTipo === 'HORAS' && datos.horaInicio
       ? `${fechaBreve(datos.fechaInicio)} · ${datos.horaInicio}–${datos.horaFin}`
       : `${fechaBreve(datos.fechaInicio)} · día completo`
+  }
+  if (tipo === 'HORAS_EXTRA') {
+    const horas = (datos as Record<string, unknown>).horas
+    return `${fechaBreve(datos.fechaInicio)} · ${datos.horaInicio}–${datos.horaFin}${horas ? ` · ${horas} h` : ''}`
   }
   if (tipo === 'INCAPACIDAD') return `${TIPO_INCAP[datos.incapacidadTipo] ?? 'Incapacidad'} · ${rangoBreve(datos.fechaInicio, datos.fechaFin)}${datos.entidad ? ` · ${datos.entidad}` : ''}`
   if (tipo === 'CERTIFICACION_LABORAL') return `${TIPO_CERT[datos.tipoCertificacion] ?? 'Simple'}${datos.dirigidaA ? ` · para ${datos.dirigidaA}` : ''}`

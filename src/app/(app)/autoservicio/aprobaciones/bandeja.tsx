@@ -35,12 +35,14 @@ type Solicitud = {
   calculoVacaciones: { dias: number; saldo: number; anticipadas: boolean; diasAnticipados: number; advertencias: string[] } | null
   /** El colaborador autorizó por escrito el descuento de las anticipadas; con cuándo y si su saldo estaba confirmado. */
   autorizacionAnticipadas: { fecha: string | null; historialConfirmado: boolean } | null
+  /** Horas extra: si se piden después de hacerlas y la alerta de límite legal (vacía si no excede). */
+  horasExtra: { posterior: boolean; alerta: string } | null
   /** Contrapropuesta de fechas que el colaborador rechazó (solo vacaciones). */
   contrapropuestaRechazada: { fechaInicio: string; fechaFin: string; respuesta: string | null } | null
   /** La solicitud fue devuelta y el colaborador ya corrigió el soporte. */
   soporteCorregido: boolean
 }
-const TIPO: Record<string, string> = { VACACIONES: 'Vacaciones', PERMISO: 'Permiso', INCAPACIDAD: 'Incapacidad', CERTIFICACION_LABORAL: 'Certificación', LICENCIA: 'Licencia' }
+const TIPO: Record<string, string> = { VACACIONES: 'Vacaciones', PERMISO: 'Permiso', HORAS_EXTRA: 'Horas extra', INCAPACIDAD: 'Incapacidad', CERTIFICACION_LABORAL: 'Certificación', LICENCIA: 'Licencia' }
 
 export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { solicitudes: Solicitud[]; plazoComprobanteDias: number }) {
   const router = useRouter()
@@ -166,6 +168,14 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">{s.sede} · radicada el {s.creadoEn}</p>
+                {s.horasExtra && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">{s.horasExtra.posterior ? 'Pedidas después de hacerlas' : 'Pedidas antes de hacerlas'}</p>
+                )}
+                {s.horasExtra?.alerta && (
+                  <p className="mt-1 flex items-start gap-1.5 rounded-md bg-amber-500/10 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-300">
+                    <TriangleAlert className="mt-0.5 size-3.5 shrink-0" /> {s.horasExtra.alerta}
+                  </p>
+                )}
                 {s.calculoVacaciones && (
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Pide {s.calculoVacaciones.dias} día{s.calculoVacaciones.dias === 1 ? '' : 's'} hábiles · saldo disponible: {s.calculoVacaciones.saldo}

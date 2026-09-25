@@ -24,7 +24,7 @@ import { Encabezado } from '@/components/shell/encabezado'
 
 export const metadata = { title: 'Autoservicio · Smart Gadgets RH' }
 
-const TIPO_SOL: Record<string, string> = { VACACIONES: 'Vacaciones', PERMISO: 'Permiso', INCAPACIDAD: 'Incapacidad', CERTIFICACION_LABORAL: 'Certificación laboral', LICENCIA: 'Licencia', OTRA: 'Otra' }
+const TIPO_SOL: Record<string, string> = { VACACIONES: 'Vacaciones', PERMISO: 'Permiso', HORAS_EXTRA: 'Horas extra', INCAPACIDAD: 'Incapacidad', CERTIFICACION_LABORAL: 'Certificación laboral', LICENCIA: 'Licencia', OTRA: 'Otra' }
 const ESTADO_SOL: Record<string, string> = { PENDIENTE: 'Pendiente', EN_APROBACION: 'En aprobación', EN_NEGOCIACION: 'Contrapropuesta', DEVUELTA: 'Devuelta', APROBADA: 'Aprobada', RECHAZADA: 'Rechazada', CANCELADA: 'Cancelada' }
 
 const TIPO_INCAP: Record<string, string> = {
@@ -82,6 +82,12 @@ function camposSolicitud(tipo: string, datos: Record<string, unknown>): { label:
   if (tipo === 'PERMISO') return [
     { label: 'Fecha', valor: fechaLegible(d.fechaInicio) },
     { label: 'Modalidad', valor: d.permisoTipo === 'HORAS' && d.horaInicio ? `Por horas · ${d.horaInicio}–${d.horaFin}` : 'Día completo' },
+    ...(d.motivo ? [{ label: 'Motivo', valor: d.motivo }] : []),
+  ]
+  if (tipo === 'HORAS_EXTRA') return [
+    { label: 'Fecha', valor: fechaLegible(d.fechaInicio) },
+    { label: 'Horario', valor: `${d.horaInicio}–${d.horaFin}${datos.horas ? ` · ${datos.horas} h` : ''}` },
+    { label: 'Pedida', valor: datos.posterior ? 'Después de hacerlas' : 'Antes de hacerlas' },
     ...(d.motivo ? [{ label: 'Motivo', valor: d.motivo }] : []),
   ]
   if (tipo === 'INCAPACIDAD') return [

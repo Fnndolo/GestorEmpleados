@@ -26,6 +26,7 @@ export type TipoVinculoClave =
 export type Tramite =
   | 'vacaciones'
   | 'permisos'
+  | 'horasExtra'
   | 'licencias'
   | 'incapacidades'
   | 'certificacion'
@@ -61,13 +62,16 @@ export function esOps(tipoVinculo: string | null | undefined): boolean {
  * custodia sin que eso implique relación laboral.
  */
 const BLOQUEADOS_OPS: ReadonlySet<Tramite> = new Set<Tramite>([
-  'vacaciones', 'permisos', 'licencias', 'incapacidades',
+  'vacaciones', 'permisos', 'horasExtra', 'licencias', 'incapacidades',
   'desprendibles', 'disciplinarios', 'dotacion', 'epp', 'capacitaciones',
 ])
 
 /** ¿El colaborador con este vínculo puede usar el trámite? */
 export function aplicaTramite(tipoVinculo: string | null | undefined, tramite: Tramite): boolean {
   if (esOps(tipoVinculo)) return !BLOQUEADOS_OPS.has(tramite)
+  // Horas extra: solo vínculo laboral pleno; el aprendiz SENA no las pide
+  // (decisión de empresa, 2026-09-25).
+  if (tramite === 'horasExtra' && tipoVinculo === 'APRENDIZ_SENA') return false
   return true
 }
 

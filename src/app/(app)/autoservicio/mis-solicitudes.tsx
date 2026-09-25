@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ChevronDown, Download, CalendarRange, Clock, HeartPulse, FileBadge, FileCheck, TriangleAlert, Check, X, CircleDashed, CalendarClock, Paperclip, FileUp, Pencil } from 'lucide-react'
+import { ChevronDown, Download, CalendarRange, Clock, ClockPlus, HeartPulse, FileBadge, FileCheck, TriangleAlert, Check, X, CircleDashed, CalendarClock, Paperclip, FileUp, Pencil } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
@@ -30,6 +30,7 @@ const TONO_ESTADO: Record<string, PillTone> = {
 const ICONO_SOL: Record<string, React.ElementType> = {
   VACACIONES: CalendarRange,
   PERMISO: Clock,
+  HORAS_EXTRA: ClockPlus,
   INCAPACIDAD: HeartPulse,
   LICENCIA: CalendarClock,
   CERTIFICACION_LABORAL: FileBadge,

@@ -14,6 +14,7 @@ import { urlFoto } from '@/lib/foto'
 import { iniciales } from '@/lib/etiquetas'
 import { plazoComprobanteDias } from '@/server/comprobante-permiso'
 import { formatFechaCorta, parseFechaISO } from '@/lib/fechas'
+import { alertaLimiteHorasExtra, type CalculoHorasExtra } from '@/lib/horas-extra-solicitud'
 
 export const metadata = { title: 'Aprobaciones · Smart Gadgets RH' }
 
@@ -104,7 +105,9 @@ export default async function AprobacionesPage({ searchParams }: { searchParams:
             // Evidencia de la autorización del descuento de anticipadas (RIT art. 69 num. 4).
             const autorizacion = (s.datos as Record<string, unknown>).autorizacionAnticipadas as
               { fecha?: string; historialConfirmado?: boolean } | undefined
+            const datosHe = s.tipo === 'HORAS_EXTRA' ? (s.datos as { posterior?: boolean; calculoHorasExtra?: CalculoHorasExtra }) : null
             return {
+              horasExtra: datosHe ? { posterior: !!datosHe.posterior, alerta: alertaLimiteHorasExtra(datosHe.calculoHorasExtra) } : null,
               autorizacionAnticipadas: autorizacion
                 ? { fecha: autorizacion.fecha ? formatFechaCorta(parseFechaISO(autorizacion.fecha)) : null, historialConfirmado: !!autorizacion.historialConfirmado }
                 : null,

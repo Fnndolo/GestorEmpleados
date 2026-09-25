@@ -641,6 +641,7 @@ model Colaborador {
   incapacidades          Incapacidad[]
   licencias              Licencia[]
   permisos               Permiso[]
+  autorizacionesHorasExtra AutorizacionHorasExtra[]
   vacaciones             Vacaciones[]
   novedadesConcepto      NovedadConcepto[]
   bonificaciones         Bonificacion[]
@@ -1659,6 +1660,30 @@ model Licencia {
   @@map("licencia")
 }
 
+/**
+ * Horas extra autorizadas: nace al aprobarse una solicitud HORAS_EXTRA de
+ * autoservicio. Es el permiso para quedarse, no el pago: las horas que se pagan
+ * siguen saliendo de las marcaciones (AsistencIA). `posterior` = se pidió
+ * después de hacerlas (máximo 3 días hábiles). El soporte vive en Documento
+ * (entidadTipo "Solicitud", el de la solicitud que la originó).
+ */
+model AutorizacionHorasExtra {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  colaboradorId String      @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  fecha         DateTime    @db.Date
+  horaInicio    String      @map("hora_inicio") // "19:00"
+  horaFin       String      @map("hora_fin") // "21:00"
+  horas         Decimal     @db.Decimal(4, 2)
+  motivo        String
+  posterior     Boolean     @default(false)
+  solicitudId   String?     @unique @map("solicitud_id") @db.Uuid
+  creadoEn      DateTime    @default(now()) @map("creado_en")
+
+  @@index([colaboradorId, fecha])
+  @@map("autorizacion_horas_extra")
+}
+
 model Permiso {
   id            String      @id @default(uuid(7)) @db.Uuid
   colaboradorId String      @map("colaborador_id") @db.Uuid
@@ -1765,6 +1790,8 @@ model Bonificacion {
 enum TipoSolicitud {
   VACACIONES
   PERMISO
+  // Autorización para trabajar horas extra (antes o hasta 3 días hábiles después).
+  HORAS_EXTRA
   INCAPACIDAD
   CERTIFICACION_LABORAL
   LICENCIA

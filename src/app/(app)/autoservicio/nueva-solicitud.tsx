@@ -3,7 +3,7 @@
 import { useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Paperclip, Scale, Info, CalendarRange, TriangleAlert, CalendarDays, X } from 'lucide-react'
+import { Paperclip, Scale, Info, CalendarRange, TriangleAlert, CalendarDays, X, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -21,6 +21,7 @@ import { festivosDeRango, esDiaHabil } from '@/lib/dias-habiles'
 import { parseFechaISO } from '@/lib/fechas'
 import { crearSolicitud, editarMiPermiso } from './acciones'
 import { textoAutorizacionAnticipadas } from '@/lib/vacaciones-config'
+import { horasEntreHoras, DIAS_HABILES_POSTERIOR, LIMITE_HORAS_EXTRA_DIA } from '@/lib/horas-extra-solicitud'
 
 /** Lo que hace falta para abrir el diálogo con un permiso ya pedido y corregirlo. */
 export type EdicionPermiso = {
@@ -32,9 +33,10 @@ export type EdicionPermiso = {
   motivo?: string
 }
 
-export type TipoSol = 'VACACIONES' | 'PERMISO' | 'INCAPACIDAD' | 'CERTIFICACION_LABORAL' | 'LICENCIA'
+export type TipoSol = 'VACACIONES' | 'PERMISO' | 'HORAS_EXTRA' | 'INCAPACIDAD' | 'CERTIFICACION_LABORAL' | 'LICENCIA'
 
 const ETIQUETA_TIPO: Record<TipoSol, string> = {
+  HORAS_EXTRA: 'Horas extra',
   VACACIONES: 'Vacaciones',
   PERMISO: 'Permiso',
   INCAPACIDAD: 'Incapacidad',
@@ -134,6 +136,20 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
   })
   const [permCalAbierto, setPermCalAbierto] = useState(false)
   const [permModo, setPermModo] = useState<'DIA' | 'HORAS'>(edicion?.permisoTipo ?? 'DIA')
+  // Horas extra: mismo día que el permiso (permFecha), su propio horario.
+  const [heIni, setHeIni] = useState('18:00')
+  const [heFin, setHeFin] = useState('20:00')
+  const horasHe = horasEntreHoras(heIni, heFin)
+  // Se pueden pedir antes o hasta 3 días hábiles después (el servidor lo exige igual).
+  const minimaHe = useMemo(() => {
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+    const festivos = festivosDeRango(hoy.getFullYear() - 1, hoy.getFullYear())
+    const d = new Date(Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()))
+    let n = DIAS_HABILES_POSTERIOR
+    while (n > 0) { d.setUTCDate(d.getUTCDate() - 1); if (esDiaHabil(d, festivos)) n-- }
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+  }, [])
+  const heDespues = !!permFecha && permFecha < new Date(new Date().setHours(0, 0, 0, 0))
   const [permIni, setPermIni] = useState(edicion?.horaInicio ?? '08:00')
   const [permFin, setPermFin] = useState(edicion?.horaFin ?? '12:00')
   // Incapacidad (rango)
@@ -165,6 +181,11 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
       if (!vacIni || !vacFin) return 'Indica la fecha de inicio y fin de tus vacaciones.'
       if (vacFin < vacIni) return 'La fecha de fin no puede ser anterior a la de inicio.'
       if (vacAnticipadas && !autorizaAnticipadas) return 'Para pedir vacaciones anticipadas debes autorizar el descuento en caso de retiro.'
+    } else if (tipo === 'HORAS_EXTRA') {
+      if (!permFecha) return 'Elige el día de las horas extra.'
+      if (heIni >= heFin) return 'La hora de inicio debe ser anterior a la hora de fin.'
+      if (!motivo.trim()) return 'Escribe el motivo de las horas extra.'
+      if (archivos.length === 0) return 'Adjunta el soporte que justifica las horas extra (obligatorio).'
     } else if (tipo === 'PERMISO') {
       if (!permFecha) return 'Selecciona el día del permiso en el calendario.'
       if (permModo === 'HORAS' && permIni >= permFin) return 'La hora de inicio debe ser anterior a la hora de fin.'
@@ -188,6 +209,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
       tipo, fechaInicio: vacIni, fechaFin: vacFin,
       ...(vacAnticipadas ? { autorizaDescuentoAnticipadas: true } : {}),
     }
+    if (tipo === 'HORAS_EXTRA') return { tipo, fechaInicio: toISO(permFecha), horaInicio: heIni, horaFin: heFin, motivo: motivo.trim() }
     if (tipo === 'PERMISO') return {
       tipo, fechaInicio: toISO(permFecha), permisoTipo: permModo, motivo: motivo || undefined,
       ...(permModo === 'HORAS' ? { horaInicio: permIni, horaFin: permFin } : {}),
@@ -285,8 +307,8 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
     )
   }
 
-  const permiteAdjunto = tipo === 'PERMISO' || tipo === 'VACACIONES' || tipo === 'INCAPACIDAD' || tipo === 'LICENCIA'
-  const adjuntoObligatorio = tipo === 'INCAPACIDAD' || (tipo === 'LICENCIA' && !!lic?.requiereSoporte)
+  const permiteAdjunto = tipo === 'PERMISO' || tipo === 'HORAS_EXTRA' || tipo === 'VACACIONES' || tipo === 'INCAPACIDAD' || tipo === 'LICENCIA'
+  const adjuntoObligatorio = tipo === 'INCAPACIDAD' || tipo === 'HORAS_EXTRA' || (tipo === 'LICENCIA' && !!lic?.requiereSoporte)
 
   return (
     <>
@@ -378,6 +400,46 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
                   </div>
                 )}
                 <div className="space-y-1.5"><Label>Motivo</Label><Textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} /></div>
+              </>
+            )}
+
+            {tipo === 'HORAS_EXTRA' && (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="he-dia">Día</Label>
+                  <Popover open={permCalAbierto} onOpenChange={setPermCalAbierto}>
+                    <PopoverTrigger asChild>
+                      <Button id="he-dia" type="button" className="w-full justify-start font-normal">
+                        <CalendarDays className="size-4 text-muted-foreground" />
+                        {permFecha ? fechaLargaLocal(permFecha) : <span className="text-muted-foreground">Elige el día</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        locale={es}
+                        selected={permFecha}
+                        disabled={{ before: minimaHe }}
+                        onSelect={(d) => { setPermFecha(d); if (d) setPermCalAbierto(false) }}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5"><Label>Desde</Label><Input type="time" value={heIni} onChange={(e) => setHeIni(e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Hasta</Label><Input type="time" value={heFin} onChange={(e) => setHeFin(e.target.value)} /></div>
+                </div>
+                {horasHe > 0 && (
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Clock className="size-4 shrink-0" />
+                    <span>
+                      <strong className="text-foreground">{horasHe} h</strong>
+                      {permFecha && <> · {heDespues ? 'ya hechas (pedidas después)' : 'por hacer'}</>}
+                      {horasHe > LIMITE_HORAS_EXTRA_DIA && <span className="text-amber-700 dark:text-amber-400"> · pasa de {LIMITE_HORAS_EXTRA_DIA} h diarias</span>}
+                    </span>
+                  </p>
+                )}
+                <div className="space-y-1.5"><Label>Motivo</Label><Textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="¿Por qué hay que quedarse?" /></div>
               </>
             )}
 
@@ -489,7 +551,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
                 </Button>
                 {adjuntoObligatorio && archivos.length === 0 && (
                   <p className="text-xs text-destructive">
-                    {tipo === 'INCAPACIDAD' ? 'Debes adjuntar el soporte de la incapacidad.' : 'Debes adjuntar el soporte de la licencia.'}
+                    {tipo === 'INCAPACIDAD' ? 'Debes adjuntar el soporte de la incapacidad.' : tipo === 'HORAS_EXTRA' ? 'Debes adjuntar el soporte que justifica las horas extra.' : 'Debes adjuntar el soporte de la licencia.'}
                   </p>
                 )}
               </div>

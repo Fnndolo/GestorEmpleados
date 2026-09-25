@@ -32,16 +32,18 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
     ? await prisma.solicitud.count({ where: { estado: 'EN_APROBACION', pasos: { some: { estado: 'PENDIENTE' } } } })
     : 0
 
-  const [vacaciones, incapacidades, licencias, permisos, bonificaciones] = await Promise.all([
+  const [vacaciones, incapacidades, licencias, permisos, bonificaciones, horasExtra] = await Promise.all([
     prisma.vacaciones.findMany({ where: filtroSede, include: incCol, orderBy: { creadoEn: 'desc' }, take: 100 }),
     prisma.incapacidad.findMany({ where: filtroSede, include: incCol, orderBy: { creadoEn: 'desc' }, take: 100 }),
     prisma.licencia.findMany({ where: filtroSede, include: incCol, orderBy: { creadoEn: 'desc' }, take: 100 }),
     prisma.permiso.findMany({ where: filtroSede, include: incCol, orderBy: { creadoEn: 'desc' }, take: 100 }),
     prisma.bonificacion.findMany({ where: filtroSede, include: incCol, orderBy: { creadoEn: 'desc' }, take: 100 }),
+    // Horas extra autorizadas desde autoservicio (la autorización, no el pago).
+    prisma.autorizacionHorasExtra.findMany({ where: filtroSede, include: incCol, orderBy: { fecha: 'desc' }, take: 100 }),
   ])
 
   // Soportes adjuntos por el empleado en la solicitud de autoservicio que originó la novedad
-  const solicitudIds = [...vacaciones, ...incapacidades, ...permisos].map((x) => x.solicitudId).filter((id): id is string => !!id)
+  const solicitudIds = [...vacaciones, ...incapacidades, ...permisos, ...horasExtra].map((x) => x.solicitudId).filter((id): id is string => !!id)
   const docs = solicitudIds.length
     ? await prisma.documento.findMany({ where: { entidadTipo: 'Solicitud', entidadId: { in: solicitudIds } }, select: { id: true, entidadId: true } })
     : []
@@ -110,6 +112,11 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
               nota: x.comprobanteNota,
               docId: comprobantePorPermiso.get(x.id) ?? null,
             },
+          })),
+          horasExtra: horasExtra.map((x) => ({
+            id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true),
+            fecha: formatFechaISO(x.fecha), horaInicio: x.horaInicio, horaFin: x.horaFin, horas: Number(x.horas),
+            motivo: x.motivo, posterior: x.posterior, soporteDocId: soporte(x.solicitudId),
           })),
           bonificaciones: bonificaciones.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true), concepto: x.concepto, valor: Number(x.valor), constitutivoSalario: x.constitutivoSalario, estadoPago: x.estadoPago, fechaPago: x.fechaPago ? formatFechaISO(x.fechaPago) : null })),
         }}

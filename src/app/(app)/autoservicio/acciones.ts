@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { aplicaTramite, type Tramite } from '@/lib/tramites-vinculo'
-import { parseFechaISO, formatFechaCorta, hoyBogotaISO } from '@/lib/fechas'
+import { parseFechaISO, formatFechaCorta, hoyBogota, hoyBogotaISO } from '@/lib/fechas'
 import { comprobanteExigido, avisarComprobanteEntregado, comprobanteVencidoDe } from '@/server/comprobante-permiso'
 import { diasHabilesRango } from '@/app/(app)/novedades/acciones'
 import { generarCertificacion } from '@/server/certificaciones'
@@ -14,6 +14,8 @@ import { avisar, avisarPorRol } from '@/server/notificaciones/avisar'
 import { miFichaSchema } from '@/lib/validaciones/colaborador'
 import { TIPOS_LICENCIA, defLicencia, esDerecho } from '@/lib/licencias'
 import { evaluarSolicitudVacaciones } from '@/server/vacaciones-reglas'
+import { calcularLimitesHorasExtra, fechaMinimaHorasExtra } from '@/server/horas-extra-autorizacion'
+import { horasEntreHoras, DIAS_HABILES_POSTERIOR } from '@/lib/horas-extra-solicitud'
 import { saldoVisibleEnAutoservicio, textoAutorizacionAnticipadas } from '@/lib/vacaciones-config'
 import { liquidarVacaciones, desgloseHtml } from '@/server/vacaciones-liquidacion'
 import { usuarioDeColaborador } from '@/server/notificaciones/avisar'
@@ -22,8 +24,8 @@ import { nombreCorto, fechaBreve, rangoBreve, dias as diasTexto } from '@/lib/no
 import type { UsuarioSesion } from '@/server/sesion'
 
 const crearSolicitudSchema = z.object({
-  tipo: z.enum(['VACACIONES', 'PERMISO', 'INCAPACIDAD', 'CERTIFICACION_LABORAL', 'LICENCIA']),
-  // Vacaciones (rango) · Permiso (un solo día en fechaInicio) · Incapacidad (rango)
+  tipo: z.enum(['VACACIONES', 'PERMISO', 'HORAS_EXTRA', 'INCAPACIDAD', 'CERTIFICACION_LABORAL', 'LICENCIA']),
+  // Vacaciones (rango) · Permiso y horas extra (un solo día en fechaInicio) · Incapacidad (rango)
   fechaInicio: z.string().optional(),
   fechaFin: z.string().optional(),
   motivo: z.string().optional(),
@@ -158,7 +160,7 @@ export const crearSolicitud = accion(
     if (d.tipo !== 'CERTIFICACION_LABORAL') await exigirColaboradorActivo(colaboradorId)
     // Trámites que no existen para un contrato de prestación de servicios.
     const TRAMITE_DE: Partial<Record<typeof d.tipo, Tramite>> = {
-      VACACIONES: 'vacaciones', PERMISO: 'permisos', LICENCIA: 'licencias', INCAPACIDAD: 'incapacidades',
+      VACACIONES: 'vacaciones', PERMISO: 'permisos', HORAS_EXTRA: 'horasExtra', LICENCIA: 'licencias', INCAPACIDAD: 'incapacidades',
     }
     const tramite = TRAMITE_DE[d.tipo]
     if (tramite) await exigirTramiteAplicable(colaboradorId, tramite)
@@ -177,6 +179,27 @@ export const crearSolicitud = accion(
 
     // Vacaciones: aplicar las reglas del RIT (cap. 9) antes de crear la solicitud.
     let datosSolicitud: Record<string, unknown> = { ...d }
+
+    // Horas extra: un día, desde–hasta, motivo y soporte (el soporte se adjunta
+    // justo después de crear la solicitud y se exige al aprobar). Se puede pedir
+    // antes o hasta 3 días hábiles después; el límite legal no bloquea: queda
+    // calculado para que el aprobador vea la alerta.
+    if (d.tipo === 'HORAS_EXTRA') {
+      if (!d.fechaInicio || !d.horaInicio || !d.horaFin) throw new ErrorNegocio('Indica el día y el horario de las horas extra.')
+      if (!d.motivo?.trim()) throw new ErrorNegocio('Escribe el motivo de las horas extra.')
+      const horas = horasEntreHoras(d.horaInicio, d.horaFin)
+      if (horas <= 0) throw new ErrorNegocio('La hora de fin debe ser después de la de inicio.')
+      const fecha = parseFechaISO(d.fechaInicio)!
+      const posterior = fecha < hoyBogota()
+      if (posterior) {
+        const minima = await fechaMinimaHorasExtra()
+        if (fecha < minima) {
+          throw new ErrorNegocio(`Las horas extra ya hechas se piden hasta ${DIAS_HABILES_POSTERIOR} días hábiles después: la fecha más antigua es el ${fechaBreve(minima)}.`)
+        }
+      }
+      const calculoHorasExtra = await calcularLimitesHorasExtra(colaboradorId, d.fechaInicio, horas)
+      datosSolicitud = { ...d, horas, posterior, calculoHorasExtra }
+    }
     if (d.tipo === 'VACACIONES') {
       if (!d.fechaInicio || !d.fechaFin) throw new ErrorNegocio('Indica la fecha de inicio y fin de tus vacaciones.')
       if (d.fechaFin < d.fechaInicio) throw new ErrorNegocio('La fecha de fin no puede ser anterior a la de inicio.')
@@ -375,6 +398,13 @@ export const resolverPaso = accion(
     const puede = await usuarioPuedeResolver(usuario, paso)
     if (!puede) throw new ErrorNegocio('No tienes permiso para aprobar este paso.')
 
+    // Horas extra: el soporte es obligatorio. Se adjunta después de crear la
+    // solicitud, así que se verifica aquí, antes de aprobar.
+    if (d.aprobar && paso.solicitud.tipo === 'HORAS_EXTRA') {
+      const soportes = await prisma.documento.count({ where: { entidadTipo: 'Solicitud', entidadId: paso.solicitudId } })
+      if (soportes === 0) throw new ErrorNegocio('Esta solicitud de horas extra no tiene soporte adjunto: no se puede aprobar. Recházala para que la pida de nuevo con el soporte.')
+    }
+
     // Una licencia que la ley concede (luto, maternidad, paternidad, calamidad,
     // votación) no se niega por decisión del empleador: negarla es una falta. Lo
     // único que puede fallar es que el soporte no acredite el hecho, y eso hay que
@@ -552,6 +582,24 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
     aviso = {
       titulo: tituloPropio('PERMISO', 'aprobad'),
       mensaje: `${fechaBreve(datos.fechaInicio)} · ${porHoras ? `${datos.horaInicio}–${datos.horaFin}` : 'día completo'}${comprobante ? ` · Sube el comprobante antes del ${fechaBreve(comprobante.comprobanteVence)}` : ''}`,
+    }
+  } else if (s.tipo === 'HORAS_EXTRA' && datos.fechaInicio && datos.horaInicio && datos.horaFin) {
+    // Queda la autorización (el permiso para quedarse). El pago no sale de aquí:
+    // las horas que se pagan siguen viniendo de las marcaciones.
+    const horas = horasEntreHoras(datos.horaInicio, datos.horaFin)
+    await prisma.autorizacionHorasExtra.create({
+      data: {
+        colaboradorId: s.colaboradorId, fecha: parseFechaISO(datos.fechaInicio)!,
+        horaInicio: datos.horaInicio, horaFin: datos.horaFin, horas,
+        motivo: datos.motivo ?? 'Horas extra',
+        posterior: (s.datos as Record<string, unknown>).posterior === true,
+        solicitudId,
+      },
+    })
+    resultado = `Horas extra autorizadas (${datos.horaInicio}–${datos.horaFin}, ${horas} h)`
+    aviso = {
+      titulo: tituloPropio('HORAS_EXTRA', 'aprobad'),
+      mensaje: `${fechaBreve(datos.fechaInicio)} · ${datos.horaInicio}–${datos.horaFin} · ${horas} h`,
     }
   } else if (s.tipo === 'INCAPACIDAD' && datos.fechaInicio && datos.fechaFin) {
     const dias = diasCalendario(datos.fechaInicio, datos.fechaFin)
@@ -918,7 +966,7 @@ async function avisarSolicitante(solicitudId: string, titulo: string, mensaje: s
 }
 
 function etiquetaTipo(tipo: string): string {
-  return tipo === 'VACACIONES' ? 'vacaciones' : tipo === 'PERMISO' ? 'permiso'
+  return tipo === 'VACACIONES' ? 'vacaciones' : tipo === 'PERMISO' ? 'permiso' : tipo === 'HORAS_EXTRA' ? 'horas extra'
     : tipo === 'INCAPACIDAD' ? 'incapacidad' : tipo === 'LICENCIA' ? 'licencia' : 'certificación'
 }
 
@@ -936,6 +984,8 @@ function resumenSolicitud(tipo: string, datos: Record<string, string>): string {
       const horas = datos.permisoTipo === 'HORAS' && datos.horaInicio && datos.horaFin ? `${datos.horaInicio}–${datos.horaFin}` : 'día completo'
       return [fechaBreve(datos.fechaInicio), horas, datos.motivo].filter(Boolean).join(' · ')
     }
+    case 'HORAS_EXTRA':
+      return [fechaBreve(datos.fechaInicio), datos.horaInicio && datos.horaFin ? `${datos.horaInicio}–${datos.horaFin}` : '', datos.motivo].filter(Boolean).join(' · ')
     case 'LICENCIA':
       return [datos.licenciaTipo ? defLicencia(datos.licenciaTipo).label : '', rangoBreve(datos.fechaInicio, datos.fechaFin)].filter(Boolean).join(' · ')
     default:
@@ -945,7 +995,7 @@ function resumenSolicitud(tipo: string, datos: Record<string, string>): string {
 
 /** Título para el propio solicitante: "Tus vacaciones fueron aprobadas", "Tu permiso fue rechazado". */
 function tituloPropio(tipo: string, verbo: 'aprobad' | 'rechazad' | 'registrad'): string {
-  const plural = tipo === 'VACACIONES'
+  const plural = tipo === 'VACACIONES' || tipo === 'HORAS_EXTRA'
   const femenino = tipo !== 'PERMISO'
   return `${plural ? 'Tus' : 'Tu'} ${etiquetaTipo(tipo)} ${plural ? 'fueron' : 'fue'} ${verbo}${femenino ? 'a' : 'o'}${plural ? 's' : ''}`
 }
