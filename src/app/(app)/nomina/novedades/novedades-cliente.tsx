@@ -79,10 +79,6 @@ export function NovedadesNomina(p: Props) {
   const [dialogo, setDialogo] = useState<Grupo | null>(null)
   const [eliminando, setEliminando] = useState<string | null>(null)
 
-  const pendientes =
-    p.comisiones.filter((c) => !c.pagadaEn).length +
-    p.horas.filter((h) => !h.pagadaEn).length +
-    p.conceptosNovedades.filter((n) => !n.pagadaEn).length
 
   /** Lo ya liquidado no cambia solo: hay que rehacer el periodo que lo pagó. */
   function recordarRecalculo() {
@@ -101,7 +97,7 @@ export function NovedadesNomina(p: Props) {
   return (
     <section>
       {/* Pestañas y "Agregar" en una sola fila (en el celular, "+" solo). */}
-      <div className="mb-1.5 flex items-center gap-2">
+      <div className="mb-3 flex items-center gap-2">
         <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto">
           {GRUPOS.map((g) => (
             <button
@@ -122,11 +118,6 @@ export function NovedadesNomina(p: Props) {
           <Plus className="size-4" /> <span className="hidden sm:inline">Agregar</span>
         </Button>
       </div>
-      <p className="mb-3 text-xs text-muted-foreground">
-        {pendientes === 0
-          ? 'Todo ya se pagó.'
-          : <>{pendientes} sin pagar<span className="hidden sm:inline"> · las recogerá el próximo periodo que cubra su fecha</span>.</>}
-      </p>
 
       {grupo === 'comisiones' && (
         p.comisiones.length === 0 ? <Vacia texto="Aún no hay comisiones registradas." /> : (
