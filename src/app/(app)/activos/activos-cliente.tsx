@@ -57,13 +57,16 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
           {/* Entrega desde el inventario: se eligen los activos y luego a quién van.
               El botón por fila sigue existiendo como atajo cuando ya sabes cuál. */}
           {tab === 'activos' && puedeEditar && hayDisponibles && (
-            <Button size="sm" onClick={() => { setAsignarActivoId(''); setDialogo('asignar') }}>
-              <UserPlus className="size-4" /> Asignar
+            <Button size="sm" onClick={() => { setAsignarActivoId(''); setDialogo('asignar') }} aria-label="Asignar activos" title="Asignar activos">
+              <UserPlus className="size-4" /> <span className="hidden sm:inline">Asignar</span>
             </Button>
           )}
           {puedeCrear && (
-            <Button size="sm" onClick={() => setDialogo(tab === 'activos' ? 'activo' : 'dotacion')}>
-              <Plus className="size-4" /> {tab === 'activos' ? 'Nuevos activos' : 'Registrar dotación'}
+            <Button
+              size="sm" onClick={() => setDialogo(tab === 'activos' ? 'activo' : 'dotacion')}
+              aria-label={tab === 'activos' ? 'Nuevos activos' : 'Registrar dotación'} title={tab === 'activos' ? 'Nuevos activos' : 'Registrar dotación'}
+            >
+              <Plus className="size-4" /> <span className="hidden sm:inline">{tab === 'activos' ? 'Nuevos activos' : 'Registrar dotación'}</span>
             </Button>
           )}
         </div>
@@ -73,19 +76,31 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
         activos.length === 0 ? <Vacio icono={Laptop} /> : (
           <Card><CardContent className="p-0 divide-y">
             {activos.map((a) => (
-              <div key={a.id} className="flex items-center gap-3 p-3">
+              // Celular: foto, nombre y acciones en una línea; las etiquetas bajan bajo
+              // el nombre (pl-12 = foto + separación). Antes todo iba en una sola fila
+              // y el nombre quedaba aplastado letra por letra.
+              <div key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3">
                 {/* La foto del activo va aquí mismo: tocarla la sube o la cambia. */}
                 <FotoActivo activoId={a.id} fotoUrl={a.fotoUrl} icono={iconoActivo(a.tipo, a.nombre)} puedeEditar={puedeEditar} />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{a.nombre}</p>
-                  <p className="text-xs text-muted-foreground">{a.codigo} · {a.tipo}{a.asignacion && ` · ${a.asignacion.colaborador}`}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{a.nombre}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {a.codigo}
+                    {a.tipo.toLowerCase() !== a.nombre.toLowerCase() && ` · ${a.tipo}`}
+                    {a.asignacion && ` · ${a.asignacion.colaborador}`}
+                  </p>
                 </div>
-                {a.asignacion && (
-                  <Pill tone={a.asignacion.actaFirmada ? 'ok' : 'warn'}>
-                    {a.asignacion.actaFirmada ? 'Acta firmada' : 'Acta sin firmar'}
-                  </Pill>
-                )}
-                <Pill tone={TONO_ACTIVO[a.estado] ?? 'muted'}>{ESTADO[a.estado]}</Pill>
+                <div className="order-last flex basis-full flex-wrap gap-1.5 pl-12 sm:order-none sm:basis-auto sm:pl-0">
+                  {/* Asignado se sobreentiende cuando ya está la etiqueta del acta. */}
+                  {a.asignacion ? (
+                    <Pill tone={a.asignacion.actaFirmada ? 'ok' : 'warn'}>
+                      {a.asignacion.actaFirmada ? 'Acta firmada' : 'Acta sin firmar'}
+                    </Pill>
+                  ) : (
+                    <Pill tone={TONO_ACTIVO[a.estado] ?? 'muted'}>{ESTADO[a.estado]}</Pill>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center">
                 {a.asignacion?.actaEntregaDocId && (
                   <Button variant="ghost" size="icon" asChild aria-label="Acta"><a href={`/api/documentos/${a.asignacion.actaEntregaDocId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a></Button>
                 )}
@@ -99,11 +114,14 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
                   />
                 )}
                 {puedeEditar && a.estado === 'DISPONIBLE' && (
-                  <Button size="sm" onClick={() => { setAsignarActivoId(a.id); setDialogo('asignar') }}><UserPlus className="size-4" /> Entregar</Button>
+                  <Button size="sm" onClick={() => { setAsignarActivoId(a.id); setDialogo('asignar') }} aria-label="Entregar" title="Entregar">
+                    <UserPlus className="size-4" /> <span className="hidden sm:inline">Entregar</span>
+                  </Button>
                 )}
                 {puedeEditar && a.asignacion && (
                   <DevolverBoton asignacionId={a.asignacion.id} />
                 )}
+                </div>
               </div>
             ))}
           </CardContent></Card>
@@ -112,12 +130,16 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
         dotaciones.length === 0 ? <Vacio icono={Shirt} /> : (
           <Card><CardContent className="p-0 divide-y">
             {dotaciones.map((d) => (
-              <div key={d.id} className="flex items-center gap-3 p-3">
-                <Chip icono={Shirt} color="violet" />
+              <div key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3">
+                <Chip icono={Shirt} color="bg-foreground text-background" className="size-9 rounded-lg" />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm">{d.colaborador}</p>
-                  <p className="text-xs text-muted-foreground">{d.corte} {d.anio} · {formatFechaCorta(new Date(d.fechaEntrega))} · {d.items}</p>
+                  <p className="truncate text-sm font-medium">{d.colaborador}</p>
+                  <p className="truncate text-xs text-muted-foreground">{d.corte} {d.anio} · {formatFechaCorta(new Date(d.fechaEntrega))} · {d.items}</p>
                 </div>
+                <div className="order-last basis-full pl-12 sm:order-none sm:basis-auto sm:pl-0">
+                  <Pill tone={d.firmado ? 'ok' : 'warn'}>{d.firmado ? 'Firmado' : 'Sin firmar'}</Pill>
+                </div>
+                <div className="flex shrink-0 items-center">
                 {d.recibidoDocId && (
                   <Button variant="ghost" size="icon" asChild aria-label="Recibido PDF">
                     <a href={`/api/documentos/${d.recibidoDocId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a>
@@ -130,7 +152,7 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
                     etiqueta={d.recibidoDocId ? 'Rehacer o reemplazar el recibido' : 'Generar o subir el recibido'}
                   />
                 )}
-                <Pill tone={d.firmado ? 'ok' : 'warn'}>{d.firmado ? 'Firmado' : 'Pendiente de firma'}</Pill>
+                </div>
               </div>
             ))}
           </CardContent></Card>
@@ -158,10 +180,10 @@ function DevolverBoton({ asignacionId }: { asignacionId: string }) {
   const router = useRouter()
   const [c, setC] = useState(false)
   return (
-    <Button variant="ghost" size="sm" disabled={c} onClick={async () => {
+    <Button variant="ghost" size="sm" disabled={c} aria-label="Devolver" title="Devolver" onClick={async () => {
       setC(true); const res = await devolverActivo({ asignacionId }); setC(false)
       if (res.ok) { toast.success('Activo devuelto. Acta generada.'); router.refresh() } else toast.error(res.error)
-    }}>{c ? <Spinner /> : <Undo2 className="size-4" />} Devolver</Button>
+    }}>{c ? <Spinner /> : <Undo2 className="size-4" />} <span className="hidden sm:inline">Devolver</span></Button>
   )
 }
 

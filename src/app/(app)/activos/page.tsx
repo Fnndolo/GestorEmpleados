@@ -31,7 +31,7 @@ export default async function ActivosPage() {
 
   return (
     <div className="max-w-7xl">
-      <Encabezado volver titulo="Activos y dotación" descripcion="Inventario de activos con actas de entrega/devolución y dotación legal (3 entregas al año)." />
+      <Encabezado volver enLinea titulo="Activos y dotación" />
       <ActivosCliente
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
