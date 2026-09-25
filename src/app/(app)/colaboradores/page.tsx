@@ -10,7 +10,7 @@ import type { Prisma } from '@/generated/prisma/client'
 
 export const metadata = { title: 'Colaboradores · Smart Gadgets RH' }
 
-const VINCULOS = ['TODOS', 'TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'OPS'] as const
+const VINCULOS = ['TODOS', 'TERMINO_INDEFINIDO', 'TERMINO_FIJO', 'OBRA_LABOR', 'APRENDIZ_SENA', 'OPS', 'PRACTICANTE'] as const
 
 export default async function ColaboradoresPage({
   searchParams,
@@ -50,7 +50,10 @@ export default async function ColaboradoresPage({
   }
   totalPorVinculo['TODOS'] = total
 
+  // "Todos" primero y luego de la modalidad con más gente a la que menos: la que
+  // más se consulta queda a la mano. A igual cantidad, el orden de VINCULOS.
   const tabs = VINCULOS.map((v) => ({ valor: v, conteo: totalPorVinculo[v] ?? 0 }))
+    .sort((a, b) => (a.valor === 'TODOS' ? -1 : b.valor === 'TODOS' ? 1 : b.conteo - a.conteo))
 
   return (
     <div className="max-w-[1600px]">
