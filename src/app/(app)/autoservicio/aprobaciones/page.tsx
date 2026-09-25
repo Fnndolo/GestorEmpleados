@@ -1,5 +1,7 @@
 import Link from 'next/link'
-import { requerirPermiso } from '@/server/sesion'
+import { requerirPermiso, tienePermiso, alcanceDe } from '@/server/sesion'
+import { Button } from '@/components/ui/button'
+import { CalendarClock } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { cn } from '@/lib/utils'
 import { historialSolicitudes, filtrarHistorialPara } from '@/server/solicitudes-historial'
@@ -20,6 +22,11 @@ export const metadata = { title: 'Aprobaciones · Smart Gadgets RH' }
 
 export default async function AprobacionesPage({ searchParams }: { searchParams: Promise<{ vista?: string }> }) {
   const usuario = await requerirPermiso('autoservicio', 'APROBAR')
+  // Solo a quien ve Novedades de toda la empresa o de sus sedes (Talento Humano):
+  // Novedades todavía no filtra por equipo, así que a un jefe (alcance EQUIPO) le
+  // mostraría lo de toda la empresa.
+  const alcanceNovedades = tienePermiso(usuario, 'novedades', 'VER') ? alcanceDe(usuario, 'novedades', 'VER') : null
+  const puedeNovedades = alcanceNovedades === 'TODAS_SEDES' || alcanceNovedades === 'SEDES_ASIGNADAS'
   const { vista } = await searchParams
   const enHistorial = vista === 'historial'
   // Plazo del comprobante de asistencia (Ajustes → Empresa), para mostrarlo al aprobar un permiso.
@@ -68,7 +75,20 @@ export default async function AprobacionesPage({ searchParams }: { searchParams:
 
   return (
     <div className="max-w-5xl">
-      <Encabezado volver enLinea titulo="Aprobaciones" />
+      <Encabezado
+        volver
+        enLinea
+        titulo="Aprobaciones"
+        // Atajo a Novedades para quien la ve (Talento Humano): lo aprobado aquí
+        // queda registrado allá. Los jefes no tienen ese permiso y no lo ven.
+        acciones={puedeNovedades && (
+          <Button asChild size="sm" variant="outline">
+            <Link href="/novedades" aria-label="Ir a Novedades" title="Ir a Novedades">
+              <CalendarClock className="size-4" /> <span className="hidden sm:inline">Novedades</span>
+            </Link>
+          </Button>
+        )}
+      />
       {/* Dos vistas: lo pendiente y el archivo de lo ya decidido. */}
       <div className="mb-4 flex gap-1.5">
         {[
