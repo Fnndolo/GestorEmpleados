@@ -168,7 +168,7 @@ export function DocumentosPlantillas({
 
       {/* Papel membretado */}
       <Dialog open={abierto === 'membrete'} onOpenChange={(o) => !o && cerrar()}>
-        <DialogContent onOpenAutoFocus={enfocarDialogo} aria-describedby={undefined} className="max-h-[92dvh] overflow-y-auto sm:max-w-4xl">
+        <DialogContent onOpenAutoFocus={enfocarDialogo} aria-describedby={undefined} className="max-h-[92dvh] overflow-y-auto sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Papel membretado</DialogTitle>
           </DialogHeader>
