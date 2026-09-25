@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { crearCargo, editarCargo, alternarCargo } from './acciones'
+import { Encabezado } from '@/components/shell/encabezado'
 import { EditorFunciones } from '@/components/contratos/editor-funciones'
 import type { FuncionesCargo } from '@/lib/contrato-variables'
 
@@ -62,11 +63,17 @@ export function CargosCliente({ puedeCrear, puedeEditar, areas, roles, cargos }:
 
   return (
     <>
-      {puedeCrear && (
-        <div className="flex justify-end mb-3">
-          <Button size="sm" onClick={abrirNuevo}><Plus className="size-4" /> Nuevo cargo</Button>
-        </div>
-      )}
+      {/* El título vive aquí y no en la página: "Nuevo cargo" abre el diálogo de
+          este componente y va en la misma fila del título (en el celular, "+" solo). */}
+      <Encabezado
+        enLinea
+        titulo="Cargos"
+        acciones={puedeCrear && (
+          <Button size="sm" onClick={abrirNuevo} aria-label="Nuevo cargo" title="Nuevo cargo">
+            <Plus className="size-4" /> <span className="hidden sm:inline">Nuevo cargo</span>
+          </Button>
+        )}
+      />
       <Card><CardContent className="p-0 divide-y">
         {cargos.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No hay cargos.</p>
@@ -84,7 +91,9 @@ export function CargosCliente({ puedeCrear, puedeEditar, areas, roles, cargos }:
             {puedeEditar && (
               <>
                 <Switch checked={c.activo} onCheckedChange={() => alternar(c)} />
-                <Button size="sm" onClick={() => abrirEditar(c)}><Pencil className="size-4" /> Editar</Button>
+                <Button size="icon" variant="ghost" className="size-8" onClick={() => abrirEditar(c)} aria-label={`Editar ${c.nombre}`} title="Editar">
+                  <Pencil className="size-4" />
+                </Button>
               </>
             )}
           </div>

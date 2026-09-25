@@ -1,6 +1,5 @@
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { Encabezado } from '@/components/shell/encabezado'
 import { CargosCliente } from './cargos-cliente'
 import type { FuncionesCargo } from '@/lib/contrato-variables'
 
@@ -22,10 +21,6 @@ export default async function CargosPage() {
 
   return (
     <div className="max-w-6xl">
-      <Encabezado
-        titulo="Cargos"
-        descripcion="Crea y edita los cargos de la empresa. El rol por defecto se asigna al usuario cuando se crea un colaborador con ese cargo. Al editar un cargo, el cambio se refleja en quienes lo tienen asignado."
-      />
       <CargosCliente
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
