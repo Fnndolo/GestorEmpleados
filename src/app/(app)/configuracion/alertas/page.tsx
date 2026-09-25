@@ -1,6 +1,5 @@
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { Encabezado } from '@/components/shell/encabezado'
 import { ReglasAlertaCliente } from './reglas-cliente'
 
 export const metadata = { title: 'Reglas de alerta · Configuración' }
@@ -14,10 +13,6 @@ export default async function AlertasConfigPage() {
 
   return (
     <div className="max-w-5xl">
-      <Encabezado
-        titulo="Reglas de alerta"
-        descripcion="Con cuánta anticipación avisa cada tipo de vencimiento. La regla global aplica a todo lo que no tenga la suya propia."
-      />
       <ReglasAlertaCliente
         reglas={reglas.map((r) => ({
           id: r.id, clave: r.clave, descripcion: r.descripcion,
