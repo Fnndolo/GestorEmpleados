@@ -171,8 +171,7 @@ export function PanelTramites({
     activo && aplica('incapacidades') && {
       clave: 'incapacidad', icono: HeartPulse,
       titulo: 'Subir incapacidad', corto: 'Incapacidad', desc: 'RRHH la valida y registra',
-      // En desarrollo: el trámite (sol: 'INCAPACIDAD') sigue intacto; solo se desvía el acceso.
-      href: '/autoservicio/en-desarrollo?titulo=Subir%20incapacidad',
+      sol: 'INCAPACIDAD' as TipoSol,
     },
     // Se radica y se espera el pago: es una solicitud de plata, no una consulta.
     {

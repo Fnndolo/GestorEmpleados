@@ -25,10 +25,11 @@ import { cn } from '@/lib/utils'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import {
-  registrarVacaciones, registrarIncapacidad, registrarLicencia, registrarPermiso,
+  registrarVacaciones, registrarLicencia, registrarPermiso,
   registrarBonificacion, marcarBonificacionPagada,
   verificarComprobantePermiso, cambiarExigenciaComprobante,
 } from './acciones'
+import { ListaIncapacidades, DialogIncapacidad, type IncapacidadItem } from './incapacidades'
 
 // Permisos primero: es la novedad que más se pide (y la pestaña por defecto).
 const TABS = [
@@ -36,10 +37,6 @@ const TABS = [
   { v: 'licencias', l: 'Licencias' }, { v: 'bonificaciones', l: 'Bonificaciones' },
 ]
 
-const TIPO_INCAP: Record<string, string> = {
-  ENFERMEDAD_GENERAL: 'Enfermedad general', ACCIDENTE_TRABAJO: 'Accidente de trabajo',
-  ENFERMEDAD_LABORAL: 'Enfermedad laboral', LICENCIA_MATERNIDAD: 'Lic. maternidad', LICENCIA_PATERNIDAD: 'Lic. paternidad',
-}
 const TIPO_LIC: Record<string, string> = {
   MATERNIDAD: 'Maternidad', PATERNIDAD: 'Paternidad', LUTO: 'Luto', CALAMIDAD: 'Calamidad', MATRIMONIO: 'Matrimonio',
   ESTUDIO: 'Estudio', NO_REMUNERADA: 'No remunerada', DIA_DE_LA_FAMILIA: 'Día de la familia',
@@ -69,7 +66,7 @@ type ComprobanteNov = {
 
 type Datos = {
   vacaciones: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; fechaInicio: string; fechaFin: string; dias: number; estado: string; desdeAutoservicio: boolean; soporteDocId: string | null }[]
-  incapacidades: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; tipo: string; fechaInicio: string; fechaFin: string; dias: number; desdeAutoservicio: boolean; soporteDocId: string | null }[]
+  incapacidades: IncapacidadItem[]
   licencias: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; tipo: string; fechaInicio: string; fechaFin: string; dias: number; remunerada: boolean }[]
   permisos: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; fecha: string; diaCompleto: boolean; horas: number | null; motivo: string; desdeAutoservicio: boolean; soporteDocId: string | null; comprobante: ComprobanteNov }[]
   bonificaciones: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; concepto: string; valor: number; constitutivoSalario: boolean; estadoPago: string; fechaPago: string | null }[]
@@ -141,7 +138,7 @@ export function BuscadorNovedades({ tab, busqueda }: { tab: string; busqueda: st
   )
 }
 
-export function NovedadesCliente({ tab, busqueda = '', datos, puedeCrear, puedeEditar }: { tab: string; busqueda?: string; datos: Datos; puedeCrear: boolean; puedeEditar: boolean }) {
+export function NovedadesCliente({ tab, busqueda = '', datos, puedeCrear, puedeEditar, puedeEliminar = false }: { tab: string; busqueda?: string; datos: Datos; puedeCrear: boolean; puedeEditar: boolean; puedeEliminar?: boolean }) {
   const [dialogo, setDialogo] = useState<string | null>(null)
 
   return (
@@ -177,25 +174,7 @@ export function NovedadesCliente({ tab, busqueda = '', datos, puedeCrear, puedeE
           }))}
         />
       )}
-      {tab === 'incapacidades' && (
-        <Lista
-          chip={CHIP_NOV.incapacidades}
-          items={datos.incapacidades.map((x) => ({
-            id: x.id,
-            titulo: x.colaborador,
-            avatar: { colaboradorId: x.colaboradorId, fotoUrl: x.fotoUrl, nombre: x.colaborador },
-            sub: `${TIPO_INCAP[x.tipo]} · ${formatFechaCorta(new Date(x.fechaInicio))} a ${formatFechaCorta(new Date(x.fechaFin))} · ${x.dias} días`,
-            campos: [
-              { label: 'Tipo', valor: TIPO_INCAP[x.tipo] ?? x.tipo },
-              { label: 'Desde', valor: formatFechaCorta(new Date(x.fechaInicio)) },
-              { label: 'Hasta', valor: formatFechaCorta(new Date(x.fechaFin)) },
-              { label: 'Días', valor: String(x.dias) },
-              { label: 'Origen', valor: x.desdeAutoservicio ? 'Autoservicio' : 'Registro de RRHH' },
-            ],
-            derecha: <OrigenSoporte autoservicio={x.desdeAutoservicio} docId={x.soporteDocId} />,
-          }))}
-        />
-      )}
+      {tab === 'incapacidades' && <ListaIncapacidades items={datos.incapacidades} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />}
       {tab === 'licencias' && (
         <Lista
           chip={CHIP_NOV.licencias}
@@ -241,7 +220,8 @@ export function NovedadesCliente({ tab, busqueda = '', datos, puedeCrear, puedeE
         />
       )}
 
-      {dialogo && <DialogRegistro tab={dialogo} onClose={() => setDialogo(null)} />}
+      {dialogo === 'incapacidades' && <DialogIncapacidad onClose={() => setDialogo(null)} />}
+      {dialogo && dialogo !== 'incapacidades' && <DialogRegistro tab={dialogo} onClose={() => setDialogo(null)} />}
     </div>
   )
 }
@@ -421,7 +401,7 @@ function DialogRegistro({ tab, onClose }: { tab: string; onClose: () => void }) 
   const [colaboradorId, setColaboradorId] = useState('')
   const [g, setG] = useState(false)
   const [campos, setCampos] = useState<Record<string, string | boolean>>({
-    tipo: tab === 'incapacidades' ? 'ENFERMEDAD_GENERAL' : tab === 'licencias' ? 'NO_REMUNERADA' : '',
+    tipo: tab === 'licencias' ? 'NO_REMUNERADA' : '',
     remunerada: true, remunerado: true, diaCompleto: true, constitutivoSalario: false, esProrroga: false, exigirComprobante: true,
   })
   const set = (k: string, v: string | boolean) => setCampos((p) => ({ ...p, [k]: v }))
@@ -431,7 +411,6 @@ function DialogRegistro({ tab, onClose }: { tab: string; onClose: () => void }) 
     setG(true)
     let res
     if (tab === 'vacaciones') res = await registrarVacaciones({ colaboradorId, fechaInicio: campos.fechaInicio as string, fechaFin: campos.fechaFin as string, observaciones: campos.observaciones as string })
-    else if (tab === 'incapacidades') res = await registrarIncapacidad({ colaboradorId, tipo: campos.tipo as 'ENFERMEDAD_GENERAL', fechaInicio: campos.fechaInicio as string, fechaFin: campos.fechaFin as string, diagnosticoCie10: campos.diagnosticoCie10 as string, entidad: campos.entidad as string, esProrroga: campos.esProrroga as boolean, observaciones: campos.observaciones as string })
     else if (tab === 'licencias') res = await registrarLicencia({ colaboradorId, tipo: campos.tipo as 'NO_REMUNERADA', fechaInicio: campos.fechaInicio as string, fechaFin: campos.fechaFin as string, remunerada: campos.remunerada as boolean, observaciones: campos.observaciones as string })
     else if (tab === 'permisos') res = await registrarPermiso({ colaboradorId, fecha: campos.fecha as string, diaCompleto: campos.diaCompleto as boolean, horas: campos.horas ? Number(campos.horas) : undefined, motivo: campos.motivo as string, remunerado: campos.remunerado as boolean, exigirComprobante: campos.exigirComprobante as boolean })
     else res = await registrarBonificacion({ colaboradorId, concepto: campos.concepto as string, valor: Number(campos.valor || 0), constitutivoSalario: campos.constitutivoSalario as boolean, observaciones: campos.observaciones as string })
@@ -439,7 +418,7 @@ function DialogRegistro({ tab, onClose }: { tab: string; onClose: () => void }) 
     if (res?.ok) { toast.success('Novedad registrada.'); onClose(); router.refresh() } else toast.error(res?.error ?? 'Error')
   }
 
-  const titulos: Record<string, string> = { vacaciones: 'Registrar vacaciones', incapacidades: 'Registrar incapacidad', licencias: 'Registrar licencia', permisos: 'Registrar permiso', bonificaciones: 'Registrar bonificación' }
+  const titulos: Record<string, string> = { vacaciones: 'Registrar vacaciones', licencias: 'Registrar licencia', permisos: 'Registrar permiso', bonificaciones: 'Registrar bonificación' }
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -448,14 +427,11 @@ function DialogRegistro({ tab, onClose }: { tab: string; onClose: () => void }) 
         <div className="space-y-4">
           <div className="space-y-1.5"><Label>Colaborador</Label><SelectorColaborador value={colaboradorId} onChange={(id) => setColaboradorId(id)} /></div>
 
-          {tab === 'incapacidades' && (
-            <Sel label="Tipo" value={campos.tipo as string} onChange={(v) => set('tipo', v)} opciones={Object.entries(TIPO_INCAP)} />
-          )}
           {tab === 'licencias' && (
             <Sel label="Tipo" value={campos.tipo as string} onChange={(v) => set('tipo', v)} opciones={Object.entries(TIPO_LIC)} />
           )}
 
-          {(tab === 'vacaciones' || tab === 'incapacidades' || tab === 'licencias') && (
+          {(tab === 'vacaciones' || tab === 'licencias') && (
             <>
               <div className="grid grid-cols-2 gap-3">
                 <Campo label="Fecha inicio">
@@ -481,13 +457,6 @@ function DialogRegistro({ tab, onClose }: { tab: string; onClose: () => void }) 
                 <Checkbox checked={campos.exigirComprobante as boolean} onCheckedChange={(v) => set('exigirComprobante', Boolean(v))} />
                 Pedir comprobante de asistencia
               </label>
-            </>
-          )}
-          {tab === 'incapacidades' && (
-            <>
-              <Campo label="Diagnóstico CIE-10 (opcional)"><Input onChange={(e) => set('diagnosticoCie10', e.target.value)} /></Campo>
-              <Campo label="Entidad (EPS/ARL)"><Input onChange={(e) => set('entidad', e.target.value)} /></Campo>
-              <label className="flex items-center gap-2 text-sm"><Checkbox checked={campos.esProrroga as boolean} onCheckedChange={(v) => set('esProrroga', Boolean(v))} /> Es prórroga</label>
             </>
           )}
           {tab === 'licencias' && (

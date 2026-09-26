@@ -251,7 +251,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
               <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expandida && 'rotate-180')} />
             </button>
 
-            {/* Licencia devuelta por soporte insuficiente: se corrige aquí mismo, sin crear otra solicitud. */}
+            {/* Licencia o incapacidad devuelta por soporte insuficiente: se corrige aquí mismo, sin crear otra solicitud. */}
             {s.estado === 'DEVUELTA' && (
               <div className="mx-3 mb-3 space-y-2.5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
                 <div className="flex items-start gap-2">
@@ -261,7 +261,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                     <p className="mt-0.5 text-muted-foreground">
                       {s.resultado?.replace(/^Soporte no validado:\s*/, '') ?? 'Adjunta el soporte que acredite el hecho.'}
                     </p>
-                    <p className="mt-0.5 text-muted-foreground">Tu licencia sigue abierta: sube el soporte corregido y vuelve a validación.</p>
+                    <p className="mt-0.5 text-muted-foreground">Sigue abierta: sube el soporte corregido y vuelve a validación.</p>
                   </div>
                 </div>
                 <input

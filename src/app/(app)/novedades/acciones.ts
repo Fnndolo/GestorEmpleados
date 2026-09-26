@@ -20,6 +20,8 @@ import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { fechaBreve, rangoBreve, dias as diasTexto } from '@/lib/notificaciones/texto'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { comprobanteExigido, avisarComprobanteRequerido, avisarComprobanteRevisado } from '@/server/comprobante-permiso'
+import { validarFechasIncapacidad, exigirNoLiquidadaEnNominaCerrada, guardarSoporteIncapacidad } from '@/server/incapacidades'
+import { eliminarDocumento } from '@/server/documentos'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
 
@@ -42,20 +44,87 @@ export async function diasHabilesRango(ini: string, fin: string): Promise<number
   return n
 }
 
+/** Soporte que adjunta Talento Humano al registrar o editar (PDF o imagen, como data URI). */
+const soporteSchema = z.object({ dataUri: z.string().startsWith('data:'), nombre: z.string().max(200) }).optional()
+
 export const registrarIncapacidad = accion(
-  { modulo: 'novedades', accion: 'CREAR', schema: incapacidadSchema },
+  { modulo: 'novedades', accion: 'CREAR', schema: incapacidadSchema.extend({ soporte: soporteSchema }) },
   async (d, usuario) => {
     await exigirColaboradorEnAlcance(usuario, d.colaboradorId, 'novedades', 'CREAR')
-    if (parseFechaISO(d.fechaFin)! < parseFechaISO(d.fechaInicio)!) throw new ErrorNegocio('La fecha de fin no puede ser anterior al inicio.')
-    await dbAuditado.incapacidad.create({
+    await exigirVinculoLaboral(d.colaboradorId, 'incapacidad')
+    const inicio = parseFechaISO(d.fechaInicio)!, fin = parseFechaISO(d.fechaFin)!
+    await validarFechasIncapacidad({ colaboradorId: d.colaboradorId, inicio, fin })
+    const inc = await dbAuditado.incapacidad.create({
       data: {
-        colaboradorId: d.colaboradorId, tipo: d.tipo,
-        fechaInicio: parseFechaISO(d.fechaInicio)!, fechaFin: parseFechaISO(d.fechaFin)!,
+        colaboradorId: d.colaboradorId, tipo: d.tipo, fechaInicio: inicio, fechaFin: fin,
         dias: diasCalendario(d.fechaInicio, d.fechaFin),
         diagnosticoCie10: v(d.diagnosticoCie10), entidad: v(d.entidad),
         esProrroga: d.esProrroga, observaciones: v(d.observaciones),
       },
     })
+    if (d.soporte) {
+      await guardarSoporteIncapacidad({ incapacidadId: inc.id, colaboradorId: d.colaboradorId, dataUri: d.soporte.dataUri, nombreArchivo: d.soporte.nombre, usuarioId: usuario.id })
+    }
+    // El colaborador se entera de que quedó registrada (y de sus fechas).
+    const uid = await usuarioDeColaborador(d.colaboradorId)
+    if (uid) {
+      await avisar(uid, {
+        evento: 'incapacidad_reportada',
+        titulo: 'Talento Humano registró tu incapacidad',
+        mensaje: `${fechaBreve(inicio)} a ${fechaBreve(fin)} · ${diasTexto(inc.dias)}`,
+        enlace: '/autoservicio',
+      }).catch(() => {})
+    }
+    revalidatePath('/novedades')
+  },
+)
+
+/**
+ * Corregir una incapacidad (fechas, tipo, datos) o adjuntarle el soporte. No se
+ * cambia la persona, y no se toca si ya se pagó en una nómina cerrada.
+ */
+export const editarIncapacidad = accion(
+  { modulo: 'novedades', accion: 'EDITAR', schema: incapacidadSchema.omit({ colaboradorId: true }).extend({ id: z.uuid(), soporte: soporteSchema }) },
+  async (d, usuario) => {
+    const actual = await prisma.incapacidad.findUniqueOrThrow({ where: { id: d.id } })
+    await exigirColaboradorEnAlcance(usuario, actual.colaboradorId, 'novedades', 'EDITAR')
+    const inicio = parseFechaISO(d.fechaInicio)!, fin = parseFechaISO(d.fechaFin)!
+    const cambiaLoPagado = actual.tipo !== d.tipo || actual.fechaInicio.getTime() !== inicio.getTime() || actual.fechaFin.getTime() !== fin.getTime()
+    if (cambiaLoPagado) {
+      await exigirNoLiquidadaEnNominaCerrada(actual)
+      await validarFechasIncapacidad({ colaboradorId: actual.colaboradorId, inicio, fin, excluirId: actual.id })
+    }
+    await dbAuditado.incapacidad.update({
+      where: { id: d.id },
+      data: {
+        tipo: d.tipo, fechaInicio: inicio, fechaFin: fin, dias: diasCalendario(d.fechaInicio, d.fechaFin),
+        diagnosticoCie10: v(d.diagnosticoCie10), entidad: v(d.entidad), esProrroga: d.esProrroga, observaciones: v(d.observaciones),
+      },
+    })
+    if (d.soporte) {
+      await guardarSoporteIncapacidad({ incapacidadId: actual.id, colaboradorId: actual.colaboradorId, dataUri: d.soporte.dataUri, nombreArchivo: d.soporte.nombre, usuarioId: usuario.id })
+    }
+    revalidatePath('/novedades')
+  },
+)
+
+/**
+ * Borrar una incapacidad mal registrada, con el motivo (queda en auditoría). Si
+ * venía de autoservicio, la solicitud queda anulada con ese motivo y el
+ * colaborador lo ve en su actividad.
+ */
+export const eliminarIncapacidad = accion(
+  { modulo: 'novedades', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: z.string().trim().min(5, 'Explica por qué se borra.').max(300) }) },
+  async (d, usuario) => {
+    const inc = await prisma.incapacidad.findUniqueOrThrow({ where: { id: d.id } })
+    await exigirColaboradorEnAlcance(usuario, inc.colaboradorId, 'novedades', 'ELIMINAR')
+    await exigirNoLiquidadaEnNominaCerrada(inc)
+    const soportes = await prisma.documento.findMany({ where: { entidadTipo: 'Incapacidad', entidadId: inc.id }, select: { id: true } })
+    await dbAuditado.incapacidad.delete({ where: { id: inc.id } })
+    for (const doc of soportes) await eliminarDocumento(doc.id).catch(() => {})
+    if (inc.solicitudId) {
+      await dbAuditado.solicitud.update({ where: { id: inc.solicitudId }, data: { estado: 'CANCELADA', resultado: `Anulada por Talento Humano: ${d.motivo}` } })
+    }
     revalidatePath('/novedades')
   },
 )
@@ -81,11 +150,12 @@ export const registrarLicencia = accion(
  * relación laboral. Además de ser inaplicable, dejar el registro sería prueba
  * escrita de subordinación en un eventual proceso por contrato realidad.
  */
-async function exigirVinculoLaboral(colaboradorId: string, novedad: 'vacaciones' | 'permiso'): Promise<void> {
+async function exigirVinculoLaboral(colaboradorId: string, novedad: 'vacaciones' | 'permiso' | 'incapacidad'): Promise<void> {
   const c = await prisma.colaborador.findUnique({ where: { id: colaboradorId }, select: { tipoVinculo: true } })
   if (esOps(c?.tipoVinculo)) {
+    const que = { vacaciones: 'vacaciones', permiso: 'permisos', incapacidad: 'incapacidades' }[novedad]
     throw new ErrorNegocio(
-      `No se pueden registrar ${novedad === 'vacaciones' ? 'vacaciones' : 'permisos'} a un contratista de prestación de servicios: no hay relación laboral.`,
+      `No se pueden registrar ${que} a un contratista de prestación de servicios: no hay relación laboral${novedad === 'incapacidad' ? ' (la tramita él con su EPS o ARL)' : ''}.`,
     )
   }
 }

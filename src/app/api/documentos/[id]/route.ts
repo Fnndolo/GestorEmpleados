@@ -4,7 +4,7 @@ import { auth } from '@/lib/auth'
 import { obtenerSesion, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { leerArchivo } from '@/server/storage'
-import { puedeVerNivel } from '@/server/documentos'
+import { puedeVerNivel, esDocumentoPropio } from '@/server/documentos'
 import { auditar } from '@/lib/auditoria'
 import { ejecutarConContexto } from '@/server/contexto'
 
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!usuario) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     // El colaborador siempre puede acceder a sus propios documentos (habeas data): desprendibles,
     // certificaciones, etc. Para el resto se valida el nivel de acceso del documento.
-    const esPropio = doc.entidadTipo === 'Colaborador' && usuario.colaboradorId != null && doc.entidadId === usuario.colaboradorId
+    const esPropio = await esDocumentoPropio(usuario, doc)
     if (!esPropio && !puedeVerNivel(usuario, doc.nivelAcceso)) {
       return NextResponse.json({ error: 'Sin permiso para este documento' }, { status: 403 })
     }
@@ -97,7 +97,7 @@ export async function HEAD(_req: NextRequest, { params }: { params: Promise<{ id
   if (!esGeneral) {
     const usuario = await obtenerSesion()
     if (!usuario) return new NextResponse(null, { status: 401 })
-    const esPropio = doc.entidadTipo === 'Colaborador' && usuario.colaboradorId != null && doc.entidadId === usuario.colaboradorId
+    const esPropio = await esDocumentoPropio(usuario, doc)
     if (!esPropio && !puedeVerNivel(usuario, doc.nivelAcceso)) return new NextResponse(null, { status: 403 })
     if (doc.entidadTipo === 'AcuerdoEvaluacion' && !tienePermiso(usuario, 'contratos', 'VER')) {
       return new NextResponse(null, { status: 403 })

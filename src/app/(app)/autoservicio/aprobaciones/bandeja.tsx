@@ -106,7 +106,7 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
     setProcesando(pasoId)
     const res = await resolverPaso({ pasoId, aprobar: true })
     setProcesando(null)
-    if (res.ok) { toast.success('Licencia registrada.'); router.refresh() } else toast.error(res.error)
+    if (res.ok) { toast.success('Registrada.'); router.refresh() } else toast.error(res.error)
   }
 
   /** Licencia de ley cuyo soporte no acredita el hecho: se devuelve con motivo escrito. */
@@ -300,7 +300,7 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
               <div className="mt-3 space-y-3 rounded-lg border p-3">
                 <p className="text-sm font-medium">Devolver por soporte insuficiente</p>
                 <p className="text-xs text-muted-foreground">
-                  No estás negando la licencia —es un derecho—, estás pidiendo el soporte que la acredite. El colaborador podrá volver a reportarla.
+                  Vuelve al colaborador para que corrija el soporte; la misma solicitud regresa aquí.
                 </p>
                 <Textarea rows={2} placeholder="¿Qué falta o qué no acredita el soporte?" value={comentario} onChange={(e) => setComentario(e.target.value)} />
                 <div className="flex justify-end gap-2">

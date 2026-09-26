@@ -1,5 +1,6 @@
 'use server'
 
+import { validarFechasIncapacidad } from '@/server/incapacidades'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
@@ -200,6 +201,19 @@ export const crearSolicitud = accion(
       const calculoHorasExtra = await calcularLimitesHorasExtra(colaboradorId, d.fechaInicio, horas)
       datosSolicitud = { ...d, horas, posterior, calculoHorasExtra }
     }
+    if (d.tipo === 'INCAPACIDAD') {
+      if (!d.fechaInicio || !d.fechaFin) throw new ErrorNegocio('Indica desde y hasta cuándo es la incapacidad.')
+      await validarFechasIncapacidad({ colaboradorId, inicio: parseFechaISO(d.fechaInicio)!, fin: parseFechaISO(d.fechaFin)! })
+      const enTramite = await prisma.solicitud.findMany({
+        where: { colaboradorId, tipo: 'INCAPACIDAD', estado: { in: ['EN_APROBACION', 'DEVUELTA'] } },
+        select: { datos: true },
+      })
+      const cruza = enTramite.some((x) => {
+        const o = x.datos as { fechaInicio?: string; fechaFin?: string }
+        return !!o.fechaInicio && !!o.fechaFin && o.fechaInicio <= d.fechaFin! && o.fechaFin >= d.fechaInicio!
+      })
+      if (cruza) throw new ErrorNegocio('Ya enviaste una incapacidad que se cruza con esas fechas y está en trámite.')
+    }
     if (d.tipo === 'VACACIONES') {
       if (!d.fechaInicio || !d.fechaFin) throw new ErrorNegocio('Indica la fecha de inicio y fin de tus vacaciones.')
       if (d.fechaFin < d.fechaInicio) throw new ErrorNegocio('La fecha de fin no puede ser anterior a la de inicio.')
@@ -330,7 +344,14 @@ async function avisarAprobadoresDelPaso(solicitudId: string, orden: number, modo
   const datosSol = solicitud.datos as Record<string, string>
   const esDerechoLic = solicitud.tipo === 'LICENCIA' && !!datosSol.licenciaTipo && esDerecho(datosSol.licenciaTipo)
   const detalle = resumenSolicitud(solicitud.tipo, datosSol)
-  const opts = esDerechoLic
+  const opts = solicitud.tipo === 'INCAPACIDAD'
+    ? {
+        titulo: modo === 'cambio' ? `${quien} corrigió el soporte de su incapacidad` : `${quien} reportó una incapacidad`,
+        mensaje: `${detalle} · Valida el soporte y regístrala.`,
+        enlace: '/autoservicio/aprobaciones', llamadoAccion: 'Validar el soporte', evento: 'solicitud_creada',
+        colaboradorId: solicitud.colaboradorId,
+      }
+    : esDerechoLic
     ? {
         titulo: `${quien} reportó licencia de ${defLicencia(datosSol.licenciaTipo).label.toLowerCase()}`,
         mensaje: `${detalle} · Es de ley: valida el soporte y regístrala.`,
@@ -410,11 +431,20 @@ export const resolverPaso = accion(
     // único que puede fallar es que el soporte no acredite el hecho, y eso hay que
     // dejarlo escrito y auditado.
     const datosPaso = paso.solicitud.datos as Record<string, string>
-    const licDerecho = paso.solicitud.tipo === 'LICENCIA' && !!datosPaso.licenciaTipo && esDerecho(datosPaso.licenciaTipo)
+    const esIncapacidad = paso.solicitud.tipo === 'INCAPACIDAD'
+    // La incapacidad la expide la EPS o la ARL: tampoco se "niega"; se valida el
+    // soporte o se devuelve para que lo corrija, igual que la licencia de ley.
+    const licDerecho = esIncapacidad || (paso.solicitud.tipo === 'LICENCIA' && !!datosPaso.licenciaTipo && esDerecho(datosPaso.licenciaTipo))
     if (licDerecho && !d.aprobar && !d.comentario?.trim()) {
       throw new ErrorNegocio(
-        'Una licencia de ley no se niega por decisión. Si el soporte no acredita el hecho, explica por escrito qué falta.',
+        esIncapacidad
+          ? 'Explica por escrito qué le falta al soporte de la incapacidad: se le devuelve para que lo corrija.'
+          : 'Una licencia de ley no se niega por decisión. Si el soporte no acredita el hecho, explica por escrito qué falta.',
       )
+    }
+    if (esIncapacidad && d.aprobar) {
+      const soportes = await prisma.documento.count({ where: { entidadTipo: 'Solicitud', entidadId: paso.solicitudId } })
+      if (soportes === 0) throw new ErrorNegocio('Esta incapacidad no tiene soporte: devuélvela para que lo adjunte.')
     }
 
     // Si propone otras fechas, actualizar la solicitud y avisar al solicitante del cambio
@@ -447,8 +477,8 @@ export const resolverPaso = accion(
       })
       await avisarSolicitante(
         paso.solicitudId,
-        'Tu licencia necesita soporte',
-        `${d.comentario} · No se niega: corrige el soporte desde tu autoservicio y la misma solicitud sigue.`,
+        esIncapacidad ? 'Tu incapacidad necesita soporte' : 'Tu licencia necesita soporte',
+        `${d.comentario} · Corrige el soporte desde tu autoservicio y la misma solicitud sigue.`,
       )
       revalidatePath('/autoservicio')
       revalidatePath('/autoservicio/aprobaciones')
@@ -602,6 +632,7 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
       mensaje: `${fechaBreve(datos.fechaInicio)} · ${datos.horaInicio}–${datos.horaFin} · ${horas} h`,
     }
   } else if (s.tipo === 'INCAPACIDAD' && datos.fechaInicio && datos.fechaFin) {
+    await validarFechasIncapacidad({ colaboradorId: s.colaboradorId, inicio: parseFechaISO(datos.fechaInicio)!, fin: parseFechaISO(datos.fechaFin)! })
     const dias = diasCalendario(datos.fechaInicio, datos.fechaFin)
     await prisma.incapacidad.create({
       data: {
@@ -920,7 +951,7 @@ export const corregirMiSoporte = accion(
     })
 
     const paso = s.pasos.find((p) => p.estado === 'PENDIENTE')
-    if (paso) await avisarAprobadoresDelPaso(s.id, paso.orden)
+    if (paso) await avisarAprobadoresDelPaso(s.id, paso.orden, 'cambio')
     revalidatePath('/autoservicio')
     revalidatePath('/autoservicio/aprobaciones')
     return { ok: true }

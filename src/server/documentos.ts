@@ -22,6 +22,29 @@ export function puedeVerNivel(usuario: UsuarioSesion, nivel: string): boolean {
   return tienePermiso(usuario, regla.modulo as Parameters<typeof tienePermiso>[1], 'VER')
 }
 
+async function esSolicitudDeIncapacidad(solicitudId: string): Promise<boolean> {
+  const s = await prisma.solicitud.findUnique({ where: { id: solicitudId }, select: { tipo: true } })
+  return s?.tipo === 'INCAPACIDAD'
+}
+
+/**
+ * ¿El documento es del propio usuario? (habeas data: siempre puede ver lo suyo,
+ * aunque sea de nivel restringido). Su ficha, el soporte de su solicitud o de
+ * su incapacidad.
+ */
+export async function esDocumentoPropio(usuario: UsuarioSesion, doc: { entidadTipo: string; entidadId: string }): Promise<boolean> {
+  const propio = usuario.colaboradorId
+  if (!propio) return false
+  if (doc.entidadTipo === 'Colaborador') return doc.entidadId === propio
+  if (doc.entidadTipo === 'Solicitud') {
+    return (await prisma.solicitud.findUnique({ where: { id: doc.entidadId }, select: { colaboradorId: true } }))?.colaboradorId === propio
+  }
+  if (doc.entidadTipo === 'Incapacidad') {
+    return (await prisma.incapacidad.findUnique({ where: { id: doc.entidadId }, select: { colaboradorId: true } }))?.colaboradorId === propio
+  }
+  return false
+}
+
 type DatosSubida = {
   entidadTipo: string
   entidadId: string
@@ -46,6 +69,12 @@ export async function guardarDocumento(
   // El certificado de un examen médico es dato de salud (Ley 1581): acceso
   // restringido aunque no se haya elegido un tipo de documento con ese nivel.
   if (datos.entidadTipo === 'ExamenMedico' && nivelAcceso === 'GENERAL') nivelAcceso = 'SST_MEDICO'
+  // Lo mismo el soporte de una incapacidad (certificado médico), lo suba Talento
+  // Humano o el colaborador con su solicitud: solo lo abre quien tiene el
+  // permiso de datos de salud, y el propio colaborador.
+  if (nivelAcceso === 'GENERAL' && (datos.entidadTipo === 'Incapacidad' || (datos.entidadTipo === 'Solicitud' && await esSolicitudDeIncapacidad(datos.entidadId)))) {
+    nivelAcceso = 'SST_MEDICO'
+  }
 
   const prefijo = `${datos.entidadTipo.toLowerCase()}/${datos.entidadId}`
   const subido = await subirArchivo(prefijo, archivo.nombre, archivo.contenido, archivo.mimeType)

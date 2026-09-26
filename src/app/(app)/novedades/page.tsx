@@ -17,6 +17,10 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
   const { tab = 'permisos', q = '' } = await searchParams
   const puedeCrear = tienePermiso(usuario, 'novedades', 'CREAR')
   const puedeEditar = tienePermiso(usuario, 'novedades', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'novedades', 'ELIMINAR')
+  // El soporte de una incapacidad es dato de salud (Ley 1581): el enlace solo
+  // se le muestra a quien tiene ese permiso (un jefe ve la incapacidad, no el certificado).
+  const puedeVerSalud = tienePermiso(usuario, 'colaboradores_salud', 'VER')
   // Alcance del permiso de Novedades (un jefe: solo su equipo; sedes asignadas;
   // toda la empresa) + la sede activa + la búsqueda. Antes solo se filtraba por
   // sede, y un jefe veía las novedades de toda la empresa (incapacidades incluidas).
@@ -69,6 +73,17 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
   for (const d of docsComprobante) if (!comprobantePorPermiso.has(d.entidadId)) comprobantePorPermiso.set(d.entidadId, d.id)
   const hoy = hoyBogota()
 
+  // Soportes que adjuntó Talento Humano al registrar o editar (entidad "Incapacidad").
+  const docsIncapacidad = incapacidades.length
+    ? await prisma.documento.findMany({
+        where: { entidadTipo: 'Incapacidad', entidadId: { in: incapacidades.map((x) => x.id) } },
+        orderBy: { creadoEn: 'desc' },
+        select: { id: true, entidadId: true },
+      })
+    : []
+  const soporteIncapacidad = new Map<string, string>()
+  for (const d of docsIncapacidad) if (!soporteIncapacidad.has(d.entidadId)) soporteIncapacidad.set(d.entidadId, d.id)
+
   const nombre = (c: { nombres: string; apellidos: string }) => `${c.nombres} ${c.apellidos}`
 
   return (
@@ -103,9 +118,18 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
         busqueda={q}
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
+        puedeEliminar={puedeEliminar}
         datos={{
           vacaciones: vacaciones.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true), fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: Number(x.diasHabiles), estado: x.estado, desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId) })),
-          incapacidades: incapacidades.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true), tipo: x.tipo, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: x.dias, desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId) })),
+          incapacidades: incapacidades.map((x) => {
+            const doc = soporteIncapacidad.get(x.id) ?? soporte(x.solicitudId)
+            return {
+              id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true),
+              tipo: x.tipo, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: x.dias,
+              entidad: x.entidad, diagnosticoCie10: puedeVerSalud ? x.diagnosticoCie10 : null, esProrroga: x.esProrroga, observaciones: x.observaciones,
+              desdeAutoservicio: !!x.solicitudId, soporteDocId: puedeVerSalud ? doc : null, conSoporte: !!doc,
+            }
+          }),
           licencias: licencias.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true), tipo: x.tipo, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: x.dias, remunerada: x.remunerada })),
           permisos: permisos.map((x) => ({
             id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true),
