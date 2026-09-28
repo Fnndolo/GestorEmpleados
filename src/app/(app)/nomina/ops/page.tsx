@@ -3,6 +3,7 @@ import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Pill, AvatarColaborador, type PillTone } from '@/components/ui-kit'
 import { Receipt, Landmark, Paperclip, ShieldCheck, ShieldAlert, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -170,9 +171,9 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
                         <span className="text-sm font-semibold tabular-nums">{fmtCOP(f.valor)}</span>
                         <div className="flex items-center gap-1.5">
                           {f.documentoId && (
-                            <a href={`/api/documentos/${f.documentoId}`} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary" title="Ver PDF de la cuenta de cobro">
-                              <Paperclip className="size-3.5" />
-                            </a>
+                            <VisorPdf documentoId={f.documentoId} titulo="Cuenta de cobro" className="text-muted-foreground hover:text-primary">
+                              <Paperclip className="size-3.5" /><span className="sr-only">Ver la cuenta de cobro</span>
+                            </VisorPdf>
                           )}
                           {/* Seguridad social: solo aplica a contratistas OPS y es requisito legal para pagar */}
                           {f.esOps && (

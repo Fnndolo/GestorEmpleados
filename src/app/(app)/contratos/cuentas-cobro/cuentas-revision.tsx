@@ -5,8 +5,9 @@ import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { CircleCheck, CircleX, Download, ShieldAlert, ExternalLink } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { CircleCheck, CircleX, Eye, ShieldAlert, ExternalLink } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
@@ -53,7 +54,9 @@ export function CuentasRevision({ puedeAprobar, cuentas, plantillas }: {
               </div>
               <span className="text-sm font-medium hidden sm:block">{fmtCOP(c.valor)}</span>
               {c.documentoId && (
-                <Button variant="ghost" size="icon" asChild aria-label="PDF"><a href={`/api/documentos/${c.documentoId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a></Button>
+                <VisorPdf documentoId={c.documentoId} titulo={`Cuenta de cobro ${c.numero}`} className={buttonVariants({ variant: 'ghost', size: 'icon' })}>
+                  <Eye className="size-4" /><span className="sr-only">Ver la cuenta de cobro</span>
+                </VisorPdf>
               )}
               {puedeAprobar && (
                 <AdjuntarDocumento

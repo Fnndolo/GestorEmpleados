@@ -4,8 +4,9 @@ import { useState } from 'react'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { FileBadge, Download } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { FileBadge, Eye } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
@@ -64,9 +65,9 @@ export function BotonCertificacion({ colaboradorId }: { colaboradorId: string })
             <div className="space-y-1.5"><Label>Dirigida a (opcional)</Label><Input value={dirigidaA} onChange={(e) => setDirigidaA(e.target.value)} /></div>
             {docId && (
               <div className="space-y-2">
-                <Button className="w-full" asChild>
-                  <a href={`/api/documentos/${docId}`} target="_blank" rel="noreferrer"><Download className="size-4" /> Descargar PDF</a>
-                </Button>
+                <VisorPdf documentoId={docId} titulo="Certificación laboral" mimeType="application/pdf" className={buttonVariants() + ' w-full'}>
+                  <Eye className="size-4" /> Ver certificación
+                </VisorPdf>
                 {/* Si la plantilla no dice lo que este caso necesita, se sustituye
                     por el PDF propio sin esperar a que se programe la variante. */}
                 {certId && (

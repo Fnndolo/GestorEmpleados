@@ -2,11 +2,12 @@ import { notFound } from 'next/navigation'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Card, CardContent } from '@/components/ui/card'
 import { Pill } from '@/components/ui-kit'
 import { Progress } from '@/components/ui/progress'
-import { Check, Clock, Download } from 'lucide-react'
+import { Check, Clock, Eye } from 'lucide-react'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import { PazSalvoBoton } from './paz-salvo-boton'
@@ -62,9 +63,9 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
         {prestamo.estado === 'PAGADO' && (
           <div className="flex items-center gap-2 pt-1">
             {pazSalvo ? (
-              <Button size="sm" asChild>
-                <a href={`/api/documentos/${pazSalvo.id}`} target="_blank" rel="noreferrer"><Download className="size-4" /> Ver paz y salvo</a>
-              </Button>
+              <VisorPdf documentoId={pazSalvo.id} titulo="Paz y salvo del préstamo" className={buttonVariants({ size: 'sm' })}>
+                <Eye className="size-4" /> Ver paz y salvo
+              </VisorPdf>
             ) : puedeExportar ? (
               <PazSalvoBoton prestamoId={prestamo.id} />
             ) : null}

@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CircleCheck, CloudUpload, Download, Eye, FileText, Image as ImageIcon, MoreVertical, Paperclip, Pencil, Trash2, TriangleAlert } from 'lucide-react'
+import { CircleCheck, CloudUpload, Eye, FileText, Image as ImageIcon, MoreVertical, Paperclip, Pencil, Trash2, TriangleAlert } from 'lucide-react'
 import { borrarMiDocumento, editarMiDocumento } from '../documentos-acciones'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import {
@@ -47,7 +47,6 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, exigidos }: {
   const router = useRouter()
   // Suelto (botón general) o con el tipo ya elegido (fila de pendientes).
   const [abierto, setAbierto] = useState<false | { tipo: TipoDoc | null }>(false)
-  const [imagen, setImagen] = useState<DocItem | null>(null)
   const [filtro, setFiltro] = useState<string>('Todos')
   const [editando, setEditando] = useState<DocItem | null>(null)
   const [borrando, setBorrando] = useState<DocItem | null>(null)
@@ -104,9 +103,7 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, exigidos }: {
                       <span className={`block leading-tight ${pendiente && e.obligatorio ? 'font-medium' : ''}`}>{e.nombre}</span>
                       {e.docFecha && <span className="block truncate text-xs text-muted-foreground">{e.docFecha}{e.estado === 'vencido' ? ' · vencido' : ''}</span>}
                     </span>
-                    {doc && (doc.esImagen
-                      ? <Button type="button" size="sm" className="shrink-0" onClick={() => setImagen(doc)}><Eye className="size-3.5" /> Ver</Button>
-                      : <VisorPdf documentoId={doc.id} titulo={doc.nombre} className={buttonVariants({ size: 'sm' }) + ' shrink-0'}><Eye className="size-3.5" /> Ver</VisorPdf>)}
+                    {doc && <VisorPdf documentoId={doc.id} titulo={doc.nombre} mimeType={doc.esImagen ? 'image/*' : undefined} className={buttonVariants({ size: 'sm' }) + ' shrink-0'}><Eye className="size-3.5" /> Ver</VisorPdf>}
                     <Button size="sm" variant={pendiente ? 'default' : 'ghost'} className="shrink-0" onClick={() => setAbierto({ tipo: e })} aria-label={`${doc ? 'Reemplazar' : 'Subir'} ${e.nombre}`}>
                       <CloudUpload className="size-3.5" /> {e.estado === 'falta' ? 'Subir' : e.estado === 'vencido' ? 'Renovar' : 'Reemplazar'}
                     </Button>
@@ -169,12 +166,10 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, exigidos }: {
               </>
             )
             const clases = 'flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset'
-            // El documento se abre DENTRO de la app: PDF con el visor embebido
-            // (pdf.js en móvil) e imagen en un diálogo de ampliación.
-            const abrir = d.esImagen ? (
-              <button type="button" onClick={() => setImagen(d)} className={clases}>{info}</button>
-            ) : (
-              <VisorPdf documentoId={d.id} titulo={d.nombre} className={clases}>{info}</VisorPdf>
+            // El documento se abre DENTRO de la app, en el visor embebido: PDF
+            // (pdf.js en móvil) o foto, con acercar y descargar.
+            const abrir = (
+              <VisorPdf documentoId={d.id} titulo={d.nombre} mimeType={d.esImagen ? 'image/*' : undefined} className={clases}>{info}</VisorPdf>
             )
             return (
               <div key={d.id} className="flex items-center pr-1.5">
@@ -199,21 +194,6 @@ export function MisDocumentos({ colaboradorId, documentos, tipos, exigidos }: {
         </CardContent></Card>
       )}
 
-      {/* Ampliación de imágenes sin salir de la app, con opción de descargar. */}
-      <Dialog open={imagen !== null} onOpenChange={(o) => { if (!o) setImagen(null) }}>
-        <DialogContent className="max-w-[calc(100%-2.5rem)] sm:max-w-2xl">
-          <DialogHeader className="flex-row items-center gap-1 space-y-0 pr-8">
-            <DialogTitle className="min-w-0 flex-1 truncate text-base">{imagen?.nombre}</DialogTitle>
-            <Button type="button" size="icon" variant="ghost" className="size-7" asChild title="Descargar">
-              <a href={`/api/documentos/${imagen?.id}?descargar=1`}><Download className="size-4" /></a>
-            </Button>
-          </DialogHeader>
-          {imagen && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={`/api/documentos/${imagen.id}`} alt={imagen.nombre} className="max-h-[70vh] w-full rounded-lg object-contain" />
-          )}
-        </DialogContent>
-      </Dialog>
 
       {editando && (
         <DialogEditar

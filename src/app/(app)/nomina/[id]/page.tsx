@@ -6,8 +6,9 @@ import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Download, Users, Clock, HandCoins, Gift, BadgeDollarSign, Stethoscope, TriangleAlert, TrendingUp, TrendingDown, Wallet, type LucideIcon } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Eye, Users, Clock, HandCoins, Gift, BadgeDollarSign, Stethoscope, TriangleAlert, TrendingUp, TrendingDown, Wallet, type LucideIcon } from 'lucide-react'
+import { buttonVariants } from '@/components/ui/button'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Chip, Pill, Stat, type ChipColor, type PillTone } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
@@ -233,9 +234,9 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
                     <td className="p-3">
                       <div className="flex items-center gap-1">
                         {l.documentoId && (
-                          <Button variant="ghost" size="icon" asChild aria-label="Desprendible">
-                            <a href={`/api/documentos/${l.documentoId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a>
-                          </Button>
+                          <VisorPdf documentoId={l.documentoId} titulo={`Desprendible · ${l.colaborador.nombres} ${l.colaborador.apellidos}`} mimeType="application/pdf" className={buttonVariants({ variant: 'ghost', size: 'icon' })}>
+                            <Eye className="size-4" /><span className="sr-only">Ver desprendible</span>
+                          </VisorPdf>
                         )}
                         {/* Si el desprendible generado no sirve, se sube el correcto. */}
                         {puedeOperar && (

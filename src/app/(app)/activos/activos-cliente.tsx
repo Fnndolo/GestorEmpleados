@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Laptop, Shirt, Download, UserPlus, Undo2, Trash2, Pencil } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Plus, Laptop, Shirt, Eye, UserPlus, Undo2, Trash2, Pencil } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -102,7 +103,9 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
                 </div>
                 <div className="flex shrink-0 items-center">
                 {a.asignacion?.actaEntregaDocId && (
-                  <Button variant="ghost" size="icon" asChild aria-label="Acta"><a href={`/api/documentos/${a.asignacion.actaEntregaDocId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a></Button>
+                  <VisorPdf documentoId={a.asignacion.actaEntregaDocId} titulo={`Acta de entrega · ${a.nombre}`} className={buttonVariants({ variant: 'ghost', size: 'icon' })}>
+                    <Eye className="size-4" /><span className="sr-only">Ver acta</span>
+                  </VisorPdf>
                 )}
                 {/* El acta generada se puede reemplazar por una propia: a veces
                     la firmada en papel es la que vale. */}
@@ -141,9 +144,9 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
                 </div>
                 <div className="flex shrink-0 items-center">
                 {d.recibidoDocId && (
-                  <Button variant="ghost" size="icon" asChild aria-label="Recibido PDF">
-                    <a href={`/api/documentos/${d.recibidoDocId}`} target="_blank" rel="noreferrer"><Download className="size-4" /></a>
-                  </Button>
+                  <VisorPdf documentoId={d.recibidoDocId} titulo={`Recibido de dotación · ${d.colaborador}`} className={buttonVariants({ variant: 'ghost', size: 'icon' })}>
+                    <Eye className="size-4" /><span className="sr-only">Ver recibido</span>
+                  </VisorPdf>
                 )}
                 {puedeEditar && (
                   <AdjuntarDocumento

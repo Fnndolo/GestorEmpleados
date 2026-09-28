@@ -5,7 +5,8 @@ import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { formatFechaLarga } from '@/lib/fechas'
 import { etiquetaReporte, esAcoso } from '@/lib/linea-etica'
 import { SoportesEntidad } from '../../_ui'
@@ -53,7 +54,7 @@ export default async function DenunciaPage({ params }: { params: Promise<{ id: s
         <Card className="mb-4"><CardContent className="py-3 flex items-center gap-3">
           <FileText className="size-5 text-muted-foreground shrink-0" />
           <span className="text-sm flex-1 truncate">Acuerdo / resolución final: {acuerdo.nombre}</span>
-          <Button size="sm" asChild><a href={`/api/documentos/${acuerdo.id}`} target="_blank" rel="noreferrer">Abrir</a></Button>
+          <VisorPdf documentoId={acuerdo.id} titulo={acuerdo.nombre} className={buttonVariants({ size: 'sm' })}>Abrir</VisorPdf>
         </CardContent></Card>
       )}
 

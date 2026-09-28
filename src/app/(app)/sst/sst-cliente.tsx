@@ -10,6 +10,7 @@ import { urlFoto } from '@/lib/foto'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { BotonVolver } from '@/components/shell/volver'
 import { Button } from '@/components/ui/button'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -485,9 +486,9 @@ export function SstCliente(p: Props) {
               </span>
             )}
             {e.documentoId && p.verSalud && (
-              <a href={`/api/documentos/${e.documentoId}`} target="_blank" rel="noreferrer" className="shrink-0 text-muted-foreground hover:text-primary" title="Ver certificado (dato de salud)">
-                <Paperclip className="size-4" />
-              </a>
+              <VisorPdf documentoId={e.documentoId} titulo="Certificado (dato de salud)" className="shrink-0 text-muted-foreground hover:text-primary">
+                <Paperclip className="size-4" /><span className="sr-only">Ver certificado (dato de salud)</span>
+              </VisorPdf>
             )}
             {e.vencido && <Pill tone="bad">Vencido</Pill>}
             <Pill tone={TONO_CONCEPTO[e.concepto] ?? 'muted'}>{CONCEPTO[e.concepto]}</Pill>
@@ -513,9 +514,9 @@ export function SstCliente(p: Props) {
               </p>
             </div>
             {n.soporteDocId && (
-              <a href={`/api/documentos/${n.soporteDocId}`} target="_blank" rel="noreferrer" className="shrink-0 text-muted-foreground hover:text-primary" title="Ver soporte">
-                <Paperclip className="size-4" />
-              </a>
+              <VisorPdf documentoId={n.soporteDocId} titulo="Soporte" className="shrink-0 text-muted-foreground hover:text-primary">
+                <Paperclip className="size-4" /><span className="sr-only">Ver soporte</span>
+              </VisorPdf>
             )}
             <Pill tone="info">{TIPO_NOVEDAD_ARL[n.tipo] ?? n.tipo}</Pill>
           </div>
@@ -557,7 +558,7 @@ export function SstCliente(p: Props) {
                 <AvatarColaborador nombre={e.colaborador} fotoUrl={urlFoto(e.colaboradorId, e.fotoPath, true)} />
                 <div className="min-w-0 flex-1"><p className="text-sm font-medium">{e.colaborador}</p><p className="text-xs text-muted-foreground">{e.cantidad}× {e.elemento} · {formatFechaCorta(new Date(e.fecha))}</p></div>
                 {e.soporteDocId && (
-                  <a href={`/api/documentos/${e.soporteDocId}`} target="_blank" rel="noreferrer" className="whitespace-nowrap text-xs text-primary hover:underline">Recibido</a>
+                  <VisorPdf documentoId={e.soporteDocId} titulo="Recibido" className="whitespace-nowrap text-xs text-primary hover:underline">Recibido</VisorPdf>
                 )}
                 {p.puedeEditar && (
                   <AdjuntarDocumento
@@ -765,7 +766,7 @@ function DialogSeguimientoAccidente({ accidente, onClose }: { accidente: Props['
         <div className="space-y-1">
           <Label>Soportes adjuntos</Label>
           <ul className="space-y-1">{accidente.documentos.map((d) => (
-            <li key={d.id}><a href={`/api/documentos/${d.id}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">{d.nombre}</a></li>
+            <li key={d.id}><VisorPdf documentoId={d.id} titulo={d.nombre} className="text-xs text-primary hover:underline">{d.nombre}</VisorPdf></li>
           ))}</ul>
         </div>
       )}
@@ -867,7 +868,7 @@ function DialogComiteDetalle({ comite, onClose }: { comite: Props['comites'][num
               <p className="text-xs text-muted-foreground">{r.temas}</p>
               {r.compromisos && <p className="text-xs text-muted-foreground">Compromisos: {r.compromisos}</p>}
               {r.actaDocId ? (
-                <a href={`/api/documentos/${r.actaDocId}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Ver acta</a>
+                <VisorPdf documentoId={r.actaDocId} titulo="Acta" className="text-xs text-primary hover:underline">Ver acta</VisorPdf>
               ) : <p className="text-xs text-amber-600">Sin acta adjunta</p>}
             </li>
           ))}</ul>
@@ -1019,7 +1020,7 @@ function DialogSeguimientoInspeccion({ inspeccion, onClose }: { inspeccion: Prop
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">{formatFechaCorta(new Date(inspeccion.fecha))}{inspeccion.sede ? ` · ${inspeccion.sede}` : ''}{inspeccion.responsable ? ` · ${inspeccion.responsable}` : ''}</p>
       <div><Label>Hallazgos</Label><p className="mt-1 text-sm">{inspeccion.hallazgos}</p></div>
-      {inspeccion.documentoId && <a href={`/api/documentos/${inspeccion.documentoId}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Ver soporte adjunto</a>}
+      {inspeccion.documentoId && <VisorPdf documentoId={inspeccion.documentoId} titulo="Soporte adjunto" className="text-xs text-primary hover:underline">Ver soporte adjunto</VisorPdf>}
       {inspeccion.estado === 'ABIERTA' ? (
         <>
           <Campo label="Adjuntar soporte (fotos, checklist)">
@@ -1079,7 +1080,7 @@ function SeccionEmergencia({ titulo, puedeCrear, sedes, planes }: { titulo: stri
               <p className={`text-xs ${pl.vencido ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>{pl.vencido ? 'venció' : 'vigente hasta'} {formatFechaCorta(new Date(pl.vigenciaHasta))}</p>
             </div>
             {pl.documentoId ? (
-              <a href={`/api/documentos/${pl.documentoId}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Ver documento</a>
+              <VisorPdf documentoId={pl.documentoId} titulo="Documento" className="text-xs text-primary hover:underline">Ver documento</VisorPdf>
             ) : puedeCrear && <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) adjuntar(pl.id, f) }} className="w-40 text-xs" />}
           </li>
         ))}</ul>
@@ -1177,7 +1178,7 @@ function SeccionSimulacros({ puedeCrear, sedes, simulacros }: { puedeCrear: bool
         <ul className="mb-3 space-y-1">{simulacros.map((s) => (
           <li key={s.id} className="flex items-center gap-2 text-sm">
             <span className="min-w-0 flex-1 truncate">{formatFechaCorta(new Date(s.fecha))} · {s.tipo}{s.sede ? ` · ${s.sede}` : ''}{s.participantes != null ? ` · ${s.participantes} participantes` : ''}</span>
-            {s.documentoId && <a href={`/api/documentos/${s.documentoId}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Acta</a>}
+            {s.documentoId && <VisorPdf documentoId={s.documentoId} titulo="Acta" className="text-xs text-primary hover:underline">Acta</VisorPdf>}
           </li>
         ))}</ul>
       )}
@@ -1293,7 +1294,7 @@ function EstructuraSgsst({ estructura, puedeEditar }: { estructura: Props['estru
             </p>
           ) : <p className="text-xs text-muted-foreground">Nadie ha sido designado formalmente (D.1072 art. 2.2.4.6.8).</p>}
           {e.responsable?.cartaDocId && (
-            <a href={`/api/documentos/${e.responsable.cartaDocId}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Ver carta de designación</a>
+            <VisorPdf documentoId={e.responsable.cartaDocId} titulo="Carta de designación" className="text-xs text-primary hover:underline">Ver carta de designación</VisorPdf>
           )}
         </div>
         <Pill tone={e.responsable ? (e.responsable.cartaDocId ? 'ok' : 'warn') : 'bad'}>{e.responsable ? (e.responsable.cartaDocId ? 'Designado' : 'Sin carta') : 'Falta'}</Pill>
@@ -1311,7 +1312,7 @@ function EstructuraSgsst({ estructura, puedeEditar }: { estructura: Props['estru
             </p>
           ) : <p className="text-xs text-muted-foreground">No se ha registrado el plan de este año.</p>}
           {e.plan?.documentoId && (
-            <a href={`/api/documentos/${e.plan.documentoId}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Ver plan (PDF)</a>
+            <VisorPdf documentoId={e.plan.documentoId} titulo="Plan (PDF)" className="text-xs text-primary hover:underline">Ver plan (PDF)</VisorPdf>
           )}
         </div>
         <Pill tone={e.plan ? (e.plan.documentoId ? 'ok' : 'warn') : 'bad'}>{e.plan ? (e.plan.documentoId ? 'Registrado' : 'Sin PDF') : 'Falta'}</Pill>
@@ -1473,7 +1474,7 @@ function DialogNorma({ norma, puedeEditar = true, onClose }: { norma?: Props['no
       <Campo label="Cómo cumple la empresa"><Textarea rows={2} value={f.comoCumple} onChange={(e) => set('comoCumple', e.target.value)} disabled={soloLectura} /></Campo>
       <Campo label="Responsable (rol)"><Input value={f.responsableRol} onChange={(e) => set('responsableRol', e.target.value)} placeholder="Responsable SST" disabled={soloLectura} /></Campo>
       {norma?.evidenciaDocId && (
-        <a href={`/api/documentos/${norma.evidenciaDocId}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Ver evidencia adjunta</a>
+        <VisorPdf documentoId={norma.evidenciaDocId} titulo="Evidencia adjunta" className="text-xs text-primary hover:underline">Ver evidencia adjunta</VisorPdf>
       )}
       {!soloLectura && (
         <Campo label="Evidencia de cumplimiento (PDF/foto)">
@@ -1537,7 +1538,7 @@ function PanelAutoeval({ autoeval, puedeEditar }: { autoeval: Props['autoeval'];
           <p className="text-sm">Año {autoeval.anio}: <b>{autoeval.puntaje}%</b> (nivel {autoeval.nivelEstandar} estándares)</p>
           {autoeval.planMejora && <p className="text-sm text-muted-foreground">Plan de mejora: {autoeval.planMejora}</p>}
           {autoeval.documentoId && (
-            <a href={`/api/documentos/${autoeval.documentoId}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Ver plan de mejora firmado (PDF)</a>
+            <VisorPdf documentoId={autoeval.documentoId} titulo="Plan de mejora firmado (PDF)" className="text-xs text-primary hover:underline">Ver plan de mejora firmado (PDF)</VisorPdf>
           )}
         </div>
         {puedeEditar && (
@@ -1571,7 +1572,7 @@ function PanelAutoeval({ autoeval, puedeEditar }: { autoeval: Props['autoeval'];
                 {a.cumplida && a.cumplidaEn ? ` · cumplida el ${formatFechaCorta(new Date(a.cumplidaEn))}` : ''}
               </p>
               <div className="flex flex-wrap items-center gap-3">
-                {a.evidenciaDocId && <a href={`/api/documentos/${a.evidenciaDocId}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Ver evidencia</a>}
+                {a.evidenciaDocId && <VisorPdf documentoId={a.evidenciaDocId} titulo="Evidencia" className="text-xs text-primary hover:underline">Ver evidencia</VisorPdf>}
                 {puedeEditar && (
                   <label className="cursor-pointer text-xs text-muted-foreground hover:text-primary hover:underline">
                     {a.evidenciaDocId ? 'Reemplazar evidencia' : 'Adjuntar evidencia'}

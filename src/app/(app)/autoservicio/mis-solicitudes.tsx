@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ChevronDown, Download, CalendarRange, Clock, ClockPlus, HeartPulse, FileBadge, FileCheck, TriangleAlert, Check, X, CircleDashed, CalendarClock, Paperclip, FileUp, Pencil } from 'lucide-react'
+import { ChevronDown, Eye, CalendarRange, Clock, ClockPlus, HeartPulse, FileBadge, FileCheck, TriangleAlert, Check, X, CircleDashed, CalendarClock, Paperclip, FileUp, Pencil } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
@@ -497,9 +497,9 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                       {s.comprobante.docId && (
                         <>
                           {' · '}
-                          <a href={`/api/documentos/${s.comprobante.docId}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                          <VisorPdf documentoId={s.comprobante.docId} titulo="Comprobante del permiso" className="text-primary hover:underline">
                             ver archivo
-                          </a>
+                          </VisorPdf>
                         </>
                       )}
                     </p>
@@ -514,11 +514,9 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                 )}
 
                 {s.certId && (
-                  <Button size="sm" asChild>
-                    <a href={`/api/documentos/${s.certId}`} target="_blank" rel="noreferrer">
-                      <Download className="size-4" /> Descargar certificación (PDF)
-                    </a>
-                  </Button>
+                  <VisorPdf documentoId={s.certId} titulo="Certificación" mimeType="application/pdf" className={buttonVariants({ size: 'sm' })}>
+                    <Eye className="size-4" /> Ver certificación
+                  </VisorPdf>
                 )}
               </div>
             )}

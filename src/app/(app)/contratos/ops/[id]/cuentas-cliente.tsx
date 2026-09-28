@@ -37,7 +37,6 @@ export function CuentasCobro({
 }) {
   const router = useRouter()
   const [soporteDe, setSoporteDe] = useState<Cuenta | null>(null)
-  const [imagen, setImagen] = useState<Planilla | null>(null)
 
   return (
     <div className="space-y-3">
@@ -74,17 +73,11 @@ export function CuentasCobro({
                 </div>
                 {/* Archivo de la planilla adjuntada por el contratista: se ve en la app. */}
                 {cc.planilla && (
-                  cc.planilla.esImagen ? (
-                    <Button size="sm" onClick={() => setImagen(cc.planilla)}>
+                  <VisorPdf documentoId={cc.planilla.id} titulo={cc.planilla.nombre} mimeType={cc.planilla.esImagen ? 'image/*' : undefined}>
+                    <span className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium shadow-xs transition-colors hover:bg-accent">
                       <Eye className="size-4" /> Ver planilla
-                    </Button>
-                  ) : (
-                    <VisorPdf documentoId={cc.planilla.id} titulo={cc.planilla.nombre}>
-                      <span className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium shadow-xs transition-colors hover:bg-accent">
-                        <Eye className="size-4" /> Ver planilla
-                      </span>
-                    </VisorPdf>
-                  )
+                    </span>
+                  </VisorPdf>
                 )}
                 {puedeEditar && (
                   <Button size="sm" onClick={() => setSoporteDe(cc)}>
@@ -109,18 +102,6 @@ export function CuentasCobro({
 
       {soporteDe && <DialogSoporte cuenta={soporteDe} valorMensual={valorMensual} onClose={() => setSoporteDe(null)} onDone={() => { setSoporteDe(null); router.refresh() }} />}
 
-      {/* Ampliación de la planilla cuando es imagen (foto del comprobante). */}
-      <Dialog open={imagen !== null} onOpenChange={(o) => { if (!o) setImagen(null) }}>
-        <DialogContent className="max-w-[calc(100%-2.5rem)] sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="truncate pr-6 text-base">{imagen?.nombre}</DialogTitle>
-          </DialogHeader>
-          {imagen && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={`/api/documentos/${imagen.id}`} alt={imagen.nombre} className="max-h-[70vh] w-full rounded-lg object-contain" />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

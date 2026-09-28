@@ -4,10 +4,11 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, FileText, Gavel, ShieldAlert, FileLock, History, Upload, Eye, ExternalLink, Lock, type LucideIcon } from 'lucide-react'
+import { Plus, FileText, Gavel, ShieldAlert, FileLock, History, Upload, Eye, Lock, type LucideIcon } from 'lucide-react'
 import { Chip, Pill, AvatarColaborador, type ChipColor, type PillTone } from '@/components/ui-kit'
 import { urlFoto } from '@/lib/foto'
 import { Button } from '@/components/ui/button'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -291,22 +292,9 @@ function DocumentoLegalItem({ d, puedeCrear }: { d: DocLegal; puedeCrear: boolea
   )
 }
 
+/** El visor compartido de documentos: PDF o foto, con acercar, descargar y abrir aparte. */
 function VisorDocumento({ documentoId, titulo, onClose }: { documentoId: string; titulo: string; onClose: () => void }) {
-  const url = `/api/documentos/${documentoId}`
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="w-[95vw] sm:max-w-4xl">
-        <DialogHeader><DialogTitle className="truncate pr-6">{titulo}</DialogTitle></DialogHeader>
-        <iframe src={url} title={titulo} className="w-full h-[70vh] rounded-md border bg-muted" />
-        <DialogFooter>
-          <Button asChild>
-            <a href={url} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /> Abrir en pestaña</a>
-          </Button>
-          <Button variant="ghost" onClick={onClose}>Cerrar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
+  return <VisorPdf documentoId={documentoId} titulo={titulo} abierto onAbiertoChange={(v) => { if (!v) onClose() }} />
 }
 
 function DialogNuevaVersion({ documentoLegalId, titulo, onClose }: { documentoLegalId: string; titulo: string; onClose: () => void }) {

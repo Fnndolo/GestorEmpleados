@@ -64,7 +64,6 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
   const [nuevaIni, setNuevaIni] = useState('')
   const [nuevaFin, setNuevaFin] = useState('')
   const [certDe, setCertDe] = useState<Solicitud | null>(null)
-  const [imagenAmpliada, setImagenAmpliada] = useState<{ id: string; nombre: string } | null>(null)
   // Plegadas por defecto: quién, qué y los botones bastan para decidir lo
   // rutinario; sede, saldo, avisos, soportes y opciones finas salen al tocar.
   const [abierta, setAbierta] = useState<string | null>(null)
@@ -223,12 +222,13 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
                   <div className="mt-2 flex flex-wrap items-start gap-2">
                     {s.documentos.map((d) =>
                       d.esImagen ? (
-                        <button
+                        // Mismo visor que los PDF: acercar, descargar y abrir aparte.
+                        <VisorPdf
                           key={d.id}
-                          type="button"
-                          onClick={() => setImagenAmpliada(d)}
+                          documentoId={d.id}
+                          titulo={d.nombre}
+                          mimeType="image/*"
                           className="group/img overflow-hidden rounded-lg border bg-muted/30 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          title={`${d.nombre} — clic para ampliar`}
                         >
                           {/* La caja es pequeña pero la imagen se ve completa (object-contain). */}
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -238,7 +238,7 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
                             className="h-28 w-36 object-contain transition-transform group-hover/img:scale-105"
                             loading="lazy"
                           />
-                        </button>
+                        </VisorPdf>
                       ) : (
                         // El soporte se abre aquí mismo: quien está aprobando no
                         // debería perder la bandeja para mirar un adjunto. Las
@@ -354,23 +354,6 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
       })}
 
       {certDe && <DialogCertificacion solicitud={certDe} onClose={() => setCertDe(null)} onDone={() => { setCertDe(null); router.refresh() }} />}
-
-      {/* Ampliación del soporte de imagen, sin salir de la bandeja. */}
-      <Dialog open={imagenAmpliada !== null} onOpenChange={(o) => { if (!o) setImagenAmpliada(null) }}>
-        <DialogContent className="max-w-[calc(100%-2.5rem)] sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="truncate pr-6 text-base">{imagenAmpliada?.nombre}</DialogTitle>
-          </DialogHeader>
-          {imagenAmpliada && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`/api/documentos/${imagenAmpliada.id}`}
-              alt={imagenAmpliada.nombre}
-              className="max-h-[70vh] w-full rounded-lg object-contain"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

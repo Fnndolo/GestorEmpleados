@@ -11,6 +11,7 @@ import { agregarEducacion, eliminarEducacion } from '../acciones'
 import { NIVEL_EDUCATIVO } from '@/lib/etiquetas'
 import { formatFechaCorta } from '@/lib/fechas'
 import { Button } from '@/components/ui/button'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -58,9 +59,9 @@ export function EducacionLista({
                 </p>
               </div>
               {e.certificadoDocId && (
-                <a href={`/api/documentos/${e.certificadoDocId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0">
+                <VisorPdf documentoId={e.certificadoDocId} titulo="Certificado de estudios" className="inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0">
                   <FileText className="size-3.5" /> Certificado
-                </a>
+                </VisorPdf>
               )}
               {puedeEditar && (
                 <Button
