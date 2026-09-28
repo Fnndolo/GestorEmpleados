@@ -5,7 +5,7 @@ import {
   CalendarRange, Clock, IdCard, FileText, FolderUp, FileBadge, CalendarClock, HeartPulse,
   PenLine, Receipt, GraduationCap, Package, Scale, ShieldAlert, Lock, Inbox, Timer, ClockPlus,
 } from 'lucide-react'
-import { CarruselMovil, Casilla, CasillaCompacta, RejillaCasillas } from '@/components/shell/carrusel-movil'
+import { CarruselMovil, Casilla, CasillaCompacta, CarruselEscritorio } from '@/components/shell/carrusel-movil'
 import { aplicaTramite, esOps, type Tramite } from '@/lib/tramites-vinculo'
 import { NuevaSolicitud, type TipoSol } from './nueva-solicitud'
 
@@ -26,8 +26,8 @@ type Item = {
 }
 
 /**
- * Una sección con la misma casilla (ícono y nombre) en las dos caras: en
- * rejilla y más grande en escritorio, y en carrusel horizontal en el celular,
+ * Una sección con la misma casilla (ícono y nombre) en un solo renglón que se
+ * desliza si no caben todas: más grande en escritorio y compacta en el celular,
  * para que ninguna sección empuje hacia abajo la que viene después.
  */
 function Seccion({
@@ -45,7 +45,7 @@ function Seccion({
       <h2 className="mb-2 text-[13px] font-bold sm:mb-2.5">{titulo}</h2>
 
       {/* Escritorio */}
-      <RejillaCasillas>
+      <CarruselEscritorio>
         {items.map((i) => (
           <CasillaCompacta
             key={i.clave} grande
@@ -53,7 +53,7 @@ function Seccion({
             onClick={i.sol ? () => onSolicitar(i.sol!) : undefined}
           />
         ))}
-      </RejillaCasillas>
+      </CarruselEscritorio>
 
       {/* Móvil */}
       <CarruselMovil>

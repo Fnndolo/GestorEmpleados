@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import Link from 'next/link'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /**
@@ -83,15 +84,65 @@ export function Casilla({ children }: { children: React.ReactNode }) {
   return <div className={cn('flex shrink-0 snap-start justify-center', ANCHO_CASILLA)}>{children}</div>
 }
 
+/** ¿Hay contenido a la izquierda? (ya se desplazó). */
+function quedaAntes(el: HTMLElement): boolean {
+  return el.scrollLeft > 1
+}
+
 /**
- * Rejilla de casillas para escritorio: las mismas casillas del celular, más
- * grandes, una tras otra hasta llenar el renglón. Donde sobra ancho no hace
- * falta deslizar, así que todo queda a la vista de una vez. Las casillas tienen
- * ancho fijo, así una sección corta ocupa solo lo suyo y la siguiente puede
- * ponerse al lado.
+ * Carrusel de escritorio: el mismo del celular, con las casillas grandes. Cada
+ * sección va en su propio renglón y, si la ventana no alcanza para todas sus
+ * casillas, el renglón se desliza en vez de bajar a otra línea. Como con el
+ * mouse no se desliza con el dedo, aparecen flechas a los lados mientras quede
+ * algo por ver, junto con el degradado que lo insinúa.
  */
-export function RejillaCasillas({ children }: { children: React.ReactNode }) {
-  return <div className="hidden flex-wrap gap-x-2 gap-y-4 sm:flex">{children}</div>
+export function CarruselEscritorio({ children }: { children: React.ReactNode }) {
+  const [antes, setAntes] = useState(false)
+  const [despues, setDespues] = useState(false)
+  const [pista, setPista] = useState<HTMLDivElement | null>(null)
+  const medir = useCallback((el: HTMLElement) => {
+    setAntes(quedaAntes(el))
+    setDespues(quedaPorVer(el))
+  }, [])
+  const observar = useCallback((el: HTMLDivElement | null) => {
+    setPista(el)
+    if (!el) return
+    medir(el)
+    const ro = new ResizeObserver(() => medir(el))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [medir])
+  // Cada flecha avanza casi una pantalla de casillas, dejando una a la vista
+  // como referencia de dónde se venía.
+  const mover = (sentido: 1 | -1) => pista?.scrollBy({ left: sentido * Math.max(pista.clientWidth - 128, 128), behavior: 'smooth' })
+
+  const flecha = 'absolute top-[3.5rem] z-10 grid size-8 -translate-y-1/2 place-items-center rounded-full border bg-background shadow-md transition-opacity duration-300 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  return (
+    <div className="relative hidden sm:block">
+      <div
+        ref={observar}
+        onScroll={(e) => medir(e.currentTarget)}
+        className={cn(
+          'flex snap-x gap-2 overflow-x-auto scroll-smooth',
+          // Respiro arriba para la insignia de pendientes, que sobresale del recuadro.
+          'pt-2',
+          '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        )}
+      >
+        {children}
+      </div>
+      <div aria-hidden className={cn('pointer-events-none absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-background via-background/70 to-transparent transition-opacity duration-300', antes ? 'opacity-100' : 'opacity-0')} />
+      <div aria-hidden className={cn('pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-background via-background/70 to-transparent transition-opacity duration-300', despues ? 'opacity-100' : 'opacity-0')} />
+      <button type="button" onClick={() => mover(-1)} aria-label="Ver anteriores" tabIndex={antes ? 0 : -1}
+        className={cn(flecha, 'left-1', antes ? 'opacity-100' : 'pointer-events-none opacity-0')}>
+        <ChevronLeft className="size-4" />
+      </button>
+      <button type="button" onClick={() => mover(1)} aria-label="Ver más" tabIndex={despues ? 0 : -1}
+        className={cn(flecha, 'right-1', despues ? 'opacity-100' : 'pointer-events-none opacity-0')}>
+        <ChevronRight className="size-4" />
+      </button>
+    </div>
+  )
 }
 
 /**
@@ -153,7 +204,7 @@ export function CasillaCompacta({
   )
   const clases = cn(
     'group/t flex shrink-0 flex-col items-center rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-    grande && 'w-[7.5rem]',
+    grande && 'w-[7.5rem] snap-start',
   )
   return href
     ? <Link href={href} className={clases}>{contenido}</Link>
