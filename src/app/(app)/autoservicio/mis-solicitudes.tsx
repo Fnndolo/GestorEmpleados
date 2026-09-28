@@ -251,146 +251,6 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
               <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expandida && 'rotate-180')} />
             </button>
 
-            {/* Licencia o incapacidad devuelta por soporte insuficiente: se corrige aquí mismo, sin crear otra solicitud. */}
-            {s.estado === 'DEVUELTA' && (
-              <div className="mx-3 mb-3 space-y-2.5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
-                <div className="flex items-start gap-2">
-                  <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-                  <div>
-                    <p className="text-[13px] font-medium">El soporte no pudo validarse</p>
-                    <p className="mt-0.5 text-muted-foreground">
-                      {s.resultado?.replace(/^Soporte no validado:\s*/, '') ?? 'Adjunta el soporte que acredite el hecho.'}
-                    </p>
-                    <p className="mt-0.5 text-muted-foreground">Sigue abierta: sube el soporte corregido y vuelve a validación.</p>
-                  </div>
-                </div>
-                <input
-                  ref={inputSoporte}
-                  type="file"
-                  accept="image/*,application/pdf"
-                  className="hidden"
-                  onChange={(e) => setArchivoSoporte(e.target.files?.[0] ?? null)}
-                />
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button size="sm" onClick={() => inputSoporte.current?.click()} disabled={corrigiendo !== null}>
-                    <Paperclip className="size-4" /> {archivoSoporte ? archivoSoporte.name : 'Adjuntar soporte'}
-                  </Button>
-                  <Button size="sm" onClick={() => enviarSoporteCorregido(s.id)} disabled={corrigiendo !== null || !archivoSoporte}>
-                    {corrigiendo === s.id ? <Spinner /> : <FileUp className="size-4" />} Enviar corrección
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Comprobante de asistencia pendiente (o vencido): exige acción, así que se ve sin expandir. */}
-            {s.comprobante && (s.comprobante.situacion === 'PENDIENTE' || s.comprobante.situacion === 'VENCIDO') && (
-              <div
-                className={cn(
-                  'mx-3 mb-3 space-y-2.5 rounded-lg border p-3 text-xs',
-                  s.comprobante.situacion === 'VENCIDO' ? 'border-rose-500/40 bg-rose-500/5' : 'border-foreground/20 bg-muted/40',
-                )}
-              >
-                <div className="flex items-start gap-2">
-                  {s.comprobante.situacion === 'VENCIDO'
-                    ? <TriangleAlert className="mt-0.5 size-4 shrink-0 text-rose-600 dark:text-rose-400" />
-                    : <FileCheck className="mt-0.5 size-4 shrink-0" />}
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-medium">
-                      {s.comprobante.situacion === 'VENCIDO' ? 'Venció el plazo del comprobante de asistencia' : 'Sube el comprobante de asistencia'}
-                    </p>
-                    <p className="mt-0.5 text-muted-foreground">
-                      {s.comprobante.situacion === 'VENCIDO'
-                        ? `El plazo era hasta el ${s.comprobante.vence ?? '—'} · Súbelo cuanto antes.`
-                        : `Cita, diligencia o trámite${s.comprobante.vence ? ` · hasta el ${s.comprobante.vence}` : ''}.`}
-                    </p>
-                    {s.comprobante.nota && (
-                      <p className="mt-0.5 text-muted-foreground">Talento Humano no aceptó el anterior: &ldquo;{s.comprobante.nota}&rdquo;</p>
-                    )}
-                  </div>
-                </div>
-                {/* Los archivos elegidos, cada uno con su X; y una sola fila: el
-                    clip (solo icono, se pueden agregar varios) y Enviar. */}
-                {archivosComprobante?.permisoId === s.comprobante.permisoId && archivosComprobante.files.length > 0 && (
-                  <ul className="space-y-1 rounded-lg border bg-card p-2">
-                    {archivosComprobante.files.map((a, i) => (
-                      <li key={`${a.name}-${i}`} className="flex items-center gap-2">
-                        <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate">{a.name}</span>
-                        <button
-                          type="button"
-                          aria-label={`Quitar ${a.name}`}
-                          className="shrink-0 text-destructive"
-                          onClick={() => setArchivosComprobante((prev) => prev ? { ...prev, files: prev.files.filter((_, j) => j !== i) } : prev)}
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="flex items-center justify-end gap-2">
-                  <Button
-                    size="sm" disabled={enviandoComprobante !== null}
-                    aria-label="Adjuntar comprobante" title="Adjuntar comprobante (puedes elegir varios)"
-                    onClick={() => { setComprobantePara(s.comprobante!.permisoId); inputComprobante.current?.click() }}
-                  >
-                    <Paperclip className="size-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={enviandoComprobante !== null || archivosComprobante?.permisoId !== s.comprobante.permisoId || archivosComprobante.files.length === 0}
-                    onClick={() => enviarComprobante(s.comprobante!.permisoId)}
-                  >
-                    {enviandoComprobante === s.comprobante.permisoId ? <Spinner /> : <FileUp className="size-4" />} Enviar
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Contrapropuesta del jefe: exige respuesta, así que se ve sin expandir. */}
-            {s.estado === 'EN_NEGOCIACION' && s.contrapropuesta && (
-              <div className="mx-3 mb-3 space-y-2.5 rounded-lg border border-foreground/20 bg-muted/40 p-3 text-xs">
-                <div className="flex items-start gap-2">
-                  <CalendarClock className="mt-0.5 size-4 shrink-0" />
-                  <div>
-                    <p className="text-[13px] font-medium">Tu jefe propone otras fechas</p>
-                    <p className="mt-0.5 text-sm">
-                      Del <strong>{s.contrapropuesta.fechaInicio}</strong> al <strong>{s.contrapropuesta.fechaFin}</strong>
-                    </p>
-                    {s.contrapropuesta.comentario && (
-                      <p className="mt-0.5 text-muted-foreground">&ldquo;{s.contrapropuesta.comentario}&rdquo;</p>
-                    )}
-                  </div>
-                </div>
-
-                {rechazando === s.id ? (
-                  <div className="space-y-2">
-                    <Textarea
-                      rows={2}
-                      placeholder="Motivo del rechazo (opcional)"
-                      value={motivoRechazo}
-                      onChange={(e) => setMotivoRechazo(e.target.value)}
-                    />
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="ghost" onClick={() => { setRechazando(null); setMotivoRechazo('') }}>Cancelar</Button>
-                      <Button size="sm" onClick={() => responder(s.id, false)} disabled={respondiendo === s.id}>
-                        {respondiendo === s.id ? <Spinner /> : <X className="size-4" />} Rechazar contrapropuesta
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex justify-end gap-2">
-                    <Button size="sm" onClick={() => setRechazando(s.id)} disabled={respondiendo === s.id}>
-                      <X className="size-4" /> Rechazar
-                    </Button>
-                    <Button size="sm" onClick={() => responder(s.id, true)} disabled={respondiendo === s.id}>
-                      {respondiendo === s.id ? <Spinner /> : <Check className="size-4" />} Aceptar fechas
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
-
             {expandida && (
               <div className="space-y-3 border-t border-dashed bg-muted/20 px-4 py-3 animate-in fade-in slide-in-from-top-1 duration-150">
                 {/* Mientras nadie decida, el permiso se corrige aquí mismo. */}
@@ -520,6 +380,149 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                 )}
               </div>
             )}
+
+            {/* Lo que pide acción va DEBAJO del detalle: al desplegar, baja con él. */}
+            <div className={cn('empty:hidden', expandida && 'pt-3')}>
+              {/* Licencia o incapacidad devuelta por soporte insuficiente: se corrige aquí mismo, sin crear otra solicitud. */}
+              {s.estado === 'DEVUELTA' && (
+                <div className="mx-3 mb-3 space-y-2.5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
+                  <div className="flex items-start gap-2">
+                    <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                    <div>
+                      <p className="text-[13px] font-medium">El soporte no pudo validarse</p>
+                      <p className="mt-0.5 text-muted-foreground">
+                        {s.resultado?.replace(/^Soporte no validado:\s*/, '') ?? 'Adjunta el soporte que acredite el hecho.'}
+                      </p>
+                      <p className="mt-0.5 text-muted-foreground">Sigue abierta: sube el soporte corregido y vuelve a validación.</p>
+                    </div>
+                  </div>
+                  <input
+                    ref={inputSoporte}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={(e) => setArchivoSoporte(e.target.files?.[0] ?? null)}
+                  />
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button size="sm" onClick={() => inputSoporte.current?.click()} disabled={corrigiendo !== null}>
+                      <Paperclip className="size-4" /> {archivoSoporte ? archivoSoporte.name : 'Adjuntar soporte'}
+                    </Button>
+                    <Button size="sm" onClick={() => enviarSoporteCorregido(s.id)} disabled={corrigiendo !== null || !archivoSoporte}>
+                      {corrigiendo === s.id ? <Spinner /> : <FileUp className="size-4" />} Enviar corrección
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Comprobante de asistencia pendiente (o vencido): exige acción, así que se ve sin expandir. */}
+              {s.comprobante && (s.comprobante.situacion === 'PENDIENTE' || s.comprobante.situacion === 'VENCIDO') && (
+                <div
+                  className={cn(
+                    'mx-3 mb-3 space-y-2.5 rounded-lg border p-3 text-xs',
+                    s.comprobante.situacion === 'VENCIDO' ? 'border-rose-500/40 bg-rose-500/5' : 'border-foreground/20 bg-muted/40',
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    {s.comprobante.situacion === 'VENCIDO'
+                      ? <TriangleAlert className="mt-0.5 size-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                      : <FileCheck className="mt-0.5 size-4 shrink-0" />}
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium">
+                        {s.comprobante.situacion === 'VENCIDO' ? 'Venció el plazo del comprobante de asistencia' : 'Sube el comprobante de asistencia'}
+                      </p>
+                      <p className="mt-0.5 text-muted-foreground">
+                        {s.comprobante.situacion === 'VENCIDO'
+                          ? `El plazo era hasta el ${s.comprobante.vence ?? '—'} · Súbelo cuanto antes.`
+                          : `Cita, diligencia o trámite${s.comprobante.vence ? ` · hasta el ${s.comprobante.vence}` : ''}.`}
+                      </p>
+                      {s.comprobante.nota && (
+                        <p className="mt-0.5 text-muted-foreground">Talento Humano no aceptó el anterior: &ldquo;{s.comprobante.nota}&rdquo;</p>
+                      )}
+                    </div>
+                  </div>
+                  {/* Los archivos elegidos, cada uno con su X; y una sola fila: el
+                      clip (solo icono, se pueden agregar varios) y Enviar. */}
+                  {archivosComprobante?.permisoId === s.comprobante.permisoId && archivosComprobante.files.length > 0 && (
+                    <ul className="space-y-1 rounded-lg border bg-card p-2">
+                      {archivosComprobante.files.map((a, i) => (
+                        <li key={`${a.name}-${i}`} className="flex items-center gap-2">
+                          <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate">{a.name}</span>
+                          <button
+                            type="button"
+                            aria-label={`Quitar ${a.name}`}
+                            className="shrink-0 text-destructive"
+                            onClick={() => setArchivosComprobante((prev) => prev ? { ...prev, files: prev.files.filter((_, j) => j !== i) } : prev)}
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      size="sm" disabled={enviandoComprobante !== null}
+                      aria-label="Adjuntar comprobante" title="Adjuntar comprobante (puedes elegir varios)"
+                      onClick={() => { setComprobantePara(s.comprobante!.permisoId); inputComprobante.current?.click() }}
+                    >
+                      <Paperclip className="size-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={enviandoComprobante !== null || archivosComprobante?.permisoId !== s.comprobante.permisoId || archivosComprobante.files.length === 0}
+                      onClick={() => enviarComprobante(s.comprobante!.permisoId)}
+                    >
+                      {enviandoComprobante === s.comprobante.permisoId ? <Spinner /> : <FileUp className="size-4" />} Enviar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Contrapropuesta del jefe: exige respuesta, así que se ve sin expandir. */}
+              {s.estado === 'EN_NEGOCIACION' && s.contrapropuesta && (
+                <div className="mx-3 mb-3 space-y-2.5 rounded-lg border border-foreground/20 bg-muted/40 p-3 text-xs">
+                  <div className="flex items-start gap-2">
+                    <CalendarClock className="mt-0.5 size-4 shrink-0" />
+                    <div>
+                      <p className="text-[13px] font-medium">Tu jefe propone otras fechas</p>
+                      <p className="mt-0.5 text-sm">
+                        Del <strong>{s.contrapropuesta.fechaInicio}</strong> al <strong>{s.contrapropuesta.fechaFin}</strong>
+                      </p>
+                      {s.contrapropuesta.comentario && (
+                        <p className="mt-0.5 text-muted-foreground">&ldquo;{s.contrapropuesta.comentario}&rdquo;</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {rechazando === s.id ? (
+                    <div className="space-y-2">
+                      <Textarea
+                        rows={2}
+                        placeholder="Motivo del rechazo (opcional)"
+                        value={motivoRechazo}
+                        onChange={(e) => setMotivoRechazo(e.target.value)}
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => { setRechazando(null); setMotivoRechazo('') }}>Cancelar</Button>
+                        <Button size="sm" onClick={() => responder(s.id, false)} disabled={respondiendo === s.id}>
+                          {respondiendo === s.id ? <Spinner /> : <X className="size-4" />} Rechazar contrapropuesta
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" onClick={() => setRechazando(s.id)} disabled={respondiendo === s.id}>
+                        <X className="size-4" /> Rechazar
+                      </Button>
+                      <Button size="sm" onClick={() => responder(s.id, true)} disabled={respondiendo === s.id}>
+                        {respondiendo === s.id ? <Spinner /> : <Check className="size-4" />} Aceptar fechas
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )
       })}
