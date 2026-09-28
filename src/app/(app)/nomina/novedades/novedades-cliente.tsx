@@ -112,9 +112,13 @@ export function NovedadesNomina(p: Props) {
             </button>
           ))}
         </div>
-        <Button size="sm" className="shrink-0" onClick={() => setDialogo(grupo)} aria-label="Agregar" title="Agregar">
-          <Plus className="size-4" /> <span className="hidden sm:inline">Agregar</span>
-        </Button>
+        {/* Las horas extra y recargos llegan de AsistencIA ("Traer a la nómina"):
+            no se digitan a mano, así que en esa pestaña no hay "Agregar". */}
+        {grupo !== 'horas' && (
+          <Button size="sm" className="shrink-0" onClick={() => setDialogo(grupo)} aria-label="Agregar" title="Agregar">
+            <Plus className="size-4" /> <span className="hidden sm:inline">Agregar</span>
+          </Button>
+        )}
       </div>
 
       {grupo === 'comisiones' && (
