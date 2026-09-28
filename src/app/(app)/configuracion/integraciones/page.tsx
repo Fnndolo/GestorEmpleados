@@ -17,7 +17,7 @@ export default async function IntegracionesPage() {
   const conexion = await conexionAsistencia()
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <Encabezado enLinea titulo="Integraciones" />
       <TarjetaAsistencia conectada={Boolean(conexion)} url={conexion?.url ?? null} />
     </div>

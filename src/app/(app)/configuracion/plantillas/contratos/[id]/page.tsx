@@ -25,7 +25,7 @@ export default async function EditarPlantillaPage({ params }: { params: Promise<
   if (!esNueva && !plantilla) notFound()
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <Encabezado
         titulo={esNueva ? 'Nueva plantilla de contrato' : `Editar · ${plantilla!.nombre}`}
         descripcion="Escribe el texto legal y usa {{variables}} donde deban ir los datos de cada contrato. Guarda y revisa la muestra para ver cómo queda."

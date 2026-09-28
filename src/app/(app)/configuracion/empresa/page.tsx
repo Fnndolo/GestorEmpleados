@@ -18,7 +18,7 @@ export default async function EmpresaPage() {
   ])
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <IdentidadEmpresa
         nombreComercial={empresa?.nombreComercial ?? ''}
         razonSocial={empresa?.razonSocial ?? ''}

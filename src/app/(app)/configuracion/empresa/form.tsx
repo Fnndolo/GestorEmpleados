@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 export function EmpresaForm({ valores }: { valores: EmpresaInput }) {
   const [guardando, setGuardando] = useState(false)
@@ -36,60 +37,68 @@ export function EmpresaForm({ valores }: { valores: EmpresaInput }) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <Card>
-        <CardContent className="grid gap-4 sm:grid-cols-2 py-6">
-          <Campo label="Razón social" error={errors.razonSocial?.message}>
-            <Input {...register('razonSocial')} />
-          </Campo>
-          <Campo label="Nombre comercial" error={errors.nombreComercial?.message}>
-            <Input {...register('nombreComercial')} />
-          </Campo>
-          <Campo label="NIT" error={errors.nit?.message}>
-            <Input {...register('nit')} />
-          </Campo>
-          <Campo label="Representante legal" error={errors.representanteLegal?.message}>
-            <Input {...register('representanteLegal')} />
-          </Campo>
-          <Campo label="C.C. del representante legal" error={errors.representanteLegalCc?.message}>
-            <Input {...register('representanteLegalCc')} placeholder="Aparece en los contratos" />
-          </Campo>
-          <Campo label="Correo de contacto" error={errors.emailContacto?.message}>
-            <Input type="email" {...register('emailContacto')} />
-          </Campo>
-          <Campo label="Teléfono" error={errors.telefono?.message}>
-            <Input {...register('telefono')} />
-          </Campo>
-          <Campo label="Dirección" error={errors.direccion?.message} full>
-            <Input {...register('direccion')} />
-          </Campo>
-          <Campo label="Sitio web" error={errors.sitioWeb?.message} full>
-            <Input {...register('sitioWeb')} placeholder="https://" />
-          </Campo>
-          <div className="sm:col-span-2 flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <p className="text-sm font-medium">Contar el sábado como día hábil</p>
-              <p className="text-xs text-muted-foreground">
-                Afecta el cálculo de días hábiles en las alertas de vencimiento.
-              </p>
-            </div>
-            <Switch checked={sabadoHabil} onCheckedChange={(v) => setValue('sabadoHabil', v)} />
-          </div>
-          <div className="sm:col-span-2 flex items-center justify-between gap-4 rounded-lg border p-3">
-            <div>
-              <p className="text-sm font-medium">Plazo para el comprobante de asistencia de un permiso</p>
-              <p className="text-xs text-muted-foreground">
-                Días hábiles, contados desde el día del permiso, que tiene el colaborador para subir la constancia de que asistió a la cita o diligencia. Con cero debe subirla el mismo día.
-              </p>
-              {errors.plazoComprobantePermisoDias && (
-                <p className="mt-1 text-xs text-destructive">{errors.plazoComprobantePermisoDias.message}</p>
-              )}
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Input
-                type="number" min={0} max={60} step={1} inputMode="numeric"
-                className="w-20 text-center tabular-nums"
-                {...register('plazoComprobantePermisoDias', { valueAsNumber: true })}
-              />
-              <span className="text-sm text-muted-foreground">días</span>
+        {/* Las columnas dependen del ancho del FORMULARIO (container queries), no de la
+            ventana: con el menú de la app y el de Ajustes abiertos queda angosto aunque
+            la pantalla sea grande. 1 columna, 2 desde ~576 px y 3 desde ~896 px: ahí
+            los nueve datos quedan en 3×3 y los dos ajustes, lado a lado. */}
+        <CardContent className="@container py-6">
+          <div className="grid gap-4 @xl:grid-cols-2 @4xl:grid-cols-3">
+            <Campo label="Razón social" error={errors.razonSocial?.message}>
+              <Input {...register('razonSocial')} />
+            </Campo>
+            <Campo label="Nombre comercial" error={errors.nombreComercial?.message}>
+              <Input {...register('nombreComercial')} />
+            </Campo>
+            <Campo label="NIT" error={errors.nit?.message}>
+              <Input {...register('nit')} />
+            </Campo>
+            <Campo label="Representante legal" error={errors.representanteLegal?.message}>
+              <Input {...register('representanteLegal')} />
+            </Campo>
+            <Campo label="C.C. del representante legal" error={errors.representanteLegalCc?.message}>
+              <Input {...register('representanteLegalCc')} placeholder="Aparece en los contratos" />
+            </Campo>
+            <Campo label="Correo de contacto" error={errors.emailContacto?.message}>
+              <Input type="email" {...register('emailContacto')} />
+            </Campo>
+            <Campo label="Teléfono" error={errors.telefono?.message}>
+              <Input {...register('telefono')} />
+            </Campo>
+            <Campo label="Dirección" error={errors.direccion?.message}>
+              <Input {...register('direccion')} />
+            </Campo>
+            <Campo label="Sitio web" error={errors.sitioWeb?.message} className="@xl:col-span-2 @4xl:col-span-1">
+              <Input {...register('sitioWeb')} placeholder="https://" />
+            </Campo>
+            <div className="grid gap-4 @xl:col-span-2 @4xl:col-span-3 @4xl:grid-cols-2">
+              <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+                <div>
+                  <p className="text-sm font-medium">Contar el sábado como día hábil</p>
+                  <p className="text-xs text-muted-foreground">
+                    Afecta el cálculo de días hábiles en las alertas de vencimiento.
+                  </p>
+                </div>
+                <Switch checked={sabadoHabil} onCheckedChange={(v) => setValue('sabadoHabil', v)} className="shrink-0" />
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+                <div>
+                  <p className="text-sm font-medium">Plazo para el comprobante de asistencia de un permiso</p>
+                  <p className="text-xs text-muted-foreground">
+                    Días hábiles, contados desde el día del permiso, que tiene el colaborador para subir la constancia de que asistió a la cita o diligencia. Con cero debe subirla el mismo día.
+                  </p>
+                  {errors.plazoComprobantePermisoDias && (
+                    <p className="mt-1 text-xs text-destructive">{errors.plazoComprobantePermisoDias.message}</p>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Input
+                    type="number" min={0} max={60} step={1} inputMode="numeric"
+                    className="w-20 text-center tabular-nums"
+                    {...register('plazoComprobantePermisoDias', { valueAsNumber: true })}
+                  />
+                  <span className="text-sm text-muted-foreground">días</span>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -107,16 +116,16 @@ export function EmpresaForm({ valores }: { valores: EmpresaInput }) {
 function Campo({
   label,
   error,
-  full,
+  className,
   children,
 }: {
   label: string
   error?: string
-  full?: boolean
+  className?: string
   children: React.ReactNode
 }) {
   return (
-    <div className={`space-y-1.5 ${full ? 'sm:col-span-2' : ''}`}>
+    <div className={cn('space-y-1.5', className)}>
       <Label>{label}</Label>
       {children}
       {error && <p className="text-xs text-destructive">{error}</p>}

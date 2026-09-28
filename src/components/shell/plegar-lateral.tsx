@@ -1,7 +1,7 @@
 'use client'
 
 import { useSyncExternalStore } from 'react'
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -59,7 +59,7 @@ export function PlegarLateral({ variante = 'lateral' }: { variante?: 'lateral' |
       variant="ghost"
       onClick={alternar}
       className={cn(
-        'hidden size-8 shrink-0 text-muted-foreground lg:inline-flex',
+        'hidden size-9 shrink-0 rounded-full text-foreground lg:inline-flex',
         // La de la barra la muestra el CSS solo con el menú plegado.
         variante === 'barra' && 'mostrar-lateral',
       )}
@@ -67,7 +67,8 @@ export function PlegarLateral({ variante = 'lateral' }: { variante?: 'lateral' |
       aria-label={etiqueta}
       title={etiqueta}
     >
-      {oculto ? <PanelLeftOpen className="size-[18px]" /> : <PanelLeftClose className="size-[18px]" />}
+      {/* Tres líneas, como en Google: el mismo ícono abre y cierra. */}
+      <Menu className="size-5" />
     </Button>
   )
 }
