@@ -10,6 +10,10 @@ import { liquidarPeriodo, revertirEfectosPeriodo } from '@/server/nomina/liquida
 import { generarDesprendibles } from '@/server/nomina/desprendibles'
 import { generarPazSalvoPrestamo } from '@/server/prestamos'
 import { parseFechaISO } from '@/lib/fechas'
+import { registrarPagoCuentaCobro } from '@/server/cuentas-cobro'
+import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
+import { fmtCOP } from '@/lib/moneda'
+import { fechaBreve } from '@/lib/notificaciones/texto'
 import { dividirDiurnoNocturno, PAREJA_TIPO_HORA } from '@/server/nomina/horas'
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -326,5 +330,39 @@ export const registrarHoras = accion(
     })
     revalidatePath('/nomina/novedades')
     return { tramos: [{ tipoHora: d.tipoHora, horas: d.horas }] }
+  },
+)
+
+/**
+ * Pagos OPS: registra el pago de una cuenta de cobro aprobada con su
+ * comprobante, desde la misma lista de lo que falta por pagar. Le avisa al
+ * contratista y la cuenta pasa a «Pagadas».
+ */
+export const pagarCuentaCobro = accion(
+  {
+    modulo: 'nomina',
+    accion: 'APROBAR',
+    schema: z.object({
+      id: z.uuid(),
+      fechaPago: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Indica la fecha del pago.'),
+      comprobante: z.string().startsWith('data:', 'Adjunta el comprobante del pago.'),
+    }),
+  },
+  async (d, usuario) => {
+    const fechaPago = parseFechaISO(d.fechaPago)!
+    const r = await registrarPagoCuentaCobro({ cuentaId: d.id, fechaPago, comprobanteDataUri: d.comprobante, usuarioId: usuario.id })
+    const uid = r.colaboradorId ? await usuarioDeColaborador(r.colaboradorId) : null
+    if (uid) {
+      await avisar(uid, {
+        evento: 'cuenta_cobro_estado',
+        titulo: `Tu cuenta ${r.numero} fue pagada`,
+        mensaje: `${fmtCOP(r.valor)} · pago del ${fechaBreve(d.fechaPago)}.`,
+        enlace: '/autoservicio/cuentas-cobro',
+        llamadoAccion: 'Ver mis cuentas de cobro',
+      }).catch(() => {})
+    }
+    revalidatePath('/nomina/ops')
+    revalidatePath('/contratos/cuentas-cobro')
+    revalidatePath('/contratos/ops')
   },
 )

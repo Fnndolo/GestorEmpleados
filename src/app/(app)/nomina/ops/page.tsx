@@ -1,15 +1,17 @@
 import Link from 'next/link'
-import { requerirPermiso } from '@/server/sesion'
+import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Pill, AvatarColaborador, type PillTone } from '@/components/ui-kit'
-import { Receipt, Landmark, Paperclip, ShieldCheck, ShieldAlert, ArrowRight } from 'lucide-react'
+import { Receipt, Landmark, Paperclip, ShieldCheck, ShieldAlert, ArrowRight, FileCheck2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { fmtCOP } from '@/lib/moneda'
 import { urlFoto } from '@/lib/foto'
-import { formatFechaCorta } from '@/lib/fechas'
+import { formatFechaCorta, hoyBogotaISO } from '@/lib/fechas'
+import { ENTIDAD_COMPROBANTE_CUENTA } from '@/server/cuentas-cobro'
+import { PagarCuenta } from './pagar-cuenta'
 import { TIPO_CUENTA } from '@/lib/etiquetas'
 import type { Prisma } from '@/generated/prisma/client'
 import type { EstadoCuentaCobro } from '@/generated/prisma/enums'
@@ -43,7 +45,9 @@ function periodoLegible(p: string): string {
 }
 
 export default async function PagosOpsPage({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
-  await requerirPermiso('nomina', 'VER')
+  const usuario = await requerirPermiso('nomina', 'VER')
+  // Registrar el pago (con su comprobante) es de quien aprueba la nómina.
+  const puedePagar = tienePermiso(usuario, 'nomina', 'APROBAR')
   const { ver } = await searchParams
   const vista: VistaKey = ver && ver in VISTAS ? (ver as VistaKey) : 'por-pagar'
   const estados = VISTAS[vista].estados
@@ -66,6 +70,16 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
   const aprobadas = await prisma.cuentaCobroOps.aggregate({ where: { estado: 'APROBADA' }, _sum: { valor: true }, _count: true })
   const totalPorPagar = Number(aprobadas._sum.valor ?? 0)
 
+  // Comprobante de cada cuenta pagada (el último que se subió).
+  const comprobantes = await prisma.documento.findMany({
+    where: { entidadTipo: ENTIDAD_COMPROBANTE_CUENTA, entidadId: { in: cuentas.filter((c) => c.estado === 'PAGADA').map((c) => c.id) } },
+    orderBy: { creadoEn: 'desc' },
+    select: { id: true, entidadId: true },
+  })
+  const comprobanteDe = new Map<string, string>()
+  for (const d of comprobantes) if (!comprobanteDe.has(d.entidadId)) comprobanteDe.set(d.entidadId, d.id)
+  const hoy = hoyBogotaISO()
+
   // Aplana + agrupa por periodo string.
   const filas = cuentas.map((c) => {
     const owner = c.colaborador ?? c.contratoOps?.colaborador ?? null
@@ -82,6 +96,9 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
       valor: Number(c.valor),
       estado: c.estado as string,
       fechaRadicacion: formatFechaCorta(c.fechaRadicacion),
+      fechaPago: c.fechaPago ? formatFechaCorta(c.fechaPago) : null,
+      fechaPagoISO: c.fechaPago ? c.fechaPago.toISOString().slice(0, 10) : null,
+      comprobanteId: comprobanteDe.get(c.id) ?? null,
       documentoId: c.documentoId,
       esOps: Boolean(c.contratoOpsId),
       ss: c.soporteSs?.estadoVerificacion ?? null,
@@ -181,8 +198,24 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
                               ? <span title="Seguridad social verificada"><ShieldCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" /></span>
                               : <span title={f.ss === 'INVALIDA' ? 'Soporte de SS inválido' : 'Falta verificar la seguridad social'}><ShieldAlert className="size-3.5 text-amber-500" /></span>
                           )}
-                          <Pill tone={TONO[f.estado] ?? 'muted'}>{ESTADO[f.estado] ?? f.estado}</Pill>
+                          <Pill tone={TONO[f.estado] ?? 'muted'}>{f.estado === 'PAGADA' && f.fechaPago ? `Pagada · ${f.fechaPago}` : (ESTADO[f.estado] ?? f.estado)}</Pill>
                         </div>
+                        {/* Pagar con el comprobante, ahí mismo; y ver (o cambiar) el de las ya pagadas. */}
+                        {f.estado === 'APROBADA' && puedePagar && (
+                          <PagarCuenta cuentaId={f.id} numero={f.numero} nombre={f.nombre} valor={fmtCOP(f.valor)} hoy={hoy} />
+                        )}
+                        {f.estado === 'PAGADA' && (f.comprobanteId || puedePagar) && (
+                          <div className="flex items-center gap-1">
+                            {f.comprobanteId && (
+                              <VisorPdf documentoId={f.comprobanteId} titulo={`Comprobante de pago · ${f.numero}`} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                                <FileCheck2 className="size-3.5" /> Comprobante
+                              </VisorPdf>
+                            )}
+                            {puedePagar && (
+                              <PagarCuenta cuentaId={f.id} numero={f.numero} nombre={f.nombre} valor={fmtCOP(f.valor)} hoy={hoy} pagada conComprobante={!!f.comprobanteId} fechaPago={f.fechaPagoISO} />
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -191,7 +224,7 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
             )
           })}
           <p className="px-1 text-xs text-muted-foreground">
-            Para verificar la seguridad social, aprobar o marcar como pagada una cuenta, ve a{' '}
+            Para verificar la seguridad social o aprobar una cuenta, ve a{' '}
             <Link href="/contratos/cuentas-cobro" className="text-primary hover:underline">Contratos → Cuentas de cobro</Link>.
           </p>
         </div>
