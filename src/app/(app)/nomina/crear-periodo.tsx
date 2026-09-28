@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { crearPeriodo } from './acciones'
+import { crearPeriodo, liquidar } from './acciones'
+import { avisosDeNomina } from './[id]/acciones-cliente'
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
@@ -23,12 +24,23 @@ export function CrearPeriodo() {
   const [quincena, setQuincena] = useState('1')
   const [g, setG] = useState(false)
 
+  /**
+   * Crea el periodo y lo liquida de una vez: no hay un paso intermedio de
+   * "borrador" que revisar. Lo calculado se revisa en el periodo y, si faltaba
+   * una novedad, se registra y se recalcula. Si el cálculo falla (p. ej. no hay
+   * SMMLV vigente), el periodo queda creado y se calcula desde su pantalla.
+   */
   async function crear() {
     setG(true)
     const res = await crearPeriodo({ anio: Number(anio), mes: Number(mes), tipo, quincena: tipo === 'QUINCENAL' ? Number(quincena) : undefined })
+    if (!res.ok) { setG(false); toast.error(res.error); return }
+    const id = (res.datos as { id: string }).id
+    const liq = await liquidar({ periodoId: id })
     setG(false)
-    if (res.ok) { toast.success('Periodo creado.'); setAbierto(false); router.push(`/nomina/${(res.datos as { id: string }).id}`) }
-    else toast.error(res.error)
+    if (liq.ok) { toast.success('Periodo creado y calculado.'); avisosDeNomina(liq.datos) }
+    else toast.error(`Periodo creado, pero no se pudo calcular: ${liq.error}`)
+    setAbierto(false)
+    router.push(`/nomina/${id}`)
   }
 
   return (
@@ -76,7 +88,7 @@ export function CrearPeriodo() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAbierto(false)}>Cancelar</Button>
-            <Button onClick={crear} disabled={g}>{g && <Spinner />}Crear</Button>
+            <Button onClick={crear} disabled={g}>{g && <Spinner />}{g ? 'Calculando…' : 'Crear y calcular'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
