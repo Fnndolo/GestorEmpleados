@@ -84,17 +84,27 @@ export function Casilla({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Casilla de móvil: solo el ícono dentro del recuadro y el nombre debajo, fuera.
- *
- * En una pantalla de teléfono la descripción no aporta —el nombre ya dice qué
- * es— y obligaba a recuadros altos. Sacando el texto del recuadro, cada módulo
- * ocupa poco más que su ícono y caben todos casi sin bajar.
+ * Rejilla de casillas para escritorio: las mismas casillas del celular, más
+ * grandes, una tras otra hasta llenar el renglón. Donde sobra ancho no hace
+ * falta deslizar, así que todo queda a la vista de una vez. Las casillas tienen
+ * ancho fijo, así una sección corta ocupa solo lo suyo y la siguiente puede
+ * ponerse al lado.
+ */
+export function RejillaCasillas({ children }: { children: React.ReactNode }) {
+  return <div className="hidden flex-wrap gap-x-2 gap-y-4 sm:flex">{children}</div>
+}
+
+/**
+ * Casilla de módulo: solo el ícono dentro del recuadro y el nombre debajo,
+ * fuera. Sin descripción: el nombre ya dice qué es, y la descripción obligaba
+ * a recuadros altos. Es la misma en el celular y, más grande (`grande`), en
+ * escritorio.
  */
 export function CasillaCompacta({
-  icono: Icono, titulo, aviso, nuevo, href, onClick,
+  icono: Icono, titulo, aviso, nuevo, href, onClick, grande = false,
 }: {
   icono: React.ElementType
-  /** Nombre corto: el largo se parte feo bajo un ícono. */
+  /** Nombre corto en el celular: el largo se parte feo bajo un ícono. */
   titulo: string
   /** Estado real que exige atención ("3 pendientes"): se pinta el número sobre el ícono. */
   aviso?: string | null
@@ -102,35 +112,49 @@ export function CasillaCompacta({
   nuevo?: boolean
   href?: string
   onClick?: () => void
+  /** Tamaño de escritorio: recuadro, ícono y nombre más grandes. */
+  grande?: boolean
 }) {
   const contenido = (
     <>
       <span className="relative">
-        <span className={cn('grid size-16 place-items-center rounded-2xl border bg-card', 'transition-colors group-active/t:bg-accent')}>
-          {/* Chip e icono algo más grandes que en escritorio: a este tamaño el
-              icono se leía chico y el recuadro de 64 px lo aguanta sin apretar. */}
-          <span className="grid size-11 place-items-center rounded-xl bg-foreground text-background">
-            <Icono className="size-[22px]" />
+        <span className={cn(
+          'grid place-items-center border bg-card transition-all group-active/t:bg-accent',
+          grande
+            ? 'size-24 rounded-3xl group-hover/t:-translate-y-0.5 group-hover/t:border-foreground/20 group-hover/t:shadow-md'
+            : 'size-16 rounded-2xl',
+        )}>
+          <span className={cn('grid place-items-center bg-foreground text-background', grande ? 'size-14 rounded-2xl' : 'size-11 rounded-xl')}>
+            <Icono className={grande ? 'size-7' : 'size-[22px]'} />
           </span>
         </span>
-        {/* Lo pendiente se marca sobre el ícono, como una notificación: en este
-            tamaño una etiqueta con texto no cabe sin descuadrar la fila. */}
+        {/* Lo pendiente se marca sobre el ícono, como una notificación: una
+            etiqueta con texto no cabe sin descuadrar la fila. */}
         {aviso ? (
-          <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-amber-500 px-1 text-center text-[10px] font-bold leading-4 text-white">
+          <span className={cn(
+            'absolute rounded-full bg-amber-500 text-center font-bold text-white',
+            grande ? '-right-1.5 -top-1.5 min-w-6 px-1.5 text-xs leading-6' : '-right-1 -top-1 min-w-4 px-1 text-[10px] leading-4',
+          )}>
             {aviso.match(/\d+/)?.[0] ?? '!'}
           </span>
         ) : nuevo ? (
-          <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
+          <span className={cn('absolute rounded-full bg-emerald-500 ring-2 ring-background', grande ? '-right-1 -top-1 size-3.5' : '-right-0.5 -top-0.5 size-2.5')} />
         ) : null}
       </span>
       {/* Alto fijo de dos líneas: sin esto los nombres de una sola línea suben y
           los de dos bajan, y la fila queda con los íconos a distinta altura. */}
-      <span className="-mx-1 mt-1 line-clamp-2 block h-[24px] w-[72px] text-center text-[10px] font-medium leading-[12px]">
+      <span className={cn(
+        'line-clamp-2 block text-center font-medium',
+        grande ? 'mt-2 h-[36px] w-28 text-[13px] leading-[18px]' : '-mx-1 mt-1 h-[24px] w-[72px] text-[10px] leading-[12px]',
+      )}>
         {titulo}
       </span>
     </>
   )
-  const clases = 'group/t flex shrink-0 flex-col items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-2xl'
+  const clases = cn(
+    'group/t flex shrink-0 flex-col items-center rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+    grande && 'w-[7.5rem]',
+  )
   return href
     ? <Link href={href} className={clases}>{contenido}</Link>
     : <button type="button" onClick={onClick} className={clases}>{contenido}</button>
