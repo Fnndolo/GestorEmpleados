@@ -8,14 +8,15 @@ import { Button } from '@/components/ui/button'
 import { Pill } from '@/components/ui-kit'
 import { FileText, ShieldCheck, UserRound } from 'lucide-react'
 import { formatFechaLarga, formatFechaCorta, formatFechaISO, hoyBogota } from '@/lib/fechas'
-import { FilaDocumento, VerDocumento } from '@/components/contratos/fila-documento'
+import { FilaDocumento } from '@/components/contratos/fila-documento'
 import { FilaAnexo } from '@/components/contratos/fila-anexo'
 import { AccionesOps } from './acciones-ops'
 import { MOTIVO_CIERRE_TEXTO } from '@/lib/contratos-cierre'
 import { fmtCOP } from '@/lib/moneda'
 import { CuentasCobro } from './cuentas-cliente'
 import { Entregables } from './entregables-cliente'
-import { FirmasContrato } from './firmas-contrato'
+import { DocumentoVersiones, type FirmaParte } from '@/components/contratos/documento-versiones'
+import { FirmarEmpresa } from '@/components/contratos/firmar-empresa'
 import { GenerarAutorizacion, RegenerarDocumentos } from './generar-autorizacion'
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import { HabilitarFirma } from './habilitar-firma'
@@ -81,6 +82,37 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
   const vencido = vigente && c.fechaFin < hoy
   const diasParaVencer = vigente ? Math.ceil((c.fechaFin.getTime() - hoy.getTime()) / 86_400_000) : null
   const tieneAutorizacion = documentos.some((d) => d.nombre.startsWith('Autorización'))
+
+  // Cada documento con sus versiones (la vigente primero) y su estado.
+  const version = (d: { id: string; nombre: string; creadoEn: Date }) => ({ id: d.id, nombre: d.nombre, fecha: formatFechaCorta(d.creadoEn) })
+  const versionesContrato = documentos.filter((d) => !d.nombre.startsWith('Autorización')).map(version)
+  const versionesAutorizacion = documentos.filter((d) => d.nombre.startsWith('Autorización')).map(version)
+  const contratanteOk = !!c.firmaContratantePath || c.firmaContratanteEnPdf
+  const contratistaOk = !!c.firmaContratistaPath
+  const nombreContratante = snap?.firmaContratanteNombre ?? ''
+  const estadoContrato = c.origenPdf === 'SUBIDO'
+    ? { estado: 'Firmado en físico · documento subido', tono: 'ok' as const, partes: undefined }
+    : {
+        estado: contratanteOk && contratistaOk ? 'Firmado por ambas partes'
+          : contratanteOk ? 'Falta la firma del contratista'
+          : contratistaOk ? 'Falta la firma del contratante'
+          : 'Pendiente de firmas',
+        tono: contratanteOk && contratistaOk ? 'ok' as const : 'pendiente' as const,
+        partes: [
+          {
+            rol: 'Contratante',
+            ok: contratanteOk,
+            texto: c.firmaContratanteEnPdf ? 'firmó en el documento aportado'
+              : c.firmaContratanteFecha ? `firmó el ${formatFechaCorta(c.firmaContratanteFecha)}` : 'pendiente',
+          },
+          {
+            rol: 'Contratista',
+            ok: contratistaOk,
+            texto: c.firmaContratistaFecha ? `firmó el ${formatFechaCorta(c.firmaContratistaFecha)}` : 'firma desde su autoservicio',
+          },
+        ] satisfies FirmaParte[],
+      }
+  const autorizacionFirmada = versionesAutorizacion[0]?.nombre.toLowerCase().includes('firmad') ?? false
 
   return (
     <div className="max-w-6xl space-y-4">
@@ -158,32 +190,29 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
               {/* Solo para contratos de plantilla: en uno subido el snapshot no trae el texto del contrato. */}
               {GENERAR_CONTRATOS_DESDE_PLANTILLA && puedeEditar && c.origenPdf === 'GENERADO' && c.contenidoPdf != null && <RegenerarDocumentos contratoId={c.id} />}
             </FilaDocumento>
-          ) : documentos.map((d) => (
-            <FilaDocumento
-              key={d.id}
-              icono={d.nombre.startsWith('Autorización') ? ShieldCheck : FileText}
-              titulo={d.nombre}
-              sub={c.origenPdf === 'SUBIDO' && !d.nombre.startsWith('Autorización') ? 'Subido · firmado en físico' : formatFechaCorta(d.creadoEn)}
-            >
-              <VerDocumento documentoId={d.id} titulo={d.nombre} />
-            </FilaDocumento>
-          ))}
-          {c.origenPdf !== 'SUBIDO' && documentos.length > 0 && (
-            <FirmasContrato
-              contratoId={c.id}
-              puedeFirmar={puedeEditar}
-              contratante={{
-                nombre: snap?.firmaContratanteNombre ?? '',
-                firmado: !!c.firmaContratantePath,
-                fecha: c.firmaContratanteFecha ? formatFechaCorta(c.firmaContratanteFecha) : null,
-                enPdf: c.firmaContratanteEnPdf,
-              }}
-              contratista={{
-                nombre: snap?.firmaContratistaNombre ?? nombreContratista,
-                firmado: !!c.firmaContratistaPath,
-                fecha: c.firmaContratistaFecha ? formatFechaCorta(c.firmaContratistaFecha) : null,
-              }}
-            />
+          ) : (
+            <>
+              {versionesContrato.length > 0 && (
+                <DocumentoVersiones
+                  icono={FileText}
+                  titulo="Contrato"
+                  estado={estadoContrato.estado}
+                  tono={estadoContrato.tono}
+                  partes={estadoContrato.partes}
+                  versiones={versionesContrato}
+                  acciones={c.origenPdf !== 'SUBIDO' && puedeEditar && !contratanteOk && <FirmarEmpresa contratoId={c.id} vinculo="OPS" nombre={nombreContratante} />}
+                />
+              )}
+              {versionesAutorizacion.length > 0 && (
+                <DocumentoVersiones
+                  icono={ShieldCheck}
+                  titulo="Autorización de datos"
+                  estado={autorizacionFirmada ? 'Firmada por el contratista' : 'Por firmar · la firma el contratista junto con el contrato'}
+                  tono={autorizacionFirmada ? 'ok' : 'pendiente'}
+                  versiones={versionesAutorizacion}
+                />
+              )}
+            </>
           )}
           {anexos.map((d) => (
             <FilaAnexo key={d.id} id={d.id} contratoId={c.id} nombre={d.nombre} fecha={formatFechaCorta(d.creadoEn)} puedeEditar={puedeEditar} />

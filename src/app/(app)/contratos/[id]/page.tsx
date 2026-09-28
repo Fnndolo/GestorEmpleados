@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Pill } from '@/components/ui-kit'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
-import { FileText, TriangleAlert, UserRound, CalendarPlus, FilePen, CirclePause } from 'lucide-react'
+import { FileText, ShieldCheck, TriangleAlert, UserRound, CalendarPlus, FilePen, CirclePause } from 'lucide-react'
 import { formatFechaCorta, duracionContrato, hoyBogota } from '@/lib/fechas'
 import { FilaDocumento, VerDocumento } from '@/components/contratos/fila-documento'
 import { FilaAnexo } from '@/components/contratos/fila-anexo'
@@ -15,7 +15,10 @@ import { fmtCOP } from '@/lib/moneda'
 import { MODALIDAD_TRABAJO } from '@/lib/etiquetas'
 import { AccionesContrato } from './acciones-cliente'
 import { discrepanciaVinculo, type TipoContratoLaboral, type TipoVinculo } from '@/lib/vinculo-contrato'
-import { FirmasLaboral } from './firmas-laboral'
+import { EdicionContrato } from './edicion-contrato'
+import { DocumentoVersiones, type FirmaParte } from '@/components/contratos/documento-versiones'
+import { FirmarEmpresa } from '@/components/contratos/firmar-empresa'
+import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import { CorregirPosicionFirma } from '@/components/contratos/corregir-posicion-firma'
 import { METODO_CORRECCION_POSICION } from '@/server/contratos-estampar'
 import { resumenOtrosi, ETIQUETA_CAMBIO_OTROSI, type ValoresOtrosi, type TipoCambioOtrosi } from '@/lib/otrosi'
@@ -55,7 +58,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
     prisma.documento.findMany({
       where: { entidadTipo: 'Contrato', entidadId: id },
       orderBy: { creadoEn: 'desc' },
-      select: { id: true, nombre: true },
+      select: { id: true, nombre: true, creadoEn: true },
     }),
     prisma.configuracionEmpresa.findFirst({ select: { representanteLegal: true } }),
     prisma.evidenciaFirmaContrato.findMany({ where: { contratoId: id }, orderBy: { firmadoEn: 'asc' } }),
@@ -68,9 +71,41 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
     }),
   ])
 
-  // Último PDF de cada tipo (el firmado si existe, si no el original).
-  const docContrato = documentos.find((d) => !d.nombre.startsWith('Autorización'))
-  const docAutorizacion = documentos.find((d) => d.nombre.startsWith('Autorización'))
+  // Cada documento con sus versiones (la vigente primero: la firmada si ya la hay) y su estado.
+  const version = (d: { id: string; nombre: string; creadoEn: Date }) => ({ id: d.id, nombre: d.nombre, fecha: formatFechaCorta(d.creadoEn) })
+  const versionesContrato = documentos.filter((d) => !d.nombre.startsWith('Autorización')).map(version)
+  const versionesAutorizacion = documentos.filter((d) => d.nombre.startsWith('Autorización')).map(version)
+  const subido = c.origenPdf === 'SUBIDO'
+  // Un contrato subido para firma no tiene snapshot de plantilla: el PDF es el documento.
+  const tieneDocumento = !!c.contenidoPdf || c.origenPdf === 'SUBIDO_PARA_FIRMA'
+  const empleadorOk = !!c.firmaEmpleadorPath || c.firmaEmpleadorEnPdf
+  const empleadoOk = !!c.firmaEmpleadoPath
+  const nombreEmpleador = empresaCfg?.representanteLegal ?? ''
+  const estadoContrato = subido
+    ? { estado: versionesContrato.length ? 'Firmado en físico · documento subido' : 'Sin PDF adjunto', tono: versionesContrato.length ? 'ok' as const : undefined, partes: undefined }
+    : {
+        estado: empleadorOk && empleadoOk ? 'Firmado por ambas partes'
+          : empleadorOk ? 'Falta la firma del empleado · contenido congelado'
+          : empleadoOk ? 'Falta la firma del empleador · contenido congelado'
+          : 'Pendiente de firmas',
+        tono: empleadorOk && empleadoOk ? 'ok' as const : 'pendiente' as const,
+        partes: [
+          {
+            rol: 'Empleador',
+            ok: empleadorOk,
+            texto: c.firmaEmpleadorEnPdf ? 'firmó en el documento aportado'
+              : c.firmaEmpleadorFecha ? `firmó el ${formatFechaCorta(c.firmaEmpleadorFecha)}` : 'pendiente',
+          },
+          {
+            rol: 'Empleado',
+            ok: empleadoOk,
+            texto: c.firmaEmpleadoFecha ? `firmó el ${formatFechaCorta(c.firmaEmpleadoFecha)}` : 'firma desde su autoservicio',
+          },
+        ] satisfies FirmaParte[],
+      }
+  // Mientras nadie firme, el texto se edita y el PDF se regenera (solo con plantilla).
+  const editable = GENERAR_CONTRATOS_DESDE_PLANTILLA && c.origenPdf === 'GENERADO' && puedeEditar && !c.firmaEmpleadorPath && !c.firmaEmpleadoPath
+  const autorizacionFirmada = (versionesAutorizacion[0]?.nombre.toLowerCase().includes('firmad') ?? false) || empleadoOk
 
   // Si el contrato y la ficha se contradicen hay que decirlo aquí: las acciones
   // disponibles salen del tipo del contrato y los trámites del autoservicio del
@@ -158,31 +193,33 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
       <Card className="py-0"><CardContent className="p-4 sm:p-5">
         <h2 className="text-sm font-semibold">Documentos</h2>
         <ul className="divide-y">
-          {c.origenPdf === 'SUBIDO' ? (
-            <FilaDocumento icono={FileText} titulo="Contrato" sub={docContrato ? 'Firmado en físico' : 'Sin PDF adjunto'} tono={docContrato ? 'ok' : undefined}>
-              {docContrato && <VerDocumento documentoId={docContrato.id} titulo={`Contrato ${c.numero}`} />}
+          {!subido && !tieneDocumento && versionesContrato.length === 0 ? (
+            <FilaDocumento icono={FileText} titulo="Contrato" sub="Sin documento">
+              {editable && <EdicionContrato contratoId={c.id} tieneDocumento={false} />}
             </FilaDocumento>
           ) : (
-            <FirmasLaboral
-              contratoId={c.id}
-              numero={c.numero}
-              // Un contrato subido para firma no tiene snapshot de plantilla: el PDF es el documento.
-              tieneDocumento={!!c.contenidoPdf || c.origenPdf === 'SUBIDO_PARA_FIRMA'}
-              subido={c.origenPdf === 'SUBIDO_PARA_FIRMA'}
-              documentoId={docContrato?.id ?? null}
-              autorizacionId={docAutorizacion?.id ?? null}
-              puedeFirmar={puedeEditar}
-              empleador={{
-                nombre: empresaCfg?.representanteLegal ?? '',
-                firmado: !!c.firmaEmpleadorPath,
-                fecha: c.firmaEmpleadorFecha ? formatFechaCorta(c.firmaEmpleadorFecha) : null,
-                enPdf: c.firmaEmpleadorEnPdf,
-              }}
-              empleado={{
-                nombre,
-                firmado: !!c.firmaEmpleadoPath,
-                fecha: c.firmaEmpleadoFecha ? formatFechaCorta(c.firmaEmpleadoFecha) : null,
-              }}
+            <DocumentoVersiones
+              icono={FileText}
+              titulo="Contrato"
+              estado={estadoContrato.estado}
+              tono={estadoContrato.tono}
+              partes={estadoContrato.partes}
+              versiones={versionesContrato}
+              acciones={
+                <>
+                  {editable && <EdicionContrato contratoId={c.id} tieneDocumento={tieneDocumento} />}
+                  {!subido && tieneDocumento && puedeEditar && !empleadorOk && <FirmarEmpresa contratoId={c.id} vinculo="LABORAL" nombre={nombreEmpleador} />}
+                </>
+              }
+            />
+          )}
+          {versionesAutorizacion.length > 0 && (
+            <DocumentoVersiones
+              icono={ShieldCheck}
+              titulo="Autorización de datos"
+              estado={autorizacionFirmada ? 'Firmada por el empleado' : 'Por firmar · la firma el empleado junto con el contrato'}
+              tono={autorizacionFirmada ? 'ok' : 'pendiente'}
+              versiones={versionesAutorizacion}
             />
           )}
           {anexos.map((d) => (
