@@ -7,6 +7,7 @@ import { formatFechaLarga } from '@/lib/fechas'
 import { fechaBreve, rangoBreve } from '@/lib/notificaciones/texto'
 import { fmtCOP } from '@/lib/moneda'
 import { resumenOtrosi, type ValoresOtrosi } from '@/lib/otrosi'
+import { TIPO_LABORAL_CORTO, firmaContratoLaboral, firmaContratoOps } from '@/lib/contratos/tarjeta'
 import { MisContratos } from './mis-contratos'
 
 export const metadata = { title: 'Mis contratos · Smart Gadgets RH' }
@@ -82,11 +83,6 @@ export default async function MisContratosPage() {
     docsPorContrato.get(id)?.[0]?.id ??
     null
 
-  const TIPO_LABORAL_CORTO: Record<string, string> = {
-    TERMINO_FIJO: 'Término fijo', TERMINO_INDEFINIDO: 'Término indefinido',
-    OBRA_LABOR: 'Obra o labor', APRENDIZAJE_SENA: 'Aprendizaje SENA', PRACTICA: 'Práctica',
-  }
-
   const items = [
     ...laborales.map((c) => ({
       id: c.id,
@@ -97,8 +93,10 @@ export default async function MisContratosPage() {
       // Para la tarjeta plegada: cargo y tipo en una línea, vigencia corta en la otra.
       resumen: [c.cargo?.nombre, TIPO_LABORAL_CORTO[c.tipo] ?? c.tipo].filter(Boolean).join(' · '),
       vigenciaCorta: c.fechaFin ? rangoBreve(c.fechaInicio, c.fechaFin) : `Desde ${fechaBreve(c.fechaInicio)}`,
-      // El empleador puede haber firmado en el PDF aportado en vez de en la app.
-      estado: c.firmaEmpleadoPath && (c.firmaEmpleadorPath || c.firmaEmpleadorEnPdf) ? 'FIRMADO' : c.estado,
+      // El estado del contrato y, aparte, cómo van las firmas (el empleador
+      // puede haber firmado en el PDF aportado en vez de en la app).
+      estado: c.estado,
+      firma: firmaContratoLaboral(c),
       valorTotal: `${fmtCOP(Number(c.salarioBase))}/mes`,
       documentoId: contratoDocId(c.id),
       documentos: docsPorContrato.get(c.id) ?? [],
@@ -127,6 +125,7 @@ export default async function MisContratosPage() {
       resumen: c.objeto.replace(/^Prestación de servicios como\s+/i, ''),
       vigenciaCorta: rangoBreve(c.fechaInicio, c.fechaFin),
       estado: c.estado,
+      firma: firmaContratoOps(c),
       valorTotal: fmtCOP(Number(c.valorTotal)),
       documentoId: contratoDocId(c.id),
       documentos: docsPorContrato.get(c.id) ?? [],

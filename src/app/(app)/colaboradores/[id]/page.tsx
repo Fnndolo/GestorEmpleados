@@ -14,7 +14,7 @@ import { TabsContent } from '@/components/ui/tabs'
 import { TabsResponsive } from '@/components/shell/tabs-responsive'
 import {
   Pencil, Phone, ShieldAlert, CalendarDays, FileText, Eye, Receipt,
-  IdCard, HeartPulse, BriefcaseBusiness, Landmark, Shirt, CalendarRange, Banknote, CalendarClock,
+  IdCard, HeartPulse, BriefcaseBusiness, Landmark, Shirt, CalendarRange, Banknote, CalendarClock, CircleCheck, Clock, ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Stat, BloqueDatos } from '@/components/ui-kit'
@@ -25,6 +25,9 @@ import { historialSolicitudes } from '@/server/solicitudes-historial'
 import { HistorialSolicitudes } from '@/components/solicitudes/historial-solicitudes'
 import { documentosDeOtroModulo } from '@/server/documentos'
 import { valorParametroVigente } from '@/server/nomina/parametros'
+import { TarjetaContrato } from '@/components/contratos/tarjeta-contrato'
+import { TIPO_LABORAL_CORTO, firmaContratoLaboral, firmaContratoOps } from '@/lib/contratos/tarjeta'
+import { fechaBreve, rangoBreve } from '@/lib/notificaciones/texto'
 import { SubirContratoExistente } from './subir-contrato-existente'
 import { FotoUploader } from './foto-uploader'
 import { EducacionLista } from './educacion-lista'
@@ -116,6 +119,79 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
     // Valor legal vigente del auxilio de transporte, para mostrarlo al subir un contrato.
     valorParametroVigente('AUX_TRANSPORTE'),
   ])
+
+  // Pestaña Contrato: la misma tarjeta que el colaborador ve en su autoservicio,
+  // con los PDF de cada contrato (el más reciente primero, laboral u OPS).
+  const docsContratos = await prisma.documento.findMany({
+    where: {
+      OR: [
+        { entidadTipo: 'Contrato', entidadId: { in: contratos.map((ct) => ct.id) } },
+        { entidadTipo: 'ContratoOps', entidadId: { in: contratosOps.map((ct) => ct.id) } },
+      ],
+    },
+    orderBy: { creadoEn: 'desc' },
+    select: { id: true, entidadId: true, nombre: true },
+  })
+  const docsDe = (contratoId: string) => docsContratos.filter((d) => d.entidadId === contratoId)
+  const tarjetasContrato = [
+    ...contratos.map((ct, i) => {
+      // La interrupción con el contrato anterior (la lista va del más nuevo al
+      // más viejo) define si la relación laboral es continua para antigüedad y
+      // prestaciones, así que se muestra explícita.
+      const anterior = contratos[i + 1]
+      const diasInterrupcion = anterior?.fechaFin
+        ? Math.round((ct.fechaInicio.getTime() - anterior.fechaFin.getTime()) / 86_400_000) - 1
+        : null
+      return {
+        id: ct.id,
+        fechaMs: ct.fechaInicio.getTime(),
+        datos: {
+          numero: ct.numero,
+          estado: ct.estado,
+          firma: firmaContratoLaboral(ct),
+          resumen: [ct.cargo?.nombre, TIPO_LABORAL_CORTO[ct.tipo] ?? ct.tipo].filter(Boolean).join(' · '),
+          vigenciaCorta: ct.fechaFin ? rangoBreve(ct.fechaInicio, ct.fechaFin) : `Desde ${fechaBreve(ct.fechaInicio)}`,
+          valor: `${fmtCOP(Number(ct.salarioBase))}/mes`,
+          documentos: docsDe(ct.id),
+        },
+        firmas: ct.origenPdf === 'SUBIDO' ? null : [
+          { parte: 'Empleado', fecha: ct.firmaEmpleadoFecha, enPdf: false, pendiente: 'firma desde su autoservicio' },
+          { parte: 'Empleador', fecha: ct.firmaEmpleadorFecha, enPdf: ct.firmaEmpleadorEnPdf, pendiente: 'pendiente' },
+        ],
+        detalles: [
+          [
+            ct.ganaSalarioMinimo ? 'Salario mínimo' : null,
+            ct.tieneAuxTransporte ? 'con auxilio de transporte' : 'sin auxilio de transporte',
+            ct.auxConectividad ? `conectividad ${fmtCOP(Number(ct.auxConectividad))}` : null,
+          ].filter(Boolean).join(' · '),
+          `${ct.sede.nombre} · ${duracionContrato(ct.fechaInicio, ct.fechaFin)}`,
+          anterior?.fechaFin && diasInterrupcion != null
+            ? `Contrato anterior (${anterior.numero}) terminó el ${formatFechaLarga(anterior.fechaFin)}${diasInterrupcion <= 0 ? ' · sin interrupción' : ` · ${diasInterrupcion} día${diasInterrupcion > 1 ? 's' : ''} de interrupción`}`
+            : null,
+        ].filter((d): d is string => !!d),
+        href: puedeVerContratos ? `/contratos/${ct.id}` : null,
+      }
+    }),
+    ...contratosOps.map((ct) => ({
+      id: ct.id,
+      fechaMs: ct.fechaInicio.getTime(),
+      datos: {
+        numero: ct.numero,
+        estado: ct.estado,
+        firma: firmaContratoOps(ct),
+        resumen: ct.objeto.replace(/^Prestación de servicios como\s+/i, ''),
+        vigenciaCorta: rangoBreve(ct.fechaInicio, ct.fechaFin),
+        valor: ct.valorMensual ? `${fmtCOP(Number(ct.valorMensual))}/mes` : fmtCOP(Number(ct.valorTotal)),
+        documentos: docsDe(ct.id),
+      },
+      firmas: ct.origenPdf === 'SUBIDO' ? null : [
+        { parte: 'Contratista', fecha: ct.firmaContratistaFecha, enPdf: false, pendiente: 'firma desde su autoservicio' },
+        { parte: 'Contratante', fecha: ct.firmaContratanteFecha, enPdf: ct.firmaContratanteEnPdf, pendiente: 'pendiente' },
+      ],
+      detalles: [`Prestación de servicios · ${ct.sede.nombre} · ${duracionContrato(ct.fechaInicio, ct.fechaFin)}`],
+      href: puedeVerContratos ? `/contratos/ops/${ct.id}` : '/autoservicio/contratos',
+    })),
+  ].sort((a, b) => b.fechaMs - a.fechaMs)
 
   // Capacitaciones internas del colaborador (RIT art. 95) para la pestaña Educación.
   const capacitacionesColab = await prisma.asistenciaCapacitacion.findMany({
@@ -446,62 +522,50 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
             </CardContent></Card>
           ) : (
             <>
-              {contratos.map((ct, i) => (
-                <Card key={ct.id}><CardContent className="py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium text-sm">{ct.numero}</p>
-                        <Badge variant="outline">{TIPO_VINCULO[ct.tipo as keyof typeof TIPO_VINCULO] ?? ct.tipo}</Badge>
-                        <Badge variant={ct.estado === 'ACTIVO' ? 'default' : 'secondary'}>{ct.estado}</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {fmtCOP(Number(ct.salarioBase))}{ct.ganaSalarioMinimo ? ' · salario mínimo' : ''}
-                        {ct.tieneAuxTransporte ? ' · con aux. transporte' : ''}
-                        {ct.auxConectividad ? ` · conectividad ${fmtCOP(Number(ct.auxConectividad))}` : ''}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{ct.cargo?.nombre ?? 'Sin cargo'} · {ct.sede.nombre} · desde {formatFechaLarga(ct.fechaInicio)}{ct.fechaFin ? ` hasta ${formatFechaLarga(ct.fechaFin)}` : ''} · {duracionContrato(ct.fechaInicio, ct.fechaFin)}</p>
-                      {/* Enlace con el contrato inmediatamente anterior (la lista viene de
-                          más nuevo a más viejo). La interrupción entre uno y otro define
-                          si la relación laboral se considera continua para antigüedad y
-                          prestaciones, así que se muestra explícita. */}
-                      {(() => {
-                        const anterior = contratos[i + 1]
-                        if (!anterior?.fechaFin) return null
-                        const dias = Math.round(
-                          (ct.fechaInicio.getTime() - anterior.fechaFin.getTime()) / 86_400_000,
-                        ) - 1
-                        return (
-                          <p className="text-xs text-muted-foreground">
-                            Contrato anterior ({anterior.numero}) terminó el {formatFechaLarga(anterior.fechaFin)}
-                            {dias <= 0 ? ' · sin interrupción' : ` · ${dias} día${dias > 1 ? 's' : ''} de interrupción`}
-                          </p>
-                        )
-                      })()}
+              {/* La misma tarjeta del autoservicio: plegada muestra número, estado,
+                  cargo y vigencia; abierta, los PDF, las firmas y los detalles. El
+                  contrato vigente (el primero) se muestra abierto. */}
+              {tarjetasContrato.map((t, i) => (
+                <TarjetaContrato key={t.id} c={t.datos} abiertoInicial={i === 0}>
+                  {t.datos.documentos.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Sin documento cargado.</p>
+                  )}
+                  {t.firmas ? (
+                    t.datos.documentos.length > 0 && (
+                      <ul className="space-y-1">
+                        {t.firmas.map((f) => {
+                          const firmo = !!f.fecha || f.enPdf
+                          return (
+                            <li key={f.parte} className={cn('flex items-center gap-1.5 text-xs', firmo ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400')}>
+                              {firmo ? <CircleCheck className="size-3.5 shrink-0" /> : <Clock className="size-3.5 shrink-0" />}
+                              <span>
+                                <span className="font-medium">{f.parte}</span>
+                                {' · '}
+                                {f.fecha ? `firmó el ${formatFechaLarga(f.fecha)}` : f.enPdf ? 'firmó en el documento aportado' : f.pendiente}
+                              </span>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )
+                  ) : (
+                    <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+                      <CircleCheck className="size-3.5 shrink-0" /> Firmado en físico
+                    </p>
+                  )}
+                  {t.detalles.length > 0 && (
+                    <div className="space-y-0.5 text-xs text-muted-foreground">
+                      {t.detalles.map((d) => <p key={d}>{d}</p>)}
                     </div>
-                    {puedeVerContratos && <Button asChild size="sm"><Link href={`/contratos/${ct.id}`}>Ver contrato</Link></Button>}
-                  </div>
-                </CardContent></Card>
+                  )}
+                  {t.href && (
+                    <Link href={t.href} className={cn(buttonVariants({ size: 'sm' }), 'w-full sm:w-auto')}>
+                      Ver contrato <ChevronRight className="size-4" />
+                    </Link>
+                  )}
+                </TarjetaContrato>
               ))}
-              {contratosOps.map((ct) => (
-                <Card key={ct.id}><CardContent className="py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium text-sm">{ct.numero}</p>
-                        <Badge variant="outline">OPS</Badge>
-                        <Badge variant={ct.estado === 'ACTIVO' ? 'default' : 'secondary'}>{ct.estado}</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">{ct.valorMensual ? `${fmtCOP(Number(ct.valorMensual))}/mes · ` : ''}{ct.sede.nombre} · desde {formatFechaLarga(ct.fechaInicio)} hasta {formatFechaLarga(ct.fechaFin)}</p>
-                    </div>
-                    <Button asChild size="sm">
-                      <Link href={puedeVerContratos ? `/contratos/ops/${ct.id}` : '/autoservicio/contratos'}>
-                        {puedeVerContratos ? 'Ver contrato' : 'Ver mi contrato'}
-                      </Link>
-                    </Button>
-                  </div>
-                </CardContent></Card>
-              ))}
+
 
               {/* Historial salarial (requerimiento 3.4): línea de tiempo de cada cambio. */}
               {variacionesSalariales.length > 0 && (
