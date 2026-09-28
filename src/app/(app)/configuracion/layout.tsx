@@ -27,7 +27,7 @@ export default async function ConfiguracionLayout({ children }: { children: Reac
 
   // Contadores del menú. Son `count`, no lecturas completas: sirven para decir
   // cuántos hay y, sobre todo, qué catálogo está vacío.
-  const [sedes, areas, cargos, usuarios, roles, tiposDocumento, reglasAlerta, parametrosNomina, conceptosNomina, plantillasCuentaCobro, plantillasContrato] =
+  const [sedes, areas, cargos, usuarios, roles, tiposDocumento, reglasAlerta, parametrosNomina, conceptosNomina, plantillasCuentaCobro, plantillasContrato, areasPazYSalvo] =
     await Promise.all([
       prisma.sede.count(),
       prisma.area.count(),
@@ -40,11 +40,12 @@ export default async function ConfiguracionLayout({ children }: { children: Reac
       prisma.conceptoNomina.count(),
       prisma.plantillaCuentaCobro.count(),
       prisma.plantillaContrato.count({ where: { activa: true } }),
+      prisma.areaPazYSalvo.count({ where: { activa: true } }),
     ])
   const contadores: Contadores = {
     sedes, areas, cargos, usuarios, roles,
     tiposDocumento, reglasAlerta, parametrosNomina, conceptosNomina, plantillasCuentaCobro,
-    plantillasContrato,
+    plantillasContrato, areasPazYSalvo,
   }
 
   return (

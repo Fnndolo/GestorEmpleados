@@ -3,8 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import {
-  FileSignature, FileText, Receipt, ScrollText, Pencil, Eye, FileBadge, Laptop, Undo2, Shirt, HardHat, Clock, type LucideIcon,
-} from 'lucide-react'
+  FileSignature, FileText, Receipt, ScrollText, Pencil, Eye, FileBadge, Laptop, Undo2, Shirt, HardHat, Clock, FileCheck2, Calculator, DoorOpen, MailCheck, MailX, CalendarX2, Handshake, Stethoscope, type LucideIcon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -61,6 +60,14 @@ const ICONO_TEXTO: Record<ClaveTexto, LucideIcon> = {
   ACTA_DOTACION: Shirt,
   ACTA_EPP: HardHat,
   ORDEN_PAGO_HORAS_EXTRA: Clock,
+  PAZ_Y_SALVO: FileCheck2,
+  LIQUIDACION_DEFINITIVA: Calculator,
+  CARTA_RENUNCIA: DoorOpen,
+  CARTA_ACEPTACION_RENUNCIA: MailCheck,
+  CARTA_TERMINACION: MailX,
+  CARTA_NO_PRORROGA: CalendarX2,
+  ACTA_MUTUO_ACUERDO: Handshake,
+  ORDEN_EXAMEN_EGRESO: Stethoscope,
 }
 
 function filaTexto(clave: ClaveTexto): Fila {
@@ -105,6 +112,14 @@ const GRUPOS: { titulo: string; filas: Fila[] }[] = [
     filas: [filaTexto('ACTA_ACTIVO_ENTREGA'), filaTexto('ACTA_ACTIVO_DEVOLUCION'), filaTexto('ACTA_DOTACION'), filaTexto('ACTA_EPP')],
   },
   { titulo: 'Nómina', filas: [filaTexto('ORDEN_PAGO_HORAS_EXTRA')] },
+  {
+    titulo: 'Terminación',
+    filas: [
+      filaTexto('CARTA_RENUNCIA'), filaTexto('CARTA_ACEPTACION_RENUNCIA'), filaTexto('CARTA_TERMINACION'),
+      filaTexto('CARTA_NO_PRORROGA'), filaTexto('ACTA_MUTUO_ACUERDO'), filaTexto('ORDEN_EXAMEN_EGRESO'),
+      filaTexto('PAZ_Y_SALVO'), filaTexto('LIQUIDACION_DEFINITIVA'),
+    ],
+  },
 ]
 
 /**

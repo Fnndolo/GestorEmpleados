@@ -6,20 +6,19 @@ import { prisma } from '@/lib/db'
 import { dbAuditado, auditar } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { parseFechaISO, formatFechaISO } from '@/lib/fechas'
-import { resolverVencimiento } from '@/server/vencimientos/servicio'
 import { cargarParametros } from '@/server/nomina/parametros'
 import { liquidacionDefinitiva } from '@/server/nomina/liquidacion-definitiva'
 import { basesDesdeHistorial, type AjustesBases } from '@/server/nomina/bases-liquidacion'
 import { saldoVacaciones } from '@/server/vacaciones'
-import { restringirAccesoSiSinVinculo, devolverAccesoNormal } from '@/server/rol-consulta'
-
-const ITEMS_PAZ_SALVO = [
-  { area: 'Activos', concepto: 'Equipos y activos asignados devueltos' },
-  { area: 'Cartera', concepto: 'Préstamos y cartera al día' },
-  { area: 'Documentos', concepto: 'Documentos y expedientes entregados' },
-  { area: 'Sistemas', concepto: 'Accesos y correos revocados' },
-  { area: 'Dotación', concepto: 'Dotación devuelta (si aplica)' },
-]
+import { devolverAccesoNormal } from '@/server/rol-consulta'
+import { enviarDocumentoAFirma, retirarEnvioDocumento, registrarPagoLiquidacion, idDocumentoTerminacion } from '@/server/terminacion-documentos'
+import { generarOrdenExamenEgreso, registrarExamenEgreso, cargarSoporteSeguridadSocial } from '@/server/terminacion-pasos'
+import { crearItemsPazYSalvo, marcarAreaPazYSalvo } from '@/server/paz-y-salvo-areas'
+import { vincularRenuncia, devolverRenuncia as devolverRenunciaServidor } from '@/server/renuncias'
+import { CARTA_PRINCIPAL } from '@/lib/terminaciones/cartas'
+import { aplicarRetiro, ultimoDiaPasado } from '@/server/terminaciones-retiro'
+import { generarYEnviarCodigoFirma, verificarCodigoFirma } from '@/server/firma/codigo-firma'
+import { eliminarDocumento } from '@/server/documentos'
 
 export const crearTerminacion = accion(
   {
@@ -32,9 +31,12 @@ export const crearTerminacion = accion(
       preavisoDias: z.coerce.number().int().min(0).optional(),
       motivo: z.string().max(1000).optional(),
       procesoDisciplinarioId: z.uuid().optional(),
+      // Cuando se registra desde una renuncia presentada en la app.
+      renunciaId: z.uuid().optional(),
     }),
   },
   async (d, usuario) => {
+    if (d.renunciaId && d.tipo !== 'RENUNCIA_VOLUNTARIA') throw new ErrorNegocio('Una renuncia presentada se registra como renuncia voluntaria.')
     const existe = await prisma.terminacion.findFirst({ where: { colaboradorId: d.colaboradorId, estado: { not: 'CERRADA' } } })
     if (existe) throw new ErrorNegocio('Ya hay una terminación en proceso para este colaborador.')
 
@@ -78,41 +80,24 @@ export const crearTerminacion = accion(
       })
     }
 
-    // Paz y salvo con ítems automáticos
-    const saldoPrestamo = await prisma.prestamo.aggregate({ where: { colaboradorId: d.colaboradorId, estado: 'ACTIVO' }, _sum: { saldo: true } })
+    // Carta obligatoria según el tipo (aceptación, terminación, no prórroga o mutuo acuerdo).
+    await prisma.cartaTerminacion.create({ data: { terminacionId: terminacion.id, tipo: CARTA_PRINCIPAL[d.tipo] ?? 'CARTA_TERMINACION' } })
+    // Renuncia presentada en la app: queda aceptada y su carta firmada entra a la terminación.
+    if (d.renunciaId) await vincularRenuncia(d.renunciaId, terminacion.id, d.colaboradorId)
+
+    // Paz y salvo: las áreas de Ajustes, con aviso a cada responsable.
     const pazYSalvo = await prisma.pazYSalvo.create({ data: { terminacionId: terminacion.id, estado: 'PENDIENTE' } })
-    await prisma.pazYSalvoItem.createMany({
-      data: ITEMS_PAZ_SALVO.map((item) => ({
-        pazYSalvoId: pazYSalvo.id,
-        area: item.area,
-        concepto: item.area === 'Cartera' && Number(saldoPrestamo._sum.saldo ?? 0) > 0
-          ? `${item.concepto} (saldo préstamo pendiente)` : item.concepto,
-        cumplido: false,
-      })),
-    })
+    await crearItemsPazYSalvo({ pazYSalvoId: pazYSalvo.id, terminacionId: terminacion.id, colaboradorId: d.colaboradorId })
 
-    // Marcar colaborador como retirado y contrato terminado
-    await dbAuditado.colaborador.update({ where: { id: d.colaboradorId }, data: { estado: 'RETIRADO', fechaRetiro } })
-    if (contrato) await dbAuditado.contrato.update({ where: { id: contrato.id }, data: { estado: 'TERMINADO' } })
-
-    // Los OPS vigentes también se cierran: quien se retira no sigue prestando
-    // servicios. Antes "Fin de OPS" retiraba a la persona y dejaba el contrato
-    // Activo, con su alerta de vencimiento sonando cada semana.
-    const opsVigentes = await prisma.contratoOps.findMany({
-      where: { colaboradorId: d.colaboradorId, estado: { in: ['ACTIVO', 'FIRMADO'] } },
-      select: { id: true },
-    })
-    for (const o of opsVigentes) {
-      await dbAuditado.contratoOps.update({
-        where: { id: o.id },
-        data: { estado: 'TERMINADO', cerradoEn: fechaRetiro, motivoCierre: 'RETIRO', cerradoPorId: usuario.id },
-      })
-      await resolverVencimiento('ContratoOps', o.id, 'CONTRATO_OPS')
-    }
-
-    // Acceso de solo consulta: sin vínculo vigente, el usuario ya no puede crear
-    // solicitudes, firmar ni radicar nada — solo ver su historial (habeas data).
-    const accesoRestringido = await restringirAccesoSiSinVinculo(d.colaboradorId)
+    // La fecha de retiro va a la ficha de una vez: es lo que lo saca de la nómina
+    // del periodo en que se retira (esos días se pagan en la liquidación). El
+    // retiro efectivo —RETIRADO, contrato TERMINADO, OPS cerrados, acceso de solo
+    // consulta— espera a que termine su último día: hasta entonces sigue
+    // trabajando. Si ese día ya pasó, se aplica ahora; si no, lo aplica el cron.
+    await dbAuditado.colaborador.update({ where: { id: d.colaboradorId }, data: { fechaRetiro } })
+    const { accesoRestringido } = ultimoDiaPasado(fechaRetiro)
+      ? await aplicarRetiro(terminacion.id, usuario.id)
+      : { accesoRestringido: false }
 
     revalidatePath('/terminaciones')
     return { id: terminacion.id, accesoRestringido }
@@ -220,6 +205,19 @@ function limpiarAjustes(d: Record<string, unknown>): AjustesBases {
 }
 
 /** Procesos disciplinarios CERRADOS de un colaborador (para sustentar una justa causa). */
+/** Devuelve la renuncia al trabajador para que la corrija y la presente de nuevo. */
+export const devolverRenuncia = accion(
+  {
+    modulo: 'terminaciones',
+    accion: 'CREAR',
+    schema: z.object({ renunciaId: z.uuid(), motivo: z.string().trim().min(5, 'Explica qué debe corregir.').max(500) }),
+  },
+  async (d) => {
+    await devolverRenunciaServidor(d.renunciaId, d.motivo)
+    revalidatePath('/terminaciones')
+  },
+)
+
 export const listarProcesosCerrados = accion(
   { modulo: 'terminaciones', accion: 'CREAR', schema: z.object({ colaboradorId: z.uuid() }) },
   async ({ colaboradorId }) => {
@@ -240,27 +238,121 @@ export const listarProcesosCerrados = accion(
 )
 
 export const verificarItemPazSalvo = accion(
-  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ itemId: z.uuid(), cumplido: z.boolean(), observacion: z.string().max(300).optional() }) },
+  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ itemId: z.uuid(), cumplido: z.boolean() }) },
   async (d, usuario) => {
-    await dbAuditado.pazYSalvoItem.update({
-      where: { id: d.itemId },
-      data: { cumplido: d.cumplido, observacion: d.observacion, verificadoPorId: usuario.id, verificadoEn: new Date() },
-    })
-    // Si todos los ítems están cumplidos, marcar paz y salvo COMPLETO
-    const item = await prisma.pazYSalvoItem.findUniqueOrThrow({ where: { id: d.itemId } })
-    const pendientes = await prisma.pazYSalvoItem.count({ where: { pazYSalvoId: item.pazYSalvoId, cumplido: false } })
-    await prisma.pazYSalvo.update({ where: { id: item.pazYSalvoId }, data: { estado: pendientes === 0 ? 'COMPLETO' : 'PENDIENTE' } })
+    await marcarAreaPazYSalvo({ itemId: d.itemId, cumplido: d.cumplido, usuarioId: usuario.id, soloSuya: false })
     revalidatePath('/terminaciones')
     return { ok: true }
+  },
+)
+
+const TIPO_DOC = z.enum(['CARTA', 'PAZ_Y_SALVO', 'LIQUIDACION'])
+
+/** Código al correo de quien firma por la empresa (Ley 527), antes de enviar el documento. */
+export const solicitarCodigoFirmaEmpresa = accion(
+  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ id: z.uuid(), tipo: TIPO_DOC }) },
+  async (d, usuario) => {
+    const referenciaId = await idDocumentoTerminacion(d.tipo, d.id)
+    return generarYEnviarCodigoFirma({ proposito: 'FIRMA_EMPRESA_TERMINACION', referenciaId, userId: usuario.id, email: usuario.email })
+  },
+)
+
+/** Talento Humano firma por la empresa y envía el documento al trabajador. */
+export const enviarDocumentoTerminacion = accion(
+  {
+    modulo: 'terminaciones',
+    accion: 'EDITAR',
+    schema: z.object({
+      id: z.uuid(),
+      tipo: TIPO_DOC,
+      firmaDataUri: z.string().min(1).startsWith('data:image/', 'Firma inválida'),
+      codigo: z.string().regex(/^\d{6}$/, 'El código debe tener 6 dígitos.'),
+    }),
+  },
+  async (d, usuario) => {
+    const referenciaId = await idDocumentoTerminacion(d.tipo, d.id)
+    await verificarCodigoFirma({ proposito: 'FIRMA_EMPRESA_TERMINACION', referenciaId, userId: usuario.id, codigo: d.codigo })
+    await enviarDocumentoAFirma({ tipo: d.tipo, terminacionId: d.id, firmaEmpresaDataUri: d.firmaDataUri, usuarioId: usuario.id, metodoAuth: 'CODIGO_EMAIL' })
+    revalidatePath(`/terminaciones/${d.id}`)
+  },
+)
+
+export const retirarDocumentoTerminacion = accion(
+  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ id: z.uuid(), tipo: TIPO_DOC }) },
+  async (d) => {
+    await retirarEnvioDocumento(d.tipo, d.id)
+    revalidatePath(`/terminaciones/${d.id}`)
+  },
+)
+
+/** Pago de la liquidación: exige el recibido firmado y el comprobante. */
+export const pagarLiquidacion = accion(
+  {
+    modulo: 'terminaciones',
+    accion: 'EDITAR',
+    schema: z.object({
+      id: z.uuid(),
+      fechaPago: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      comprobante: z.string().startsWith('data:', 'Adjunta el comprobante del pago.'),
+      nombreArchivo: z.string().max(200),
+    }),
+  },
+  async (d, usuario) => {
+    await registrarPagoLiquidacion({
+      terminacionId: d.id, fechaPago: parseFechaISO(d.fechaPago)!, comprobanteDataUri: d.comprobante, nombreArchivo: d.nombreArchivo, usuarioId: usuario.id,
+    })
+    revalidatePath(`/terminaciones/${d.id}`)
+  },
+)
+
+export const generarOrdenExamen = accion(
+  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ id: z.uuid() }) },
+  async ({ id }, usuario) => {
+    await generarOrdenExamenEgreso(id, usuario.id)
+    revalidatePath(`/terminaciones/${id}`)
+  },
+)
+
+export const registrarExamen = accion(
+  {
+    modulo: 'terminaciones',
+    accion: 'EDITAR',
+    schema: z.object({
+      id: z.uuid(),
+      realizado: z.boolean(),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      concepto: z.enum(['APTO', 'APTO_CON_RECOMENDACIONES', 'NO_APTO', 'APLAZADO']).optional(),
+      certificado: z.string().startsWith('data:').optional(),
+    }),
+  },
+  async (d, usuario) => {
+    await registrarExamenEgreso({
+      terminacionId: d.id, realizado: d.realizado, fecha: parseFechaISO(d.fecha)!, concepto: d.concepto,
+      certificadoDataUri: d.certificado ?? null, usuarioId: usuario.id,
+    })
+    revalidatePath(`/terminaciones/${d.id}`)
+  },
+)
+
+export const subirSeguridadSocial = accion(
+  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ id: z.uuid(), archivo: z.string().startsWith('data:', 'Adjunta el soporte.') }) },
+  async (d, usuario) => {
+    await cargarSoporteSeguridadSocial(d.id, d.archivo, usuario.id)
+    revalidatePath(`/terminaciones/${d.id}`)
   },
 )
 
 export const cerrarTerminacion = accion(
   { modulo: 'terminaciones', accion: 'APROBAR', schema: z.object({ id: z.uuid() }) },
   async ({ id }) => {
-    const t = await prisma.terminacion.findUniqueOrThrow({ where: { id }, include: { pazYSalvo: { include: { items: true } } } })
-    const pendientes = t.pazYSalvo?.items.filter((i) => !i.cumplido).length ?? 0
-    if (pendientes > 0) throw new ErrorNegocio('No puedes cerrar la terminación con ítems de paz y salvo pendientes.')
+    const t = await prisma.terminacion.findUniqueOrThrow({ where: { id }, include: { liquidacion: true, cartas: true } })
+    // Pasos obligatorios (decisión de empresa): la carta firmada y la liquidación
+    // firmada y pagada. El paz y salvo es opcional: hay retiros con plazos tan
+    // cortos que no alcanza, y el pago no puede quedar sujeto a él (art. 65 CST).
+    const carta = t.cartas.find((c) => c.tipo === (CARTA_PRINCIPAL[t.tipo] ?? 'CARTA_TERMINACION'))
+    if (!carta?.firmadoEn) throw new ErrorNegocio('Falta la carta de la terminación firmada por el trabajador.')
+    if (t.liquidacion && !t.liquidacion.firmadoEn) throw new ErrorNegocio('Falta que el trabajador firme el recibido de la liquidación.')
+    if (t.liquidacion && !t.liquidacion.pagadoEn) throw new ErrorNegocio('Falta registrar el pago de la liquidación con su comprobante.')
     // No cerrar mientras el colaborador tenga liquidaciones en un periodo de
     // nómina abierto: podría recalcularse y cambiar lo que se le debe.
     const nominaAbierta = await prisma.liquidacionNomina.findFirst({
@@ -336,6 +428,9 @@ export const recalcularLiquidacion = accion(
     // Puede no existir: si al registrar la terminación no había contrato activo,
     // la terminación quedó EN_PROCESO y sin liquidación.
     const previa = await prisma.liquidacionDefinitiva.findFirst({ where: { terminacionId: d.id } })
+    if (previa?.enviadoFirmaEn) {
+      throw new ErrorNegocio('La liquidación ya se envió a firmar. Retira el envío para rehacer el cálculo.')
+    }
 
     // Los ajustes que venga trayendo el formulario pisan a los guardados; los que
     // no se toquen se conservan, para que rehacer el cálculo no borre en silencio
@@ -384,11 +479,19 @@ export const anularTerminacion = accion(
       descripcion: `Terminación anulada (${t.tipo}, retiro ${formatFechaISO(t.fechaRetiro)}). Motivo: ${motivo}`,
     })
 
+    const cartas = await prisma.cartaTerminacion.findMany({ where: { terminacionId: id }, select: { documentoId: true, firmadoEn: true, tipo: true } })
+    for (const c of cartas) if (c.documentoId && !c.firmadoEn) await eliminarDocumento(c.documentoId).catch(() => {})
+    await prisma.renuncia.updateMany({ where: { terminacionId: id }, data: { estado: 'PRESENTADA', terminacionId: null } })
+    const liqPrevia = await prisma.liquidacionDefinitiva.findFirst({ where: { terminacionId: id }, select: { documentoId: true, firmadoEn: true } })
     await prisma.liquidacionDefinitiva.deleteMany({ where: { terminacionId: id } })
-    const pyS = await prisma.pazYSalvo.findFirst({ where: { terminacionId: id }, select: { id: true } })
+    if (liqPrevia?.documentoId && !liqPrevia.firmadoEn) await eliminarDocumento(liqPrevia.documentoId).catch(() => {})
+    const pyS = await prisma.pazYSalvo.findFirst({ where: { terminacionId: id }, select: { id: true, documentoId: true, firmadoEn: true } })
     if (pyS) {
       await prisma.pazYSalvoItem.deleteMany({ where: { pazYSalvoId: pyS.id } })
       await prisma.pazYSalvo.delete({ where: { id: pyS.id } })
+      // El acta sin firmar se va con la terminación; la firmada se queda en el
+      // expediente del colaborador, porque es un documento que él ya firmó.
+      if (pyS.documentoId && !pyS.firmadoEn) await eliminarDocumento(pyS.documentoId).catch(() => {})
     }
     await dbAuditado.terminacion.delete({ where: { id } })
 
@@ -400,6 +503,9 @@ export const anularTerminacion = accion(
       where: { id: t.colaboradorId },
       data: { estado: 'ACTIVO', fechaRetiro: null },
     })
+    // Si el retiro aún no se aplicaba (su último día no había pasado), no hay
+    // contrato, OPS ni acceso que devolver.
+    if (t.retiroAplicadoEn) {
     // El contrato que se dio por terminado es el último: era el vigente cuando
     // se registró. Solo se reactiva si sigue marcado TERMINADO.
     const contratoTerminado = await prisma.contrato.findFirst({
@@ -424,6 +530,7 @@ export const anularTerminacion = accion(
       })
     }
     await devolverAccesoNormal(t.colaboradorId)
+    }
 
     revalidatePath('/terminaciones')
     revalidatePath(`/colaboradores/${t.colaboradorId}`)

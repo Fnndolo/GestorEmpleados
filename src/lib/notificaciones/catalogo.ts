@@ -29,6 +29,20 @@ export type ClaveEvento =
   | 'contrato_firmado'
   | 'contrato_actualizado'
   | 'evaluacion_firmada'
+  // Terminaciones
+  | 'paz_y_salvo_por_firmar'
+  | 'paz_y_salvo_firmado'
+  | 'liquidacion_por_firmar'
+  | 'liquidacion_firmada'
+  | 'liquidacion_pagada'
+  | 'carta_terminacion_por_firmar'
+  | 'carta_terminacion_firmada'
+  | 'paz_y_salvo_area_pendiente'
+  | 'paz_y_salvo_completo'
+  | 'orden_examen_egreso'
+  | 'seguridad_social_retiro'
+  | 'renuncia_presentada'
+  | 'renuncia_devuelta'
   // Cuentas de cobro
   | 'cuenta_cobro_radicada'
   | 'cuenta_cobro_estado'
@@ -110,6 +124,21 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
   { clave: 'contrato_firmado', etiqueta: 'Contrato firmado', descripcion: 'Se completan las firmas del contrato.', modulo: 'Contratos' },
   { clave: 'contrato_actualizado', etiqueta: 'Contrato actualizado', descripcion: 'Se modifica un contrato ya existente.', modulo: 'Contratos' },
   { clave: 'evaluacion_firmada', etiqueta: 'Acuerdo de evaluación firmado', descripcion: 'El aspirante devuelve firmado el acuerdo de evaluación previa: hay que evaluarlo y decidir.', modulo: 'Contratos' },
+
+  // Terminaciones
+  { clave: 'paz_y_salvo_por_firmar', etiqueta: 'Acta de paz y salvo por firmar', descripcion: 'Se envía al trabajador que se retira su acta de paz y salvo para que la firme.', modulo: 'Terminaciones' },
+  { clave: 'paz_y_salvo_firmado', etiqueta: 'Acta de paz y salvo firmada', descripcion: 'El trabajador firmó su acta de paz y salvo.', modulo: 'Terminaciones' },
+  { clave: 'liquidacion_por_firmar', etiqueta: 'Liquidación por firmar', descripcion: 'Se envía al trabajador que se retira su liquidación definitiva para que firme el recibido.', modulo: 'Terminaciones' },
+  { clave: 'liquidacion_firmada', etiqueta: 'Liquidación firmada', descripcion: 'El trabajador firmó el recibido de su liquidación: ya se puede registrar el pago.', modulo: 'Terminaciones' },
+  { clave: 'liquidacion_pagada', etiqueta: 'Liquidación pagada', descripcion: 'Se registra el pago de la liquidación con su comprobante.', modulo: 'Terminaciones' },
+  { clave: 'carta_terminacion_por_firmar', etiqueta: 'Carta del retiro por firmar', descripcion: 'Se envía al trabajador la carta de su retiro (aceptación, terminación, no prórroga o mutuo acuerdo) para que firme el recibido.', modulo: 'Terminaciones' },
+  { clave: 'carta_terminacion_firmada', etiqueta: 'Carta del retiro firmada', descripcion: 'El trabajador firmó el recibido de la carta de su retiro.', modulo: 'Terminaciones' },
+  { clave: 'paz_y_salvo_area_pendiente', etiqueta: 'Área del paz y salvo por verificar', descripcion: 'Al responsable de un área le toca verificar la entrega de quien se retira.', modulo: 'Terminaciones' },
+  { clave: 'paz_y_salvo_completo', etiqueta: 'Paz y salvo completo', descripcion: 'Todas las áreas verificaron la entrega: ya se puede enviar el acta.', modulo: 'Terminaciones' },
+  { clave: 'orden_examen_egreso', etiqueta: 'Orden de examen de egreso', descripcion: 'El trabajador que se retira recibe su orden de examen médico de egreso.', modulo: 'Terminaciones' },
+  { clave: 'seguridad_social_retiro', etiqueta: 'Soporte de seguridad social del retiro', descripcion: 'El trabajador recibe el soporte de sus aportes de los últimos tres meses.', modulo: 'Terminaciones' },
+  { clave: 'renuncia_presentada', etiqueta: 'Renuncia presentada', descripcion: 'Un trabajador presenta (o retira) su renuncia desde la app.', modulo: 'Terminaciones' },
+  { clave: 'renuncia_devuelta', etiqueta: 'Renuncia devuelta', descripcion: 'Talento Humano devuelve una renuncia para corregirla (p. ej. la fecha); el trabajador presenta otra.', modulo: 'Terminaciones' },
 
   // Cuentas de cobro
   { clave: 'cuenta_cobro_radicada', etiqueta: 'Cuenta de cobro radicada', descripcion: 'Se radica una cuenta de cobro.', modulo: 'Cuentas de cobro' },

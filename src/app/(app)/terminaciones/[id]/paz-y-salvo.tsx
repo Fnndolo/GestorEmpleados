@@ -1,27 +1,22 @@
 'use client'
 
-import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Lock } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { UserRound } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Card, CardContent } from '@/components/ui/card'
-import { Spinner } from '@/components/ui/spinner'
-import { verificarItemPazSalvo, cerrarTerminacion } from '../acciones'
+import { verificarItemPazSalvo } from '../acciones'
+import { DocumentoFirma, type EstadoDocumento } from './documento-firma'
 
-type Item = { id: string; area: string; concepto: string; cumplido: boolean; observacion: string | null }
+type Item = { id: string; area: string; concepto: string; cumplido: boolean; observacion: string | null; responsable: string | null; verificadoPor: string | null }
 
-export function PazYSalvoChecklist({
-  estado, items, terminacionId, terminacionEstado, puedeEditar, puedeAprobar,
-}: {
-  estado: string; items: Item[]; terminacionId: string; terminacionEstado: string
-  puedeEditar: boolean; puedeAprobar: boolean
+/** Paso "Paz y salvo": las áreas verifican la entrega y, con todo listo, el acta se firma y se envía. */
+export function PazYSalvoChecklist({ items, acta, terminacionId, cerrada, puedeEditar }: {
+  items: Item[]; acta: EstadoDocumento; terminacionId: string; cerrada: boolean; puedeEditar: boolean
 }) {
   const router = useRouter()
-  const [cerrando, setCerrando] = useState(false)
   const completo = items.every((i) => i.cumplido)
+  // Enviada a firmar: el checklist queda congelado (es lo que el trabajador firma).
+  const congelado = cerrada || !!acta.enviadaEn
 
   async function toggle(itemId: string, cumplido: boolean) {
     const res = await verificarItemPazSalvo({ itemId, cumplido })
@@ -29,37 +24,36 @@ export function PazYSalvoChecklist({
     else toast.error(res.error)
   }
 
-  async function cerrar() {
-    setCerrando(true)
-    const res = await cerrarTerminacion({ id: terminacionId })
-    setCerrando(false)
-    if (res.ok) { toast.success('Terminación cerrada.'); router.refresh() } else toast.error(res.error)
-  }
-
   return (
-    <Card><CardContent className="py-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium">Paz y salvo por área</h3>
-        <Badge variant={estado === 'COMPLETO' ? 'default' : 'secondary'}>{estado === 'COMPLETO' ? 'Completo' : 'Pendiente'}</Badge>
-      </div>
-      <ul className="space-y-2">
+    <div className="space-y-3">
+      <ul className="grid gap-2 sm:grid-cols-2">
         {items.map((i) => (
-          <li key={i.id} className="flex items-start gap-3 rounded-lg border p-3">
-            <Checkbox checked={i.cumplido} disabled={!puedeEditar || terminacionEstado === 'CERRADA'} onCheckedChange={(v) => toggle(i.id, Boolean(v))} className="mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium">{i.area}</p>
-              <p className="text-xs text-muted-foreground">{i.concepto}</p>
-            </div>
+          <li key={i.id}>
+            <label className="flex h-full cursor-pointer items-start gap-3 rounded-lg border p-3 has-[:disabled]:cursor-default">
+              <Checkbox checked={i.cumplido} disabled={!puedeEditar || congelado} onCheckedChange={(v) => toggle(i.id, Boolean(v))} className="mt-0.5" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">{i.area}</span>
+                <span className="block text-xs text-muted-foreground">{i.concepto}</span>
+                {i.observacion && !i.cumplido && <span className="mt-0.5 block text-xs font-medium text-amber-700 dark:text-amber-400">{i.observacion}</span>}
+                <span className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <UserRound className="size-3 shrink-0" />
+                  <span className="truncate">{i.cumplido && i.verificadoPor ? `Verificó ${i.verificadoPor}` : i.responsable ?? 'Talento Humano'}</span>
+                </span>
+              </span>
+            </label>
           </li>
         ))}
       </ul>
-      {puedeAprobar && terminacionEstado !== 'CERRADA' && (
-        <div className="flex justify-end mt-4">
-          <Button size="sm" onClick={cerrar} disabled={!completo || cerrando}>
-            {cerrando ? <Spinner /> : <Lock className="size-4" />} Cerrar terminación
-          </Button>
-        </div>
-      )}
-    </CardContent></Card>
+      <DocumentoFirma
+        terminacionId={terminacionId}
+        tipo="PAZ_Y_SALVO"
+        titulo="Acta de paz y salvo"
+        estado={acta}
+        listo={completo}
+        faltante="Faltan áreas"
+        puedeEditar={puedeEditar}
+        cerrada={cerrada}
+      />
+    </div>
   )
 }

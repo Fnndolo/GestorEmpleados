@@ -13,10 +13,13 @@ import { renderActaDotacion } from './acta-dotacion'
 import { renderActaEpp } from './acta-epp'
 import { renderCertificacion } from './certificacion'
 import { renderOrdenPagoHorasExtra } from './pago-horas-extra'
+import { renderActaPazYSalvo } from './paz-y-salvo'
+import { renderLiquidacionDefinitiva } from './liquidacion-definitiva'
+import { renderCartaTerminacion } from './carta-terminacion'
 import { plantillaTexto } from '@/server/plantillas-documento'
 import type { ClaveTexto, TextoDocumento } from '@/lib/plantillas-documento/textos'
 import {
-  muestraActaActivo, muestraActaDotacion, muestraActaEpp, muestraCertificacion, muestraOrdenPago,
+  muestraActaActivo, muestraActaDotacion, muestraActaEpp, muestraCertificacion, muestraOrdenPago, muestraPazYSalvo, AREAS_PAZ_Y_SALVO_MUESTRA, muestraLiquidacion, LIQUIDACION_MUESTRA, muestraCarta,
 } from '@/lib/plantillas-documento/textos-muestra'
 
 /**
@@ -287,6 +290,36 @@ export async function renderMuestraTexto(clave: ClaveTexto, variante: string, pl
       return renderActaEpp({ ...muestraActaEpp(variante, empresa), empresa }, texto)
     case 'ORDEN_PAGO_HORAS_EXTRA':
       return renderOrdenPagoHorasExtra({ ...muestraOrdenPago(empresa), empresa, firma: null }, texto)
+    case 'PAZ_Y_SALVO':
+      return renderActaPazYSalvo(
+        {
+          ...muestraPazYSalvo(empresa),
+          empresa,
+          areas: AREAS_PAZ_Y_SALVO_MUESTRA.map(([area, concepto, verificadoPor, verificadoEn]) => ({ area, concepto, verificadoPor, verificadoEn })),
+        },
+        texto,
+      )
+    case 'LIQUIDACION_DEFINITIVA': {
+      const m = muestraLiquidacion(empresa)
+      return renderLiquidacionDefinitiva(
+        {
+          ...m,
+          empresa,
+          ingresos: LIQUIDACION_MUESTRA.ingresos,
+          deducciones: LIQUIDACION_MUESTRA.deducciones,
+          totalIngresos: LIQUIDACION_MUESTRA.ingresos.reduce((t, f) => t + f.v, 0),
+          totalDeducciones: LIQUIDACION_MUESTRA.deducciones.reduce((t, f) => t + f.v, 0),
+        },
+        texto,
+      )
+    }
+    case 'CARTA_RENUNCIA':
+    case 'CARTA_ACEPTACION_RENUNCIA':
+    case 'CARTA_TERMINACION':
+    case 'CARTA_NO_PRORROGA':
+    case 'ACTA_MUTUO_ACUERDO':
+    case 'ORDEN_EXAMEN_EGRESO':
+      return renderCartaTerminacion(clave, { ...muestraCarta(empresa), empresa }, texto)
     case 'CERTIFICACION_LABORAL':
     case 'CERTIFICACION_CONTRACTUAL':
       return renderCertificacion(

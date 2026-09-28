@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/jornada-asistencia",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/retiros",
+      "schedule": "10 5 * * *"
     }
   ]
 }

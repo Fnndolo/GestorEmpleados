@@ -1,16 +1,31 @@
+import { Fragment } from 'react'
 import { notFound } from 'next/navigation'
-import { AccionesLiquidacion } from './acciones-liquidacion'
 import Link from 'next/link'
+import { UserRound } from 'lucide-react'
+import { formatFechaCorta } from '@/lib/fechas'
+import { AccionesLiquidacion } from './acciones-liquidacion'
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { formatFechaLarga, formatFechaISO } from '@/lib/fechas'
+import { Button } from '@/components/ui/button'
+import { Pill } from '@/components/ui-kit'
+import { formatFechaLarga, formatFechaISO, hoyBogotaISO } from '@/lib/fechas'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { fmtCOP } from '@/lib/moneda'
-import { PazYSalvoChecklist } from './paz-y-salvo'
+import { leerDetalleLiquidacion } from '@/lib/terminaciones/liquidacion-filas'
 import { mesesParaPromedios } from '@/server/nomina/bases-liquidacion'
+import { PazYSalvoChecklist } from './paz-y-salvo'
+import { DocumentoFirma, type EstadoDocumento } from './documento-firma'
+import { PagoLiquidacion } from './pago-liquidacion'
+import { CierreTerminacion } from './cierre'
+import { RutaTerminacion, type PasoRuta } from './ruta'
+import { ResumenLiquidacion } from './resumen-liquidacion'
+import { ExamenEgreso } from './examen-egreso'
+import { SeguridadSocial } from './seguridad-social'
+import { CARTA_PRINCIPAL, NOMBRE_CARTA } from '@/lib/terminaciones/cartas'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
+import { buttonVariants } from '@/components/ui/button'
+import { FileText } from 'lucide-react'
 
 export const metadata = { title: 'Terminación · Smart Gadgets RH' }
 
@@ -20,6 +35,19 @@ const TIPO: Record<string, string> = {
   PERIODO_PRUEBA: 'Periodo de prueba', FIN_OPS: 'Fin OPS',
 }
 
+const ESTADO: Record<string, { texto: string; tone: 'ok' | 'warn' | 'info' }> = {
+  EN_PROCESO: { texto: 'En proceso', tone: 'warn' },
+  LIQUIDADA: { texto: 'Liquidada', tone: 'info' },
+  CERRADA: { texto: 'Cerrada', tone: 'ok' },
+}
+
+const fecha = (d: Date | null | undefined) => (d ? formatFechaLarga(d) : null)
+
+/**
+ * Una terminación como ruta de pasos: registro, carta, paz y salvo, examen de
+ * egreso, liquidación, seguridad social, soportes y cierre. Cada paso dice en qué va; los que llevan firma se firman
+ * aquí (Talento Humano) y en el autoservicio del trabajador.
+ */
 export default async function TerminacionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const usuario = await requerirPermiso('terminaciones', 'VER')
@@ -32,27 +60,33 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
     include: {
       colaborador: { select: { id: true, nombres: true, apellidos: true, numeroDocumento: true, fechaIngreso: true } },
       liquidacion: true,
-      pazYSalvo: { include: { items: true } },
+      pazYSalvo: { include: { items: { orderBy: { id: 'asc' } } } },
+      cartas: true,
       procesoDisciplinario: { select: { id: true, asunto: true, decision: true, fechaApertura: true } },
     },
   })
   if (!t) notFound()
   const liq = t.liquidacion
-  // El desglose línea por línea vive en el JSON del cálculo. Las liquidaciones
-  // hechas antes de separar salario, auxilio y seguridad social no lo traen: en
-  // ese caso se muestran solo las columnas, y rehacer el cálculo lo completa.
-  const detalle = leerDetalle(liq?.detalle)
+  const pys = t.pazYSalvo
+  const detalle = leerDetalleLiquidacion(liq?.detalle)
+  const cerrada = t.estado === 'CERRADA'
+  const nombre = `${t.colaborador.nombres} ${t.colaborador.apellidos}`
 
-  // Meses sobre los que se promedia el salario variable. Se piden en pantalla
-  // uno por uno para que nadie tenga que calcular el promedio a mano.
-  const ventana = puedeEditar
+  // Meses sobre los que se promedia el salario variable (para rehacer el cálculo).
+  const ventana = puedeEditar && liq && !liq.enviadoFirmaEn
     ? await mesesParaPromedios(t.colaborador.id, t.colaborador.fechaIngreso, t.fechaRetiro)
     : { meses: [], mesesAnual: 0, mesesSemestre: 0 }
-  const variableGuardado = Object.fromEntries(
-    (detalle?.ajustes?.variablePorMes ?? []).map((m) => [m.mes, m.valor]),
-  )
+  const variableGuardado = Object.fromEntries((detalle?.ajustes?.variablePorMes ?? []).map((m) => [m.mes, m.valor]))
+  const bases = {
+    auxilioTransporte: detalle?.bases?.auxilioTransporte ?? 0,
+    promedioVariableAnual: detalle?.bases?.promedioVariableAnual ?? 0,
+    promedioVariableSemestre: detalle?.bases?.promedioVariableSemestre ?? 0,
+    otroConceptoSalarial: detalle?.bases?.otroConceptoSalarial ?? 0,
+    diasSalarioPendiente: detalle?.bases?.diasSalarioPendiente ?? 0,
+    periodosConsiderados: detalle?.bases?.periodosConsiderados ?? 0,
+  }
 
-  // Actas y soportes de la terminación (carta, liquidación firmada, acta de entrega…)
+  // Soportes de la terminación: lo que se haga por fuera (examen de egreso, etc.).
   const [documentos, tiposDocumento] = await Promise.all([
     prisma.documento.findMany({
       where: { entidadTipo: 'Terminacion', entidadId: id },
@@ -62,224 +96,253 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
     prisma.tipoDocumento.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
   ])
 
-  return (
-    <div className="max-w-5xl">
-      <Encabezado
-        titulo={`${t.colaborador.nombres} ${t.colaborador.apellidos}`}
-        descripcion={`${TIPO[t.tipo]} · ${formatFechaLarga(t.fechaRetiro)}`}
-        acciones={<Badge variant={t.estado === 'CERRADA' ? 'default' : 'outline'}>{t.estado}</Badge>}
-        volver
-      />
+  // Nombres de quienes responden por cada área y de quienes ya verificaron.
+  const idsUsuarios = [...new Set((pys?.items ?? []).flatMap((i) => [i.responsableId, i.verificadoPorId]).filter((x): x is string => !!x))]
+  const [usuarios, examen, renuncia] = await Promise.all([
+    idsUsuarios.length ? prisma.user.findMany({ where: { id: { in: idsUsuarios } }, select: { id: true, name: true } }) : [],
+    t.examenMedicoId ? prisma.examenMedico.findUnique({ where: { id: t.examenMedicoId }, select: { fecha: true } }) : null,
+    prisma.renuncia.findUnique({ where: { terminacionId: t.id }, select: { creadoEn: true } }),
+  ])
+  const nombreUsuario = new Map(usuarios.map((u) => [u.id, u.name]))
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Link href={`/colaboradores/${t.colaborador.id}`} className="text-sm text-primary hover:underline">Ver ficha del colaborador →</Link>
-        {/* Rehacer y anular solo mientras no esté cerrada: después ya se pagó. */}
-        {t.estado !== 'CERRADA' && (
+  // ── Estado de cada paso ──
+  const tipoCarta = CARTA_PRINCIPAL[t.tipo] ?? 'CARTA_TERMINACION'
+  const carta = t.cartas.find((c) => c.tipo === tipoCarta)
+  const cartaRenuncia = t.cartas.find((c) => c.tipo === 'CARTA_RENUNCIA')
+  const estadoCarta: EstadoDocumento = { documentoId: carta?.documentoId ?? null, enviadaEn: fecha(carta?.enviadoFirmaEn), firmadaEn: fecha(carta?.firmadoEn) }
+  const examenHecho = t.examenNoAsistio ? 'No asistió' : examen ? `Realizado el ${formatFechaCorta(examen.fecha)}` : null
+  const areasOk = pys?.items.filter((i) => i.cumplido).length ?? 0
+  const areasTotal = pys?.items.length ?? 0
+  const acta: EstadoDocumento = { documentoId: pys?.documentoId ?? null, enviadaEn: fecha(pys?.enviadoFirmaEn), firmadaEn: fecha(pys?.firmadoEn) }
+  const recibo: EstadoDocumento = { documentoId: liq?.documentoId ?? null, enviadaEn: fecha(liq?.enviadoFirmaEn), firmadaEn: fecha(liq?.firmadoEn) }
+
+  const pasos: PasoRuta[] = [
+    { id: 'registro', titulo: 'Registro', detalle: `${TIPO[t.tipo]} · ${formatFechaLarga(t.fechaRetiro)}`, estado: 'hecho' },
+    {
+      id: 'carta',
+      titulo: NOMBRE_CARTA[tipoCarta],
+      corto: 'Carta',
+      detalle: carta?.firmadoEn ? 'Firmada' : carta?.enviadoFirmaEn ? 'Esperando firma del trabajador' : 'Por firmar y enviar',
+      estado: carta?.firmadoEn ? 'hecho' : 'pendiente',
+    },
+  ]
+  if (pys) {
+    pasos.push({
+      id: 'paz-y-salvo',
+      titulo: 'Paz y salvo',
+      detalle: pys.firmadoEn ? 'Firmado' : pys.enviadoFirmaEn ? 'Esperando firma del trabajador' : `${areasOk} de ${areasTotal} áreas verificadas`,
+      // Opcional: hay retiros con plazos tan cortos que no alcanza, y el pago de
+      // la liquidación no puede quedar sujeto a él (art. 65 CST).
+      estado: pys.firmadoEn ? 'hecho' : 'opcional',
+      opcional: true,
+    })
+  }
+  pasos.push({
+    id: 'examen',
+    titulo: 'Examen de egreso',
+    corto: 'Examen',
+    detalle: examenHecho ?? (t.ordenExamenDocId ? 'Orden entregada' : 'Por generar la orden'),
+    estado: examenHecho ? 'hecho' : 'opcional',
+    opcional: true,
+  })
+  if (liq) {
+    pasos.push({
+      id: 'liquidacion',
+      titulo: 'Liquidación',
+      detalle: liq.pagadoEn ? `Pagada · ${fmtCOP(Number(liq.total))}` : liq.firmadoEn ? 'Firmada · falta el pago' : liq.enviadoFirmaEn ? 'Esperando firma del trabajador' : `${fmtCOP(Number(liq.total))} · por firmar`,
+      estado: liq.pagadoEn && liq.firmadoEn ? 'hecho' : 'pendiente',
+    })
+  }
+  pasos.push({
+    id: 'seguridad-social',
+    titulo: 'Seguridad social',
+    corto: 'Seg. social',
+    detalle: t.seguridadSocialDocId ? 'Soporte entregado' : 'Por cargar el soporte',
+    estado: t.seguridadSocialDocId ? 'hecho' : 'opcional',
+    opcional: true,
+  })
+  pasos.push({ id: 'soportes', titulo: 'Soportes', detalle: documentos.length ? `${documentos.length} documento${documentos.length === 1 ? '' : 's'}` : 'Opcional', estado: 'opcional', opcional: true })
+
+  const requisitos = [
+    { texto: `${NOMBRE_CARTA[tipoCarta]} firmada por el trabajador`, ok: !!carta?.firmadoEn },
+    ...(liq ? [
+      { texto: 'Recibido de la liquidación firmado', ok: !!liq.firmadoEn },
+      { texto: 'Pago de la liquidación con comprobante', ok: !!liq.pagadoEn },
+    ] : []),
+  ]
+  pasos.push({ id: 'cierre', titulo: 'Cierre', detalle: cerrada ? 'Cerrada' : requisitos.every((r) => r.ok) ? 'Lista para cerrar' : 'Faltan pasos', estado: cerrada ? 'hecho' : 'pendiente' })
+
+  const inicial = pasos.find((p) => p.estado === 'pendiente')?.id ?? 'cierre'
+
+  const paneles: Record<string, React.ReactNode> = {
+    registro: (
+      <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+        <Dato k="Tipo" v={TIPO[t.tipo]} />
+        <Dato k="Fecha de retiro" v={formatFechaLarga(t.fechaRetiro)} />
+        <Dato k="Trabajador" v={t.retiroAplicadoEn ? `Retirado desde el ${formatFechaCorta(t.retiroAplicadoEn)}` : `Activo hasta su último día; esa noche queda retirado`} />
+        <Dato k="Ingreso" v={formatFechaLarga(t.colaborador.fechaIngreso)} />
+        <Dato k="Documento" v={t.colaborador.numeroDocumento} />
+        {t.preavisoDias != null && <Dato k="Preaviso" v={`${t.preavisoDias} días`} />}
+        {renuncia && <Dato k="Origen" v={`Renuncia presentada en la app el ${formatFechaCorta(renuncia.creadoEn)}`} />}
+        {t.motivo && <div className="sm:col-span-2"><Dato k="Motivo" v={t.motivo} /></div>}
+        {t.tipo === 'CON_JUSTA_CAUSA' && (
+          <div className="sm:col-span-2">
+            {t.procesoDisciplinario ? (
+              <Dato k="Proceso disciplinario" v={
+                <Link href={`/juridica/disciplinarios/${t.procesoDisciplinario.id}`} className="text-primary hover:underline">
+                  {t.procesoDisciplinario.asunto} ({formatFechaLarga(t.procesoDisciplinario.fechaApertura)})
+                </Link>
+              } />
+            ) : (
+              <p className="text-sm text-destructive">⚠ Terminación con justa causa sin proceso disciplinario vinculado.</p>
+            )}
+          </div>
+        )}
+      </dl>
+    ),
+    carta: (
+      <div className="space-y-3">
+        {cartaRenuncia?.documentoId && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
+            <FileText className="size-4 shrink-0 text-muted-foreground" />
+            <span className="text-sm font-medium">Carta de renuncia</span>
+            <Pill tone="ok">Firmada por el trabajador · {fecha(cartaRenuncia.firmadoEn)}</Pill>
+            <span className="flex-1" />
+            <VisorPdf documentoId={cartaRenuncia.documentoId} titulo="Carta de renuncia" className={buttonVariants({ size: 'sm', variant: 'outline' }) + ' gap-1.5'}>
+              <FileText className="size-3.5" /> Ver
+            </VisorPdf>
+          </div>
+        )}
+        <DocumentoFirma
+          terminacionId={t.id}
+          tipo="CARTA"
+          titulo={NOMBRE_CARTA[tipoCarta]}
+          estado={estadoCarta}
+          listo
+          puedeEditar={puedeEditar}
+          cerrada={cerrada}
+        />
+      </div>
+    ),
+    examen: (
+      <ExamenEgreso
+        terminacionId={t.id}
+        ordenDocId={t.ordenExamenDocId}
+        resultado={examenHecho}
+        hoy={hoyBogotaISO()}
+        puedeEditar={puedeEditar}
+        cerrada={cerrada}
+      />
+    ),
+    'seguridad-social': <SeguridadSocial terminacionId={t.id} docId={t.seguridadSocialDocId} puedeEditar={puedeEditar} cerrada={cerrada} />,
+    'paz-y-salvo': pys && (
+      <PazYSalvoChecklist
+        items={pys.items.map((i) => ({
+          id: i.id, area: i.area, concepto: i.concepto, cumplido: i.cumplido, observacion: i.observacion,
+          responsable: i.responsableId ? nombreUsuario.get(i.responsableId) ?? null : null,
+          verificadoPor: i.verificadoPorId ? nombreUsuario.get(i.verificadoPorId) ?? null : null,
+        }))}
+        acta={acta}
+        terminacionId={t.id}
+        cerrada={cerrada}
+        puedeEditar={puedeEditar}
+      />
+    ),
+    liquidacion: liq && (
+      <div className="space-y-3">
+        <ResumenLiquidacion liq={liq} detalle={detalle} />
+        {!cerrada && !liq.enviadoFirmaEn && puedeEditar && (
           <AccionesLiquidacion
             terminacionId={t.id}
-            colaborador={`${t.colaborador.nombres} ${t.colaborador.apellidos}`}
+            colaborador={nombre}
             fechaRetiro={formatFechaISO(t.fechaRetiro)}
-            bases={{
-              auxilioTransporte: detalle?.bases?.auxilioTransporte ?? 0,
-              promedioVariableAnual: detalle?.bases?.promedioVariableAnual ?? 0,
-              promedioVariableSemestre: detalle?.bases?.promedioVariableSemestre ?? 0,
-              otroConceptoSalarial: detalle?.bases?.otroConceptoSalarial ?? 0,
-              diasSalarioPendiente: detalle?.bases?.diasSalarioPendiente ?? 0,
-              periodosConsiderados: detalle?.bases?.periodosConsiderados ?? 0,
-            }}
+            bases={bases}
             ventana={ventana}
             variableGuardado={variableGuardado}
-            puedeEditar={puedeEditar}
-            puedeEliminar={puedeEliminar}
+            puedeEditar
+            puedeEliminar={false}
           />
         )}
-      </div>
-
-      {/* Justa causa: proceso disciplinario que la sustenta (debido proceso) */}
-      {t.tipo === 'CON_JUSTA_CAUSA' && (
-        <Card className="mb-4"><CardContent className="py-3">
-          {t.procesoDisciplinario ? (
-            <p className="text-sm">
-              <span className="font-medium">Sustentada en el proceso disciplinario:</span>{' '}
-              <Link href={`/juridica/disciplinarios/${t.procesoDisciplinario.id}`} className="text-primary hover:underline">
-                {t.procesoDisciplinario.asunto} ({formatFechaLarga(t.procesoDisciplinario.fechaApertura)})
-              </Link>
-              {t.procesoDisciplinario.decision && <span className="text-muted-foreground"> · {t.procesoDisciplinario.decision}</span>}
-            </p>
-          ) : (
-            <p className="text-sm text-destructive">
-              ⚠ Terminación con justa causa sin proceso disciplinario vinculado (registrada antes del control de debido proceso).
-            </p>
-          )}
-        </CardContent></Card>
-      )}
-
-      {/* Liquidación definitiva */}
-      {liq && <ResumenLiquidacion liq={liq} detalle={detalle} />}
-
-      {/* Paz y salvo */}
-      {t.pazYSalvo && (
-        <PazYSalvoChecklist
-          estado={t.pazYSalvo.estado}
-          items={t.pazYSalvo.items.map((i) => ({ id: i.id, area: i.area, concepto: i.concepto, cumplido: i.cumplido, observacion: i.observacion }))}
+        <DocumentoFirma
           terminacionId={t.id}
-          terminacionEstado={t.estado}
+          tipo="LIQUIDACION"
+          titulo="Liquidación definitiva"
+          estado={recibo}
+          listo
           puedeEditar={puedeEditar}
-          puedeAprobar={puedeAprobar}
+          cerrada={cerrada}
         />
-      )}
-
-      {/* Actas y soportes: carta de terminación, liquidación firmada, renuncia, actas de entrega… */}
-      <div className="mt-6">
-        <GestorDocumentos
-          entidadTipo="Terminacion"
-          entidadId={t.id}
-          sedeId={null}
-          documentos={documentos.map((d) => ({
-            id: d.id, nombre: d.nombre, tipoDocumentoNombre: d.tipoDocumento?.nombre ?? null,
-            mimeType: d.mimeType, tamanoBytes: d.tamanoBytes,
-            fechaVencimiento: formatFechaISO(d.fechaVencimiento) || null, creadoEn: d.creadoEn.toISOString(),
-          }))}
-          tiposDocumento={tiposDocumento.map((x) => ({ id: x.id, nombre: x.nombre, requiereVencimiento: x.requiereVencimiento }))}
-          semaforo={[]}
+        <PagoLiquidacion
+          terminacionId={t.id}
+          total={fmtCOP(Number(liq.total))}
+          firmada={!!liq.firmadoEn}
+          pagadaEn={fecha(liq.pagadoEn)}
+          comprobanteDocId={liq.comprobanteDocId}
+          hoy={hoyBogotaISO()}
           puedeEditar={puedeEditar}
+          cerrada={cerrada}
         />
       </div>
+    ),
+    soportes: (
+      <GestorDocumentos
+        entidadTipo="Terminacion"
+        entidadId={t.id}
+        sedeId={null}
+        documentos={documentos.map((d) => ({
+          id: d.id, nombre: d.nombre, tipoDocumentoNombre: d.tipoDocumento?.nombre ?? null,
+          mimeType: d.mimeType, tamanoBytes: d.tamanoBytes,
+          fechaVencimiento: formatFechaISO(d.fechaVencimiento) || null, creadoEn: d.creadoEn.toISOString(),
+        }))}
+        tiposDocumento={tiposDocumento.map((x) => ({ id: x.id, nombre: x.nombre, requiereVencimiento: x.requiereVencimiento }))}
+        semaforo={[]}
+        puedeEditar={puedeEditar}
+      />
+    ),
+    cierre: <CierreTerminacion terminacionId={t.id} requisitos={requisitos} cerrada={cerrada} puedeAprobar={puedeAprobar} />,
+  }
+
+  for (const k of Object.keys(paneles)) paneles[k] = <Fragment key={k}>{paneles[k]}</Fragment>
+
+  return (
+    <div className="max-w-7xl">
+      <Encabezado
+        titulo={nombre}
+        descripcion={`${TIPO[t.tipo]} · ${formatFechaLarga(t.fechaRetiro)}`}
+        volver
+        acciones={
+          <div className="flex items-center gap-1.5">
+            <Pill tone={ESTADO[t.estado]?.tone ?? 'info'}>{ESTADO[t.estado]?.texto ?? t.estado}</Pill>
+            <Button asChild size="icon" variant="outline" title="Ver ficha del colaborador" aria-label="Ver ficha del colaborador">
+              <Link href={`/colaboradores/${t.colaborador.id}`}><UserRound className="size-4" /></Link>
+            </Button>
+            {/* Anular solo mientras no esté cerrada: después ya se pagó. */}
+            {!cerrada && puedeEliminar && (
+              <AccionesLiquidacion
+                terminacionId={t.id}
+                colaborador={nombre}
+                fechaRetiro={formatFechaISO(t.fechaRetiro)}
+                bases={bases}
+                ventana={{ meses: [], mesesAnual: 0, mesesSemestre: 0 }}
+                variableGuardado={{}}
+                puedeEditar={false}
+                puedeEliminar
+              />
+            )}
+          </div>
+        }
+      />
+
+      <RutaTerminacion pasos={pasos} paneles={paneles} inicial={inicial} />
     </div>
   )
 }
 
-/** Desglose guardado por el calculador. Puede faltar en liquidaciones antiguas. */
-type Detalle = {
-  salario?: number
-  auxilioTransporte?: number
-  otroConceptoSalarial?: number
-  salud?: number
-  pension?: number
-  saldoPrestamo?: number
-  totalDevengado?: number
-  totalDeducciones?: number
-  diasSalario?: number
-  diasPrima?: number
-  baseCesantias?: number
-  basePrima?: number
-  baseVacaciones?: number
-  baseSeguridadSocial?: number
-  ajustes?: { variablePorMes?: { mes: string; valor: number }[] }
-  bases?: {
-    auxilioTransporte?: number
-    promedioVariableAnual?: number
-    promedioVariableSemestre?: number
-    otroConceptoSalarial?: number
-    diasSalarioPendiente?: number
-    periodosConsiderados?: number
-  }
-}
-
-function leerDetalle(d: unknown): Detalle | null {
-  return d && typeof d === 'object' ? (d as Detalle) : null
-}
-
-type LiqFila = { k: string; sub?: string; v: number }
-
-/**
- * Resumen de la liquidación con la misma estructura de la colilla que revisa el
- * contador: ingresos arriba, deducciones al lado y el total abajo. Antes se
- * mostraba una sola lista de prestaciones sin el salario del último tramo ni la
- * seguridad social, y no había forma de cuadrarla contra el documento contable.
- */
-function ResumenLiquidacion({ liq, detalle }: {
-  liq: { diasLiquidados: number; salarioBase: unknown; cesantias: unknown; interesesCesantias: unknown; prima: unknown; vacaciones: unknown; indemnizacion: unknown; deducciones: unknown; total: unknown }
-  detalle: Detalle | null
-}) {
-  const n = (v: unknown) => Number(v ?? 0)
-  const dias = liq.diasLiquidados
-
-  const ingresos: LiqFila[] = [
-    { k: 'Salario', sub: detalle?.diasSalario ? `${detalle.diasSalario} días` : undefined, v: n(detalle?.salario) },
-    { k: 'Auxilio de transporte', v: n(detalle?.auxilioTransporte) },
-    { k: 'Otro concepto salarial', sub: 'comisiones y horas sin pagar', v: n(detalle?.otroConceptoSalarial) },
-    { k: 'Cesantías', sub: `${dias} días`, v: n(liq.cesantias) },
-    { k: 'Intereses cesantías', sub: `12% · ${dias} días`, v: n(liq.interesesCesantias) },
-    { k: 'Prima salarial', sub: detalle?.diasPrima ? `${detalle.diasPrima} días` : undefined, v: n(liq.prima) },
-    { k: 'Vacaciones compensadas', v: n(liq.vacaciones) },
-    { k: 'Indemnización', v: n(liq.indemnizacion) },
-  ].filter((f) => f.v > 0)
-
-  const deducciones: LiqFila[] = [
-    { k: 'Salud', sub: '4%', v: n(detalle?.salud) },
-    { k: 'Fondo de pensión', sub: '4%', v: n(detalle?.pension) },
-    { k: 'Saldo de préstamo', v: n(detalle?.saldoPrestamo) },
-  ].filter((f) => f.v > 0)
-
-  // Liquidaciones viejas no traen el desglose de deducciones; ahí manda la columna.
-  const totalDeducciones = deducciones.length > 0 ? deducciones.reduce((t, f) => t + f.v, 0) : n(liq.deducciones)
-  const totalIngresos = ingresos.reduce((t, f) => t + f.v, 0)
-
-  return (
-    <Card className="mb-4"><CardContent className="py-4">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-medium">Liquidación definitiva (borrador para revisión contable)</h3>
-        <p className="text-xs text-muted-foreground">
-          {dias} días liquidados · salario base {fmtCOP(n(liq.salarioBase))}
-        </p>
-      </div>
-
-      <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
-        <Bloque titulo="Ingresos" filas={ingresos} total={totalIngresos} />
-        {(deducciones.length > 0 || totalDeducciones > 0) && (
-          <Bloque titulo="Deducciones" filas={deducciones} total={totalDeducciones} />
-        )}
-      </div>
-
-      <div className="mt-4 flex items-center justify-between border-t pt-3">
-        <span className="font-medium">Total a pagar</span>
-        <span className="text-lg font-semibold text-emerald-600 tabular-nums">{fmtCOP(n(liq.total))}</span>
-      </div>
-
-      {/* Las bases se muestran porque son lo primero que revisa el contador:
-          de ellas salen cesantías y prima, y cada una usa una ventana distinta. */}
-      {detalle?.baseCesantias != null && (
-        <dl className="mt-4 grid gap-x-6 gap-y-1.5 border-t pt-3 text-xs sm:grid-cols-2">
-          <Base k="Base de cesantías" v={detalle.baseCesantias} ayuda="salario + auxilio + promedio del año" />
-          <Base k="Base de prima" v={detalle.basePrima} ayuda="salario + auxilio + promedio del semestre" />
-          <Base k="Base de vacaciones" v={detalle.baseVacaciones} ayuda="salario ordinario, sin auxilio" />
-          <Base k="Base de seguridad social" v={detalle.baseSeguridadSocial} ayuda="solo lo que constituye salario" />
-        </dl>
-      )}
-    </CardContent></Card>
-  )
-}
-
-function Bloque({ titulo, filas, total }: { titulo: string; filas: LiqFila[]; total: number }) {
+function Dato({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{titulo}</p>
-      <dl className="divide-y text-sm">
-        {filas.map((f) => (
-          <div key={f.k} className="flex items-baseline justify-between gap-3 py-1.5">
-            <dt className="min-w-0">
-              {f.k}
-              {f.sub && <span className="ml-1.5 text-xs text-muted-foreground">{f.sub}</span>}
-            </dt>
-            <dd className="shrink-0 tabular-nums">{fmtCOP(f.v)}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="mt-1.5 flex justify-between border-t pt-1.5 text-sm font-medium">
-        <span>Total {titulo.toLowerCase()}</span>
-        <span className="tabular-nums">{fmtCOP(total)}</span>
-      </div>
-    </div>
-  )
-}
-
-function Base({ k, v, ayuda }: { k: string; v: number | undefined; ayuda: string }) {
-  if (v == null) return null
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-muted-foreground">{k} <span className="hidden sm:inline">· {ayuda}</span></dt>
-      <dd className="shrink-0 tabular-nums">{fmtCOP(v)}</dd>
+      <dt className="text-xs text-muted-foreground">{k}</dt>
+      <dd className="font-medium">{v}</dd>
     </div>
   )
 }

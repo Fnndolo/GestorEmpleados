@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   CalendarRange, Clock, IdCard, FileText, FolderUp, FileBadge, CalendarClock, HeartPulse,
-  PenLine, Receipt, GraduationCap, Package, Scale, ShieldAlert, Lock, Inbox, Timer, ClockPlus,
+  PenLine, Receipt, GraduationCap, Package, Scale, ShieldAlert, Lock, Inbox, Timer, ClockPlus, DoorOpen, ClipboardCheck,
 } from 'lucide-react'
 import { CarruselMovil, Casilla, CasillaCompacta, CarruselEscritorio } from '@/components/shell/carrusel-movil'
 import { aplicaTramite, esOps, type Tramite } from '@/lib/tramites-vinculo'
@@ -72,7 +72,7 @@ function Seccion({
 
 
 export function PanelTramites({
-  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, mostrarSaldoVacaciones = false, bloqueoPermiso = null, documentosFaltantes, dotacionPorFirmar, horasExtraPorFirmar, hrefsNuevos = [],
+  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, mostrarSaldoVacaciones = false, bloqueoPermiso = null, documentosFaltantes, dotacionPorFirmar, horasExtraPorFirmar, retiroPorFirmar = 0, entregasPorVerificar = 0, esResponsableArea = false, hrefsNuevos = [],
 }: {
   /** Colaborador con vínculo activo: solo entonces se ofrecen los trámites operativos. */
   activo: boolean
@@ -92,6 +92,12 @@ export function PanelTramites({
   dotacionPorFirmar: number
   /** Órdenes de pago de horas extra (se pagan aparte de la nómina) esperando su firma. */
   horasExtraPorFirmar: number
+  /** Documentos de su retiro (carta, acta, liquidación) esperando su firma. */
+  retiroPorFirmar?: number
+  /** Áreas del paz y salvo a su cargo pendientes de verificar (de otros que se retiran). */
+  entregasPorVerificar?: number
+  /** Es responsable de alguna área del paz y salvo (ve la casilla aunque no haya pendientes). */
+  esResponsableArea?: boolean
   /** Rutas con un aviso de la plataforma vigente sin leer: su casilla muestra "Nuevo". */
   hrefsNuevos?: string[]
 }) {
@@ -219,6 +225,20 @@ export function PanelTramites({
       clave: 'aprobaciones', icono: Inbox,
       titulo: 'Aprobaciones', corto: 'Aprobaciones',
       href: '/autoservicio/aprobaciones',
+    },
+    // Para los responsables de un área del paz y salvo: la entrega de quien se retira.
+    (esResponsableArea || entregasPorVerificar > 0) && {
+      clave: 'verificar-entregas', icono: ClipboardCheck,
+      titulo: 'Verificar entregas', corto: 'Verificar',
+      aviso: entregasPorVerificar > 0 ? plural(entregasPorVerificar, 'pendiente') : null,
+      href: '/autoservicio/verificar-entregas',
+    },
+    // Renuncia, paz y salvo, liquidación y documentos de salida.
+    {
+      clave: 'retiro', icono: DoorOpen,
+      titulo: 'Mi retiro', corto: 'Mi retiro',
+      aviso: retiroPorFirmar > 0 ? `${retiroPorFirmar} por firmar` : null,
+      href: '/autoservicio/retiro',
     },
   ].filter(Boolean) as Item[]
 

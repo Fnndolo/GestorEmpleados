@@ -29,15 +29,20 @@ const TIPOS = [
  * @param colaboradorInicial - llega desde el detalle del contrato, por el
  *   parámetro `?colaborador=` de la URL: abre el diálogo con esa persona ya
  *   elegida, para no obligar a buscarla de nuevo en la lista.
+ * @param renuncia - llega de una renuncia presentada en la app (`?renuncia=`):
+ *   el diálogo abre con la persona, el último día y el motivo que escribió.
  */
-export function NuevaTerminacion({ colaboradorInicial }: { colaboradorInicial?: string }) {
+export function NuevaTerminacion({ colaboradorInicial, renuncia }: {
+  colaboradorInicial?: string
+  renuncia?: { id: string; colaboradorId: string; nombre: string; fechaRetiro: string; motivo: string } | null
+}) {
   const router = useRouter()
-  const [abierto, setAbierto] = useState(Boolean(colaboradorInicial))
-  const [colaboradorId, setColaboradorId] = useState(colaboradorInicial ?? '')
+  const [abierto, setAbierto] = useState(Boolean(colaboradorInicial || renuncia))
+  const [colaboradorId, setColaboradorId] = useState(renuncia?.colaboradorId ?? colaboradorInicial ?? '')
   const [tipo, setTipo] = useState('RENUNCIA_VOLUNTARIA')
-  const [fechaRetiro, setFechaRetiro] = useState(new Date().toISOString().slice(0, 10))
+  const [fechaRetiro, setFechaRetiro] = useState(renuncia?.fechaRetiro ?? new Date().toISOString().slice(0, 10))
   const [preavisoDias, setPreavisoDias] = useState('')
-  const [motivo, setMotivo] = useState('')
+  const [motivo, setMotivo] = useState(renuncia?.motivo ?? '')
   const [g, setG] = useState(false)
   // Justa causa: proceso disciplinario cerrado que la sustenta (debido proceso)
   const [procesos, setProcesos] = useState<{ id: string; asunto: string; fecha: string; decision: string | null }[] | null>(null)
@@ -75,6 +80,7 @@ export function NuevaTerminacion({ colaboradorInicial }: { colaboradorInicial?: 
       colaboradorId, tipo: tipo as 'RENUNCIA_VOLUNTARIA', fechaRetiro,
       preavisoDias: preavisoDias ? Number(preavisoDias) : undefined, motivo,
       procesoDisciplinarioId: tipo === 'CON_JUSTA_CAUSA' ? procesoId : undefined,
+      renunciaId: renuncia?.id,
     })
     setG(false)
     if (res.ok) { toast.success('Terminación registrada y liquidación calculada.'); setAbierto(false); router.push(`/terminaciones/${(res.datos as { id: string }).id}`) }
@@ -91,8 +97,14 @@ export function NuevaTerminacion({ colaboradorInicial }: { colaboradorInicial?: 
             <DialogDescription>Se calculará la liquidación definitiva y se generará el paz y salvo.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1.5"><Label>Colaborador</Label><SelectorColaborador value={colaboradorId} onChange={(id) => { setColaboradorId(id); cargarProcesos(id) }} /></div>
-            <div className="space-y-1.5">
+            {renuncia ? (
+              <p className="rounded-lg border bg-muted/50 p-3 text-sm">
+                <span className="font-medium">{renuncia.nombre}</span> presentó su renuncia en la app. Al registrarla, su carta firmada queda en la terminación.
+              </p>
+            ) : (
+              <div className="space-y-1.5"><Label>Colaborador</Label><SelectorColaborador value={colaboradorId} onChange={(id) => { setColaboradorId(id); cargarProcesos(id) }} /></div>
+            )}
+            <div className={renuncia ? 'hidden' : 'space-y-1.5'}>
               <Label>Tipo de terminación</Label>
               <Select value={tipo} onValueChange={setTipo}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>

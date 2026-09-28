@@ -53,6 +53,8 @@ export async function fondoParaTexto(usaMembrete: boolean): Promise<string | und
 
 const s = StyleSheet.create({
   item: { flexDirection: 'row', marginBottom: 6, paddingLeft: 14 },
+  itemCompacto: { marginBottom: 4 },
+  parrafoCompacto: { marginBottom: 7 },
   itemMarca: { width: 16 },
   itemCheck: { width: 16, paddingTop: 3.5 },
   itemTexto: { flex: 1, textAlign: 'justify' },
@@ -82,7 +84,11 @@ function Marcador({ vineta }: { vineta: string }) {
   )
 }
 
-export function BloquesPdf({ bloques, tabla }: { bloques: BloqueTexto[]; tabla?: ReactNode }) {
+/**
+ * `compacto`: menos aire entre párrafos, como una carta de Word. Las cartas de
+ * la terminación lo usan para que el texto y las firmas quepan en una hoja.
+ */
+export function BloquesPdf({ bloques, tabla, compacto = false }: { bloques: BloqueTexto[]; tabla?: ReactNode; compacto?: boolean }) {
   const lista = tabla ? conTablaImplicita(bloques) : bloques.filter((b) => b.tipo !== 'tabla')
   return (
     <>
@@ -90,12 +96,12 @@ export function BloquesPdf({ bloques, tabla }: { bloques: BloqueTexto[]; tabla?:
         if (b.tipo === 'tabla') return <View key={i}>{tabla}</View>
         const p = b.parrafo
         return p.vineta ? (
-          <View key={i} style={s.item}>
+          <View key={i} style={compacto ? [s.item, s.itemCompacto] : s.item}>
             <Marcador vineta={p.vineta} />
             <Text style={s.itemTexto}><TramosPdf tramos={p.tramos} /></Text>
           </View>
         ) : (
-          <Text key={i} style={estilos.parrafo}><TramosPdf tramos={p.tramos} /></Text>
+          <Text key={i} style={compacto ? [estilos.parrafo, s.parrafoCompacto] : estilos.parrafo}><TramosPdf tramos={p.tramos} /></Text>
         )
       })}
     </>

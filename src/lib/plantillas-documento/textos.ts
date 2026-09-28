@@ -1,7 +1,8 @@
 /**
  * Textos editables de los documentos que la app arma sola a partir de datos:
  * las actas de Mis entregas (activos, dotación, EPP), la orden de pago de
- * horas extra y las certificaciones (laboral y contractual).
+ * horas extra, las certificaciones (laboral y contractual) y el acta de paz y
+ * salvo de la terminación.
  *
  * Cada documento tiene un texto de fábrica y la empresa puede cambiarlo en
  * Ajustes → Plantillas de documentos (se guarda en `PlantillaDocumento` con la
@@ -39,6 +40,14 @@ export const CLAVES_TEXTO = [
   'ACTA_DOTACION',
   'ACTA_EPP',
   'ORDEN_PAGO_HORAS_EXTRA',
+  'PAZ_Y_SALVO',
+  'LIQUIDACION_DEFINITIVA',
+  'CARTA_RENUNCIA',
+  'CARTA_ACEPTACION_RENUNCIA',
+  'CARTA_TERMINACION',
+  'CARTA_NO_PRORROGA',
+  'ACTA_MUTUO_ACUERDO',
+  'ORDEN_EXAMEN_EGRESO',
 ] as const
 export type ClaveTexto = (typeof CLAVES_TEXTO)[number]
 
@@ -88,6 +97,20 @@ const V_ACTA: VariableTexto[] = [
 
 const ENCABEZADO_ACTA =
   'En {{ciudad}}, a los {{fecha}}, el(la) señor(a) **{{nombre}}**, identificado(a) con documento {{documento}}[[, en su cargo de {{cargo}}]],'
+
+/** Variables de las cartas de la terminación y de la orden de examen. */
+const V_CARTA: VariableTexto[] = [
+  ...V_ACTA,
+  { clave: 'fecha_ingreso', descripcion: 'Fecha de ingreso, en letras' },
+  { clave: 'fecha_retiro', descripcion: 'Fecha de retiro (último día), en letras' },
+  { clave: 'motivo', descripcion: 'Tipo de terminación (renuncia voluntaria, terminación sin justa causa…)' },
+  { clave: 'observaciones', descripcion: 'Motivo o causa escrita en la terminación (vacío si no hay)' },
+  { clave: 'preaviso_dias', descripcion: 'Días de preaviso (vacío si no aplica)' },
+  { clave: 'lugar_expedicion', descripcion: 'Lugar de expedición del documento del colaborador (vacío si no está en la ficha)' },
+  { clave: 'correo', descripcion: 'Correo del colaborador (vacío si no tiene)' },
+  { clave: 'departamento', descripcion: 'Departamento de la sede del colaborador' },
+  { clave: 'ciudad_empresa', descripcion: 'Ciudad desde donde escribe la empresa (la de la sede principal)' },
+]
 
 // ─── Definiciones ───────────────────────────────────────────────────────────
 
@@ -326,6 +349,187 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
     tabla: 'Horas por tipo (diurnas, nocturnas, dominicales…), el total de horas y el recuadro con el total a pagar.',
     variantes: [],
   },
+
+  PAZ_Y_SALVO: {
+    clave: 'PAZ_Y_SALVO',
+    nombre: 'Acta de paz y salvo',
+    descripcion: 'Al terminar el contrato, cuando todas las áreas verificaron la entrega, se envía al trabajador para que la firme desde su autoservicio.',
+    fijo: 'La app pone el encabezado de la empresa, la tabla de áreas verificadas (quién y cuándo), las firmas del trabajador y de Talento Humano, y el pie.',
+    membrete: false,
+    defecto: {
+      titulo: 'Acta de paz y salvo',
+      contenido: [
+        `${ENCABEZADO_ACTA} quien laboró en {{empresa}} desde el {{fecha_ingreso}} hasta el {{fecha_retiro}}, hace entrega de su puesto de trabajo. Las áreas de la empresa verificaron lo siguiente:`,
+        '[tabla]',
+        'En consecuencia, se deja constancia de que el(la) trabajador(a) se encuentra **a paz y salvo** con la empresa por concepto de entrega de equipos y activos, dotación, documentos, accesos y obligaciones de cartera.',
+        '~ Este paz y salvo se refiere únicamente a la entrega del puesto de trabajo. No implica renuncia a salarios, prestaciones sociales ni a ningún otro derecho laboral, que se liquidan y pagan por separado.',
+      ].join('\n'),
+    },
+    variables: [
+      ...V_ACTA,
+      { clave: 'fecha_ingreso', descripcion: 'Fecha de ingreso, en letras' },
+      { clave: 'fecha_retiro', descripcion: 'Fecha de retiro, en letras' },
+      { clave: 'motivo', descripcion: 'Tipo de terminación (renuncia voluntaria, mutuo acuerdo…)' },
+    ],
+    tabla: 'Cada área (activos, cartera, documentos, sistemas, dotación) con lo verificado, quién lo verificó y cuándo.',
+    variantes: [],
+  },
+
+  LIQUIDACION_DEFINITIVA: {
+    clave: 'LIQUIDACION_DEFINITIVA',
+    nombre: 'Liquidación definitiva',
+    descripcion: 'Al terminar el contrato, Talento Humano la firma y la envía al trabajador, que firma el recibido desde su autoservicio antes del pago.',
+    fijo: 'La app pone el encabezado de la empresa, los datos del contrato, la tabla de ingresos y deducciones con el total a pagar, y las firmas de Talento Humano y del trabajador.',
+    membrete: false,
+    defecto: {
+      titulo: 'Liquidación definitiva de prestaciones sociales',
+      contenido: [
+        'En {{ciudad}}, a los {{fecha}}, {{razon_social}} liquida el contrato de trabajo de **{{nombre}}**, identificado(a) con documento {{documento}}[[, en su cargo de {{cargo}}]], vigente desde el {{fecha_ingreso}} hasta el {{fecha_retiro}} ({{motivo}}), así:',
+        '[tabla]',
+        'El(la) trabajador(a) declara que recibirá la suma de **{{total}}** ({{total_letras}}) por los conceptos aquí detallados.',
+        '~ La firma de este documento acredita el recibido de la liquidación. No implica renuncia a derechos ciertos e indiscutibles del trabajador (art. 14 CST).',
+      ].join('\n'),
+    },
+    variables: [
+      ...V_ACTA,
+      { clave: 'fecha_ingreso', descripcion: 'Fecha de ingreso, en letras' },
+      { clave: 'fecha_retiro', descripcion: 'Fecha de retiro, en letras' },
+      { clave: 'motivo', descripcion: 'Tipo de terminación (renuncia voluntaria, mutuo acuerdo…)' },
+      { clave: 'dias', descripcion: 'Días liquidados' },
+      { clave: 'salario', descripcion: 'Salario base en pesos' },
+      { clave: 'total', descripcion: 'Total a pagar en pesos' },
+      { clave: 'total_letras', descripcion: 'El total en letras' },
+    ],
+    tabla: 'Ingresos (salario, auxilio, cesantías, intereses, prima, vacaciones, indemnización) y deducciones (salud, pensión, préstamo), con sus totales y el total a pagar.',
+    variantes: [],
+  },
+
+  CARTA_RENUNCIA: {
+    clave: 'CARTA_RENUNCIA',
+    nombre: 'Carta de renuncia',
+    descripcion: 'La escribe y firma el trabajador desde su autoservicio al presentar su renuncia.',
+    fijo: 'La app pone el encabezado de la empresa, la firma del trabajador y el pie.',
+    membrete: false,
+    defecto: {
+      titulo: 'Carta de renuncia',
+      contenido: [
+        "{{ciudad}}, {{fecha}}",
+        "Señores **{{razon_social}}**",
+        "Por medio de la presente presento mi **renuncia voluntaria**[[ al cargo de {{cargo}}]], que desempeño en {{empresa}} desde el {{fecha_ingreso}}. Mi último día de trabajo será el **{{fecha_retiro}}**.",
+        "[[Motivo: {{observaciones}}]]",
+        "Agradezco la oportunidad brindada y quedo atento(a) a la entrega de mi puesto de trabajo, al examen médico de egreso y a la liquidación de mis salarios y prestaciones sociales.",
+      ].join('\n'),
+    },
+    variables: V_CARTA,
+    variantes: [],
+  },
+
+  CARTA_ACEPTACION_RENUNCIA: {
+    clave: 'CARTA_ACEPTACION_RENUNCIA',
+    nombre: 'Aceptación de la renuncia',
+    descripcion: 'En una renuncia, Talento Humano la firma y la envía al trabajador, que firma el recibido desde su autoservicio.',
+    fijo: 'La app pone el encabezado de la empresa, las firmas de Talento Humano y del trabajador, y el pie.',
+    membrete: false,
+    defecto: {
+      titulo: 'Aceptación de renuncia',
+      contenido: [
+        '{{ciudad_empresa}}, {{fecha}}',
+        'Señor(a) **{{nombre}}**, {{documento}}[[ de {{lugar_expedicion}}]]',
+        '{{ciudad}}[[ - {{departamento}}]][[ · {{correo}}]]',
+        'Cordial saludo.',
+        'Por medio de la presente, **{{razon_social}}** le comunica que se acepta su renuncia irrevocable[[ al cargo de **{{cargo}}**]], con efectos a partir del **{{fecha_retiro}}**, fecha en la cual se entenderá finalizada su relación laboral con nuestra empresa.',
+        'En consecuencia, y con el fin de dar cumplimiento a las obligaciones legales y contractuales a cargo de ambas partes, le informamos lo siguiente:',
+        '1. **Devolución de dotación y elementos de trabajo:** deberá reintegrar a la empresa, en buen estado y en la fecha de su retiro, toda la dotación, equipos, herramientas y demás elementos que le hayan sido entregados para el desempeño de sus funciones.',
+        '2. **Examen médico ocupacional de retiro:** de acuerdo con las estipulaciones de Seguridad y Salud en el Trabajo, {{razon_social}} solicita la realización obligatoria del examen médico de retiro, de conformidad con la Resolución 1843 de 2025 y el numeral 7 del artículo 57 del Código Sustantivo del Trabajo.',
+        '3. **Liquidación y pago de prestaciones sociales:** se procederá a realizar la liquidación final a que tenga derecho, incluyendo salarios causados, vacaciones, prima de servicios, cesantías, intereses a las cesantías y demás conceptos legales y contractuales aplicables. Los valores resultantes serán consignados en la cuenta bancaria que tiene registrada en nuestro sistema de nómina, dentro de los términos previstos por la ley.',
+        'Agradecemos el tiempo, dedicación y aporte que brindó a {{razon_social}} durante el periodo en que formó parte de nuestra organización, y le deseamos éxitos en sus próximos proyectos.',
+        'Cordialmente,',
+        '~ Con su firma, el(la) trabajador(a) confirma que recibió esta comunicación.',
+      ].join('\n'),
+    },
+    variables: V_CARTA,
+    variantes: [],
+  },
+
+  CARTA_TERMINACION: {
+    clave: 'CARTA_TERMINACION',
+    nombre: 'Carta de terminación',
+    descripcion: 'Cuando la empresa termina el contrato (con o sin justa causa, anticipada, periodo de prueba): Talento Humano la firma y el trabajador firma el recibido.',
+    fijo: 'La app pone el encabezado de la empresa, las firmas de Talento Humano y del trabajador, y el pie.',
+    membrete: false,
+    defecto: {
+      titulo: 'Terminación del contrato de trabajo',
+      contenido: [
+        "{{ciudad}}, {{fecha}}",
+        "Señor(a) **{{nombre}}**, identificado(a) con documento {{documento}}[[, {{cargo}}]]",
+        "Por medio de la presente le comunicamos que **{{razon_social}}** da por terminado el contrato de trabajo suscrito con usted, por **{{motivo}}**, con efectos a partir del **{{fecha_retiro}}**.",
+        "[[Causa: {{observaciones}}]]",
+        "Le informamos que su liquidación de salarios y prestaciones sociales se pondrá a su disposición conforme a la ley, junto con la constancia del pago de sus aportes a seguridad social de los últimos tres (3) meses (art. 65 CST, parágrafo 1).",
+        "Le pedimos hacer la entrega de su puesto de trabajo (equipos, dotación, documentos y accesos) para expedir su paz y salvo. Así mismo, le entregamos la orden para el examen médico ocupacional de egreso, que debe realizarse dentro de los cinco (5) días hábiles siguientes a su retiro, y pondremos a su disposición la liquidación de sus salarios y prestaciones sociales.",
+        "~ Con su firma, el(la) trabajador(a) confirma que recibió esta comunicación; no implica que esté de acuerdo con su contenido.",
+      ].join('\n'),
+    },
+    variables: V_CARTA,
+    variantes: [],
+  },
+
+  CARTA_NO_PRORROGA: {
+    clave: 'CARTA_NO_PRORROGA',
+    nombre: 'Aviso de no prórroga',
+    descripcion: 'Contrato a término fijo que no se renueva: se envía con al menos 30 días de anticipación (art. 46 CST) y el trabajador firma el recibido.',
+    fijo: 'La app pone el encabezado de la empresa, las firmas de Talento Humano y del trabajador, y el pie.',
+    membrete: false,
+    defecto: {
+      titulo: 'Aviso de no prórroga del contrato',
+      contenido: [
+        "{{ciudad}}, {{fecha}}",
+        "Señor(a) **{{nombre}}**[[, {{cargo}}]]",
+        "De conformidad con el artículo 46 del Código Sustantivo del Trabajo, y con una anticipación no inferior a treinta (30) días, le informamos que **{{razon_social}}** ha decidido **no prorrogar** su contrato de trabajo a término fijo, el cual terminará el **{{fecha_retiro}}**.",
+        "Le pedimos hacer la entrega de su puesto de trabajo (equipos, dotación, documentos y accesos) para expedir su paz y salvo. Así mismo, le entregamos la orden para el examen médico ocupacional de egreso, que debe realizarse dentro de los cinco (5) días hábiles siguientes a su retiro, y pondremos a su disposición la liquidación de sus salarios y prestaciones sociales.",
+        "~ Con su firma, el(la) trabajador(a) confirma que recibió este aviso.",
+      ].join('\n'),
+    },
+    variables: V_CARTA,
+    variantes: [],
+  },
+
+  ACTA_MUTUO_ACUERDO: {
+    clave: 'ACTA_MUTUO_ACUERDO',
+    nombre: 'Acta de mutuo acuerdo',
+    descripcion: 'Terminación por mutuo acuerdo (art. 61 CST): la firman Talento Humano y el trabajador.',
+    fijo: 'La app pone el encabezado de la empresa, las firmas de Talento Humano y del trabajador, y el pie.',
+    membrete: false,
+    defecto: {
+      titulo: 'Acta de terminación por mutuo acuerdo',
+      contenido: [
+        "En {{ciudad}}, a los {{fecha}}, **{{razon_social}}** (NIT {{nit}}) y **{{nombre}}**, identificado(a) con documento {{documento}}[[, en su cargo de {{cargo}}]], acuerdan libre y voluntariamente dar por terminado el contrato de trabajo vigente desde el {{fecha_ingreso}}, con efectos a partir del **{{fecha_retiro}}** (art. 61, literal b, CST).",
+        "[[Condiciones acordadas: {{observaciones}}]]",
+        "La empresa pagará al trabajador la liquidación de sus salarios y prestaciones sociales causados hasta la fecha de terminación. Las partes dejan constancia de que el acuerdo se firma sin presiones y con pleno conocimiento de sus efectos.",
+        "~ Este acuerdo no implica renuncia a derechos ciertos e indiscutibles del trabajador (art. 14 CST).",
+      ].join('\n'),
+    },
+    variables: V_CARTA,
+    variantes: [],
+  },
+
+  ORDEN_EXAMEN_EGRESO: {
+    clave: 'ORDEN_EXAMEN_EGRESO',
+    nombre: 'Orden de examen de egreso',
+    descripcion: 'Se genera en la terminación y le queda al trabajador en su autoservicio para presentarla en la IPS.',
+    fijo: 'La app pone el encabezado de la empresa, el nombre de quien la expide en Talento Humano y el pie.',
+    membrete: false,
+    defecto: {
+      titulo: 'Orden de examen médico ocupacional de egreso',
+      contenido: [
+        "{{ciudad}}, {{fecha}}",
+        "**{{razon_social}}** (NIT {{nit}}) remite a **{{nombre}}**, identificado(a) con documento {{documento}}[[, quien se desempeñó como {{cargo}}]], para la práctica del **examen médico ocupacional de egreso**, con motivo de la terminación de su contrato de trabajo el {{fecha_retiro}}.",
+        "El examen debe realizarse dentro de los cinco (5) días hábiles siguientes a la fecha de retiro (Resolución 2346 de 2007). Su costo corre por cuenta de la empresa. Si no se presenta en ese plazo, la empresa dejará constancia de ello.",
+        "~ Presente esta orden y su documento de identidad en la IPS de salud ocupacional.",
+      ].join('\n'),
+    },
+    variables: V_CARTA,
+    variantes: [],
+  },
 }
 
 // ─── Resolución del texto ───────────────────────────────────────────────────
@@ -529,6 +733,58 @@ export function variablesOrdenPago(d: DatosVarsOrdenPago): Record<string, string
     ciudad: d.ciudad ?? '',
     fecha_dias: fechaEnDias(d.fecha),
     ...varsEmpresa(d.empresa),
+  }
+}
+
+export type DatosVarsPazYSalvo = {
+  colaborador: ColaboradorActa
+  empresa: EmpresaTexto
+  ciudad: string
+  fecha: Date
+  fechaIngreso: Date
+  fechaRetiro: Date
+  motivo: string
+}
+
+export function variablesPazYSalvo(d: DatosVarsPazYSalvo): Record<string, string> {
+  return {
+    ...varsActa(d),
+    fecha_ingreso: formatFechaLarga(d.fechaIngreso),
+    fecha_retiro: formatFechaLarga(d.fechaRetiro),
+    motivo: d.motivo,
+  }
+}
+
+export type DatosVarsCarta = DatosVarsPazYSalvo & {
+  observaciones: string | null
+  preavisoDias: number | null
+  /** Datos del destinatario para el encabezado de la carta. */
+  destinatario?: { correo: string | null; lugarExpedicion: string | null; departamento: string | null }
+  /** Ciudad desde donde escribe la empresa (la de su sede principal). */
+  ciudadEmpresa?: string | null
+}
+
+export function variablesCarta(d: DatosVarsCarta): Record<string, string> {
+  return {
+    ...variablesPazYSalvo(d),
+    observaciones: d.observaciones?.trim() ?? '',
+    preaviso_dias: d.preavisoDias != null ? String(d.preavisoDias) : '',
+    lugar_expedicion: d.destinatario?.lugarExpedicion?.trim() ?? '',
+    correo: d.destinatario?.correo?.trim() ?? '',
+    departamento: d.destinatario?.departamento?.trim() ?? '',
+    ciudad_empresa: d.ciudadEmpresa?.trim() || d.ciudad,
+  }
+}
+
+export type DatosVarsLiquidacion = DatosVarsPazYSalvo & { dias: number; salarioBase: number; total: number }
+
+export function variablesLiquidacion(d: DatosVarsLiquidacion): Record<string, string> {
+  return {
+    ...variablesPazYSalvo(d),
+    dias: String(d.dias),
+    salario: fmtCOP(d.salarioBase),
+    total: fmtCOP(d.total),
+    total_letras: pesosEnLetras(d.total),
   }
 }
 

@@ -7,8 +7,8 @@
 
 import { fmtCOP } from '@/lib/moneda'
 import {
-  variablesActaActivo, variablesActaDotacion, variablesActaEpp, variablesCertificacion, variablesOrdenPago,
-  type ClaveTexto, type DatosVarsActaActivo, type DatosVarsActaDotacion, type DatosVarsActaEpp,
+  variablesActaActivo, variablesActaDotacion, variablesActaEpp, variablesCertificacion, variablesOrdenPago, variablesPazYSalvo, variablesLiquidacion, variablesCarta,
+  type ClaveTexto, type DatosVarsActaActivo, type DatosVarsActaDotacion, type DatosVarsActaEpp, type DatosVarsPazYSalvo, type DatosVarsLiquidacion, type DatosVarsCarta,
   type DatosVarsCertificacion, type DatosVarsOrdenPago, type EmpresaTexto, type TipoCertificacion,
 } from './textos'
 
@@ -106,6 +106,55 @@ export function muestraOrdenPago(empresa: EmpresaTexto): DatosVarsOrdenPago & { 
     horasExtra: 12.5,
     valor: 187_500,
     ciudad: MUESTRA_PERSONA.ciudad,
+  }
+}
+
+/** Áreas de la muestra del acta de paz y salvo: [área, verificado, quién, cuándo]. */
+export const AREAS_PAZ_Y_SALVO_MUESTRA: [string, string, string, string][] = [
+  ['Activos', 'Equipos y activos asignados devueltos', 'Verificador de muestra', '14 ene. 2026'],
+  ['Cartera', 'Préstamos y cartera al día', 'Verificador de muestra', '14 ene. 2026'],
+  ['Documentos', 'Documentos y expedientes entregados', 'Verificador de muestra', '14 ene. 2026'],
+  ['Sistemas', 'Accesos y correos revocados', 'Verificador de muestra', '15 ene. 2026'],
+  ['Dotación', 'Dotación devuelta (si aplica)', 'Verificador de muestra', '15 ene. 2026'],
+]
+
+export function muestraPazYSalvo(empresa: EmpresaTexto): DatosVarsPazYSalvo {
+  return {
+    colaborador: { nombre: MUESTRA_PERSONA.nombre, documento: MUESTRA_PERSONA.documento, cargo: MUESTRA_PERSONA.cargo },
+    empresa,
+    ciudad: MUESTRA_PERSONA.ciudad,
+    fecha: FECHA_MUESTRA,
+    fechaIngreso: new Date(Date.UTC(2024, 2, 1)),
+    fechaRetiro: new Date(Date.UTC(2026, 0, 10)),
+    motivo: 'renuncia voluntaria',
+  }
+}
+
+/** Liquidación de muestra: ingresos y deducciones ficticios, con sus totales. */
+export const LIQUIDACION_MUESTRA = {
+  ingresos: [
+    { k: 'Salario', sub: '10 días', v: 500_000 },
+    { k: 'Auxilio de transporte', v: 66_667 },
+    { k: 'Cesantías', sub: '680 días', v: 2_833_333 },
+    { k: 'Intereses cesantías', sub: '12% · 680 días', v: 340_000 },
+    { k: 'Prima salarial', sub: '10 días', v: 55_556 },
+    { k: 'Vacaciones compensadas', v: 708_333 },
+  ],
+  deducciones: [{ k: 'Salud', sub: '4%', v: 20_000 }, { k: 'Fondo de pensión', sub: '4%', v: 20_000 }],
+}
+
+export function muestraLiquidacion(empresa: EmpresaTexto): DatosVarsLiquidacion {
+  const ingresos = LIQUIDACION_MUESTRA.ingresos.reduce((t, f) => t + f.v, 0)
+  const deducciones = LIQUIDACION_MUESTRA.deducciones.reduce((t, f) => t + f.v, 0)
+  return { ...muestraPazYSalvo(empresa), dias: 680, salarioBase: 1_500_000, total: ingresos - deducciones }
+}
+
+/** Carta de la terminación de muestra (renuncia, terminación, no prórroga…). */
+export function muestraCarta(empresa: EmpresaTexto): DatosVarsCarta {
+  return {
+    ...muestraPazYSalvo(empresa), observaciones: 'Motivo de muestra escrito en la terminación.', preavisoDias: 30,
+    destinatario: { correo: 'correo.muestra@ejemplo.com', lugarExpedicion: MUESTRA_PERSONA.ciudad, departamento: 'Departamento de muestra' },
+    ciudadEmpresa: 'Ciudad de la empresa',
   }
 }
 
@@ -207,6 +256,41 @@ export function muestraTexto(clave: ClaveTexto, variante: string, empresa: Empre
           pie,
         },
       }
+    }
+    case 'PAZ_Y_SALVO': {
+      const d = muestraPazYSalvo(empresa)
+      return {
+        vars: variablesPazYSalvo(d),
+        tabla: {
+          tipo: 'columnas',
+          columnas: [
+            { titulo: 'Área', ancho: '18%' }, { titulo: 'Verificado', ancho: '42%' },
+            { titulo: 'Verificó', ancho: '24%' }, { titulo: 'Fecha', ancho: '16%' },
+          ],
+          filas: AREAS_PAZ_Y_SALVO_MUESTRA,
+          total: null,
+        },
+        fijos: { cabecera: 'membrete', firmas: [FIRMA_COLABORADOR, firmaEmpresa('Talento Humano')], pie },
+      }
+    }
+    case 'LIQUIDACION_DEFINITIVA': {
+      const d = muestraLiquidacion(empresa)
+      const filas = [...LIQUIDACION_MUESTRA.ingresos, ...LIQUIDACION_MUESTRA.deducciones.map((f) => ({ ...f, v: -f.v }))]
+      return {
+        vars: variablesLiquidacion(d),
+        tabla: { tipo: 'pares', pares: [...filas.map((f): [string, string] => [f.k, fmtCOP(f.v)]), ['Total a pagar', fmtCOP(d.total)]] },
+        fijos: { cabecera: 'membrete', firmas: [{ nombre: 'Talento Humano', detalle: 'Firmado electrónicamente el (fecha de envío)', conFirma: true }, FIRMA_COLABORADOR], pie },
+      }
+    }
+    case 'CARTA_RENUNCIA':
+    case 'CARTA_ACEPTACION_RENUNCIA':
+    case 'CARTA_TERMINACION':
+    case 'CARTA_NO_PRORROGA':
+    case 'ACTA_MUTUO_ACUERDO':
+    case 'ORDEN_EXAMEN_EGRESO': {
+      const firmaTH = { nombre: 'Talento Humano', detalle: 'Firmado electrónicamente el (fecha de envío)', conFirma: clave !== 'ORDEN_EXAMEN_EGRESO' }
+      const firmas = clave === 'CARTA_RENUNCIA' ? [FIRMA_COLABORADOR] : clave === 'ORDEN_EXAMEN_EGRESO' ? [firmaTH] : [firmaTH, FIRMA_COLABORADOR]
+      return { vars: variablesCarta(muestraCarta(empresa)), tabla: null, fijos: { cabecera: 'membrete', firmas, pie } }
     }
     case 'CERTIFICACION_LABORAL':
     case 'CERTIFICACION_CONTRACTUAL': {

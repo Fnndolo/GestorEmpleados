@@ -7,7 +7,8 @@ import { saldoVacaciones } from '@/server/vacaciones'
 import { saldoVisibleEnAutoservicio } from '@/lib/vacaciones-config'
 import { liquidarVacaciones } from '@/server/vacaciones-liquidacion'
 import { Card, CardContent } from '@/components/ui/card'
-import { CalendarRange, Clock, CreditCard } from 'lucide-react'
+import { CalendarRange, ChevronRight, Clock, CreditCard, FileCheck2 } from 'lucide-react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta, formatFechaLarga, formatFechaISO, hoyBogota, parseFechaISO } from '@/lib/fechas'
@@ -406,10 +407,31 @@ export default async function AutoservicioPage() {
   const mostrarSaldo = saldoVisibleEnAutoservicio(colab.vacacionesHistorialCompletoEn)
   const avisos = await avisosParaUsuario(usuario)
   const avisosNuevos = avisos.filter((a) => a.vigente && !a.leido)
+  // Documentos de su retiro esperando su firma (paz y salvo, liquidación): van
+  // arriba de todo, porque sin ellos no se cierra su terminación.
+  const porFirmarRetiro = { terminacion: { colaboradorId: usuario.colaboradorId }, enviadoFirmaEn: { not: null }, firmadoEn: null }
+  const [pysPorFirmar, liqPorFirmar, cartasPorFirmar, entregasPorVerificar, areasACargo] = await Promise.all([
+    prisma.pazYSalvo.count({ where: porFirmarRetiro }),
+    prisma.liquidacionDefinitiva.count({ where: porFirmarRetiro }),
+    prisma.cartaTerminacion.count({ where: porFirmarRetiro }),
+    // Responsable de un área del paz y salvo: entregas de otros por verificar.
+    prisma.pazYSalvoItem.count({ where: { responsableId: usuario.id, cumplido: false, pazYSalvo: { enviadoFirmaEn: null, terminacion: { estado: { not: 'CERRADA' } } } } }),
+    prisma.areaPazYSalvo.count({ where: { responsableId: usuario.id, activa: true } }),
+  ])
+  const retiroPorFirmar = pysPorFirmar + liqPorFirmar + cartasPorFirmar
 
   return (
     <div className="max-w-7xl">
       <BannerAvisos avisos={avisosNuevos.slice(0, 5).map((a) => ({ id: a.id, titulo: a.titulo, resumen: a.resumen, tipo: a.tipo, enlace: a.enlace }))} />
+      {retiroPorFirmar > 0 && (
+        <Link href="/autoservicio/retiro" className="mb-3 flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-950 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          <FileCheck2 className="size-5 shrink-0" />
+          <span className="min-w-0 flex-1 text-sm font-medium">
+            {retiroPorFirmar === 1 ? 'Tienes un documento de tu retiro por firmar' : `Tienes ${retiroPorFirmar} documentos de tu retiro por firmar`}
+          </span>
+          <ChevronRight className="size-4 shrink-0" />
+        </Link>
+      )}
       {/* Etiquetas de una palabra: con "Días de vacaciones disponibles" el texto
           se partía en tres renglones y estiraba los recuadros de más. La cifra
           grande y el ícono ya dicen de qué se trata. */}
@@ -458,6 +480,9 @@ export default async function AutoservicioPage() {
         bloqueoPermiso={debeComprobante ? { fecha: fechaBreve(debeComprobante.fecha), vence: fechaBreve(debeComprobante.vence) } : null}
         documentosFaltantes={documentosFaltantes}
         horasExtraPorFirmar={horasExtraPorFirmar}
+        retiroPorFirmar={retiroPorFirmar}
+        entregasPorVerificar={entregasPorVerificar}
+        esResponsableArea={areasACargo > 0}
         dotacionPorFirmar={dotacionPorFirmar}
         hrefsNuevos={hrefsNuevos(avisos)}
       />

@@ -57,6 +57,8 @@ model User {
   // unión de todos; ver fusionarPermisos() en src/lib/permisos/tipos.ts.
   rolesExtra  UsuarioRol[]
   colaborador Colaborador?
+  // Áreas del paz y salvo de las que es responsable (verifica la entrega).
+  areasPazYSalvo AreaPazYSalvo[] @relation("ResponsableAreaPazYSalvo")
 
   @@map("user")
 }
@@ -679,6 +681,8 @@ model Colaborador {
 
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  renuncias Renuncia[]
 
   @@unique([tipoDocumento, numeroDocumento])
   @@index([sedeId, estado])
@@ -1443,6 +1447,16 @@ model EvidenciaFirmaContrato {
   // O la firma fue de una orden de pago de horas extra (aparte de la nómina).
   pagoHorasExtraId String?       @map("pago_horas_extra_id") @db.Uuid
   pagoHorasExtra   PagoHorasExtra? @relation(fields: [pagoHorasExtraId], references: [id], onDelete: Cascade)
+  // O la firma fue de un documento de la terminación: acta de paz y salvo o liquidación.
+  pazYSalvoId   String?          @map("paz_y_salvo_id") @db.Uuid
+  pazYSalvo     PazYSalvo?       @relation(fields: [pazYSalvoId], references: [id], onDelete: Cascade)
+  liquidacionDefinitivaId String? @map("liquidacion_definitiva_id") @db.Uuid
+  liquidacionDefinitiva   LiquidacionDefinitiva? @relation(fields: [liquidacionDefinitivaId], references: [id], onDelete: Cascade)
+  // O de una carta de la terminación, o de la renuncia presentada en la app.
+  cartaTerminacionId String?      @map("carta_terminacion_id") @db.Uuid
+  cartaTerminacion   CartaTerminacion? @relation(fields: [cartaTerminacionId], references: [id], onDelete: Cascade)
+  renunciaId    String?          @map("renuncia_id") @db.Uuid
+  renuncia      Renuncia?        @relation(fields: [renunciaId], references: [id], onDelete: Cascade)
   rol           RolFirmaContrato
   userId        String?          @map("user_id") @db.Uuid
   userEmail     String?          @map("user_email")
@@ -1463,6 +1477,12 @@ enum PropositoCodigoFirma {
   FIRMA_CONTRATO_LABORAL
   FIRMA_OTROSI
   FIRMA_PAGO_HORAS_EXTRA
+  FIRMA_PAZ_Y_SALVO
+  FIRMA_LIQUIDACION
+  // Firma de Talento Humano (por la empresa) en un documento de la terminación.
+  FIRMA_EMPRESA_TERMINACION
+  FIRMA_CARTA_TERMINACION
+  FIRMA_RENUNCIA
 
   @@map("proposito_codigo_firma")
 }
@@ -2276,11 +2296,24 @@ model Terminacion {
   indemnizacion          Decimal?              @db.Decimal(14, 2)
   motivo                 String?
   estado                 EstadoTerminacion     @default(EN_PROCESO)
+  // Examen médico ocupacional de egreso (Res. 2346 de 2007): la orden en PDF,
+  // y el examen ya registrado en SST o la constancia de que no asistió.
+  ordenExamenDocId       String?               @map("orden_examen_doc_id") @db.Uuid
+  examenMedicoId         String?               @map("examen_medico_id") @db.Uuid
+  examenNoAsistio        Boolean               @default(false) @map("examen_no_asistio")
+  examenRegistradoEn     DateTime?             @map("examen_registrado_en")
+  // Soporte del pago de los aportes de los últimos tres meses (art. 65 CST,
+  // parágrafo 1): se le entrega al trabajador en su autoservicio.
+  seguridadSocialDocId   String?               @map("seguridad_social_doc_id") @db.Uuid
+  // Cuándo se aplicó el retiro (colaborador RETIRADO, contrato TERMINADO, acceso
+  // de solo consulta). Sigue activo hasta su último día: esa noche lo aplica el cron.
+  retiroAplicadoEn       DateTime?             @map("retiro_aplicado_en")
   creadoEn               DateTime              @default(now()) @map("creado_en")
   actualizadoEn          DateTime              @updatedAt @map("actualizado_en")
 
   liquidacion LiquidacionDefinitiva?
   pazYSalvo   PazYSalvo?
+  cartas      CartaTerminacion[]
 
   @@index([colaboradorId])
   @@map("terminacion")
@@ -2301,8 +2334,23 @@ model LiquidacionDefinitiva {
   deducciones        Decimal     @default(0) @db.Decimal(14, 2)
   total              Decimal     @db.Decimal(14, 2)
   detalle            Json?
+  // La liquidación en PDF: la que se envió a firmar y, una vez firmada, la firmada.
   documentoId        String?     @map("documento_id") @db.Uuid
+  // Se envía a firmar con la firma de quien la tramita (por la empresa); el
+  // trabajador firma el recibido en su autoservicio; después se registra el
+  // pago con su comprobante. Sin firma y pago no se cierra la terminación.
+  enviadoFirmaEn     DateTime?   @map("enviado_firma_en")
+  firmaEmpresaPath   String?     @map("firma_empresa_path")
+  firmaEmpresaEn     DateTime?   @map("firma_empresa_en")
+  firmaEmpresaPorId  String?     @map("firma_empresa_por_id") @db.Uuid
+  firmaPath          String?     @map("firma_path")
+  firmadoEn          DateTime?   @map("firmado_en")
+  firmadoPorId       String?     @map("firmado_por_id") @db.Uuid
+  pagadoEn           DateTime?   @map("pagado_en") @db.Date
+  comprobanteDocId   String?     @map("comprobante_doc_id") @db.Uuid
   creadoEn           DateTime    @default(now()) @map("creado_en")
+
+  evidencias EvidenciaFirmaContrato[]
 
   @@map("liquidacion_definitiva")
 }
@@ -2319,10 +2367,22 @@ model PazYSalvo {
   terminacionId String          @unique @map("terminacion_id") @db.Uuid
   terminacion   Terminacion     @relation(fields: [terminacionId], references: [id], onDelete: Cascade)
   estado        EstadoPazYSalvo @default(PENDIENTE)
+  // El acta en PDF: la que se envió a firmar y, una vez firmada, la firmada.
   documentoId   String?         @map("documento_id") @db.Uuid
+  // Firma del trabajador (Ley 527): se envía con el checklist completo, la
+  // firma desde su autoservicio y sin ella no se cierra la terminación.
+  enviadoFirmaEn DateTime?      @map("enviado_firma_en")
+  firmaPath     String?         @map("firma_path")
+  firmadoEn     DateTime?       @map("firmado_en")
+  firmadoPorId  String?         @map("firmado_por_id") @db.Uuid
+  // Firma de quien la envía, por la empresa (la dibuja al enviarla).
+  firmaEmpresaPath  String?     @map("firma_empresa_path")
+  firmaEmpresaEn    DateTime?   @map("firma_empresa_en")
+  firmaEmpresaPorId String?     @map("firma_empresa_por_id") @db.Uuid
   creadoEn      DateTime        @default(now()) @map("creado_en")
 
-  items PazYSalvoItem[]
+  items      PazYSalvoItem[]
+  evidencias EvidenciaFirmaContrato[]
 
   @@map("paz_y_salvo")
 }
@@ -2337,9 +2397,100 @@ model PazYSalvoItem {
   observacion     String?
   verificadoPorId String?   @map("verificado_por_id") @db.Uuid
   verificadoEn    DateTime? @map("verificado_en")
+  // Quien debe verificarlo (el responsable del área al crear la terminación);
+  // sin responsable lo verifica Talento Humano, que además puede verificar todo.
+  responsableId   String?   @map("responsable_id") @db.Uuid
 
   @@index([pazYSalvoId])
+  @@index([responsableId])
   @@map("paz_y_salvo_item")
+}
+
+// Áreas del paz y salvo (Ajustes → Paz y salvo): cada terminación nueva copia
+// las activas como ítems. Cada una puede tener un responsable, que recibe el
+// aviso y verifica su parte; `chequeo` agrega una alerta automática al crear
+// la terminación ("ACTIVOS": activos sin devolver; "PRESTAMOS": préstamo con saldo).
+model AreaPazYSalvo {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  nombre        String   @unique
+  concepto      String
+  responsableId String?  @map("responsable_id") @db.Uuid
+  responsable   User?    @relation("ResponsableAreaPazYSalvo", fields: [responsableId], references: [id], onDelete: SetNull)
+  chequeo       String?
+  orden         Int      @default(0)
+  activa        Boolean  @default(true)
+  creadoEn      DateTime @default(now()) @map("creado_en")
+
+  @@map("area_paz_y_salvo")
+}
+
+// Cartas de la terminación según su tipo. La principal (aceptación de la
+// renuncia, terminación, no prórroga o acta de mutuo acuerdo) la firma Talento
+// Humano al enviarla y el trabajador desde su autoservicio; es obligatoria para
+// cerrar. La carta de renuncia presentada en la app llega ya firmada.
+enum TipoCartaTerminacion {
+  CARTA_RENUNCIA
+  ACEPTACION_RENUNCIA
+  CARTA_TERMINACION
+  NO_PRORROGA
+  ACTA_MUTUO_ACUERDO
+
+  @@map("tipo_carta_terminacion")
+}
+
+model CartaTerminacion {
+  id                String               @id @default(uuid(7)) @db.Uuid
+  terminacionId     String               @map("terminacion_id") @db.Uuid
+  terminacion       Terminacion          @relation(fields: [terminacionId], references: [id], onDelete: Cascade)
+  tipo              TipoCartaTerminacion
+  documentoId       String?              @map("documento_id") @db.Uuid
+  enviadoFirmaEn    DateTime?            @map("enviado_firma_en")
+  firmaEmpresaPath  String?              @map("firma_empresa_path")
+  firmaEmpresaEn    DateTime?            @map("firma_empresa_en")
+  firmaEmpresaPorId String?              @map("firma_empresa_por_id") @db.Uuid
+  firmaPath         String?              @map("firma_path")
+  firmadoEn         DateTime?            @map("firmado_en")
+  firmadoPorId      String?              @map("firmado_por_id") @db.Uuid
+  creadoEn          DateTime             @default(now()) @map("creado_en")
+
+  evidencias EvidenciaFirmaContrato[]
+
+  @@unique([terminacionId, tipo])
+  @@map("carta_terminacion")
+}
+
+// Renuncia presentada por el trabajador desde su autoservicio (carta firmada
+// con código al correo). Talento Humano la acepta registrando la terminación.
+enum EstadoRenuncia {
+  PRESENTADA
+  ACEPTADA
+  RETIRADA
+  // Talento Humano la devolvió para corregir (p. ej. la fecha); el trabajador presenta otra.
+  DEVUELTA
+
+  @@map("estado_renuncia")
+}
+
+model Renuncia {
+  id            String         @id @default(uuid(7)) @db.Uuid
+  colaboradorId String         @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador    @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  fechaRetiro   DateTime       @map("fecha_retiro") @db.Date
+  motivo        String?
+  documentoId   String?        @map("documento_id") @db.Uuid
+  firmaPath     String?        @map("firma_path")
+  firmadoEn     DateTime       @map("firmado_en")
+  estado        EstadoRenuncia @default(PRESENTADA)
+  /** Por qué Talento Humano la devolvió, y cuándo. */
+  motivoDevolucion String?     @map("motivo_devolucion")
+  devueltaEn    DateTime?      @map("devuelta_en")
+  terminacionId String?        @unique @map("terminacion_id") @db.Uuid
+  creadoEn      DateTime       @default(now()) @map("creado_en")
+
+  evidencias EvidenciaFirmaContrato[]
+
+  @@index([colaboradorId, estado])
+  @@map("renuncia")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
