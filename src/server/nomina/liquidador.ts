@@ -22,15 +22,27 @@ import { regenerarNovedadesAsistencia } from '@/server/asistencia/horas-asistenc
 export async function revertirEfectosPeriodo(periodoId: string): Promise<void> {
   await prisma.liquidacionNomina.deleteMany({ where: { periodoId } })
 
-  // Abonos de préstamo: devolver el saldo y borrar las cuotas del periodo.
-  const cuotasPrevias = await prisma.cuotaPrestamo.findMany({ where: { periodoId } })
+  // Abonos de préstamo: devolver el saldo y dejar las cuotas del periodo como
+  // estaban. Las del plan del préstamo (numero ≤ numeroCuotas) vuelven a quedar
+  // pendientes; las creadas de más por la nómina (préstamos viejos sin plan) se borran.
+  const cuotasPrevias = await prisma.cuotaPrestamo.findMany({
+    where: { periodoId },
+    include: { prestamo: { select: { numeroCuotas: true, valorCuota: true } } },
+  })
   for (const c of cuotasPrevias) {
     await prisma.prestamo.update({
       where: { id: c.prestamoId },
       data: { saldo: { increment: c.valor }, estado: 'ACTIVO' },
     })
+    if (c.numero <= c.prestamo.numeroCuotas) {
+      await prisma.cuotaPrestamo.update({
+        where: { id: c.id },
+        data: { pagada: false, periodoId: null, fechaPago: null, valor: c.prestamo.valorCuota },
+      })
+    } else {
+      await prisma.cuotaPrestamo.delete({ where: { id: c.id } })
+    }
   }
-  await prisma.cuotaPrestamo.deleteMany({ where: { periodoId } })
 
   // Bonificaciones pagadas por ESTE periodo → vuelven a quedar pendientes y sin periodo.
   await prisma.bonificacion.updateMany({
@@ -259,9 +271,22 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
       if (abono <= 0) continue
       cuotaPrestamo += abono
       const nuevoSaldo = Math.round((Number(p.saldo) - abono) * 100) / 100
-      await prisma.cuotaPrestamo.create({
-        data: { prestamoId: p.id, numero: p._count.cuotas + 1, valor: abono, pagada: true, periodoId, fechaPago: periodo.fechaFin },
+      // Se paga la siguiente cuota del plan (las crea el registro del préstamo:
+      // 1, 2, 3…). Solo un préstamo viejo sin plan recibe una cuota nueva.
+      const siguiente = await prisma.cuotaPrestamo.findFirst({
+        where: { prestamoId: p.id, pagada: false },
+        orderBy: { numero: 'asc' },
       })
+      if (siguiente) {
+        await prisma.cuotaPrestamo.update({
+          where: { id: siguiente.id },
+          data: { valor: abono, pagada: true, periodoId, fechaPago: periodo.fechaFin },
+        })
+      } else {
+        await prisma.cuotaPrestamo.create({
+          data: { prestamoId: p.id, numero: p._count.cuotas + 1, valor: abono, pagada: true, periodoId, fechaPago: periodo.fechaFin },
+        })
+      }
       await prisma.prestamo.update({
         where: { id: p.id },
         data: { saldo: nuevoSaldo, estado: nuevoSaldo <= 0 ? 'PAGADO' : 'ACTIVO' },
