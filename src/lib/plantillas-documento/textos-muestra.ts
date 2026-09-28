@@ -7,9 +7,9 @@
 
 import { fmtCOP } from '@/lib/moneda'
 import {
-  variablesActaActivo, variablesActaDotacion, variablesActaEpp, variablesCertificacion, variablesOrdenPago, variablesPazYSalvo, variablesLiquidacion, variablesCarta,
+  variablesActaActivo, variablesDesprendible, variablesActaDotacion, variablesActaEpp, variablesCertificacion, variablesOrdenPago, variablesPazYSalvo, variablesLiquidacion, variablesCarta,
   type ClaveTexto, type DatosVarsActaActivo, type DatosVarsActaDotacion, type DatosVarsActaEpp, type DatosVarsPazYSalvo, type DatosVarsLiquidacion, type DatosVarsCarta,
-  type DatosVarsCertificacion, type DatosVarsOrdenPago, type EmpresaTexto, type TipoCertificacion,
+  type DatosVarsCertificacion, type DatosVarsOrdenPago, type DatosVarsDesprendible, type EmpresaTexto, type TipoCertificacion,
 } from './textos'
 
 export const MUESTRA_PERSONA = {
@@ -106,6 +106,29 @@ export function muestraOrdenPago(empresa: EmpresaTexto): DatosVarsOrdenPago & { 
     horasExtra: 12.5,
     valor: 187_500,
     ciudad: MUESTRA_PERSONA.ciudad,
+  }
+}
+
+/** Líneas de la muestra del desprendible: [concepto, cantidad, valor]. */
+export const LINEAS_DESPRENDIBLE_MUESTRA: { nombre: string; tipo: 'DEVENGADO' | 'DEDUCCION'; cantidad: number | null; valor: number }[] = [
+  { nombre: 'Salario básico', tipo: 'DEVENGADO', cantidad: 30, valor: 1_750_905 },
+  { nombre: 'Auxilio de transporte', tipo: 'DEVENGADO', cantidad: 30, valor: 249_095 },
+  { nombre: 'Recargo dominical', tipo: 'DEVENGADO', cantidad: 6, valor: 45_023 },
+  { nombre: 'Salud (4%)', tipo: 'DEDUCCION', cantidad: null, valor: 71_837 },
+  { nombre: 'Pensión (4%)', tipo: 'DEDUCCION', cantidad: null, valor: 71_837 },
+]
+
+export function muestraDesprendible(empresa: EmpresaTexto): DatosVarsDesprendible {
+  const dev = LINEAS_DESPRENDIBLE_MUESTRA.filter((l) => l.tipo === 'DEVENGADO').reduce((t, l) => t + l.valor, 0)
+  const ded = LINEAS_DESPRENDIBLE_MUESTRA.filter((l) => l.tipo === 'DEDUCCION').reduce((t, l) => t + l.valor, 0)
+  return {
+    empresa,
+    periodo: 'Enero 2026',
+    colaborador: { nombre: MUESTRA_PERSONA.nombre, documento: MUESTRA_PERSONA.documento, cargo: MUESTRA_PERSONA.cargo, sede: 'Sede de muestra' },
+    diasTrabajados: 30,
+    totalDevengado: dev,
+    totalDeducido: ded,
+    neto: dev - ded,
   }
 }
 
@@ -254,6 +277,30 @@ export function muestraTexto(clave: ClaveTexto, variante: string, empresa: Empre
           filas: [['Colaborador', `${vars.nombre} · ${vars.documento}`], ['Período', `${vars.periodo_desde} a ${vars.periodo_hasta}`]],
           firmas: [{ nombre: MUESTRA_PERSONA.nombre, detalle: `${MUESTRA_PERSONA.documento} · Firmado electrónicamente el (fecha de la firma)`, conFirma: true }],
           pie,
+        },
+      }
+    }
+    case 'DESPRENDIBLE_NOMINA': {
+      const d = muestraDesprendible(empresa)
+      const vars = variablesDesprendible(d)
+      const linea = (l: (typeof LINEAS_DESPRENDIBLE_MUESTRA)[number]): [string, string] => [l.nombre, fmtCOP(l.valor)]
+      return {
+        vars,
+        tabla: {
+          tipo: 'pares',
+          pares: [
+            ...LINEAS_DESPRENDIBLE_MUESTRA.filter((l) => l.tipo === 'DEVENGADO').map(linea),
+            ['Total devengado', vars.devengado],
+            ...LINEAS_DESPRENDIBLE_MUESTRA.filter((l) => l.tipo === 'DEDUCCION').map(linea),
+            ['Total deducido', vars.deducido],
+            ['Neto a pagar', vars.neto],
+          ],
+        },
+        fijos: {
+          cabecera: 'membrete',
+          filas: [['Colaborador', `${vars.nombre} · ${vars.documento}`], ['Periodo', `${vars.periodo} · ${vars.dias} días`], ['Cargo', vars.cargo], ['Sede', vars.sede]],
+          firmas: [],
+          pie: `${pie} · Documento generado electrónicamente`,
         },
       }
     }

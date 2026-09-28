@@ -13,6 +13,7 @@ import { renderActaDotacion } from './acta-dotacion'
 import { renderActaEpp } from './acta-epp'
 import { renderCertificacion } from './certificacion'
 import { renderOrdenPagoHorasExtra } from './pago-horas-extra'
+import { renderDesprendible } from './desprendible'
 import { renderActaPazYSalvo } from './paz-y-salvo'
 import { renderLiquidacionDefinitiva } from './liquidacion-definitiva'
 import { renderCartaTerminacion } from './carta-terminacion'
@@ -20,6 +21,7 @@ import { plantillaTexto } from '@/server/plantillas-documento'
 import type { ClaveTexto, TextoDocumento } from '@/lib/plantillas-documento/textos'
 import {
   muestraActaActivo, muestraActaDotacion, muestraActaEpp, muestraCertificacion, muestraOrdenPago, muestraPazYSalvo, AREAS_PAZ_Y_SALVO_MUESTRA, muestraLiquidacion, LIQUIDACION_MUESTRA, muestraCarta,
+  muestraDesprendible, LINEAS_DESPRENDIBLE_MUESTRA,
 } from '@/lib/plantillas-documento/textos-muestra'
 
 /**
@@ -290,6 +292,16 @@ export async function renderMuestraTexto(clave: ClaveTexto, variante: string, pl
       return renderActaEpp({ ...muestraActaEpp(variante, empresa), empresa }, texto)
     case 'ORDEN_PAGO_HORAS_EXTRA':
       return renderOrdenPagoHorasExtra({ ...muestraOrdenPago(empresa), empresa, firma: null }, texto)
+    case 'DESPRENDIBLE_NOMINA':
+      return renderDesprendible(
+        {
+          ...muestraDesprendible(empresa),
+          empresa,
+          ibc: 1_795_928,
+          lineas: LINEAS_DESPRENDIBLE_MUESTRA.map((l, i) => ({ codigo: String(i), nombre: l.nombre, tipo: l.tipo, cantidad: l.cantidad, valor: l.valor })),
+        },
+        texto,
+      )
     case 'PAZ_Y_SALVO':
       return renderActaPazYSalvo(
         {

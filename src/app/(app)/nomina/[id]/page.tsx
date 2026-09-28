@@ -8,7 +8,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Eye, TriangleAlert, TrendingUp, TrendingDown, Wallet, Calculator } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
-import { Pill, Stat, type PillTone } from '@/components/ui-kit'
+import { Pill, Stat, AvatarColaborador, type PillTone } from '@/components/ui-kit'
+import { urlFoto } from '@/lib/foto'
 import { fmtCOP } from '@/lib/moneda'
 import { TIPO_CUENTA } from '@/lib/etiquetas'
 import { AccionesPeriodo } from './acciones-cliente'
@@ -30,7 +31,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
     include: {
       liquidaciones: {
         include: {
-          colaborador: { select: { nombres: true, apellidos: true, numeroDocumento: true, banco: { select: { nombre: true } }, tipoCuenta: true, numeroCuenta: true } },
+          colaborador: { select: { nombres: true, apellidos: true, numeroDocumento: true, fotoPath: true, banco: { select: { nombre: true } }, tipoCuenta: true, numeroCuenta: true } },
           // Solo la línea de horas extra: se trae aquí (y no con una consulta por
           // liquidación) para no provocar un N+1 cuando el periodo tiene muchos
           // colaboradores.
@@ -66,6 +67,8 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
     colaboradorId: l.colaboradorId,
     nombre: `${l.colaborador.nombres} ${l.colaborador.apellidos}`,
     documento: l.colaborador.numeroDocumento,
+    // Miniatura (la versión pequeña de la foto): en una tabla de muchas filas no se baja la grande.
+    fotoUrl: urlFoto(l.colaboradorId, l.colaborador.fotoPath, true),
     // Puede haber varias líneas del concepto (una por tramo), así que se suman.
     horasExtra: l.detalles.reduce((t, d) => t + Number(d.valor), 0),
     devengado: Number(l.totalDevengado),
@@ -146,7 +149,8 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
           {/* Celular: una tarjeta por persona con el neto a la vista; la tabla no cabía. */}
           <Card className="sm:hidden"><CardContent className="divide-y p-0">
             {filas.map((l) => (
-              <div key={l.id} className="flex items-start gap-2 p-3">
+              <div key={l.id} className="flex items-start gap-2.5 p-3">
+                <AvatarColaborador nombre={l.nombre} fotoUrl={l.fotoUrl} className="mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <Link href={`/colaboradores/${l.colaboradorId}`} className="block truncate text-sm font-medium hover:underline">{l.nombre}</Link>
                   <p className="text-xs text-muted-foreground">
@@ -179,8 +183,13 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
                 {filas.map((l) => (
                   <tr key={l.id} className="border-t">
                     <td className="p-3">
-                      <Link href={`/colaboradores/${l.colaboradorId}`} className="hover:underline">{l.nombre}</Link>
-                      <p className="text-xs text-muted-foreground">{l.documento}</p>
+                      <div className="flex items-center gap-2.5">
+                        <AvatarColaborador nombre={l.nombre} fotoUrl={l.fotoUrl} />
+                        <div className="min-w-0">
+                          <Link href={`/colaboradores/${l.colaboradorId}`} className="hover:underline">{l.nombre}</Link>
+                          <p className="text-xs text-muted-foreground">{l.documento}</p>
+                        </div>
+                      </div>
                     </td>
                     <td className="p-3 text-right tabular-nums">
                       {l.horasExtra > 0 ? fmtCOP(l.horasExtra) : <span className="text-muted-foreground">—</span>}
@@ -206,7 +215,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
 }
 
 type Fila = {
-  id: string; colaboradorId: string; nombre: string; documento: string
+  id: string; colaboradorId: string; nombre: string; documento: string; fotoUrl: string | null
   horasExtra: number; devengado: number; deducido: number; neto: number
   cuenta: { banco: string; tipo: string; numero: string } | null
   documentoId: string | null

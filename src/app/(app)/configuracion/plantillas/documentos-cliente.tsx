@@ -60,6 +60,7 @@ const ICONO_TEXTO: Record<ClaveTexto, LucideIcon> = {
   ACTA_DOTACION: Shirt,
   ACTA_EPP: HardHat,
   ORDEN_PAGO_HORAS_EXTRA: Clock,
+  DESPRENDIBLE_NOMINA: Receipt,
   PAZ_Y_SALVO: FileCheck2,
   LIQUIDACION_DEFINITIVA: Calculator,
   CARTA_RENUNCIA: DoorOpen,
@@ -111,7 +112,7 @@ const GRUPOS: { titulo: string; filas: Fila[] }[] = [
     titulo: 'Actas de Mis entregas',
     filas: [filaTexto('ACTA_ACTIVO_ENTREGA'), filaTexto('ACTA_ACTIVO_DEVOLUCION'), filaTexto('ACTA_DOTACION'), filaTexto('ACTA_EPP')],
   },
-  { titulo: 'Nómina', filas: [filaTexto('ORDEN_PAGO_HORAS_EXTRA')] },
+  { titulo: 'Nómina', filas: [filaTexto('DESPRENDIBLE_NOMINA'), filaTexto('ORDEN_PAGO_HORAS_EXTRA')] },
   {
     titulo: 'Terminación',
     filas: [

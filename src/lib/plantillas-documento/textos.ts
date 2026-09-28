@@ -40,6 +40,7 @@ export const CLAVES_TEXTO = [
   'ACTA_DOTACION',
   'ACTA_EPP',
   'ORDEN_PAGO_HORAS_EXTRA',
+  'DESPRENDIBLE_NOMINA',
   'PAZ_Y_SALVO',
   'LIQUIDACION_DEFINITIVA',
   'CARTA_RENUNCIA',
@@ -347,6 +348,36 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
       ...V_EMPRESA,
     ],
     tabla: 'Horas por tipo (diurnas, nocturnas, dominicales…), el total de horas y el recuadro con el total a pagar.',
+    variantes: [],
+  },
+
+  DESPRENDIBLE_NOMINA: {
+    clave: 'DESPRENDIBLE_NOMINA',
+    nombre: 'Desprendible de pago de nómina',
+    descripcion: 'El comprobante de pago de cada periodo de nómina. Lo descarga el colaborador en Mis desprendibles.',
+    fijo: 'La app pone el encabezado (colaborador, periodo, días, cargo y sede), las tablas de devengados y deducciones con sus totales, el neto a pagar y el IBC.',
+    membrete: false,
+    defecto: {
+      titulo: 'Desprendible de pago de nómina',
+      contenido: [
+        '[tabla]',
+        '~ Si tiene alguna inquietud sobre este pago, comuníquese con el área de Talento Humano.',
+      ].join('\n'),
+    },
+    variables: [
+      { clave: 'nombre', descripcion: 'Nombre completo del colaborador' },
+      { clave: 'documento', descripcion: 'Número de documento' },
+      { clave: 'cargo', descripcion: 'Cargo (vacío si no tiene)' },
+      { clave: 'sede', descripcion: 'Sede del colaborador' },
+      { clave: 'periodo', descripcion: 'Nombre del periodo (p. ej. Septiembre 2026)' },
+      { clave: 'dias', descripcion: 'Días trabajados en el periodo' },
+      { clave: 'devengado', descripcion: 'Total devengado en pesos' },
+      { clave: 'deducido', descripcion: 'Total deducido en pesos' },
+      { clave: 'neto', descripcion: 'Neto a pagar en pesos' },
+      { clave: 'neto_letras', descripcion: 'El neto a pagar en letras con la cifra' },
+      ...V_EMPRESA,
+    ],
+    tabla: 'El encabezado del colaborador, los devengados y las deducciones con sus totales, el neto a pagar y el IBC.',
     variantes: [],
   },
 
@@ -732,6 +763,32 @@ export function variablesOrdenPago(d: DatosVarsOrdenPago): Record<string, string
     cuenta: [c.banco, c.tipoCuenta, c.numeroCuenta].filter(Boolean).join(' '),
     ciudad: d.ciudad ?? '',
     fecha_dias: fechaEnDias(d.fecha),
+    ...varsEmpresa(d.empresa),
+  }
+}
+
+export type DatosVarsDesprendible = {
+  empresa: EmpresaTexto
+  periodo: string
+  colaborador: { nombre: string; documento: string; cargo: string | null; sede: string }
+  diasTrabajados: number
+  totalDevengado: number
+  totalDeducido: number
+  neto: number
+}
+
+export function variablesDesprendible(d: DatosVarsDesprendible): Record<string, string> {
+  return {
+    nombre: d.colaborador.nombre,
+    documento: d.colaborador.documento,
+    cargo: d.colaborador.cargo ?? '',
+    sede: d.colaborador.sede,
+    periodo: d.periodo,
+    dias: String(d.diasTrabajados),
+    devengado: fmtCOP(d.totalDevengado),
+    deducido: fmtCOP(d.totalDeducido),
+    neto: fmtCOP(d.neto),
+    neto_letras: pesosALetras(d.neto),
     ...varsEmpresa(d.empresa),
   }
 }
