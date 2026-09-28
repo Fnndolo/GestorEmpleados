@@ -2,7 +2,7 @@ import 'server-only'
 import { esOps } from '@/lib/tramites-vinculo'
 import { prisma } from '@/lib/db'
 import { hoyBogota } from '@/lib/fechas'
-import { dias360 } from '@/server/nomina/liquidacion-definitiva'
+import { diasDeSalario } from '@/server/nomina/liquidacion-definitiva'
 
 /**
  * Saldo de vacaciones de un colaborador.
@@ -55,8 +55,9 @@ export async function saldoVacaciones(colaboradorId: string, corte?: Date): Prom
   const desde = await inicioCausacion(colaboradorId, colab.fechaIngreso, hasta)
   // Convención comercial 30/360, la misma con que se liquida todo lo demás
   // (cesantías, prima, indemnizaciones). Contar días calendario contra un año de
-  // 360 mezclaba dos convenciones y causaba ~1,4% de días de más.
-  const diasTrabajados = dias360(desde, hasta)
+  // 360 mezclaba dos convenciones y causaba ~1,4% de días de más. Son días
+  // trabajados, con el primero y el último: un año completo causa 15 días, no 14,96.
+  const diasTrabajados = diasDeSalario(desde, hasta)
   const causadasBase = (diasTrabajados / 360) * 15
 
   const ajustes = await prisma.ajusteVacaciones.aggregate({

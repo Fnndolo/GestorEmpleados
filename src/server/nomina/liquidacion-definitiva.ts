@@ -48,6 +48,8 @@ export type EntradaLiquidacionDef = {
 export type ResultadoLiquidacionDef = {
   diasLiquidados: number
   diasSalario: number
+  /** Días de cesantías: los del año del retiro (las de antes ya se consignaron al fondo). */
+  diasCesantias: number
   diasPrima: number
   // Devengados
   salario: number
@@ -98,6 +100,24 @@ export function dias360(desde: Date, hasta: Date): number {
 }
 
 /**
+ * Días de salario entre dos fechas, ambas inclusive, en meses de 30 días.
+ *
+ * A diferencia de dias360 —que mide plazos y por eso no cuenta el día inicial—,
+ * aquí se cuentan días trabajados, y con ellos se liquida todo lo causado
+ * (salario, cesantías, intereses, prima, vacaciones): del 1 al 10 son 10 días de sueldo, no 9. Y un
+ * mes completo son siempre 30, trátese de febrero o de julio: el día 31 se paga
+ * dentro del mes y el 29 y 30 de febrero se pagan aunque no existan.
+ */
+export function diasDeSalario(desde: Date, hasta: Date): number {
+  if (hasta < desde) return 0
+  const finDeMes = new Date(Date.UTC(hasta.getUTCFullYear(), hasta.getUTCMonth() + 1, 0)).getUTCDate()
+  const d1 = Math.min(desde.getUTCDate(), 30)
+  const d2 = hasta.getUTCDate() === finDeMes ? 30 : Math.min(hasta.getUTCDate(), 30)
+  const meses = (hasta.getUTCFullYear() - desde.getUTCFullYear()) * 12 + (hasta.getUTCMonth() - desde.getUTCMonth())
+  return Math.max(0, meses * 30 + (d2 - d1) + 1)
+}
+
+/**
  * Liquidación definitiva: lo que se le paga a alguien el día que sale.
  *
  * Son dos cosas en un mismo documento. Primero el pedazo de mes que ninguna
@@ -110,7 +130,10 @@ export function dias360(desde: Date, hasta: Date): number {
 export function liquidacionDefinitiva(e: EntradaLiquidacionDef): ResultadoLiquidacionDef {
   const salarioBase = new Decimal(e.salarioBase)
   const auxilioMensual = new Decimal(e.auxilioTransporte)
-  const totalDias = dias360(e.fechaIngreso, e.fechaRetiro)
+  // Días TRABAJADOS, contando el de ingreso y el de retiro: medirlos como plazo
+  // (dias360) dejaba cada prestación un día corta —un semestre completo daba 179
+  // días de prima en vez de 180— salvo cuando el retiro caía un 31.
+  const totalDias = diasDeSalario(e.fechaIngreso, e.fechaRetiro)
 
   // ── Bases prestacionales ──
   // El auxilio de transporte no es salario, pero la Ley 1ª de 1963 (art. 7) lo
@@ -126,7 +149,7 @@ export function liquidacionDefinitiva(e: EntradaLiquidacionDef): ResultadoLiquid
   const anioRetiro = e.fechaRetiro.getUTCFullYear()
   const inicioAnio = new Date(Date.UTC(anioRetiro, 0, 1))
   const corteCesantias = e.fechaIngreso > inicioAnio ? e.fechaIngreso : inicioAnio
-  const diasCesantias = dias360(corteCesantias, e.fechaRetiro)
+  const diasCesantias = diasDeSalario(corteCesantias, e.fechaRetiro)
 
   const cesantias = baseCesantias.times(diasCesantias).dividedBy(360)
   const interesesCesantias = cesantias.times(e.porcentajeInteresesCesantias).times(diasCesantias).dividedBy(360)
@@ -136,7 +159,7 @@ export function liquidacionDefinitiva(e: EntradaLiquidacionDef): ResultadoLiquid
   const mesRetiro = e.fechaRetiro.getUTCMonth()
   const inicioSemestre = new Date(Date.UTC(anioRetiro, mesRetiro < 6 ? 0 : 6, 1))
   const cortePrima = e.fechaIngreso > inicioSemestre ? e.fechaIngreso : inicioSemestre
-  const diasPrima = dias360(cortePrima, e.fechaRetiro)
+  const diasPrima = diasDeSalario(cortePrima, e.fechaRetiro)
   const prima = basePrima.times(diasPrima).dividedBy(360)
 
   // ── Vacaciones compensadas en dinero ──
@@ -177,6 +200,7 @@ export function liquidacionDefinitiva(e: EntradaLiquidacionDef): ResultadoLiquid
   return {
     diasLiquidados: totalDias,
     diasSalario: e.diasSalarioPendiente,
+    diasCesantias,
     diasPrima,
     salario: peso(salario),
     auxilioTransporte: peso(auxilioTransporte),

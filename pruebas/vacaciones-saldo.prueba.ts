@@ -6,7 +6,7 @@ instalarSesionFalsa()
 const { prisma } = await import('@/lib/db')
 const { saldoVacaciones } = await import('@/server/vacaciones')
 const { registrarVacacionesDisfrutadas } = await import('@/app/(app)/novedades/acciones')
-const { dias360 } = await import('@/server/nomina/liquidacion-definitiva')
+const { diasDeSalario } = await import('@/server/nomina/liquidacion-definitiva')
 import type { UsuarioSesion } from '@/lib/permisos/tipos'
 
 /**
@@ -81,7 +81,7 @@ describe('desde cuándo causa', () => {
     const s = await saldoVacaciones(colaboradorId)
     expect(iso(s.desde)).toBe(iso(inicioContrato))
     const ajustes = await prisma.ajusteVacaciones.aggregate({ where: { colaboradorId }, _sum: { dias: true } })
-    const esperado = (dias360(inicioContrato, hoy) / 360) * 15 + Number(ajustes._sum.dias ?? 0)
+    const esperado = (diasDeSalario(inicioContrato, hoy) / 360) * 15 + Number(ajustes._sum.dias ?? 0)
     expect(Math.abs(s.causadas - esperado)).toBeLessThan(0.02)
     await prisma.colaborador.update({ where: { id: colaboradorId }, data: { fechaIngreso: fechaIngresoOriginal } })
   })

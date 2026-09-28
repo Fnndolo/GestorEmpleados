@@ -182,11 +182,23 @@ describe('liquidación definitiva · reglas', () => {
     expect(r.indemnizacion).toBe(peso((1_750_905 / 30) * 151))
   })
 
-  it('retiro el mismo día del ingreso: todo en cero', () => {
+  it('retiro el mismo día del ingreso: se liquida ese único día trabajado', () => {
     const r = liquidacionDefinitiva({ ...base, fechaRetiro: D(2026, 1, 15) })
-    expect(r.diasLiquidados).toBe(0)
-    expect(r.cesantias).toBe(0)
-    expect(r.total).toBe(0)
+    expect(r.diasLiquidados).toBe(1)
+    expect(r.cesantias).toBe(peso(1_750_905 / 360))
+    expect(r.diasPrima).toBe(1)
+  })
+
+  it('cuenta el día de ingreso y el de retiro (30/360)', () => {
+    // Semestre completo: 180 días de prima, no 179.
+    expect(liquidacionDefinitiva({ ...base, fechaIngreso: D(2025, 3, 1), fechaRetiro: D(2026, 6, 30) }).diasPrima).toBe(180)
+    // Retiro a mitad de mes: 1 de enero → 15 de octubre = 9 meses × 30 + 15 = 285 días de cesantías.
+    const oct = liquidacionDefinitiva({ ...base, fechaIngreso: D(2025, 9, 1), fechaRetiro: D(2026, 10, 15), auxilioTransporte: 249_095 })
+    expect(oct.cesantias).toBe(peso(2_000_000 * 285 / 360))
+    expect(oct.diasPrima).toBe(105)
+    expect(oct.diasLiquidados).toBe(405)
+    // Febrero completo cuenta 30.
+    expect(liquidacionDefinitiva({ ...base, fechaIngreso: D(2025, 3, 1), fechaRetiro: D(2026, 2, 28) }).diasPrima).toBe(60)
   })
 })
 

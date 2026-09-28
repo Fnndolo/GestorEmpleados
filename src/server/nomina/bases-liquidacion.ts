@@ -2,7 +2,9 @@ import 'server-only'
 import { prisma } from '@/lib/db'
 import { cargarParametros, cargarTiposHora } from './parametros'
 import { horasMesJornada } from './horas'
-import { dias360 } from './liquidacion-definitiva'
+import { diasDeSalario } from './liquidacion-definitiva'
+
+export { diasDeSalario }
 
 /**
  * Insumos variables de una liquidación definitiva: lo que no se lee del contrato
@@ -204,7 +206,7 @@ function mesEnVentana(mes: string, desde: Date, hasta: Date): boolean {
  * variable permanente.
  */
 function promedioMensual(porMes: Map<string, number>, desde: Date, hasta: Date): number {
-  const meses = dias360(desde, hasta) / 30
+  const meses = diasDeSalario(desde, hasta) / 30
   if (meses <= 0) return 0
   let total = 0
   for (const [mes, valor] of porMes) if (mesEnVentana(mes, desde, hasta)) total += valor
@@ -265,8 +267,8 @@ export async function mesesParaPromedios(
 
   return {
     meses,
-    mesesAnual: dias360(inicioAnual, fechaRetiro) / 30,
-    mesesSemestre: dias360(inicioSem, fechaRetiro) / 30,
+    mesesAnual: diasDeSalario(inicioAnual, fechaRetiro) / 30,
+    mesesSemestre: diasDeSalario(inicioSem, fechaRetiro) / 30,
   }
 }
 
@@ -320,21 +322,5 @@ async function variableSinPagar(
   )
 }
 
-/**
- * Días de salario entre dos fechas, ambas inclusive, en meses de 30 días.
- *
- * A diferencia de dias360 —que mide plazos y por eso no cuenta el día inicial—,
- * aquí se cuentan días trabajados: del 1 al 10 son 10 días de sueldo, no 9. Y un
- * mes completo son siempre 30, trátese de febrero o de julio: el día 31 se paga
- * dentro del mes y el 29 y 30 de febrero se pagan aunque no existan.
- */
-export function diasDeSalario(desde: Date, hasta: Date): number {
-  if (hasta < desde) return 0
-  const finDeMes = new Date(Date.UTC(hasta.getUTCFullYear(), hasta.getUTCMonth() + 1, 0)).getUTCDate()
-  const d1 = Math.min(desde.getUTCDate(), 30)
-  const d2 = hasta.getUTCDate() === finDeMes ? 30 : Math.min(hasta.getUTCDate(), 30)
-  const meses = (hasta.getUTCFullYear() - desde.getUTCFullYear()) * 12 + (hasta.getUTCMonth() - desde.getUTCMonth())
-  return Math.max(0, meses * 30 + (d2 - d1) + 1)
-}
 
 const maximo = (a: Date, b: Date) => (a > b ? a : b)
