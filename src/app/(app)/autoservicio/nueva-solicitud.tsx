@@ -324,8 +324,8 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
             {tipo === 'VACACIONES' && (
               <>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label>Desde</Label><Input type="date" value={vacIni} onChange={(e) => cambiarFechasVac(e.target.value, vacFin)} /></div>
-                  <div className="space-y-1.5"><Label>Hasta</Label><Input type="date" value={vacFin} onChange={(e) => cambiarFechasVac(vacIni, e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Desde <Obligatorio /></Label><Input type="date" value={vacIni} onChange={(e) => cambiarFechasVac(e.target.value, vacFin)} /></div>
+                  <div className="space-y-1.5"><Label>Hasta <Obligatorio /></Label><Input type="date" value={vacFin} onChange={(e) => cambiarFechasVac(vacIni, e.target.value)} /></div>
                 </div>
 
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -366,7 +366,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
             {tipo === 'PERMISO' && (
               <>
                 <div className="space-y-1.5">
-                  <Label htmlFor="perm-dia">Día del permiso</Label>
+                  <Label htmlFor="perm-dia">Día del permiso <Obligatorio /></Label>
                   {/* El calendario sale al pulsar, no desplegado: abierto ocupaba
                       todo el formulario y escondía el resto de los campos. */}
                   <Popover open={permCalAbierto} onOpenChange={setPermCalAbierto}>
@@ -387,7 +387,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
                   </Popover>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Tipo de permiso</Label>
+                  <Label>Tipo de permiso <Obligatorio /></Label>
                   <RadioGroup value={permModo} onValueChange={(v) => setPermModo(v as 'DIA' | 'HORAS')} className="flex gap-6">
                     <div className="flex items-center gap-2"><RadioGroupItem value="DIA" id="p-dia" /><Label htmlFor="p-dia" className="font-normal">Día entero</Label></div>
                     <div className="flex items-center gap-2"><RadioGroupItem value="HORAS" id="p-horas" /><Label htmlFor="p-horas" className="font-normal">Por horas</Label></div>
@@ -395,8 +395,8 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
                 </div>
                 {permModo === 'HORAS' && (
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5"><Label>Desde</Label><Input type="time" value={permIni} onChange={(e) => setPermIni(e.target.value)} /></div>
-                    <div className="space-y-1.5"><Label>Hasta</Label><Input type="time" value={permFin} onChange={(e) => setPermFin(e.target.value)} /></div>
+                    <div className="space-y-1.5"><Label>Desde <Obligatorio /></Label><Input type="time" value={permIni} onChange={(e) => setPermIni(e.target.value)} /></div>
+                    <div className="space-y-1.5"><Label>Hasta <Obligatorio /></Label><Input type="time" value={permFin} onChange={(e) => setPermFin(e.target.value)} /></div>
                   </div>
                 )}
                 <div className="space-y-1.5"><Label>Motivo</Label><Textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} /></div>
@@ -406,7 +406,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
             {tipo === 'HORAS_EXTRA' && (
               <>
                 <div className="space-y-1.5">
-                  <Label htmlFor="he-dia">Día</Label>
+                  <Label htmlFor="he-dia">Día <Obligatorio /></Label>
                   <Popover open={permCalAbierto} onOpenChange={setPermCalAbierto}>
                     <PopoverTrigger asChild>
                       <Button id="he-dia" type="button" className="w-full justify-start font-normal">
@@ -426,8 +426,8 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
                   </Popover>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label>Desde</Label><Input type="time" value={heIni} onChange={(e) => setHeIni(e.target.value)} /></div>
-                  <div className="space-y-1.5"><Label>Hasta</Label><Input type="time" value={heFin} onChange={(e) => setHeFin(e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Desde <Obligatorio /></Label><Input type="time" value={heIni} onChange={(e) => setHeIni(e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Hasta <Obligatorio /></Label><Input type="time" value={heFin} onChange={(e) => setHeFin(e.target.value)} /></div>
                 </div>
                 {horasHe > 0 && (
                   <p className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -439,14 +439,14 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
                     </span>
                   </p>
                 )}
-                <div className="space-y-1.5"><Label>Motivo</Label><Textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="¿Por qué hay que quedarse?" /></div>
+                <div className="space-y-1.5"><Label>Motivo <Obligatorio /></Label><Textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="¿Por qué hay que quedarse?" /></div>
               </>
             )}
 
             {tipo === 'INCAPACIDAD' && (
               <>
                 <div className="space-y-1.5">
-                  <Label>Tipo de incapacidad</Label>
+                  <Label>Tipo de incapacidad <Obligatorio /></Label>
                   <Select value={incaTipo} onValueChange={setIncaTipo}>
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -455,18 +455,18 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
                   </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label>Desde</Label><Input type="date" value={incaIni} onChange={(e) => setIncaIni(e.target.value)} /></div>
-                  <div className="space-y-1.5"><Label>Hasta</Label><Input type="date" value={incaFin} onChange={(e) => setIncaFin(e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Desde <Obligatorio /></Label><Input type="date" value={incaIni} onChange={(e) => setIncaIni(e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Hasta <Obligatorio /></Label><Input type="date" value={incaFin} onChange={(e) => setIncaFin(e.target.value)} /></div>
                 </div>
-                <div className="space-y-1.5"><Label>Entidad (EPS/ARL) — opcional</Label><Input value={entidad} onChange={(e) => setEntidad(e.target.value)} placeholder="Quién la expide" /></div>
-                <div className="space-y-1.5"><Label>Observaciones (opcional)</Label><Textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>Entidad (EPS/ARL)</Label><Input value={entidad} onChange={(e) => setEntidad(e.target.value)} placeholder="Quién la expide" /></div>
+                <div className="space-y-1.5"><Label>Observaciones</Label><Textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} /></div>
               </>
             )}
 
             {tipo === 'LICENCIA' && (
               <>
                 <div className="space-y-1.5">
-                  <Label>Tipo de licencia</Label>
+                  <Label>Tipo de licencia <Obligatorio /></Label>
                   <Select value={licTipo} onValueChange={(v) => { setLicTipo(v as TipoLicencia); setArchivos([]) }}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
                     <SelectContent>
@@ -495,11 +495,11 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
                 )}
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label>Desde</Label><Input type="date" value={licIni} onChange={(e) => setLicIni(e.target.value)} /></div>
-                  <div className="space-y-1.5"><Label>Hasta</Label><Input type="date" value={licFin} onChange={(e) => setLicFin(e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Desde <Obligatorio /></Label><Input type="date" value={licIni} onChange={(e) => setLicIni(e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Hasta <Obligatorio /></Label><Input type="date" value={licFin} onChange={(e) => setLicFin(e.target.value)} /></div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Motivo {lic?.derecho ? '(opcional)' : ''}</Label>
+                  <Label>Motivo</Label>
                   <Textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder={lic?.derecho ? 'Cuéntanos lo que necesites; no es obligatorio.' : 'Explica por qué la necesitas.'} />
                 </div>
               </>
@@ -508,7 +508,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
             {tipo === 'CERTIFICACION_LABORAL' && (
               <>
                 <div className="space-y-1.5">
-                  <Label>Tipo de certificación</Label>
+                  <Label>Tipo de certificación <Obligatorio /></Label>
                   <Select value={certTipo} onValueChange={setCertTipo}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
                     <SelectContent>
@@ -519,13 +519,13 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5"><Label>Dirigida a (opcional)</Label><Input value={dirigidaA} onChange={(e) => setDirigidaA(e.target.value)} placeholder="Banco, entidad…" /></div>
+                <div className="space-y-1.5"><Label>Dirigida a</Label><Input value={dirigidaA} onChange={(e) => setDirigidaA(e.target.value)} placeholder="Banco, entidad…" /></div>
               </>
             )}
 
             {permiteAdjunto && (
               <div className="space-y-1.5">
-                <Label>Soporte {adjuntoObligatorio ? '(obligatorio)' : '(opcional)'}</Label>
+                <Label>Soporte{adjuntoObligatorio && <Obligatorio />}</Label>
                 {tipo === 'LICENCIA' && lic && lic.soporteEsperado !== '—' && (
                   <p className="text-xs text-muted-foreground">{lic.soporteEsperado}</p>
                 )}
@@ -566,4 +566,9 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
       </Dialog>
     </>
   )
+}
+
+/** Campo obligatorio: asterisco rojo. Lo opcional no lleva marca. */
+function Obligatorio() {
+  return <span className="text-destructive" aria-hidden>*</span>
 }

@@ -198,3 +198,21 @@
     display: inline-flex;
   }
 }
+
+/* iPhone/iPad: Safari le da a los campos de fecha y hora un ancho mínimo propio
+   (el del texto «26/09/2026» con su relleno) y los saca de su columna cuando van
+   de a dos. Sin apariencia nativa respetan el ancho; el selector sigue abriendo
+   igual al tocarlos. `-webkit-touch-callout` solo existe en Safari de iOS. */
+@supports (-webkit-touch-callout: none) {
+  input[type='date'],
+  input[type='time'],
+  input[type='month'],
+  input[type='datetime-local'] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+  input::-webkit-date-and-time-value {
+    text-align: left;
+  }
+}
