@@ -105,6 +105,7 @@ export function muestraOrdenPago(empresa: EmpresaTexto): DatosVarsOrdenPago & { 
     detalleHoras: HORAS_MUESTRA,
     horasExtra: 12.5,
     valor: 187_500,
+    ciudad: MUESTRA_PERSONA.ciudad,
   }
 }
 
@@ -125,6 +126,8 @@ export function muestraCertificacion(clase: 'LABORAL' | 'CONTRACTUAL', variante:
       tipoVinculo: clase === 'CONTRACTUAL' ? 'OPS' : 'TERMINO_INDEFINIDO',
       fechaIngreso: new Date(Date.UTC(2025, 2, 1)),
       salario: 1_800_000,
+      lugarExpedicion: MUESTRA_PERSONA.ciudad,
+      tieneComisiones: true,
     },
     contratoOps: clase === 'CONTRACTUAL'
       ? {

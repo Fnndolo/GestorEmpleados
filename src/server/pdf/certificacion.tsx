@@ -25,6 +25,8 @@ export type DatosCertificacion = {
     tipoVinculo: string
     fechaIngreso: Date
     salario: number | null
+    lugarExpedicion?: string | null
+    tieneComisiones?: boolean
   }
   /** Solo en la certificación contractual: datos del contrato OPS vigente. */
   contratoOps?: {

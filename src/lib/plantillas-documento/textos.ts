@@ -20,9 +20,10 @@
  *     Una línea que queda vacía no se imprime.
  */
 
-import { TIPO_VINCULO } from '@/lib/etiquetas'
+import { TIPO_DOCUMENTO_IDENTIDAD, TIPO_VINCULO } from '@/lib/etiquetas'
 import { formatFechaLarga } from '@/lib/fechas'
 import { fmtCOP } from '@/lib/moneda'
+import { pesosALetras } from '@/lib/numero-letras'
 import { marcadorDe, sustituirVariables, tramosDe, type Parrafo, type Tramo } from './autorizacion-datos'
 
 export type PlantillaTexto = { titulo: string; contenido: string }
@@ -98,27 +99,35 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
     fijo: 'La app pone el encabezado de la empresa, la firma de Talento Humano y el pie de página.',
     membrete: false,
     defecto: {
-      titulo: 'La empresa {{razon_social}} certifica:',
+      titulo: 'Certifica que:',
       contenido: [
-        'Que el(la) señor(a) **{{nombre}}**, identificado(a) con {{tipo_documento}} No. **{{documento}}**, labora en nuestra empresa mediante contrato de **{{tipo_contrato}}**[[ desempeñando el cargo de **{{cargo}}**]], desde el **{{fecha_ingreso}}**.',
-        '[[Devenga una asignación salarial mensual de **{{salario}}** ({{salario_letras}}).]]',
+        'El(la) señor(a) **{{nombre}}**, identificado(a) con {{tipo_documento_nombre}} No. **{{documento}}**[[ de {{lugar_expedicion}}]], labora en nuestra compañía[[ desempeñando el cargo de **{{cargo}}**]] bajo contrato de **{{tipo_contrato}}** desde el día {{fecha_ingreso}}[[, devengando un salario mensual equivalente a la suma de **{{salario_en_letras}}**[[, más {{comisiones}}]]]].',
+        'Certificamos que su desempeño ha sido satisfactorio y que sus funciones se han desarrollado de manera óptima durante todo el tiempo que labora con nosotros.',
         '[[**Funciones del cargo:** {{funciones}}]]',
-        'La presente certificación se expide a solicitud del interesado[[, dirigida a **{{destinatario}}**,]] en {{ciudad}}, a los {{fecha}}.',
+        'Esta certificación se expide a solicitud del interesado[[, dirigida a **{{destinatario}}**]], sin otro en particular. Quedamos atentos a cualquier aclaración que requiera.',
+        'Para constancia de lo anterior, se firma en la ciudad de {{ciudad}}, a los {{fecha_dias}}.',
+        'Atentamente,',
+        '~ El tratamiento de los datos personales se realiza conforme a la Ley 1581 de 2012 y demás normas concordantes, garantizando la protección, confidencialidad y uso adecuado de la información.',
       ].join('\n'),
     },
     variables: [
       { clave: 'nombre', descripcion: 'Nombre completo del colaborador, en mayúsculas' },
-      { clave: 'tipo_documento', descripcion: 'Tipo de documento (CC, CE…)' },
+      { clave: 'tipo_documento', descripcion: 'Tipo de documento abreviado (CC, CE…)' },
+      { clave: 'tipo_documento_nombre', descripcion: 'Tipo de documento completo (cédula de ciudadanía…)' },
       { clave: 'documento', descripcion: 'Número de documento' },
+      { clave: 'lugar_expedicion', descripcion: 'Lugar de expedición del documento (vacío si no está en la ficha)' },
       { clave: 'tipo_contrato', descripcion: 'Tipo de contrato (término indefinido, fijo, obra o labor…)' },
       { clave: 'cargo', descripcion: 'Cargo actual (vacío si no tiene)' },
       { clave: 'fecha_ingreso', descripcion: 'Fecha de ingreso, en letras' },
       { clave: 'salario', descripcion: 'Salario mensual en pesos; solo en las certificaciones con salario o para entidad financiera' },
-      { clave: 'salario_letras', descripcion: 'El salario en letras' },
+      { clave: 'salario_letras', descripcion: 'El salario en cifra con "pesos M/CTE"' },
+      { clave: 'salario_en_letras', descripcion: 'El salario en letras con la cifra: TRES MILLONES QUINIENTOS MIL PESOS M/CTE ($3.500.000)' },
+      { clave: 'comisiones', descripcion: '"comisiones mensuales por concepto de ventas realizadas" si tuvo comisiones en los últimos 3 meses (solo con salario)' },
       { clave: 'funciones', descripcion: 'Funciones del cargo; solo en la certificación con funciones' },
       { clave: 'destinatario', descripcion: 'A quién va dirigida (vacío si no se indicó)' },
       { clave: 'ciudad', descripcion: 'Ciudad de la sede del colaborador' },
       { clave: 'fecha', descripcion: 'Fecha de expedición, en letras' },
+      { clave: 'fecha_dias', descripcion: 'Fecha de expedición como "28 días del mes de septiembre de 2026"' },
       ...V_EMPRESA,
     ],
     variantes: [
@@ -136,19 +145,24 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
     fijo: 'La app pone el encabezado de la empresa, la firma de Talento Humano y el pie de página.',
     membrete: false,
     defecto: {
-      titulo: 'La empresa {{razon_social}} certifica:',
+      titulo: 'Certifica que:',
       contenido: [
-        'Que el(la) señor(a) **{{nombre}}**, identificado(a) con {{tipo_documento}} No. **{{documento}}**, presta sus servicios a esta empresa mediante **contrato de prestación de servicios**[[ No. **{{contrato_numero}}**]], suscrito desde el **{{contrato_inicio}}**[[ y con vigencia hasta el **{{contrato_fin}}**]].',
+        'El(la) señor(a) **{{nombre}}**, identificado(a) con {{tipo_documento_nombre}} No. **{{documento}}**[[ de {{lugar_expedicion}}]], presta sus servicios a nuestra compañía mediante **contrato de prestación de servicios**[[ No. **{{contrato_numero}}**]] desde el día {{contrato_inicio}}[[ y con vigencia hasta el {{contrato_fin}}]][[, con {{honorarios_texto}}[[, más {{comisiones}}]]]].',
         '[[**Objeto del contrato:** {{objeto}}]]',
-        '[[Los honorarios pactados ascienden a **{{honorarios}}** ({{honorarios_letras}})[[, pagaderos en cuotas mensuales de **{{honorarios_mensuales}}**]].]]',
+        'Certificamos que ha cumplido a satisfacción las obligaciones pactadas durante todo el tiempo de ejecución del contrato.',
         'Se deja constancia de que entre las partes no existe relación laboral: el contratista actúa con plena autonomía técnica y administrativa, y asume por su cuenta los aportes al Sistema de Seguridad Social Integral.',
-        'La presente certificación se expide a solicitud del interesado[[, dirigida a **{{destinatario}}**,]] en {{ciudad}}, a los {{fecha}}.',
+        'Esta certificación se expide a solicitud del interesado[[, dirigida a **{{destinatario}}**]], sin otro en particular. Quedamos atentos a cualquier aclaración que requiera.',
+        'Para constancia de lo anterior, se firma en la ciudad de {{ciudad}}, a los {{fecha_dias}}.',
+        'Atentamente,',
+        '~ El tratamiento de los datos personales se realiza conforme a la Ley 1581 de 2012 y demás normas concordantes, garantizando la protección, confidencialidad y uso adecuado de la información.',
       ].join('\n'),
     },
     variables: [
       { clave: 'nombre', descripcion: 'Nombre completo del contratista, en mayúsculas' },
-      { clave: 'tipo_documento', descripcion: 'Tipo de documento (CC, CE…)' },
+      { clave: 'tipo_documento', descripcion: 'Tipo de documento abreviado (CC, CE…)' },
+      { clave: 'tipo_documento_nombre', descripcion: 'Tipo de documento completo (cédula de ciudadanía…)' },
       { clave: 'documento', descripcion: 'Número de documento' },
+      { clave: 'lugar_expedicion', descripcion: 'Lugar de expedición del documento (vacío si no está en la ficha)' },
       { clave: 'contrato_numero', descripcion: 'Número del contrato OPS vigente (vacío si no hay)' },
       { clave: 'contrato_inicio', descripcion: 'Inicio del contrato, en letras (o la fecha de ingreso)' },
       { clave: 'contrato_fin', descripcion: 'Fin del contrato, en letras (vacío si no hay contrato)' },
@@ -156,9 +170,12 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
       { clave: 'honorarios', descripcion: 'Valor total en pesos; solo en las certificaciones con valor o para entidad financiera' },
       { clave: 'honorarios_letras', descripcion: 'El valor total en letras' },
       { clave: 'honorarios_mensuales', descripcion: 'Cuota mensual en pesos (vacío si el contrato no la tiene)' },
+      { clave: 'honorarios_texto', descripcion: '"honorarios mensuales equivalentes a la suma de …" (o el valor total si no hay cuota mensual), en letras con la cifra; solo con honorarios' },
+      { clave: 'comisiones', descripcion: '"comisiones mensuales por concepto de ventas realizadas" si tuvo comisiones en los últimos 3 meses (solo con honorarios)' },
       { clave: 'destinatario', descripcion: 'A quién va dirigida (vacío si no se indicó)' },
       { clave: 'ciudad', descripcion: 'Ciudad de la sede del contratista' },
       { clave: 'fecha', descripcion: 'Fecha de expedición, en letras' },
+      { clave: 'fecha_dias', descripcion: 'Fecha de expedición como "28 días del mes de septiembre de 2026"' },
       ...V_EMPRESA,
     ],
     variantes: [
@@ -279,14 +296,16 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
   ORDEN_PAGO_HORAS_EXTRA: {
     clave: 'ORDEN_PAGO_HORAS_EXTRA',
     nombre: 'Orden de pago de horas extra',
-    descripcion: 'Se envía al colaborador para que acepte el monto con su firma antes de pagarle las horas extra aparte de la nómina.',
+    descripcion: 'El colaborador la recibe, la firma aceptando el monto y después se le pagan las horas extra, aparte de la nómina.',
     fijo: 'La app pone el encabezado, el número y la fecha, el colaborador y el período, la tabla de horas con el total a pagar, y la firma del colaborador.',
     membrete: true,
     defecto: {
       titulo: 'Orden de pago · Horas extra',
       contenido: [
+        'Yo, **{{nombre}}**, identificado(a) con documento No. {{documento}}, acepto el pago que me hará {{razon_social}}, NIT {{nit}}, correspondiente a mis horas extras del {{periodo_desde}} al {{periodo_hasta}}. Después de revisar el formato de registro, confirmo que el valor liquidado se ajusta a lo establecido por la ley y al total de mis horas extras trabajadas. Estoy de acuerdo con el monto y con el detalle presentado:',
         '[tabla]',
         '[[Consignar a: {{cuenta}}.]]',
+        'En constancia, firmo en {{ciudad}}, a los {{fecha_dias}}.',
       ].join('\n'),
     },
     variables: [
@@ -300,6 +319,8 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
       { clave: 'valor', descripcion: 'Total a pagar en pesos' },
       { clave: 'valor_letras', descripcion: 'El total en letras' },
       { clave: 'cuenta', descripcion: 'Banco, tipo y número de cuenta (vacío si no tiene)' },
+      { clave: 'ciudad', descripcion: 'Ciudad de la sede del colaborador' },
+      { clave: 'fecha_dias', descripcion: 'Fecha de la orden como "27 días del mes de agosto de 2026"' },
       ...V_EMPRESA,
     ],
     tabla: 'Horas por tipo (diurnas, nocturnas, dominicales…), el total de horas y el recuadro con el total a pagar.',
@@ -391,6 +412,16 @@ function varsEmpresa(e: EmpresaTexto): Record<string, string> {
   return { empresa: e.nombreComercial || e.razonSocial, razon_social: e.razonSocial, nit: e.nit }
 }
 
+/** "28 días del mes de septiembre de 2026" ("1 día…" el primero), para "a los … días del mes de …". */
+export function fechaEnDias(fecha: Date): string {
+  const dia = fecha.getUTCDate()
+  const mes = new Intl.DateTimeFormat('es-CO', { timeZone: 'UTC', month: 'long' }).format(fecha)
+  return `${dia} ${dia === 1 ? 'día' : 'días'} del mes de ${mes} de ${fecha.getUTCFullYear()}`
+}
+
+/** Frase de las comisiones en las certificaciones con valor. */
+const FRASE_COMISIONES = 'comisiones mensuales por concepto de ventas realizadas'
+
 /** "1.500.000 pesos M/CTE": la cifra en letras, en la forma corta de siempre. */
 export function pesosEnLetras(valor: number): string {
   return `${new Intl.NumberFormat('es-CO').format(Math.round(valor))} pesos M/CTE`
@@ -474,6 +505,8 @@ export type DatosVarsOrdenPago = {
   periodo: { desde: string; hasta: string }
   horasExtra: number
   valor: number
+  /** Ciudad de la sede del colaborador (vacía si no se sabe). */
+  ciudad?: string
 }
 
 function fechaLargaISO(iso: string): string {
@@ -493,6 +526,8 @@ export function variablesOrdenPago(d: DatosVarsOrdenPago): Record<string, string
     valor: fmtCOP(d.valor),
     valor_letras: pesosEnLetras(d.valor),
     cuenta: [c.banco, c.tipoCuenta, c.numeroCuenta].filter(Boolean).join(' '),
+    ciudad: d.ciudad ?? '',
+    fecha_dias: fechaEnDias(d.fecha),
     ...varsEmpresa(d.empresa),
   }
 }
@@ -514,6 +549,10 @@ export type DatosVarsCertificacion = {
     tipoVinculo: string
     fechaIngreso: Date
     salario: number | null
+    /** Lugar de expedición del documento (ficha); null si no está. */
+    lugarExpedicion?: string | null
+    /** Tuvo comisiones en los últimos meses: la certificación con valor las menciona. */
+    tieneComisiones?: boolean
   }
   contratoOps?: {
     numero: string
@@ -538,10 +577,14 @@ export function variablesCertificacion(d: DatosVarsCertificacion): Record<string
   const comunes = {
     nombre: `${c.nombres} ${c.apellidos}`.toUpperCase(),
     tipo_documento: c.tipoDocumento,
+    tipo_documento_nombre: (TIPO_DOCUMENTO_IDENTIDAD[c.tipoDocumento] ?? c.tipoDocumento).toLowerCase(),
     documento: c.numeroDocumento,
+    lugar_expedicion: c.lugarExpedicion?.trim() ?? '',
+    comisiones: conValor && c.tieneComisiones ? FRASE_COMISIONES : '',
     destinatario: d.dirigidaA ?? '',
     ciudad: d.ciudad,
     fecha: formatFechaLarga(d.fecha),
+    fecha_dias: fechaEnDias(d.fecha),
     ...varsEmpresa(d.empresa),
   }
   if (d.clase === 'CONTRACTUAL') {
@@ -555,6 +598,10 @@ export function variablesCertificacion(d: DatosVarsCertificacion): Record<string
       honorarios: conValor && o ? fmtCOP(o.valorTotal) : '',
       honorarios_letras: conValor && o ? pesosEnLetras(o.valorTotal) : '',
       honorarios_mensuales: conValor && o?.valorMensual != null ? fmtCOP(o.valorMensual) : '',
+      honorarios_texto: !conValor || !o ? ''
+        : o.valorMensual != null
+          ? `honorarios mensuales equivalentes a la suma de **${pesosALetras(o.valorMensual)}**`
+          : `honorarios por un valor total de **${pesosALetras(o.valorTotal)}**`,
     }
   }
   const salario = conValor && c.salario != null ? c.salario : null
@@ -565,6 +612,7 @@ export function variablesCertificacion(d: DatosVarsCertificacion): Record<string
     fecha_ingreso: formatFechaLarga(c.fechaIngreso),
     salario: salario != null ? fmtCOP(salario) : '',
     salario_letras: salario != null ? pesosEnLetras(salario) : '',
+    salario_en_letras: salario != null ? pesosALetras(salario) : '',
     funciones: d.tipo === 'CON_FUNCIONES' ? (c.funciones ?? '') : '',
   }
 }

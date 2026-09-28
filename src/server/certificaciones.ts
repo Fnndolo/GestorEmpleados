@@ -37,6 +37,12 @@ export async function generarCertificacion(opts: {
       })
     : null
 
+  // Las certificaciones con valor mencionan las comisiones si las hubo en los
+  // últimos tres meses: son parte de lo que la persona devenga.
+  const desde = hoyBogota()
+  desde.setUTCMonth(desde.getUTCMonth() - 3)
+  const comisionesRecientes = await prisma.comision.count({ where: { colaboradorId: opts.colaboradorId, fecha: { gte: desde } } })
+
   const datos: DatosCertificacion = {
     tipo: opts.tipo,
     clase,
@@ -67,6 +73,8 @@ export async function generarCertificacion(opts: {
       tipoVinculo: colab.tipoVinculo,
       fechaIngreso: colab.fechaIngreso,
       salario: contrato ? Number(contrato.salarioBase) : null,
+      lugarExpedicion: colab.lugarExpedicionDoc,
+      tieneComisiones: comisionesRecientes > 0,
     },
     ciudad: colab.sede.ciudad.nombre,
     fecha: hoyBogota(),

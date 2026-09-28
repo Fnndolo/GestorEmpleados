@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  CLAVES_TEXTO, TEXTOS, conTablaImplicita, resolverOpcionales, resolverTexto, variablesActaActivo, variablesCertificacion,
+  CLAVES_TEXTO, TEXTOS, conTablaImplicita, fechaEnDias, resolverOpcionales, resolverTexto, variablesActaActivo, variablesCertificacion,
   variablesOrdenPago, type BloqueTexto,
 } from './textos'
 import { muestraTexto } from './textos-muestra'
@@ -126,12 +126,28 @@ describe('textos de fábrica', () => {
     const salario = plano(resolverTexto(def, muestraTexto('CERTIFICACION_LABORAL', 'CON_SALARIO', EMPRESA).vars).bloques)
     const funciones = plano(resolverTexto(def, muestraTexto('CERTIFICACION_LABORAL', 'CON_FUNCIONES', EMPRESA).vars).bloques)
     const banco = plano(resolverTexto(def, muestraTexto('CERTIFICACION_LABORAL', 'ENTIDAD_FINANCIERA', EMPRESA).vars).bloques)
-    expect(simple).not.toContain('Devenga')
+    expect(simple).not.toContain('devengando')
+    expect(simple).not.toContain('comisiones')
     expect(simple).not.toContain('Funciones')
-    expect(simple).toContain('a solicitud del interesado en Ciudad de muestra')
-    expect(salario).toContain('Devenga una asignación salarial mensual de')
+    expect(simple).toContain('a solicitud del interesado, sin otro en particular')
+    expect(simple).toContain('se firma en la ciudad de Ciudad de muestra, a los ')
+    expect(salario).toContain('devengando un salario mensual equivalente a la suma de UN MILLÓN OCHOCIENTOS MIL PESOS M/CTE ($1.800.000), más comisiones mensuales por concepto de ventas realizadas.')
     expect(funciones).toContain('Funciones del cargo: Atender')
-    expect(banco).toContain('dirigida a Banco de muestra,')
+    expect(banco).toContain('dirigida a Banco de muestra, sin otro en particular')
+  })
+
+  it('la certificación contractual habla de honorarios, en letras con la cifra', () => {
+    const def = TEXTOS.CERTIFICACION_CONTRACTUAL.defecto
+    const simple = plano(resolverTexto(def, muestraTexto('CERTIFICACION_CONTRACTUAL', 'SIMPLE', EMPRESA).vars).bloques)
+    const valor = plano(resolverTexto(def, muestraTexto('CERTIFICACION_CONTRACTUAL', 'CON_SALARIO', EMPRESA).vars).bloques)
+    expect(simple).not.toContain('honorarios')
+    expect(valor).toContain('con honorarios mensuales equivalentes a la suma de UN MILLÓN QUINIENTOS MIL PESOS M/CTE ($1.500.000), más comisiones')
+    expect(valor).not.toMatch(/salario|labora /)
+  })
+
+  it('"a los … días del mes de …" en las fechas de firma', () => {
+    expect(fechaEnDias(new Date(Date.UTC(2026, 7, 27)))).toBe('27 días del mes de agosto de 2026')
+    expect(fechaEnDias(new Date(Date.UTC(2026, 7, 1)))).toBe('1 día del mes de agosto de 2026')
   })
 
   it('el acta de activos no deja "en su cargo de" colgando cuando no hay cargo', () => {

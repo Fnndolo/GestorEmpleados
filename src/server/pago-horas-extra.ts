@@ -97,7 +97,7 @@ async function upsertPago(colaboradorId: string, mes: string, quincena: 1 | 2 | 
  */
 async function renderizarPdfDePago(pago: PagoHorasExtra, firma?: { dataUri: string; fecha: Date } | null): Promise<Buffer> {
   const [colaborador, empresa] = await Promise.all([
-    prisma.colaborador.findUniqueOrThrow({ where: { id: pago.colaboradorId }, include: { banco: true } }),
+    prisma.colaborador.findUniqueOrThrow({ where: { id: pago.colaboradorId }, include: { banco: true, sede: { include: { ciudad: true } } } }),
     prisma.configuracionEmpresa.findFirstOrThrow(),
   ])
 
@@ -117,6 +117,7 @@ async function renderizarPdfDePago(pago: PagoHorasExtra, firma?: { dataUri: stri
       detalleHoras: (pago.detalleHoras as Record<string, number> | null) ?? {},
       horasExtra: Number(pago.horasExtra),
       valor: Number(pago.valor),
+      ciudad: colaborador.sede?.ciudad?.nombre ?? '',
       firma: firma ? { dataUri: firma.dataUri, fecha: formatFechaLarga(firma.fecha) } : null,
     },
   )

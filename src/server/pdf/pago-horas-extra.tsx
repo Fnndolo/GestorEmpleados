@@ -56,6 +56,8 @@ export type DatosOrdenPagoHorasExtra = {
   detalleHoras: Record<string, number>
   horasExtra: number
   valor: number
+  /** Ciudad de la sede del colaborador, para "firmo en …". */
+  ciudad?: string
   /** Firma electrónica del colaborador aceptando el monto; null si todavía no ha firmado. */
   firma?: { dataUri: string; fecha: string } | null
 }
@@ -104,6 +106,8 @@ function Doc({ d, texto, membrete, fondo }: { d: DatosOrdenPagoHorasExtra; texto
           <Text style={s.negrita}>{formatFechaLarga(new Date(`${d.periodo.desde}T00:00:00.000Z`))} a {formatFechaLarga(new Date(`${d.periodo.hasta}T00:00:00.000Z`))}</Text>
         </View>
 
+        {/* Respiro entre la cabecera y la declaración del colaborador. */}
+        <View style={{ height: 10 }} />
         <BloquesPdf bloques={texto.bloques} tabla={<TablaHoras d={d} />} />
 
         <View style={s.firma} wrap={false}>
