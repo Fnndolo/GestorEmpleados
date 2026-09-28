@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Laptop, Shirt, Eye, UserPlus, Undo2, Trash2, Pencil } from 'lucide-react'
+import { Plus, Laptop, Shirt, Eye, UserPlus, Undo2, Trash2, Pencil, Camera, X } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Input } from '@/components/ui/input'
@@ -22,7 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import { crearActivos, asignarActivos, devolverActivo, registrarDotacion } from './acciones'
-import { FotoActivo } from '@/components/activos/foto-activo'
+import { FotoActivo, subirFotoActivo } from '@/components/activos/foto-activo'
 import { iconoActivo } from '@/lib/activos-visual'
 
 type Activo = { id: string; codigo: string; nombre: string; tipo: string; estado: string; valor: number | null; fotoUrl: string | null; asignacion: { id: string; colaborador: string; actaEntregaDocId: string | null; actaFirmada: boolean } | null }
@@ -191,8 +191,68 @@ function DevolverBoton({ asignacionId }: { asignacionId: string }) {
 }
 
 /** Una línea del alta en lote. La sede es común a todas y va aparte. */
-type FilaActivo = { codigo: string; nombre: string; tipo: string; marca: string; serie: string; valor: string }
-const FILA_VACIA: FilaActivo = { codigo: '', nombre: '', tipo: '', marca: '', serie: '', valor: '' }
+type CampoTexto = 'codigo' | 'nombre' | 'tipo' | 'marca' | 'serie' | 'valor'
+/** Foto elegida y su vista previa (URL local, se libera al quitarla o cambiarla). */
+type FotoElegida = { archivo: File; url: string }
+type FilaActivo = Record<CampoTexto, string> & { foto: FotoElegida | null }
+const FILA_VACIA: FilaActivo = { codigo: '', nombre: '', tipo: '', marca: '', serie: '', valor: '', foto: null }
+
+/** Marca de campo obligatorio. */
+const Req = () => <span className="text-destructive">*</span>
+
+/**
+ * Vista previa de una foto recién elegida (todavía sin subir). La URL local se
+ * crea al elegir la foto y no aquí: creada y liberada en un efecto, el doble
+ * montaje de desarrollo la liberaba antes de pintarse y la imagen salía rota.
+ */
+function Miniatura({ foto, className }: { foto: FotoElegida; className?: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={foto.url} alt="" className={cn('object-cover', className)} />
+}
+
+/**
+ * Foto del activo en el alta: un recuadro que se toca para elegirla (en el
+ * celular ofrece la cámara) y muestra la vista previa. Se sube al crear.
+ */
+function ElegirFoto({ foto, onChange }: { foto: FotoElegida | null; onChange: (f: FotoElegida | null) => void }) {
+  const cambiar = (nueva: FotoElegida | null) => {
+    if (foto) URL.revokeObjectURL(foto.url)
+    onChange(nueva)
+  }
+  const input = useRef<HTMLInputElement>(null)
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => input.current?.click()}
+        className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-lg border border-dashed bg-muted/30 text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={foto ? 'Cambiar la foto' : 'Añadir foto'}
+      >
+        {foto ? <Miniatura foto={foto} className="size-full" /> : <Camera className="size-6" />}
+      </button>
+      <div className="flex flex-wrap gap-1">
+        <Button type="button" size="sm" variant="outline" onClick={() => input.current?.click()}>
+          <Camera className="size-4" /> {foto ? 'Cambiar foto' : 'Añadir foto'}
+        </Button>
+        {foto && (
+          <Button type="button" size="sm" variant="ghost" onClick={() => cambiar(null)}>
+            <X className="size-4" /> Quitar
+          </Button>
+        )}
+      </div>
+      <input
+        ref={input} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          e.target.value = ''
+          if (!f) return
+          if (!['image/jpeg', 'image/png', 'image/webp'].includes(f.type)) { toast.error('La foto debe ser JPG, PNG o WebP.'); return }
+          cambiar({ archivo: f, url: URL.createObjectURL(f) })
+        }}
+      />
+    </div>
+  )
+}
 
 /**
  * Alta de activos en lote: un computador, un mouse, un teclado y una silla se
@@ -206,8 +266,10 @@ function DialogActivo({ sedes, sedeActual, onClose }: { sedes: Sede[]; sedeActua
   const [abierto, setAbierto] = useState(0)
   const [g, setG] = useState(false)
 
-  const set = (i: number, k: keyof FilaActivo, v: string) =>
+  const set = (i: number, k: CampoTexto, v: string) =>
     setFilas((p) => p.map((f, j) => (j === i ? { ...f, [k]: v } : f)))
+  const setFoto = (i: number, foto: FotoElegida | null) =>
+    setFilas((p) => p.map((f, j) => (j === i ? { ...f, foto } : f)))
 
   function añadir() {
     setFilas((p) => [...p, { ...FILA_VACIA }])
@@ -237,11 +299,21 @@ function DialogActivo({ sedes, sedeActual, onClose }: { sedes: Sede[]; sedeActua
         sedeId,
       })),
     })
+    if (!res.ok) { setG(false); toast.error(res.error); return }
+
+    // Las fotos se suben ya creados los activos, cada una al suyo. Si alguna
+    // falla, los activos quedan creados y la foto se sube luego desde la lista.
+    const idPorCodigo = new Map(res.datos.ids.map((a) => [a.codigo, a.id]))
+    const sinFoto: string[] = []
+    for (const f of llenas) {
+      const id = idPorCodigo.get(f.codigo.trim())
+      if (!f.foto || !id) continue
+      try { await subirFotoActivo(id, f.foto.archivo) } catch { sinFoto.push(f.codigo.trim()) }
+    }
     setG(false)
-    if (res.ok) {
-      toast.success(llenas.length === 1 ? 'Activo creado.' : `${llenas.length} activos creados.`)
-      onClose(); router.refresh()
-    } else toast.error(res.error)
+    toast.success(llenas.length === 1 ? 'Activo creado.' : `${llenas.length} activos creados.`)
+    if (sinFoto.length > 0) toast.error(`No se pudo subir la foto de ${sinFoto.join(', ')}. Súbela tocando su ícono en la lista.`)
+    onClose(); router.refresh()
   }
 
   return (
@@ -271,6 +343,7 @@ function DialogActivo({ sedes, sedeActual, onClose }: { sedes: Sede[]; sedeActua
             return (
               <div key={i} className="overflow-hidden rounded-lg border">
                 <div className={cn('flex items-center gap-2 px-3 py-2', !abierta && 'bg-muted/40')}>
+                  {!abierta && f.foto && <Miniatura foto={f.foto} className="size-8 shrink-0 rounded-md" />}
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-semibold text-muted-foreground">Activo {i + 1}</span>
                     {!abierta && (
@@ -290,12 +363,13 @@ function DialogActivo({ sedes, sedeActual, onClose }: { sedes: Sede[]; sedeActua
                 </div>
                 {abierta && (
                   <div className="grid grid-cols-2 gap-3 border-t p-3">
-                    <Campo label="Código"><Input value={f.codigo} onChange={(e) => set(i, 'codigo', e.target.value)} placeholder="EQ-001" /></Campo>
-                    <Campo label="Tipo"><Input value={f.tipo} onChange={(e) => set(i, 'tipo', e.target.value)} placeholder="Computador, Mouse, Silla…" /></Campo>
-                    <div className="col-span-2"><Campo label="Nombre"><Input value={f.nombre} onChange={(e) => set(i, 'nombre', e.target.value)} placeholder="Portátil Lenovo ThinkPad E14" /></Campo></div>
+                    <Campo label={<>Código <Req /></>}><Input value={f.codigo} onChange={(e) => set(i, 'codigo', e.target.value)} placeholder="EQ-001" /></Campo>
+                    <Campo label={<>Tipo <Req /></>}><Input value={f.tipo} onChange={(e) => set(i, 'tipo', e.target.value)} placeholder="Computador, Mouse, Silla…" /></Campo>
+                    <div className="col-span-2"><Campo label={<>Nombre <Req /></>}><Input value={f.nombre} onChange={(e) => set(i, 'nombre', e.target.value)} placeholder="Portátil Lenovo ThinkPad E14" /></Campo></div>
                     <Campo label="Marca"><Input value={f.marca} onChange={(e) => set(i, 'marca', e.target.value)} /></Campo>
                     <Campo label="Serie"><Input value={f.serie} onChange={(e) => set(i, 'serie', e.target.value)} /></Campo>
                     <div className="col-span-2"><Campo label="Valor"><Input type="number" value={f.valor} onChange={(e) => set(i, 'valor', e.target.value)} placeholder="0" /></Campo></div>
+                    <div className="col-span-2"><Campo label="Foto"><ElegirFoto foto={f.foto} onChange={(foto) => setFoto(i, foto)} /></Campo></div>
                   </div>
                 )}
               </div>
@@ -443,6 +517,6 @@ function DialogDotacion({ onClose }: { onClose: () => void }) {
   )
 }
 
-function Campo({ label, children }: { label: string; children: React.ReactNode }) {
+function Campo({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>
 }

@@ -17,6 +17,21 @@ import { cn } from '@/lib/utils'
 // eslint-disable-next-line @next/next/no-img-element
 const Imagen = ({ src }: { src: string }) => <img src={src} alt="" className="size-full object-cover" />
 
+/**
+ * Sube la foto de un activo ya creado. Se reduce en el navegador: una foto de
+ * celular pesa 4–8 MB y para una miniatura de inventario basta con 1200 px.
+ * La usan la miniatura del inventario y el alta de activos nuevos.
+ */
+export async function subirFotoActivo(activoId: string, archivo: File): Promise<void> {
+  const { default: comprimir } = await import('browser-image-compression')
+  const reducida = await comprimir(archivo, { maxSizeMB: 0.6, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/jpeg' })
+  const fd = new FormData()
+  fd.append('archivo', new File([reducida], 'foto.jpg', { type: 'image/jpeg' }))
+  const resp = await fetch(`/api/activos/${activoId}/foto`, { method: 'POST', body: fd })
+  const j = await resp.json().catch(() => ({}))
+  if (!resp.ok) throw new Error(j.error ?? 'No se pudo subir la foto.')
+}
+
 export function FotoActivo({ activoId, fotoUrl, icono: Icono, puedeEditar, className }: {
   activoId: string
   fotoUrl: string | null
@@ -31,15 +46,7 @@ export function FotoActivo({ activoId, fotoUrl, icono: Icono, puedeEditar, class
   async function subir(archivo: File) {
     setOcupado(true)
     try {
-      // Se reduce en el navegador: una foto de celular pesa 4–8 MB y para una
-      // miniatura de inventario basta con 1200 px.
-      const { default: comprimir } = await import('browser-image-compression')
-      const reducida = await comprimir(archivo, { maxSizeMB: 0.6, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/jpeg' })
-      const fd = new FormData()
-      fd.append('archivo', new File([reducida], 'foto.jpg', { type: 'image/jpeg' }))
-      const resp = await fetch(`/api/activos/${activoId}/foto`, { method: 'POST', body: fd })
-      const j = await resp.json().catch(() => ({}))
-      if (!resp.ok) throw new Error(j.error ?? 'No se pudo subir la foto.')
+      await subirFotoActivo(activoId, archivo)
       toast.success('Foto guardada.')
       router.refresh()
     } catch (e) {

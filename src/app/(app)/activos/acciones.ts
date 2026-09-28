@@ -47,18 +47,20 @@ export const crearActivos = accion(
       throw new ErrorNegocio(`Ya existe(n) activo(s) con el código: ${existentes.map((e) => e.codigo).join(', ')}.`)
     }
 
-    await dbAuditado.$transaction(
+    const creados = await dbAuditado.$transaction(
       d.activos.map((a) =>
         dbAuditado.activo.create({
           data: {
             codigo: a.codigo, nombre: a.nombre, tipo: a.tipo, marca: v(a.marca), serie: v(a.serie),
             valor: a.valor ?? null, sedeId: v(a.sedeId), estado: 'DISPONIBLE',
           },
+          select: { id: true, codigo: true },
         }),
       ),
     )
     revalidatePath('/activos')
-    return { creados: d.activos.length }
+    // El id de cada uno, para subirle la foto que se eligió en el formulario.
+    return { creados: creados.length, ids: creados }
   },
 )
 
