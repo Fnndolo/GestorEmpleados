@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 type Sede = {
   id: string; nombre: string; ciudadId: string; ciudadNombre: string
@@ -68,6 +69,7 @@ export function SedesCliente({
           </CardContent></Card>
         ) : (
           <Card><CardContent className="p-0">
+            <TooltipProvider delayDuration={300}>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -88,7 +90,16 @@ export function SedesCliente({
                       </span>
                     </TableCell>
                     <TableCell>{s.ciudadNombre}</TableCell>
-                    <TableCell className="hidden sm:table-cell text-muted-foreground">{s.direccion}</TableCell>
+                    {/* max-w-0 + w-full: la dirección toma el espacio que sobra y, si no cabe,
+                        se corta con puntos suspensivos en vez de desbordar la tabla. */}
+                    <TableCell className="hidden w-full max-w-0 text-muted-foreground sm:table-cell">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="block truncate">{s.direccion}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" align="start">{s.direccion}</TooltipContent>
+                      </Tooltip>
+                    </TableCell>
                     <TableCell>
                       <Badge variant={s.activa ? 'default' : 'secondary'}>
                         {s.activa ? 'Activa' : 'Inactiva'}
@@ -105,6 +116,7 @@ export function SedesCliente({
                 ))}
               </TableBody>
             </Table>
+            </TooltipProvider>
           </CardContent></Card>
         )}
       </section>

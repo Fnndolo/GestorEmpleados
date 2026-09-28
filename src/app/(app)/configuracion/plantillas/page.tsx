@@ -61,7 +61,7 @@ export default async function PlantillasPage({ searchParams }: { searchParams: P
   }
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <Encabezado enLinea titulo="Plantillas de documentos" />
       <DocumentosPlantillas
         abrirInicial={abrirInicial}

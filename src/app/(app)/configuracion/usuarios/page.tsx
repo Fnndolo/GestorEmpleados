@@ -27,7 +27,7 @@ export default async function UsuariosPage() {
   ])
 
   return (
-    <div className="max-w-7xl">
+    <div>
       <Encabezado
         titulo="Usuarios"
         descripcion="Crea cuentas, asigna rol y sedes. La invitación se envía por correo con una contraseña temporal. Si alguien cubre dos frentes a la vez, puedes darle roles adicionales: sus permisos serán la suma de todos."

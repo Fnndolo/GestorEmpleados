@@ -20,7 +20,7 @@ export default async function CargosPage() {
   ])
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <CargosCliente
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}

@@ -32,7 +32,7 @@ export default async function EntidadesPage() {
   ])
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <Encabezado
         titulo="Entidades y bancos"
         descripcion="Catálogo de EPS, ARL, fondos de pensiones y cesantías, cajas de compensación y bancos que aparecen al crear o editar un colaborador. Desactivar una entidad la retira de los formularios sin afectar a quienes ya la tienen asignada."

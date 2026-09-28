@@ -55,8 +55,9 @@ export default async function ConfiguracionLayout({ children }: { children: Reac
        y no deja una franja vacía debajo; solo al pasarse del alto disponible
        aparecen los desplazamientos internos. El tope descuenta la barra superior
        de la app (3.5rem) y el relleno del contenedor (3rem). En móvil la página
-       se desplaza entera. */
-    <div className="max-w-6xl lg:flex lg:max-h-[calc(100dvh-6.5rem)] lg:flex-col lg:overflow-hidden">
+       se desplaza entera. Sin tope de ancho: al esconder el menú lateral de la
+       app, Ajustes ocupa toda la pantalla. */
+    <div className="lg:flex lg:max-h-[calc(100dvh-6.5rem)] lg:flex-col lg:overflow-hidden">
       {/* Respaldo de la flecha en las secciones: quien solo tiene permiso de
           Usuarios no puede entrar a Empresa, así que para él es Inicio. */}
       <CabeceraAjustes portada={verConfig ? '/configuracion/empresa' : '/inicio'} />

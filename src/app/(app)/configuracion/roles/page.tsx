@@ -17,7 +17,7 @@ export default async function RolesPage() {
   })
 
   return (
-    <div className="max-w-7xl">
+    <div>
       <Encabezado
         titulo="Roles y permisos"
         descripcion="Define qué módulos puede ver y editar cada rol, y con qué alcance de datos."

@@ -12,7 +12,7 @@ export default async function AlertasConfigPage() {
   const reglas = await prisma.reglaAlerta.findMany({ orderBy: { clave: 'asc' } })
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <ReglasAlertaCliente
         reglas={reglas.map((r) => ({
           id: r.id, clave: r.clave, descripcion: r.descripcion,

@@ -20,7 +20,7 @@ export default async function TiposDocumentoPage() {
   })
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <Encabezado
         titulo="Tipos de documento"
         descripcion="Catálogo de documentos del expediente y cuáles son obligatorios según el tipo de vínculo. Los que llevan vencimiento alimentan las alertas y el tablero de vencimientos."

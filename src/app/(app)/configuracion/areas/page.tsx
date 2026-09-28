@@ -29,7 +29,7 @@ export default async function AreasPage() {
   ])
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <Encabezado
         titulo="Áreas"
         descripcion="Estructura organizativa de la empresa. Un área puede depender de otra para armar el organigrama, y tener un responsable — la misma persona puede responder por varias. Los cargos se crean dentro de un área, así que estas van primero."

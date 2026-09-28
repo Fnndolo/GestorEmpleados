@@ -26,7 +26,7 @@ export default async function PlantillasPage() {
   })
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <Encabezado
         titulo="Plantillas de contrato"
         descripcion="El texto de los contratos vive aquí, no en el código: puedes corregir una cláusula sin depender de un despliegue. Los datos de cada contrato se insertan con variables."

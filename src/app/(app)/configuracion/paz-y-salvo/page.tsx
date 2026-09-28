@@ -16,7 +16,7 @@ export default async function PazYSalvoConfigPage() {
   ])
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <Encabezado enLinea titulo="Paz y salvo" />
       <AreasPazYSalvoCliente
         puedeCrear={tienePermiso(usuario, 'configuracion', 'CREAR')}

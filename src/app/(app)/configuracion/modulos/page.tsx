@@ -16,7 +16,7 @@ export default async function ModulosPage() {
   })
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <Encabezado
         titulo="Módulos personalizados"
         descripcion="Crea pestañas y módulos a la medida con campos propios, sin necesidad de programar."
