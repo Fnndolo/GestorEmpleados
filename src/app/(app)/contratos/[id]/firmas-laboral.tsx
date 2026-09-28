@@ -4,27 +4,24 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { PenLine, CircleCheck, RefreshCw, FilePenLine, Lock } from 'lucide-react'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { PenLine, RefreshCw, FilePenLine, FileText, ShieldCheck, Building2, UserRound } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FirmaCaptura } from '@/components/firma/firma-captura'
-import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { firmarContratoLaboral, regenerarPdfContratoLaboral } from '../acciones'
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
+import { FilaDocumento, VerDocumento } from '@/components/contratos/fila-documento'
 
 type Estado = { firmado: boolean; fecha: string | null }
 
+/**
+ * El contrato, su autorización de datos y las dos firmas, como filas de la
+ * lista de documentos. La firma del empleador se aplica aquí; la del empleado,
+ * solo él desde su autoservicio.
+ */
 export function FirmasLaboral({
-  contratoId,
-  numero,
-  tieneDocumento,
-  documentoId,
-  autorizacionId,
-  puedeFirmar,
-  empleador,
-  empleado,
-  subido = false,
+  contratoId, numero, tieneDocumento, documentoId, autorizacionId, puedeFirmar, empleador, empleado, subido = false,
 }: {
   contratoId: string
   numero: string
@@ -40,6 +37,12 @@ export function FirmasLaboral({
 }) {
   const router = useRouter()
   const [regen, setRegen] = useState(false)
+  const alguienFirmo = empleador.firmado || empleado.firmado
+  const ambos = (empleador.firmado || !!empleador.enPdf) && empleado.firmado
+  // Mientras nadie firme, el documento se puede editar y el PDF regenerarse
+  // (solo si los contratos se redactan desde plantilla). Desde la primera firma
+  // queda congelado: los cambios van por otrosí.
+  const editable = GENERAR_CONTRATOS_DESDE_PLANTILLA && !subido && puedeFirmar && !alguienFirmo
 
   async function regenerar() {
     setRegen(true)
@@ -49,60 +52,44 @@ export function FirmasLaboral({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {documentoId && (
-          <VisorPdf documentoId={documentoId} titulo={`Contrato ${numero}`} className={buttonVariants({ size: 'sm' })}>
-            Ver contrato (PDF)
-          </VisorPdf>
+    <>
+      <FilaDocumento
+        icono={FileText}
+        titulo="Contrato"
+        tono={!tieneDocumento ? undefined : ambos ? 'ok' : 'pendiente'}
+        sub={!tieneDocumento ? 'Sin documento' : ambos ? 'Firmado por ambas partes' : alguienFirmo ? 'Falta una firma · contenido congelado' : 'Pendiente de firmas'}
+      >
+        {documentoId && <VerDocumento documentoId={documentoId} titulo={`Contrato ${numero}`} />}
+        {editable && tieneDocumento && (
+          <Button size="icon" variant="outline" className="size-8" asChild>
+            <Link href={`/contratos/${contratoId}/documento`} aria-label="Editar contrato" title="Editar contrato"><FilePenLine className="size-4" /></Link>
+          </Button>
         )}
-        {autorizacionId && (
-          <VisorPdf documentoId={autorizacionId} titulo={`Autorización de datos ${numero}`} className={buttonVariants({ size: 'sm' })}>
-            Autorización de datos
-          </VisorPdf>
+        {editable && (
+          <Button size="sm" variant={tieneDocumento ? 'outline' : 'default'} onClick={regenerar} disabled={regen} title={tieneDocumento ? 'Regenerar PDF' : 'Generar desde la plantilla'}>
+            {regen ? <Spinner /> : <RefreshCw className="size-4" />}
+            <span className={tieneDocumento ? 'sr-only' : undefined}>{tieneDocumento ? 'Regenerar PDF' : 'Generar'}</span>
+          </Button>
         )}
-        {/* Mientras nadie firme, el documento se puede editar y el PDF regenerarse.
-            Desde la primera firma el contenido queda congelado (cambios → otrosí).
-            Solo cuando los contratos se redactan desde plantilla. */}
-        {GENERAR_CONTRATOS_DESDE_PLANTILLA && !subido && puedeFirmar && !empleador.firmado && !empleado.firmado && (
-          <>
-            {tieneDocumento && (
-              <Button size="sm" asChild>
-                <Link href={`/contratos/${contratoId}/documento`}><FilePenLine className="size-4" /> Editar contrato</Link>
-              </Button>
-            )}
-            <Button size="sm" onClick={regenerar} disabled={regen}>
-              {regen ? <Spinner /> : <RefreshCw className="size-4" />} {tieneDocumento ? 'Regenerar PDF' : 'Generar documento desde la plantilla'}
-            </Button>
-          </>
-        )}
-        {tieneDocumento && (empleador.firmado || empleado.firmado) && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Lock className="size-3.5" /> Contenido congelado por firma — cambios posteriores van por otrosí
-          </span>
-        )}
-      </div>
+      </FilaDocumento>
       {tieneDocumento && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ParteFirma contratoId={contratoId} etiqueta="El empleador" nombre={empleador.nombre} estado={empleador} puedeFirmar={puedeFirmar && !empleador.enPdf} enPdf={empleador.enPdf} />
-          {/* La firma del empleado solo la aplica él mismo, desde su autoservicio. */}
-          <ParteFirma contratoId={contratoId} etiqueta="El empleado" nombre={empleado.nombre} estado={empleado} puedeFirmar={false} pendienteTexto="Pendiente · firma desde su autoservicio" />
-        </div>
+        <>
+          <ParteFirma contratoId={contratoId} icono={Building2} etiqueta="Empleador" nombre={empleador.nombre} estado={empleador} puedeFirmar={puedeFirmar && !empleador.enPdf} enPdf={empleador.enPdf} />
+          <ParteFirma contratoId={contratoId} icono={UserRound} etiqueta="Empleado" nombre={empleado.nombre} estado={empleado} puedeFirmar={false} pendienteTexto="Firma desde su autoservicio" />
+        </>
       )}
-    </div>
+      {autorizacionId && (
+        <FilaDocumento icono={ShieldCheck} titulo="Autorización de datos">
+          <VerDocumento documentoId={autorizacionId} titulo={`Autorización de datos ${numero}`} />
+        </FilaDocumento>
+      )}
+    </>
   )
 }
 
-function ParteFirma({
-  contratoId,
-  etiqueta,
-  nombre,
-  estado,
-  puedeFirmar,
-  pendienteTexto = 'Pendiente de firma',
-  enPdf = false,
-}: {
+function ParteFirma({ contratoId, icono, etiqueta, nombre, estado, puedeFirmar, pendienteTexto = 'Pendiente de firma', enPdf = false }: {
   contratoId: string
+  icono: typeof Building2
   etiqueta: string
   nombre: string
   estado: Estado
@@ -115,6 +102,7 @@ function ParteFirma({
   const [abierto, setAbierto] = useState(false)
   const [firma, setFirma] = useState<string | null>(null)
   const [g, setG] = useState(false)
+  const firmado = enPdf || estado.firmado
 
   async function firmar() {
     if (!firma) return
@@ -126,30 +114,21 @@ function ParteFirma({
       setAbierto(false)
       setFirma(null)
       router.refresh()
-    } else {
-      toast.error(res.error)
-    }
+    } else toast.error(res.error)
   }
 
   return (
-    <div className="rounded-lg border p-3">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{etiqueta}</div>
-      <div className="mt-0.5 text-sm font-medium">{nombre || '—'}</div>
-      {enPdf ? (
-        <div className="mt-2 flex items-center gap-1.5 text-sm text-emerald-600">
-          <CircleCheck className="size-4" /> Firmó en el documento aportado
-        </div>
-      ) : estado.firmado ? (
-        <div className="mt-2 flex items-center gap-1.5 text-sm text-emerald-600">
-          <CircleCheck className="size-4" /> Firmado{estado.fecha ? ` · ${estado.fecha}` : ''}
-        </div>
-      ) : puedeFirmar ? (
-        <Button size="sm" className="mt-2" onClick={() => setAbierto(true)}>
-          <PenLine className="size-4" /> Firmar
-        </Button>
-      ) : (
-        <div className="mt-2 text-sm text-muted-foreground">{pendienteTexto}</div>
-      )}
+    <>
+      <FilaDocumento
+        icono={icono}
+        titulo={`${etiqueta} · ${nombre || '—'}`}
+        tono={firmado ? 'ok' : 'pendiente'}
+        sub={enPdf ? 'Firmó en el documento aportado' : estado.firmado ? `Firmado${estado.fecha ? ` · ${estado.fecha}` : ''}` : pendienteTexto}
+      >
+        {!firmado && puedeFirmar && (
+          <Button size="sm" onClick={() => setAbierto(true)}><PenLine className="size-4" /> Firmar</Button>
+        )}
+      </FilaDocumento>
 
       <Dialog open={abierto} onOpenChange={setAbierto}>
         <DialogContent className="max-h-[88vh] overflow-y-auto">
@@ -164,6 +143,6 @@ function ParteFirma({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }

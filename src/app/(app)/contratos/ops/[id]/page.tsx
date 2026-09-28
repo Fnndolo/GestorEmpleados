@@ -4,12 +4,14 @@ import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { formatFechaLarga, formatFechaISO, hoyBogota } from '@/lib/fechas'
+import { Button } from '@/components/ui/button'
+import { Pill } from '@/components/ui-kit'
+import { FileText, ShieldCheck, UserRound } from 'lucide-react'
+import { formatFechaLarga, formatFechaCorta, formatFechaISO, hoyBogota } from '@/lib/fechas'
+import { FilaDocumento, VerDocumento } from '@/components/contratos/fila-documento'
+import { FilaAnexo } from '@/components/contratos/fila-anexo'
+import { AccionesOps } from './acciones-ops'
 import { MOTIVO_CIERRE_TEXTO } from '@/lib/contratos-cierre'
-import { CerrarContratoOps } from './cerrar-contrato'
-import { EliminarContratoOps } from './eliminar-contrato'
-import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 import { fmtCOP } from '@/lib/moneda'
 import { CuentasCobro } from './cuentas-cliente'
 import { Entregables } from './entregables-cliente'
@@ -18,7 +20,6 @@ import { GenerarAutorizacion, RegenerarDocumentos } from './generar-autorizacion
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import { HabilitarFirma } from './habilitar-firma'
 import { CorregirPosicionFirma } from '@/components/contratos/corregir-posicion-firma'
-import { VisorPdf } from '@/components/documentos/visor-pdf'
 
 export const metadata = { title: 'Contrato OPS · Smart Gadgets RH' }
 
@@ -54,7 +55,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
     // nunca liste el PDF del contrato ni la autorización.
     prisma.documento.findMany({
       where: { entidadTipo: 'ContratoOpsAnexo', entidadId: id },
-      include: { tipoDocumento: true },
+      select: { id: true, nombre: true, creadoEn: true },
       orderBy: { creadoEn: 'desc' },
     }),
   ])
@@ -78,32 +79,66 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
   const hoy = hoyBogota()
   const vigente = c.estado === 'ACTIVO' || c.estado === 'FIRMADO'
   const vencido = vigente && c.fechaFin < hoy
+  const diasParaVencer = vigente ? Math.ceil((c.fechaFin.getTime() - hoy.getTime()) / 86_400_000) : null
+  const tieneAutorizacion = documentos.some((d) => d.nombre.startsWith('Autorización'))
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-6xl space-y-4">
       <Encabezado
         volver="/contratos?tab=OPS"
-        titulo={`OPS ${c.numero}`}
+        enLinea
+        titulo={`Contrato ${c.numero}`}
         descripcion={nombreContratista}
-        acciones={puedeEditar && vigente && (
-          <CerrarContratoOps contratoId={c.id} numero={c.numero} fechaFin={formatFechaISO(c.fechaFin)} vencido={vencido} hoy={formatFechaISO(hoy)} />
-        )}
+        acciones={
+          <>
+            {c.colaboradorId && (
+              <Button asChild size="icon" variant="outline" title="Ver ficha del contratista" aria-label="Ver ficha del contratista">
+                <Link href={`/colaboradores/${c.colaboradorId}`}><UserRound className="size-4" /></Link>
+              </Button>
+            )}
+            {puedeEditar && (
+              <AccionesOps
+                contratoId={c.id}
+                numero={c.numero}
+                sedeId={c.sedeId}
+                vigente={vigente}
+                vencido={vencido}
+                fechaFin={formatFechaISO(c.fechaFin)}
+                hoy={formatFechaISO(hoy)}
+                puedeEliminar={puedeEliminar}
+                firmado={Boolean(c.firmaContratistaPath)}
+              />
+            )}
+          </>
+        }
       />
 
-      {/* Un OPS con el plazo vencido y todavía activo es una contradicción que el
-          sistema no resuelve solo: o hay contrato nuevo y este se cierra, o hay
-          que registrar el retiro. Se dice aquí, donde se puede actuar. */}
+      {/* Un OPS con el plazo vencido y todavía activo: o hay contrato nuevo y este
+          se cierra, o hay que registrar el retiro. Se dice aquí, donde se puede actuar. */}
       {vencido && (
-        <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm">
-          <b>El plazo venció el {formatFechaLarga(c.fechaFin)}</b> y el contrato sigue {c.estado === 'FIRMADO' ? 'firmado' : 'activo'}.
-          Si la relación continúa con un contrato nuevo, ciérralo por vencimiento del plazo; si el contratista se retira, regístralo en Terminaciones.
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm">
+          <b>El plazo venció el {formatFechaLarga(c.fechaFin)}.</b> Si sigue con un contrato nuevo, ciérralo en Acciones; si se retira, regístralo en Terminaciones.
         </div>
       )}
 
-      <Card className="mb-4"><CardContent className="py-4">
-        <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
-          <Dato k="Contratista" v={nombreContratista} />
-          <Dato k="Estado" v={<Badge variant={vigente ? 'default' : 'secondary'}>{ESTADO_OPS[c.estado] ?? c.estado}</Badge>} />
+      {/* Resumen: estado y los datos que se consultan, en una cuadrícula que usa el ancho. */}
+      <Card className="py-0"><CardContent className="p-4 sm:p-5">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Pill tone={vigente ? 'ok' : 'muted'}>{ESTADO_OPS[c.estado] ?? c.estado}</Pill>
+          <Pill tone="info">Prestación de servicios</Pill>
+          {diasParaVencer != null && !vencido && (
+            <Pill tone={diasParaVencer <= 30 ? 'warn' : 'muted'}>{diasParaVencer === 0 ? 'Vence hoy' : `Vence en ${diasParaVencer} días`}</Pill>
+          )}
+        </div>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-4">
+          <Dato k="Valor total" v={fmtCOP(Number(c.valorTotal))} />
+          <Dato k="Valor mensual" v={c.valorMensual ? fmtCOP(Number(c.valorMensual)) : '—'} />
+          <Dato k="Supervisor" v={c.supervisor ? `${c.supervisor.nombres} ${c.supervisor.apellidos}` : '—'} />
+          <Dato k="Sede" v={`${c.sede.nombre} · ${c.sede.ciudad.nombre}`} />
+          <Dato k="Inicio" v={formatFechaCorta(c.fechaInicio)} />
+          <Dato k="Fin" v={formatFechaCorta(c.fechaFin)} />
+          <Dato k="RUT" v={c.rut ?? '—'} />
+          <Dato k="Objeto" v={c.objeto} full />
           {c.estado === 'TERMINADO' && c.cerradoEn && (
             <Dato
               k="Cierre"
@@ -111,20 +146,67 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
               full
             />
           )}
-          <Dato k="Objeto" v={c.objeto} full />
-          <Dato k="Valor total" v={fmtCOP(Number(c.valorTotal))} />
-          <Dato k="Valor mensual" v={c.valorMensual ? fmtCOP(Number(c.valorMensual)) : '—'} />
-          <Dato k="Supervisor" v={c.supervisor ? `${c.supervisor.nombres} ${c.supervisor.apellidos}` : '—'} />
-          <Dato k="Sede" v={`${c.sede.nombre} · ${c.sede.ciudad.nombre}`} />
-          <Dato k="Vigencia" v={`${formatFechaLarga(c.fechaInicio)} — ${formatFechaLarga(c.fechaFin)}`} />
-          <Dato k="RUT" v={c.rut ?? '—'} />
         </dl>
-        {c.colaboradorId && <p className="mt-3">
-          <Link href={`/colaboradores/${c.colaboradorId}`} className="text-sm text-primary hover:underline">Ver ficha del contratista →</Link>
-        </p>}
       </CardContent></Card>
 
-      <Card className="mb-4"><CardContent className="py-4">
+      {/* Documentos: el contrato y la autorización, las dos firmas y lo adjunto. */}
+      <Card className="py-0"><CardContent className="p-4 sm:p-5">
+        <h2 className="text-sm font-semibold">Documentos</h2>
+        <ul className="divide-y">
+          {documentos.length === 0 ? (
+            <FilaDocumento icono={FileText} titulo="Contrato" sub="Aún no se ha generado el PDF">
+              {/* Solo para contratos de plantilla: en uno subido el snapshot no trae el texto del contrato. */}
+              {GENERAR_CONTRATOS_DESDE_PLANTILLA && puedeEditar && c.origenPdf === 'GENERADO' && c.contenidoPdf != null && <RegenerarDocumentos contratoId={c.id} />}
+            </FilaDocumento>
+          ) : documentos.map((d) => (
+            <FilaDocumento
+              key={d.id}
+              icono={d.nombre.startsWith('Autorización') ? ShieldCheck : FileText}
+              titulo={d.nombre}
+              sub={c.origenPdf === 'SUBIDO' && !d.nombre.startsWith('Autorización') ? 'Subido · firmado en físico' : formatFechaCorta(d.creadoEn)}
+            >
+              <VerDocumento documentoId={d.id} titulo={d.nombre} />
+            </FilaDocumento>
+          ))}
+          {c.origenPdf !== 'SUBIDO' && documentos.length > 0 && (
+            <FirmasContrato
+              contratoId={c.id}
+              puedeFirmar={puedeEditar}
+              contratante={{
+                nombre: snap?.firmaContratanteNombre ?? '',
+                firmado: !!c.firmaContratantePath,
+                fecha: c.firmaContratanteFecha ? formatFechaCorta(c.firmaContratanteFecha) : null,
+                enPdf: c.firmaContratanteEnPdf,
+              }}
+              contratista={{
+                nombre: snap?.firmaContratistaNombre ?? nombreContratista,
+                firmado: !!c.firmaContratistaPath,
+                fecha: c.firmaContratistaFecha ? formatFechaCorta(c.firmaContratistaFecha) : null,
+              }}
+            />
+          )}
+          {anexos.map((d) => (
+            <FilaAnexo key={d.id} id={d.id} contratoId={c.id} nombre={d.nombre} fecha={formatFechaCorta(d.creadoEn)} puedeEditar={puedeEditar} />
+          ))}
+        </ul>
+
+        {/* Arreglos puntuales, solo cuando hacen falta. */}
+        {puedeEditar && (
+          <div className="mt-3 flex flex-wrap gap-2 empty:hidden">
+            {/* Subido como "firmado en físico" pero en realidad falta la firma del contratista:
+                el único camino de vuelta para que la firme en la app (solo si lo archivado es un PDF). */}
+            {c.origenPdf === 'SUBIDO' && documentos.some((d) => d.mimeType === 'application/pdf') && !c.firmaContratistaPath && !c.firmaContratantePath && (
+              <HabilitarFirma contratoId={c.id} />
+            )}
+            {/* La autorización (Ley 1581) no se generó al crear el contrato: se repara aquí. */}
+            {c.origenPdf !== 'SUBIDO' && documentos.length > 0 && !tieneAutorizacion && <GenerarAutorizacion contratoId={c.id} />}
+            {/* Firma estampada donde no era: se mueve sin volver a firmar. */}
+            {c.origenPdf === 'SUBIDO_PARA_FIRMA' && <CorregirPosicionFirma contratoId={c.id} vinculo="OPS" />}
+          </div>
+        )}
+      </CardContent></Card>
+
+      <Card className="py-0"><CardContent className="p-4 sm:p-5">
         <Entregables
           contratoOpsId={c.id}
           puedeEditar={puedeEditar}
@@ -137,148 +219,26 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
         />
       </CardContent></Card>
 
-      <Card className="mb-4"><CardContent className="py-4">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-base font-medium">Documentos del contrato</h2>
-          {c.origenPdf === 'SUBIDO' ? (
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">Subido · firmado en físico</Badge>
-              {/* Este origen lo pone «Subir contrato existente» de la ficha del
-                  colaborador, que da el contrato por firmado en papel. Cuando en
-                  realidad falta la firma del contratista, este es el único camino
-                  de vuelta: el autoservicio mira `origenPdf` para ofrecer la firma,
-                  así que sin esto el contrato queda sin botón allá y tampoco hay
-                  forma de borrarlo para rehacerlo por la pantalla correcta. */}
-              {/* Solo si lo archivado es un PDF: firmar en la app es estampar la
-                  firma sobre el documento, y un comprimido no se puede estampar. */}
-              {puedeEditar && documentos.some((d) => d.mimeType === 'application/pdf') && !c.firmaContratistaPath && !c.firmaContratantePath && (
-                <HabilitarFirma contratoId={c.id} />
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              {c.origenPdf === 'SUBIDO_PARA_FIRMA' && (
-                // Distinto del anterior: este sí recoge firmas, solo que se estampan
-                // sobre el PDF aportado en vez de regenerar el documento.
-                <Badge variant="secondary">
-                  {c.firmaContratanteEnPdf ? 'Subido firmado por el contratante · firma el contratista en la app' : 'Subido · se firma en la app'}
-                </Badge>
-              )}
-              {/* La autorización (Ley 1581) la arma la app en los dos caminos, y su
-                  generación al crear el contrato no aborta el alta si falla. Sin este
-                  botón, un contrato subido al que le falle se queda sin ella y sin
-                  forma de repararla desde la interfaz. */}
-              {puedeEditar && documentos.length > 0 && !documentos.some((d) => d.nombre.startsWith('Autorización')) && (
-                <GenerarAutorizacion contratoId={c.id} />
-              )}
-            </div>
-          )}
-        </div>
-        {documentos.length === 0 ? (
-          <div className="flex flex-col items-start gap-2">
-            <p className="text-sm text-muted-foreground">Aún no se ha generado el PDF del contrato.</p>
-            {/* Solo para contratos de plantilla: en uno subido el snapshot no trae
-                el texto del contrato, así que "regenerar" produciría un PDF vacío. */}
-            {GENERAR_CONTRATOS_DESDE_PLANTILLA && puedeEditar && c.origenPdf === 'GENERADO' && c.contenidoPdf != null && <RegenerarDocumentos contratoId={c.id} />}
-          </div>
-        ) : (
-          <ul className="space-y-1.5">
-            {documentos.map((d) => (
-              <li key={d.id} className="flex items-center justify-between gap-3 text-sm">
-                <span className="truncate">{d.nombre} · {formatFechaLarga(d.creadoEn)}</span>
-                <VisorPdf documentoId={d.id} titulo={d.nombre} className="shrink-0 text-primary hover:underline">Ver PDF →</VisorPdf>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent></Card>
-
-      {c.origenPdf !== 'SUBIDO' && (
-      <Card className="mb-4"><CardContent className="py-4">
-        <h2 className="mb-3 text-base font-medium">Firmas</h2>
-        {documentos.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Genera el PDF del contrato antes de recoger las firmas.</p>
-        ) : (
-          <FirmasContrato
-            contratoId={c.id}
-            puedeFirmar={puedeEditar}
-            contratante={{
-              nombre: snap?.firmaContratanteNombre ?? '',
-              firmado: !!c.firmaContratantePath,
-              fecha: c.firmaContratanteFecha ? formatFechaLarga(c.firmaContratanteFecha) : null,
-              enPdf: c.firmaContratanteEnPdf,
-            }}
-            contratista={{
-              nombre: snap?.firmaContratistaNombre ?? nombreContratista,
-              firmado: !!c.firmaContratistaPath,
-              fecha: c.firmaContratistaFecha ? formatFechaLarga(c.firmaContratistaFecha) : null,
-            }}
-          />
-        )}
-        {/* Firma estampada donde no era: se mueve sin volver a firmar. */}
-        {c.origenPdf === 'SUBIDO_PARA_FIRMA' && puedeEditar && (
-          <div className="mt-3">
-            <CorregirPosicionFirma contratoId={c.id} vinculo="OPS" />
-          </div>
-        )}
-        <p className="mt-2 text-xs text-muted-foreground">
-          La autorización de tratamiento de datos (Ley 1581) la firma únicamente el contratista, junto con el contrato, desde su autoservicio.
-        </p>
-      </CardContent></Card>
-      )}
-
-      {/* Anexos del contrato: otrosíes, prórrogas y soportes escaneados. Van en su propia
-          entidad para no mezclarse con el PDF del contrato (que no debe poder borrarse aquí). */}
-      <Card className="mb-4"><CardContent className="py-4">
-        <h2 className="text-base font-medium">Anexos del contrato</h2>
-        <p className="mb-3 mt-1 text-xs text-muted-foreground">
-          Otrosíes, prórrogas y soportes que acompañan a este contrato. Los documentos del contrato
-          se gestionan arriba.
-        </p>
-        <GestorDocumentos
-          entidadTipo="ContratoOpsAnexo"
-          entidadId={c.id}
-          sedeId={c.sedeId}
-          documentos={anexos.map((d) => ({
-            id: d.id, nombre: d.nombre, tipoDocumentoNombre: d.tipoDocumento?.nombre ?? null,
-            mimeType: d.mimeType, tamanoBytes: d.tamanoBytes,
-            fechaVencimiento: formatFechaISO(d.fechaVencimiento) || null,
-            creadoEn: d.creadoEn.toISOString(),
+      <Card className="py-0"><CardContent className="p-4 sm:p-5">
+        <CuentasCobro
+          contratoOpsId={c.id}
+          valorMensual={c.valorMensual ? Number(c.valorMensual) : null}
+          cuentas={c.cuentasCobro.map((cc) => ({
+            id: cc.id, numero: cc.numero, periodo: cc.periodo, valor: Number(cc.valor),
+            estado: cc.estado, fechaRadicacion: formatFechaISO(cc.fechaRadicacion),
+            fechaPago: cc.fechaPago ? formatFechaISO(cc.fechaPago) : null,
+            soporte: cc.soporteSs ? {
+              estadoVerificacion: cc.soporteSs.estadoVerificacion,
+              periodoCotizado: cc.soporteSs.periodoCotizado,
+              ibcDeclarado: cc.soporteSs.ibcDeclarado ? Number(cc.soporteSs.ibcDeclarado) : null,
+              operador: cc.soporteSs.operador,
+            } : null,
+            planilla: planillaPorCuenta.get(cc.id) ?? null,
           }))}
-          tiposDocumento={[]}
-          semaforo={[]}
           puedeEditar={puedeEditar}
+          puedeAprobar={puedeAprobar}
         />
       </CardContent></Card>
-
-      <h2 className="text-lg font-medium mb-3">Cuentas de cobro</h2>
-      <CuentasCobro
-        contratoOpsId={c.id}
-        valorMensual={c.valorMensual ? Number(c.valorMensual) : null}
-        cuentas={c.cuentasCobro.map((cc) => ({
-          id: cc.id, numero: cc.numero, periodo: cc.periodo, valor: Number(cc.valor),
-          estado: cc.estado, fechaRadicacion: formatFechaISO(cc.fechaRadicacion),
-          fechaPago: cc.fechaPago ? formatFechaISO(cc.fechaPago) : null,
-          soporte: cc.soporteSs ? {
-            estadoVerificacion: cc.soporteSs.estadoVerificacion,
-            periodoCotizado: cc.soporteSs.periodoCotizado,
-            ibcDeclarado: cc.soporteSs.ibcDeclarado ? Number(cc.soporteSs.ibcDeclarado) : null,
-            operador: cc.soporteSs.operador,
-          } : null,
-          planilla: planillaPorCuenta.get(cc.id) ?? null,
-        }))}
-        puedeEditar={puedeEditar}
-        puedeAprobar={puedeAprobar}
-      />
-
-      {/* Borrar es para el error de registro —el PDF a la persona equivocada, un
-          duplicado—, no para terminar el contrato: eso es «Cerrar contrato». Por
-          eso va al final, aparte y con confirmación. */}
-      {puedeEliminar && (
-        <Card className="mt-4"><CardContent className="py-4">
-          <EliminarContratoOps contratoId={c.id} numero={c.numero} firmado={Boolean(c.firmaContratistaPath)} />
-        </CardContent></Card>
-      )}
     </div>
   )
 }
@@ -287,9 +247,9 @@ const ESTADO_OPS: Record<string, string> = { BORRADOR: 'Borrador', ACTIVO: 'Acti
 
 function Dato({ k, v, full }: { k: string; v: React.ReactNode; full?: boolean }) {
   return (
-    <div className={`flex flex-col ${full ? 'sm:col-span-2' : ''}`}>
+    <div className={`flex min-w-0 flex-col ${full ? 'col-span-2 lg:col-span-4' : ''}`}>
       <dt className="text-xs text-muted-foreground">{k}</dt>
-      <dd className="text-sm">{v}</dd>
+      <dd className="text-sm font-medium">{v}</dd>
     </div>
   )
 }

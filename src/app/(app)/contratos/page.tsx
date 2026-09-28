@@ -102,12 +102,14 @@ export default async function ContratosPage({
         volver
         titulo="Contratación y vinculación"
         acciones={
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" asChild>
-              <Link href="/contratos/cuentas-cobro"><Receipt className="size-4" /> Cuentas de cobro</Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Solo el ícono (con su nombre al pasar el cursor): con el texto, los cuatro
+                botones ocupaban dos renglones en el celular. */}
+            <Button size="icon" variant="outline" asChild>
+              <Link href="/contratos/cuentas-cobro" title="Cuentas de cobro" aria-label="Cuentas de cobro"><Receipt className="size-4" /></Link>
             </Button>
-            <Button size="sm" asChild>
-              <Link href="/contratos/acuerdos"><ClipboardCheck className="size-4" /> Evaluación previa</Link>
+            <Button size="icon" variant="outline" asChild>
+              <Link href="/contratos/acuerdos" title="Evaluación previa" aria-label="Evaluación previa"><ClipboardCheck className="size-4" /></Link>
             </Button>
             {catalogos && <NuevoContrato abrirInicial={abrirNuevo} ops={catalogos.ops} laboral={catalogos.laboral} />}
           </div>

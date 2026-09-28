@@ -263,7 +263,7 @@ function IconoEstado({ estado }: { estado: ItemSemaforo['estado'] }) {
   return <TriangleAlert className="size-3.5 text-muted-foreground" />
 }
 
-function DialogSubir({
+export function DialogSubir({
   entidadTipo, entidadId, sedeId, tipoInicial, subiendo, setSubiendo, onClose, onSubido,
 }: {
   entidadTipo: string; entidadId: string; sedeId: string | null

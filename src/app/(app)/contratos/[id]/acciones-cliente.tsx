@@ -5,18 +5,19 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { leerComoDataUri, MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
-import { CalendarPlus, FilePen, CirclePause, CirclePlay, UserMinus, Paperclip, Trash2 } from 'lucide-react'
+import { CalendarPlus, FilePen, CirclePause, CirclePlay, UserMinus, Paperclip, Trash2, Ellipsis } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DialogSubir } from '@/components/documentos/gestor-documentos'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Spinner } from '@/components/ui/spinner'
-import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { agregarProrroga, agregarOtrosi, analizarPdfOtrosi, registrarSuspension, reactivarContrato, eliminarContratoLaboral } from '../acciones'
@@ -25,12 +26,19 @@ import { TIPOS_CAMBIO_OTROSI, ETIQUETA_CAMBIO_OTROSI } from '@/lib/otrosi'
 
 type Cat = { cargos: { id: string; nombre: string }[]; sedes: { id: string; nombre: string; ciudad: string }[] }
 
+/**
+ * Las acciones del contrato, arriba en el encabezado: un solo botón "Acciones"
+ * que abre el menú (prórroga, otrosí, suspender o reactivar, terminar, adjuntar
+ * un documento) y, aparte y en rojo, eliminar —que es para el error de
+ * registro, no para cerrar un contrato: eso va por Terminaciones—.
+ */
 export function AccionesContrato({
-  contratoId, colaboradorId, tipo, estado, numero, puedeEliminar, cargos, sedes,
-}: { contratoId: string; colaboradorId: string; tipo: string; estado: string; numero: string; puedeEliminar: boolean } & Cat) {
+  contratoId, colaboradorId, tipo, estado, numero, sedeId, puedeEliminar, cargos, sedes,
+}: { contratoId: string; colaboradorId: string; tipo: string; estado: string; numero: string; sedeId: string | null; puedeEliminar: boolean } & Cat) {
   const router = useRouter()
-  const [dialogo, setDialogo] = useState<'prorroga' | 'otrosi' | 'suspension' | null>(null)
+  const [dialogo, setDialogo] = useState<'prorroga' | 'otrosi' | 'suspension' | 'adjuntar' | null>(null)
   const [cargando, setCargando] = useState(false)
+  const [subiendo, setSubiendo] = useState(false)
   const [confirmarBorrado, setConfirmarBorrado] = useState(false)
 
   async function eliminar() {
@@ -51,65 +59,73 @@ export function AccionesContrato({
     else toast.error(res.error)
   }
 
-  return (
-    <Card><CardContent className="py-4">
-      <h3 className="text-sm font-medium mb-3">Acciones</h3>
-      <div className="flex flex-wrap gap-2">
-        {tipo === 'TERMINO_FIJO' && (
-          <Button size="sm" onClick={() => setDialogo('prorroga')}><CalendarPlus className="size-4" /> Prórroga</Button>
-        )}
-        <Button size="sm" onClick={() => setDialogo('otrosi')}><FilePen className="size-4" /> Otrosí</Button>
-        {estado !== 'SUSPENDIDO' ? (
-          <Button size="sm" onClick={() => setDialogo('suspension')}><CirclePause className="size-4" /> Suspender</Button>
-        ) : (
-          <Button size="sm" onClick={reactivar} disabled={cargando}>
-            {cargando ? <Spinner /> : <CirclePlay className="size-4" />} Reactivar
-          </Button>
-        )}
-        {/* Terminar vive en su propio módulo (liquidación y paz y salvo), pero
-            se llega desde aquí: quien está viendo un contrato vencido no tiene
-            por qué saber que la acción está en otra pantalla. */}
-        {estado === 'ACTIVO' && (
-          <Link
-            href={`/terminaciones?colaborador=${colaboradorId}`}
-            className={buttonVariants({ size: 'sm' })}
-          >
-            <UserMinus className="size-4" /> Terminar contrato
-          </Link>
-        )}
-      </div>
+  const terminado = estado === 'TERMINADO'
 
-      {/* Borrar es para el error de registro —PDF a la persona equivocada,
-          duplicado—, no para cerrar un contrato: eso va por Terminaciones. Por
-          eso queda aparte, abajo, y con confirmación. */}
-      {puedeEliminar && (
-        <div className="mt-4 border-t pt-3">
-          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmarBorrado(true)} disabled={cargando}>
-            <Trash2 className="size-4" /> Eliminar contrato
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" disabled={cargando} aria-label="Acciones del contrato">
+            {cargando ? <Spinner /> : <Ellipsis className="size-4" />}
+            {/* En el celular solo los tres puntos: con el texto, el título del contrato se cortaba. */}
+            <span className="hidden sm:inline">Acciones</span>
           </Button>
-          <p className="mt-1 text-xs text-muted-foreground">Solo si se registró por error. Un contrato real se termina desde Terminaciones.</p>
-          <AlertDialog open={confirmarBorrado} onOpenChange={setConfirmarBorrado}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Eliminar el contrato {numero}</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Se borran el registro, su PDF y su autorización de datos, y sus alertas de vencimiento. La ficha
-                  del colaborador vuelve al vínculo de los contratos que le queden. No se puede deshacer.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={eliminar} className="bg-destructive text-white hover:bg-destructive/90">Eliminar</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      )}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          {!terminado && tipo === 'TERMINO_FIJO' && (
+            <DropdownMenuItem onSelect={() => setDialogo('prorroga')}><CalendarPlus className="size-4" /> Prórroga</DropdownMenuItem>
+          )}
+          {!terminado && <DropdownMenuItem onSelect={() => setDialogo('otrosi')}><FilePen className="size-4" /> Otrosí</DropdownMenuItem>}
+          {!terminado && (estado !== 'SUSPENDIDO' ? (
+            <DropdownMenuItem onSelect={() => setDialogo('suspension')}><CirclePause className="size-4" /> Suspender</DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onSelect={reactivar}><CirclePlay className="size-4" /> Reactivar</DropdownMenuItem>
+          ))}
+          {/* Terminar vive en su propio módulo (liquidación y paz y salvo), pero se llega desde aquí. */}
+          {estado === 'ACTIVO' && (
+            <DropdownMenuItem asChild>
+              <Link href={`/terminaciones?colaborador=${colaboradorId}`}><UserMinus className="size-4" /> Terminar contrato</Link>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={() => setDialogo('adjuntar')}><Paperclip className="size-4" /> Adjuntar documento</DropdownMenuItem>
+          {puedeEliminar && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={() => setConfirmarBorrado(true)}><Trash2 className="size-4" /> Eliminar contrato</DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={confirmarBorrado} onOpenChange={setConfirmarBorrado}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar el contrato {numero}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Solo si se registró por error: un contrato real se termina desde Terminaciones. Se borran el registro,
+              su PDF, su autorización de datos y sus alertas. No se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={eliminar} className="bg-destructive text-white hover:bg-destructive/90">Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {dialogo === 'prorroga' && <DialogProrroga contratoId={contratoId} onClose={() => setDialogo(null)} onDone={() => { setDialogo(null); router.refresh() }} />}
       {dialogo === 'otrosi' && <DialogOtrosi contratoId={contratoId} cargos={cargos} sedes={sedes} onClose={() => setDialogo(null)} onDone={() => { setDialogo(null); router.refresh() }} />}
       {dialogo === 'suspension' && <DialogSuspension contratoId={contratoId} onClose={() => setDialogo(null)} onDone={() => { setDialogo(null); router.refresh() }} />}
-    </CardContent></Card>
+      {/* Anexos (soportes escaneados, prórrogas firmadas en papel…): entidad propia
+          para no mezclarse con el PDF del contrato, que no se borra desde aquí. */}
+      {dialogo === 'adjuntar' && (
+        <DialogSubir
+          entidadTipo="ContratoAnexo" entidadId={contratoId} sedeId={sedeId}
+          subiendo={subiendo} setSubiendo={setSubiendo}
+          onClose={() => setDialogo(null)} onSubido={() => { setDialogo(null); router.refresh() }}
+        />
+      )}
+    </>
   )
 }
 

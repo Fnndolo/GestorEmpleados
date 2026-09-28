@@ -13,11 +13,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { TabsContent } from '@/components/ui/tabs'
 import { TabsResponsive } from '@/components/shell/tabs-responsive'
 import {
-  Pencil, Phone, ShieldAlert, CalendarDays, FileText, Eye, Receipt,
-  IdCard, HeartPulse, BriefcaseBusiness, Landmark, Shirt, CalendarRange, Banknote, CalendarClock, CircleCheck, Clock, ChevronRight,
+  Pencil, ShieldAlert, CalendarDays, FileText, Eye, Receipt,
+  IdCard, Landmark, Shirt, CalendarRange, Banknote, CalendarClock, CircleCheck, Clock, ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Stat, BloqueDatos } from '@/components/ui-kit'
+import { Stat } from '@/components/ui-kit'
 import { fmtCOP } from '@/lib/moneda'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
@@ -289,6 +289,10 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   const docsPorVencer = semaforo.filter((s) => s.estado === 'por_vencer').length
   const docsFaltan = semaforo.filter((s) => s.obligatorio && s.estado === 'falta').length
 
+  // Enlace para completar los datos que falten (quien edita la ficha, o la propia persona).
+  const enlaceEditar = puedeEditar ? `/colaboradores/${id}/editar` : esPropia ? '/autoservicio/mi-informacion' : null
+  const tallas: DatoFicha[] = [['Camisa', c.tallaCamisa], ['Pantalón', c.tallaPantalon], ['Calzado', c.tallaCalzado]]
+
   return (
     <div className="max-w-6xl">
       <Encabezado
@@ -396,42 +400,50 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
       >
 
         {/* Resumen */}
-        <TabsContent value="resumen" className="grid gap-3 sm:grid-cols-2">
-          <BloqueDatos titulo="Identificación" icono={IdCard} color="bg-foreground text-background" datos={[
-            ['Documento', `${TIPO_DOCUMENTO_IDENTIDAD[c.tipoDocumento]} ${c.numeroDocumento}`],
-            ['Lugar de expedición', c.lugarExpedicionDoc ?? '—'],
-            ['Fecha de expedición', c.fechaExpedicionDoc ? formatFechaLarga(c.fechaExpedicionDoc) : '—'],
-            ['Fecha de nacimiento', c.fechaNacimiento ? `${formatFechaLarga(c.fechaNacimiento)}${edad !== null ? ` (${edad} años)` : ''}` : '—'],
-            ['Género', c.genero ? GENERO[c.genero] : '—'],
-            ['Estado civil', c.estadoCivil ? ESTADO_CIVIL[c.estadoCivil] : '—'],
-            ['Grupo sanguíneo', c.grupoSanguineo ? GRUPO_SANGUINEO[c.grupoSanguineo] : '—'],
-            ['Nivel educativo', c.nivelEducativoMax ? NIVEL_EDUCATIVO[c.nivelEducativoMax] : '—'],
-          ]} />
+        {/* Resumen: lo de la persona en bloques compactos. Solo se muestran los
+            datos que existen; los que faltan se nombran en una línea al final de
+            cada bloque, con el enlace para completarlos. Lo laboral (cargo, jefe,
+            vínculo, sede, ingreso) ya está arriba, en el encabezado y las cifras. */}
+        <TabsContent value="resumen" className="grid items-start gap-3 lg:grid-cols-3">
+          <BloqueFicha
+            titulo="Datos personales"
+            icono={IdCard}
+            className="lg:col-span-2"
+            editarHref={enlaceEditar}
+            datos={[
+              ['Documento', <span key="doc" title={TIPO_DOCUMENTO_IDENTIDAD[c.tipoDocumento]}>{c.tipoDocumento} {c.numeroDocumento}</span>],
+              ['Expedición', [c.fechaExpedicionDoc ? formatFechaCorta(c.fechaExpedicionDoc) : null, c.lugarExpedicionDoc].filter(Boolean).join(' · ') || null],
+              ['Nacimiento', c.fechaNacimiento ? `${formatFechaCorta(c.fechaNacimiento)}${edad !== null ? ` · ${edad} años` : ''}` : null],
+              ['Celular', c.celular || null],
+              ['Correo personal', c.emailPersonal, true],
+              ['Dirección', [c.direccion, c.ciudadResidencia?.nombre].filter(Boolean).join(', ') || null, true],
+              ['Género', c.genero ? GENERO[c.genero] : null],
+              ['Estado civil', c.estadoCivil ? ESTADO_CIVIL[c.estadoCivil] : null],
+              ['Grupo sanguíneo', c.grupoSanguineo ? GRUPO_SANGUINEO[c.grupoSanguineo] : null],
+              ['Nivel educativo', c.nivelEducativoMax ? NIVEL_EDUCATIVO[c.nivelEducativoMax] : null],
+              ['Contacto de emergencia', c.emergenciaNombre
+                ? [c.emergenciaNombre, c.emergenciaParentesco, c.emergenciaTelefono].filter(Boolean).join(' · ')
+                : null, true],
+            ]}
+          />
 
           {/* Vacaciones: cuentan desde el contrato de trabajo y se muestran en
               días completos. Las ya tomadas sin registro se anotan aquí. */}
-          {!esOps(c.tipoVinculo) && (
-            <Card>
-              <CardContent className="py-4">
-                <div className="mb-3 flex items-center gap-2.5">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
-                    <CalendarRange className="size-4" />
-                  </span>
-                  <h3 className="text-sm font-bold">Vacaciones</h3>
-                </div>
-                <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+          {!esOps(c.tipoVinculo) ? (
+            <Card className="py-0">
+              <CardContent className="p-4">
+                <TituloBloque titulo="Vacaciones" icono={CalendarRange} />
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5">
                   {/* Negativo: tomó días anticipados que aún no ha causado. */}
                   {saldoVac.saldoEntero < 0 ? (
-                    <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Anticipadas por causar</dt><dd className="text-sm font-medium text-amber-700 dark:text-amber-400">Debe {-saldoVac.saldoEntero} días hábiles</dd></div>
+                    <Campo k="Anticipadas" v={<span className="text-amber-700 dark:text-amber-400">Debe {-saldoVac.saldoEntero} días</span>} />
                   ) : (
-                    <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Disponibles</dt><dd className="text-sm font-medium">{saldoVac.saldoEntero} días hábiles</dd></div>
+                    <Campo k="Disponibles" v={`${saldoVac.saldoEntero} días`} />
                   )}
-                  <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Causadas</dt><dd className="text-sm">{Math.trunc(saldoVac.causadas)} días</dd></div>
-                  <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Disfrutadas</dt><dd className="text-sm">{Math.trunc(saldoVac.disfrutadas)} días</dd></div>
-                  <div className="flex flex-col"><dt className="text-xs text-muted-foreground">Causan desde</dt><dd className="text-sm">{formatFechaLarga(saldoVac.desde)}</dd></div>
-                  {saldoVac.pendientesAprobacion > 0 && (
-                    <div className="flex flex-col sm:col-span-2"><dt className="text-xs text-muted-foreground">Pedidas, sin aprobar</dt><dd className="text-sm">{Math.trunc(saldoVac.pendientesAprobacion)} días</dd></div>
-                  )}
+                  <Campo k="Causadas" v={`${Math.trunc(saldoVac.causadas)} días`} />
+                  <Campo k="Disfrutadas" v={`${Math.trunc(saldoVac.disfrutadas)} días`} />
+                  <Campo k="Causan desde" v={formatFechaCorta(saldoVac.desde)} />
+                  {saldoVac.pendientesAprobacion > 0 && <Campo k="Pedidas, sin aprobar" v={`${Math.trunc(saldoVac.pendientesAprobacion)} días`} />}
                 </dl>
                 {puedeNovedades && (
                   <div className="mt-3 space-y-3">
@@ -447,61 +459,42 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
                 )}
               </CardContent>
             </Card>
+          ) : (
+            <BloqueFicha titulo="Tallas para dotación" icono={Shirt} editarHref={enlaceEditar} datos={tallas} />
           )}
-          <BloqueDatos titulo="Contacto" icono={Phone} color="bg-foreground text-background" datos={[
-            ['Celular', c.celular],
-            ['Correo personal', c.emailPersonal ?? '—'],
-            ['Dirección', [c.direccion, c.ciudadResidencia?.nombre].filter(Boolean).join(', ') || '—'],
-          ]} />
-
-          <BloqueDatos titulo="Contacto de emergencia" icono={HeartPulse} color="bg-foreground text-background" datos={[
-            ['Nombre', c.emergenciaNombre ?? '—'],
-            ['Parentesco', c.emergenciaParentesco ?? '—'],
-            ['Teléfono', c.emergenciaTelefono ?? '—'],
-          ]} />
-
-          <BloqueDatos titulo="Información laboral" icono={BriefcaseBusiness} color="bg-foreground text-background" datos={[
-            ['Vínculo', TIPO_VINCULO[c.tipoVinculo]],
-            ['Modalidad', MODALIDAD_TRABAJO[c.modalidadTrabajo]],
-            ['Sede', `${c.sede.nombre} · ${c.sede.ciudad.nombre}`],
-            ['Área', c.area?.nombre ?? '—'],
-            ['Cargo', c.cargo?.nombre ?? '—'],
-            ['Jefe inmediato', c.jefeInmediato ? `${c.jefeInmediato.nombres} ${c.jefeInmediato.apellidos}` : '—'],
-            ['Fecha de ingreso', `${formatFechaLarga(c.fechaIngreso)} (${antiguedad(c.fechaIngreso)})`],
-          ]} />
 
           {verSalud ? (
-            <BloqueDatos titulo="Seguridad social" icono={ShieldAlert} color="bg-foreground text-background" nota="Sensible · Ley 1581" datos={[
-              ['EPS', c.eps?.nombre ?? '—'],
-              ['Fondo de pensión', c.afp?.nombre ?? '—'],
-              ['Fondo de cesantías', c.fondoCesantias?.nombre ?? '—'],
-              ['Caja de compensación', c.cajaCompensacion?.nombre ?? '—'],
-              ['ARL', c.arl?.nombre ?? '—'],
-              ['Clase de riesgo', c.claseRiesgoArl ? CLASE_RIESGO_ARL[c.claseRiesgoArl] : '—'],
-            ]} />
+            <BloqueFicha
+              titulo="Seguridad social y pago"
+              icono={ShieldAlert}
+              nota="Sensible"
+              className="lg:col-span-2"
+              editarHref={enlaceEditar}
+              datos={[
+                ['EPS', c.eps?.nombre ?? null],
+                ['Pensión', c.afp?.nombre ?? null],
+                ['Cesantías', c.fondoCesantias?.nombre ?? null],
+                ['Caja de compensación', c.cajaCompensacion?.nombre ?? null],
+                ['ARL', [c.arl?.nombre, c.claseRiesgoArl ? CLASE_RIESGO_ARL[c.claseRiesgoArl] : null].filter(Boolean).join(' · ') || null],
+                // Completo: es un dato operativo para pagar; este bloque solo lo ve quien puede ver datos sensibles.
+                ['Cuenta', c.banco ? [c.banco.nombre, c.tipoCuenta ? TIPO_CUENTA[c.tipoCuenta] : null, c.numeroCuenta].filter(Boolean).join(' · ') : null, true],
+              ]}
+            />
+          ) : puedeEditar ? (
+            <BloqueFicha
+              titulo="Datos bancarios"
+              icono={Landmark}
+              className="lg:col-span-2"
+              editarHref={enlaceEditar}
+              datos={[['Cuenta', c.banco ? [c.banco.nombre, c.tipoCuenta ? TIPO_CUENTA[c.tipoCuenta] : null, c.numeroCuenta].filter(Boolean).join(' · ') : null, true]]}
+            />
           ) : (
-            <Card><CardContent className="py-4 text-sm text-muted-foreground flex items-center gap-2">
-              <ShieldAlert className="size-4" /> Los datos de seguridad social son sensibles y no están disponibles para tu perfil.
+            <Card className="py-0 lg:col-span-2"><CardContent className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+              <ShieldAlert className="size-4 shrink-0" /> La seguridad social es un dato sensible y no está disponible para tu perfil.
             </CardContent></Card>
           )}
 
-          {(puedeEditar || verSalud) && (
-            <BloqueDatos titulo="Datos bancarios" icono={Landmark} color="bg-foreground text-background" datos={[
-              ['Banco', c.banco?.nombre ?? '—'],
-              ['Tipo de cuenta', c.tipoCuenta ? TIPO_CUENTA[c.tipoCuenta] : '—'],
-              // Completo: es un dato operativo que se necesita para pagar, y este
-              // bloque ya solo lo ve quien puede editar la ficha o ver datos
-              // sensibles. Nómina y cuentas OPS lo muestran igual.
-              ['Número de cuenta', c.numeroCuenta ?? '—'],
-            ]} />
-          )}
-
-          <BloqueDatos titulo="Tallas para dotación" icono={Shirt} color="bg-foreground text-background" datos={[
-            ['Camisa', c.tallaCamisa ?? '—'],
-            ['Pantalón', c.tallaPantalon ?? '—'],
-            ['Calzado', c.tallaCalzado ?? '—'],
-          ]} />
-
+          {!esOps(c.tipoVinculo) && <BloqueFicha titulo="Tallas para dotación" icono={Shirt} editarHref={enlaceEditar} datos={tallas} />}
         </TabsContent>
 
         {/* Contrato */}
@@ -710,3 +703,60 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   )
 }
 
+
+/** [etiqueta, valor o null si no está registrado, ocupa toda la fila]. */
+type DatoFicha = [string, React.ReactNode | null | undefined, boolean?]
+
+function TituloBloque({ titulo, icono: Icono, nota }: { titulo: string; icono: typeof IdCard; nota?: string }) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      <Icono className="size-4 shrink-0 text-muted-foreground" />
+      <h3 className="text-sm font-semibold">{titulo}</h3>
+      {nota && <span className="ml-auto text-[11px] font-medium text-amber-700 dark:text-amber-400">{nota}</span>}
+    </div>
+  )
+}
+
+function Campo({ k, v, ancho }: { k: string; v: React.ReactNode; ancho?: boolean }) {
+  return (
+    <div className={cn('min-w-0', ancho && 'col-span-2')}>
+      <dt className="text-[11px] text-muted-foreground">{k}</dt>
+      <dd className="break-words text-sm font-medium">{v}</dd>
+    </div>
+  )
+}
+
+/**
+ * Un bloque de la ficha: solo los datos que existen, en cuadrícula (2 columnas
+ * en el celular, 3 en pantalla ancha); los que faltan, en una línea al final.
+ */
+function BloqueFicha({ titulo, icono, datos, nota, className, editarHref }: {
+  titulo: string
+  icono: typeof IdCard
+  datos: DatoFicha[]
+  nota?: string
+  className?: string
+  editarHref: string | null
+}) {
+  const conDato = datos.filter(([, v]) => v !== null && v !== undefined && v !== '')
+  const faltan = datos.filter(([, v]) => v === null || v === undefined || v === '').map(([k]) => k)
+  const ancho = className?.includes('col-span-2')
+  return (
+    <Card className={cn('py-0', className)}>
+      <CardContent className="p-4">
+        <TituloBloque titulo={titulo} icono={icono} nota={nota} />
+        {conDato.length > 0 && (
+          <dl className={cn('grid grid-cols-2 gap-x-4 gap-y-2.5', ancho && 'sm:grid-cols-3')}>
+            {conDato.map(([k, v, completo]) => <Campo key={k} k={k} v={v} ancho={completo} />)}
+          </dl>
+        )}
+        {faltan.length > 0 && (
+          <p className={cn('text-xs text-muted-foreground', conDato.length > 0 && 'mt-3 border-t pt-2.5')}>
+            Sin registrar: {faltan.join(', ')}
+            {editarHref && <> · <Link href={editarHref} className="font-medium text-primary hover:underline">Completar</Link></>}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

@@ -21,14 +21,20 @@ import { eliminarContratoOps } from '../../ops-acciones'
  * lleva. El servidor no deja borrar uno ya firmado por el contratista ni con
  * cuentas de cobro radicadas.
  */
-export function EliminarContratoOps({ contratoId, numero, firmado }: {
+export function EliminarContratoOps({ contratoId, numero, firmado, abierto: abiertoControlado, onAbiertoChange }: {
   contratoId: string
   numero: string
   /** Ya lo firmó el contratista: solo se explica por qué no se puede borrar. */
   firmado: boolean
+  /** Abierto desde afuera (el menú de acciones del contrato): solo la confirmación. */
+  abierto?: boolean
+  onAbiertoChange?: (v: boolean) => void
 }) {
   const router = useRouter()
-  const [abierto, setAbierto] = useState(false)
+  const [abiertoPropio, setAbiertoPropio] = useState(false)
+  const controlado = abiertoControlado !== undefined
+  const abierto = controlado ? abiertoControlado : abiertoPropio
+  const setAbierto = (v: boolean) => (controlado ? onAbiertoChange?.(v) : setAbiertoPropio(v))
   const [borrando, empezar] = useTransition()
 
   function eliminar() {
@@ -51,19 +57,24 @@ export function EliminarContratoOps({ contratoId, numero, firmado }: {
 
   return (
     <>
-      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setAbierto(true)} disabled={borrando}>
-        {borrando ? <Spinner /> : <Trash2 className="size-4" />} Eliminar contrato
-      </Button>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Solo si se registró por error y todavía nadie lo ha firmado. Un contrato real se cierra, no se borra.
-      </p>
+      {!controlado && (
+        <>
+          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setAbierto(true)} disabled={borrando}>
+            {borrando ? <Spinner /> : <Trash2 className="size-4" />} Eliminar contrato
+          </Button>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Solo si se registró por error y todavía nadie lo ha firmado. Un contrato real se cierra, no se borra.
+          </p>
+        </>
+      )}
 
       <AlertDialog open={abierto} onOpenChange={setAbierto}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Eliminar el contrato {numero}</AlertDialogTitle>
             <AlertDialogDescription>
-              Se borran el registro, su PDF y su autorización de datos, sus entregables y su alerta de vencimiento.
+              Solo si se registró por error: un contrato real se cierra, no se borra. Se borran el registro, su PDF y su
+              autorización de datos, sus entregables y su alerta de vencimiento.
               La ficha del contratista vuelve al vínculo de los contratos que le queden. No se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>

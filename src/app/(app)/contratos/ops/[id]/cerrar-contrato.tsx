@@ -28,7 +28,7 @@ const MOTIVOS: { v: Motivo; l: string; d: string }[] = [
  * Terminaciones. Un contrato cerrado no se reabre: si la relación continúa, el
  * camino es el contrato nuevo.
  */
-export function CerrarContratoOps({ contratoId, numero, fechaFin, vencido, hoy, compacto }: {
+export function CerrarContratoOps({ contratoId, numero, fechaFin, vencido, hoy, compacto, abierto: abiertoControlado, onAbiertoChange }: {
   contratoId: string
   numero: string
   /** ISO de la fecha de fin pactada. */
@@ -39,9 +39,15 @@ export function CerrarContratoOps({ contratoId, numero, fechaFin, vencido, hoy, 
   hoy: string
   /** En una fila de lista: botón discreto, solo icono en móvil. */
   compacto?: boolean
+  /** Abierto desde afuera (el menú de acciones del contrato): sin botón propio. */
+  abierto?: boolean
+  onAbiertoChange?: (v: boolean) => void
 }) {
   const router = useRouter()
-  const [abierto, setAbierto] = useState(false)
+  const [abiertoPropio, setAbiertoPropio] = useState(false)
+  const controlado = abiertoControlado !== undefined
+  const abierto = controlado ? abiertoControlado : abiertoPropio
+  const setAbierto = (v: boolean) => (controlado ? onAbiertoChange?.(v) : setAbiertoPropio(v))
   const [guardando, empezar] = useTransition()
   const [motivo, setMotivo] = useState<Motivo>(vencido ? 'VENCIMIENTO_PLAZO' : 'TERMINACION_ANTICIPADA')
   const [fecha, setFecha] = useState(hoy)
@@ -61,7 +67,7 @@ export function CerrarContratoOps({ contratoId, numero, fechaFin, vencido, hoy, 
 
   return (
     <>
-      {compacto ? (
+      {controlado ? null : compacto ? (
         <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-foreground" aria-label={`Cerrar contrato ${numero}`} onClick={() => setAbierto(true)}>
           <CircleX className="size-4" /> <span className="hidden sm:inline">Cerrar</span>
         </Button>

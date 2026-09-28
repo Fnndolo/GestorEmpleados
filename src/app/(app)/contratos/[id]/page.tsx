@@ -4,15 +4,15 @@ import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { buttonVariants } from '@/components/ui/button'
-import { VisorPdf } from '@/components/documentos/visor-pdf'
+import { Button } from '@/components/ui/button'
+import { Pill } from '@/components/ui-kit'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
-import { FileText, TriangleAlert, CircleCheck } from 'lucide-react'
-import { formatFechaLarga, formatFechaCorta, formatFechaISO, duracionContrato } from '@/lib/fechas'
-import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
+import { FileText, TriangleAlert, UserRound, CalendarPlus, FilePen, CirclePause } from 'lucide-react'
+import { formatFechaCorta, duracionContrato, hoyBogota } from '@/lib/fechas'
+import { FilaDocumento, VerDocumento } from '@/components/contratos/fila-documento'
+import { FilaAnexo } from '@/components/contratos/fila-anexo'
 import { fmtCOP } from '@/lib/moneda'
-import { TIPO_VINCULO, MODALIDAD_TRABAJO } from '@/lib/etiquetas'
+import { MODALIDAD_TRABAJO } from '@/lib/etiquetas'
 import { AccionesContrato } from './acciones-cliente'
 import { discrepanciaVinculo, type TipoContratoLaboral, type TipoVinculo } from '@/lib/vinculo-contrato'
 import { FirmasLaboral } from './firmas-laboral'
@@ -63,7 +63,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
     // nunca liste el PDF del contrato ni la autorización.
     prisma.documento.findMany({
       where: { entidadTipo: 'ContratoAnexo', entidadId: id },
-      include: { tipoDocumento: true },
+      select: { id: true, nombre: true, creadoEn: true },
       orderBy: { creadoEn: 'desc' },
     }),
   ])
@@ -81,21 +81,48 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
     c.colaborador.tipoVinculo as TipoVinculo,
   )
 
+  const nombre = `${c.colaborador.nombres} ${c.colaborador.apellidos}`
+  // Días que le quedan a un contrato con fecha de fin: lo primero que se mira en un término fijo.
+  const diasParaVencer = c.fechaFin && c.estado === 'ACTIVO' ? Math.ceil((c.fechaFin.getTime() - hoyBogota().getTime()) / 86_400_000) : null
+  const hayModificaciones = c.prorrogas.length + c.otrosis.length + c.suspensiones.length > 0
+
   return (
-    <div className="max-w-6xl">
-      <Encabezado volver titulo={`Contrato ${c.numero}`} descripcion={`${c.colaborador.nombres} ${c.colaborador.apellidos}`} />
+    <div className="max-w-6xl space-y-4">
+      <Encabezado
+        volver
+        enLinea
+        titulo={`Contrato ${c.numero}`}
+        descripcion={nombre}
+        acciones={
+          <>
+            <Button asChild size="icon" variant="outline" title="Ver ficha del colaborador" aria-label="Ver ficha del colaborador">
+              <Link href={`/colaboradores/${c.colaboradorId}`}><UserRound className="size-4" /></Link>
+            </Button>
+            {puedeEditar && (
+              <AccionesContrato
+                contratoId={c.id}
+                colaboradorId={c.colaboradorId}
+                tipo={c.tipo}
+                estado={c.estado}
+                numero={c.numero}
+                sedeId={c.sedeId}
+                puedeEliminar={puedeEliminar}
+                cargos={cargos.map((x) => ({ id: x.id, nombre: x.nombre }))}
+                sedes={sedes.map((x) => ({ id: x.id, nombre: x.nombre, ciudad: x.ciudad.nombre }))}
+              />
+            )}
+          </>
+        }
+      />
 
       {discrepancia && (
-        <Card className="mb-4 border-amber-500/40 bg-amber-500/5">
+        <Card className="border-amber-500/40 bg-amber-500/5 py-0">
           <CardContent className="flex items-start gap-2 py-3">
             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <div className="min-w-0 text-xs text-amber-800 dark:text-amber-300">
               <p className="font-medium">El tipo del contrato no coincide con la ficha</p>
               <p className="mt-0.5">{discrepancia}</p>
-              <Link
-                href={`/colaboradores/${c.colaboradorId}/editar`}
-                className="mt-1 inline-block font-medium underline underline-offset-2"
-              >
+              <Link href={`/colaboradores/${c.colaboradorId}/editar`} className="mt-1 inline-block font-medium underline underline-offset-2">
                 Abrir la ficha del colaborador
               </Link>
             </div>
@@ -103,228 +130,130 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
         </Card>
       )}
 
-      <Card className="mb-4"><CardContent className="py-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Badge variant={c.estado === 'ACTIVO' ? 'default' : c.estado === 'SUSPENDIDO' ? 'destructive' : 'secondary'}>{ESTADO[c.estado]}</Badge>
-          <Badge variant="outline">{TIPO_CONTRATO[c.tipo]}</Badge>
-        </div>
-        <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
-          <Dato k="Cargo" v={c.cargo?.nombre ?? '—'} />
-          <Dato k="Sede" v={`${c.sede.nombre} · ${c.sede.ciudad.nombre}`} />
-          <Dato k="Salario base" v={fmtCOP(Number(c.salarioBase))} />
-          <Dato k="Modalidad" v={MODALIDAD_TRABAJO[c.modalidadTrabajo]} />
-          <Dato k="Fecha de inicio" v={formatFechaLarga(c.fechaInicio)} />
-          <Dato k="Fecha de fin" v={c.fechaFin ? formatFechaLarga(c.fechaFin) : 'Indefinida'} />
-          <Dato k="Duración" v={duracionContrato(c.fechaInicio, c.fechaFin)} />
-          {c.periodoPruebaFin && <Dato k="Fin periodo de prueba" v={formatFechaLarga(c.periodoPruebaFin)} />}
-          {c.objetoObraLabor && <Dato k="Objeto obra/labor" v={c.objetoObraLabor} full />}
-        </dl>
-        <p className="mt-3">
-          <Link href={`/colaboradores/${c.colaboradorId}`} className="text-sm text-primary hover:underline">Ver ficha del colaborador →</Link>
-        </p>
-      </CardContent></Card>
-
-      {/* Documento del contrato y firmas digitales */}
-      <Card className="mb-4"><CardContent className="py-4">
-        {c.origenPdf === 'SUBIDO' ? (
-          <>
-            <h3 className="text-sm font-medium mb-3">Documento del contrato</h3>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">Contrato subido</Badge>
-              <span className="text-sm text-muted-foreground">Firmado en físico (documento externo al sistema).</span>
-            </div>
-            {docContrato ? (
-              <VisorPdf documentoId={docContrato.id} titulo={`Contrato ${c.numero}`} className={`mt-3 ${buttonVariants({ size: 'sm' })}`}>
-                <FileText className="size-4" /> Ver documento
-              </VisorPdf>
-            ) : (
-              <p className="mt-3 text-sm text-muted-foreground">No hay PDF adjunto para este contrato.</p>
-            )}
-          </>
-        ) : (
-        <>
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-medium">Documento y firmas</h3>
-          {c.origenPdf === 'SUBIDO_PARA_FIRMA' && (
-            // Distinto de «Contrato subido» (firmado en físico): este sí recoge
-            // firmas, solo que se estampan sobre el PDF aportado.
-            <Badge variant="secondary">
-              {c.firmaEmpleadorEnPdf ? 'Subido firmado por el empleador · firma el empleado en la app' : 'Subido · se firma en la app'}
-            </Badge>
+      {/* Resumen: estado, tipo y los datos que se consultan, en una cuadrícula que usa el ancho. */}
+      <Card className="py-0"><CardContent className="p-4 sm:p-5">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Pill tone={c.estado === 'ACTIVO' ? 'ok' : c.estado === 'SUSPENDIDO' ? 'bad' : 'muted'}>{ESTADO[c.estado]}</Pill>
+          <Pill tone="info">{TIPO_CONTRATO[c.tipo]}</Pill>
+          {diasParaVencer != null && (
+            <Pill tone={diasParaVencer <= 45 ? 'warn' : 'muted'}>
+              {diasParaVencer < 0 ? `Venció hace ${-diasParaVencer} días` : diasParaVencer === 0 ? 'Vence hoy' : `Vence en ${diasParaVencer} días`}
+            </Pill>
           )}
         </div>
-        <FirmasLaboral
-          contratoId={c.id}
-          numero={c.numero}
-          // Un contrato subido para firma no tiene snapshot de plantilla: el PDF es el documento.
-          tieneDocumento={!!c.contenidoPdf || c.origenPdf === 'SUBIDO_PARA_FIRMA'}
-          subido={c.origenPdf === 'SUBIDO_PARA_FIRMA'}
-          documentoId={docContrato?.id ?? null}
-          autorizacionId={docAutorizacion?.id ?? null}
-          puedeFirmar={puedeEditar}
-          empleador={{
-            nombre: empresaCfg?.representanteLegal ?? '',
-            firmado: !!c.firmaEmpleadorPath,
-            fecha: c.firmaEmpleadorFecha ? formatFechaCorta(c.firmaEmpleadorFecha) : null,
-            enPdf: c.firmaEmpleadorEnPdf,
-          }}
-          empleado={{
-            nombre: `${c.colaborador.nombres} ${c.colaborador.apellidos}`,
-            firmado: !!c.firmaEmpleadoPath,
-            fecha: c.firmaEmpleadoFecha ? formatFechaCorta(c.firmaEmpleadoFecha) : null,
-          }}
-        />
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-4">
+          <Dato k="Cargo" v={c.cargo?.nombre ?? '—'} />
+          <Dato k="Salario base" v={fmtCOP(Number(c.salarioBase))} />
+          <Dato k="Sede" v={`${c.sede.nombre} · ${c.sede.ciudad.nombre}`} />
+          <Dato k="Modalidad" v={MODALIDAD_TRABAJO[c.modalidadTrabajo]} />
+          <Dato k="Inicio" v={formatFechaCorta(c.fechaInicio)} />
+          <Dato k="Fin" v={c.fechaFin ? formatFechaCorta(c.fechaFin) : 'Indefinida'} />
+          <Dato k="Duración" v={duracionContrato(c.fechaInicio, c.fechaFin)} />
+          {c.periodoPruebaFin && <Dato k="Fin periodo de prueba" v={formatFechaCorta(c.periodoPruebaFin)} />}
+          {c.objetoObraLabor && <Dato k="Objeto obra/labor" v={c.objetoObraLabor} full />}
+        </dl>
+      </CardContent></Card>
+
+      {/* Documentos: el contrato con sus firmas, la autorización y lo adjunto. */}
+      <Card className="py-0"><CardContent className="p-4 sm:p-5">
+        <h2 className="text-sm font-semibold">Documentos</h2>
+        <ul className="divide-y">
+          {c.origenPdf === 'SUBIDO' ? (
+            <FilaDocumento icono={FileText} titulo="Contrato" sub={docContrato ? 'Firmado en físico' : 'Sin PDF adjunto'} tono={docContrato ? 'ok' : undefined}>
+              {docContrato && <VerDocumento documentoId={docContrato.id} titulo={`Contrato ${c.numero}`} />}
+            </FilaDocumento>
+          ) : (
+            <FirmasLaboral
+              contratoId={c.id}
+              numero={c.numero}
+              // Un contrato subido para firma no tiene snapshot de plantilla: el PDF es el documento.
+              tieneDocumento={!!c.contenidoPdf || c.origenPdf === 'SUBIDO_PARA_FIRMA'}
+              subido={c.origenPdf === 'SUBIDO_PARA_FIRMA'}
+              documentoId={docContrato?.id ?? null}
+              autorizacionId={docAutorizacion?.id ?? null}
+              puedeFirmar={puedeEditar}
+              empleador={{
+                nombre: empresaCfg?.representanteLegal ?? '',
+                firmado: !!c.firmaEmpleadorPath,
+                fecha: c.firmaEmpleadorFecha ? formatFechaCorta(c.firmaEmpleadorFecha) : null,
+                enPdf: c.firmaEmpleadorEnPdf,
+              }}
+              empleado={{
+                nombre,
+                firmado: !!c.firmaEmpleadoPath,
+                fecha: c.firmaEmpleadoFecha ? formatFechaCorta(c.firmaEmpleadoFecha) : null,
+              }}
+            />
+          )}
+          {anexos.map((d) => (
+            <FilaAnexo key={d.id} id={d.id} contratoId={c.id} nombre={d.nombre} fecha={formatFechaCorta(d.creadoEn)} puedeEditar={puedeEditar} />
+          ))}
+        </ul>
+
         {/* Firma estampada donde no era: se mueve sin volver a firmar. */}
         {c.origenPdf === 'SUBIDO_PARA_FIRMA' && puedeEditar && (
-          <div className="mt-3">
-            <CorregirPosicionFirma contratoId={c.id} vinculo="LABORAL" />
-          </div>
+          <div className="mt-3"><CorregirPosicionFirma contratoId={c.id} vinculo="LABORAL" /></div>
         )}
         {evidencias.length > 0 && (
-          <div className="mt-4 border-t pt-3">
-            <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Rastro de firma</h4>
-            <ul className="space-y-1">
+          <details className="mt-3 rounded-lg border px-3 py-2">
+            <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground">Rastro de firma ({evidencias.length})</summary>
+            <ul className="mt-2 space-y-1">
               {evidencias.map((e) => (
                 <li key={e.id} className="text-xs text-muted-foreground">
                   {e.metodoAuth === METODO_CORRECCION_POSICION
                     // No es una firma: alguien de TH movió el trazo a su sitio y se regeneró el PDF.
                     ? 'Posición de la firma corregida (PDF regenerado)'
-                    : e.rol === 'EMPLEADO' ? 'Empleado' : 'Empleador'} · {formatFechaCorta(e.firmadoEn)}
+                    : e.otrosiId ? 'Otrosí · empleado' : e.rol === 'EMPLEADO' ? 'Empleado' : 'Empleador'} · {formatFechaCorta(e.firmadoEn)}
                   {e.userEmail ? ` · ${e.userEmail}` : ''}{e.ip ? ` · IP ${e.ip}` : ''}
                   {e.metodoAuth === METODO_CORRECCION_POSICION ? '' : e.metodoAuth === 'CODIGO_EMAIL' ? ' · código al correo' : ' · sesión'}
                 </li>
               ))}
             </ul>
-          </div>
-        )}
-        </>
+          </details>
         )}
       </CardContent></Card>
 
-      {/* Anexos del contrato: otrosíes, prórrogas y soportes escaneados. Van en su propia
-          entidad para no mezclarse con el PDF del contrato (que no debe poder borrarse aquí). */}
-      <Card className="mb-4"><CardContent className="py-4">
-        <h3 className="text-sm font-medium">Anexos del contrato</h3>
-        <p className="mb-3 mt-1 text-xs text-muted-foreground">
-          Otrosíes, prórrogas y soportes que acompañan a este contrato. El documento del contrato
-          se gestiona arriba.
-        </p>
-        <GestorDocumentos
-          entidadTipo="ContratoAnexo"
-          entidadId={c.id}
-          sedeId={c.sedeId}
-          documentos={anexos.map((d) => ({
-            id: d.id, nombre: d.nombre, tipoDocumentoNombre: d.tipoDocumento?.nombre ?? null,
-            mimeType: d.mimeType, tamanoBytes: d.tamanoBytes,
-            fechaVencimiento: formatFechaISO(d.fechaVencimiento) || null,
-            creadoEn: d.creadoEn.toISOString(),
-          }))}
-          tiposDocumento={[]}
-          semaforo={[]}
-          puedeEditar={puedeEditar}
-        />
-      </CardContent></Card>
-
-      {/* Prórrogas */}
-      {c.prorrogas.length > 0 && (
-        <Card className="mb-4"><CardContent className="py-4">
-          <h3 className="text-sm font-medium mb-2">Prórrogas</h3>
-          <ul className="space-y-1.5">
+      {/* Lo que cambió el contrato después de firmado: prórrogas, otrosíes y suspensiones. */}
+      {hayModificaciones && (
+        <Card className="py-0"><CardContent className="p-4 sm:p-5">
+          <h2 className="text-sm font-semibold">Modificaciones</h2>
+          <ul className="divide-y">
             {c.prorrogas.map((p) => (
-              <li key={p.id} className="flex flex-wrap items-center gap-2 text-sm">
-                <span>Prórroga {p.numero}</span>
-                <span className="flex-1 text-muted-foreground">{formatFechaCorta(p.fechaInicio)} — {formatFechaCorta(p.fechaFin)}</span>
-                {/* El sistema no genera el PDF de la prórroga: se redacta fuera,
-                    se firma y se adjunta aquí. */}
-                {p.documentoId && (
-                  <VisorPdf documentoId={p.documentoId} titulo={`Prórroga ${p.numero}`} className="text-xs text-primary hover:underline">
-                    Ver PDF
-                  </VisorPdf>
-                )}
+              <FilaDocumento key={p.id} icono={CalendarPlus} titulo={`Prórroga ${p.numero}`} sub={`${formatFechaCorta(p.fechaInicio)} a ${formatFechaCorta(p.fechaFin)}`}>
+                {p.documentoId && <VerDocumento documentoId={p.documentoId} titulo={`Prórroga ${p.numero}`} />}
+                {/* El sistema no genera el PDF de la prórroga: se redacta fuera, se firma y se adjunta. */}
                 {puedeEditar && (
-                  <AdjuntarDocumento destino="prorroga" id={p.id} tieneDocumento={Boolean(p.documentoId)} etiqueta={p.documentoId ? 'Reemplazar' : 'Adjuntar PDF'} variante="ghost" />
+                  <AdjuntarDocumento destino="prorroga" id={p.id} tieneDocumento={Boolean(p.documentoId)} etiqueta={p.documentoId ? 'Reemplazar PDF' : 'Adjuntar PDF'} variante="ghost" tamano="icon" className="size-8" />
                 )}
-              </li>
+              </FilaDocumento>
             ))}
-          </ul>
-        </CardContent></Card>
-      )}
-
-      {/* Otrosí. Los nuevos traen el PDF que el trabajador firma en la app (misma
-          lógica que el contrato); los viejos solo tienen texto y, si acaso, un PDF
-          adjuntado a mano, que se puede seguir reemplazando. */}
-      {c.otrosis.length > 0 && (
-        <Card className="mb-4"><CardContent className="py-4">
-          <h3 className="text-sm font-medium mb-2">Otrosí y modificaciones</h3>
-          <ul className="space-y-3">
             {c.otrosis.map((o) => {
               const resumen = resumenOtrosi(o.tiposCambio, o.valoresNuevos as ValoresOtrosi | null)
-              const firma = evidencias.find((e) => e.otrosiId === o.id)
+              const cambios = o.tiposCambio.map((t) => ETIQUETA_CAMBIO_OTROSI[t as TipoCambioOtrosi] ?? t).join(', ')
               return (
-                <li key={o.id} className="text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">Otrosí {o.numero}</span>
-                    <span className="text-muted-foreground">{formatFechaCorta(o.fecha)}</span>
-                    {o.tiposCambio.map((t) => (
-                      <Badge key={t} variant="outline">{ETIQUETA_CAMBIO_OTROSI[t as TipoCambioOtrosi] ?? t}</Badge>
-                    ))}
-                    <span className="flex-1" />
-                    {o.documentoId && (
-                      <VisorPdf documentoId={o.documentoId} titulo={`Otrosí ${o.numero}`} className="text-xs text-primary hover:underline">
-                        Ver PDF
-                      </VisorPdf>
-                    )}
-                    {puedeEditar && !o.requiereFirma && (
-                      <AdjuntarDocumento destino="otrosi" id={o.id} tieneDocumento={Boolean(o.documentoId)} etiqueta={o.documentoId ? 'Reemplazar' : 'Adjuntar PDF'} variante="ghost" />
-                    )}
-                  </div>
-                  {resumen && <p className="text-muted-foreground">{resumen}</p>}
-                  {o.descripcion && <p className="text-muted-foreground">{o.descripcion}</p>}
-                  {o.requiereFirma && (
-                    o.firmaEmpleadoPath ? (
-                      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-emerald-600">
-                        <CircleCheck className="size-3.5" /> Firmado por el trabajador
-                        {o.firmaEmpleadoFecha ? ` · ${formatFechaCorta(o.firmaEmpleadoFecha)}` : ''}
-                        {firma?.userEmail ? ` · ${firma.userEmail}` : ''}{firma?.ip ? ` · IP ${firma.ip}` : ''}
-                        {firma ? (firma.metodoAuth === 'CODIGO_EMAIL' ? ' · código al correo' : ' · sesión') : ''}
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">Pendiente de firma del trabajador · firma desde su autoservicio</p>
-                    )
+                <FilaDocumento
+                  key={o.id}
+                  icono={FilePen}
+                  titulo={`Otrosí ${o.numero} · ${cambios}`}
+                  tono={o.requiereFirma ? (o.firmaEmpleadoPath ? 'ok' : 'pendiente') : undefined}
+                  sub={
+                    o.requiereFirma
+                      ? (o.firmaEmpleadoPath ? `Firmado por el trabajador${o.firmaEmpleadoFecha ? ` · ${formatFechaCorta(o.firmaEmpleadoFecha)}` : ''}` : 'Pendiente de firma del trabajador')
+                      : [formatFechaCorta(o.fecha), resumen || o.descripcion].filter(Boolean).join(' · ')
+                  }
+                >
+                  {o.documentoId && <VerDocumento documentoId={o.documentoId} titulo={`Otrosí ${o.numero}`} />}
+                  {puedeEditar && !o.requiereFirma && (
+                    <AdjuntarDocumento destino="otrosi" id={o.id} tieneDocumento={Boolean(o.documentoId)} etiqueta={o.documentoId ? 'Reemplazar PDF' : 'Adjuntar PDF'} variante="ghost" tamano="icon" className="size-8" />
                   )}
-                </li>
+                </FilaDocumento>
               )
             })}
-          </ul>
-        </CardContent></Card>
-      )}
-
-      {/* Suspensiones */}
-      {c.suspensiones.length > 0 && (
-        <Card className="mb-4"><CardContent className="py-4">
-          <h3 className="text-sm font-medium mb-2">Suspensiones</h3>
-          <ul className="space-y-1.5">
-            {c.suspensiones.map((s) => (
-              <li key={s.id} className="text-sm flex justify-between">
-                <span>{CAUSA_SUSP[s.causa]}</span>
-                <span className="text-muted-foreground">{formatFechaCorta(s.fechaInicio)}{s.fechaFin ? ` — ${formatFechaCorta(s.fechaFin)}` : ''}</span>
-              </li>
+            {c.suspensiones.map((su) => (
+              <FilaDocumento key={su.id} icono={CirclePause} titulo={`Suspensión · ${CAUSA_SUSP[su.causa]}`} sub={`${formatFechaCorta(su.fechaInicio)}${su.fechaFin ? ` a ${formatFechaCorta(su.fechaFin)}` : ' · sin fecha de fin'}`} />
             ))}
           </ul>
         </CardContent></Card>
-      )}
-
-      {puedeEditar && (
-        <AccionesContrato
-          contratoId={c.id}
-          colaboradorId={c.colaboradorId}
-          tipo={c.tipo}
-          estado={c.estado}
-          numero={c.numero}
-          puedeEliminar={puedeEliminar}
-          cargos={cargos.map((x) => ({ id: x.id, nombre: x.nombre }))}
-          sedes={sedes.map((x) => ({ id: x.id, nombre: x.nombre, ciudad: x.ciudad.nombre }))}
-        />
       )}
     </div>
   )
@@ -332,9 +261,9 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
 
 function Dato({ k, v, full }: { k: string; v: React.ReactNode; full?: boolean }) {
   return (
-    <div className={`flex flex-col ${full ? 'sm:col-span-2' : ''}`}>
+    <div className={`flex min-w-0 flex-col ${full ? 'col-span-2 lg:col-span-4' : ''}`}>
       <dt className="text-xs text-muted-foreground">{k}</dt>
-      <dd className="text-sm">{v}</dd>
+      <dd className="text-sm font-medium">{v}</dd>
     </div>
   )
 }

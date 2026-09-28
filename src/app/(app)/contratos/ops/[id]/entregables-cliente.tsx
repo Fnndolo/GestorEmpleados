@@ -79,29 +79,27 @@ export function Entregables({ contratoOpsId, entregables, puedeEditar }: {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="text-base font-medium">
+        <h2 className="text-sm font-semibold">
           Entregables
           {entregables.length > 0 && (
-            <span className="ml-2 text-sm font-normal text-muted-foreground">{cumplidos} de {entregables.length} cumplidos</span>
+            <span className="ml-2 text-xs font-normal text-muted-foreground">{cumplidos} de {entregables.length} cumplidos</span>
           )}
         </h2>
         {puedeEditar && !agregando && (
-          <Button type="button" size="sm" onClick={abrirNuevo}><Plus className="size-4" /> Añadir</Button>
+          <Button type="button" size="sm" variant="outline" onClick={abrirNuevo}><Plus className="size-4" /> Añadir</Button>
         )}
       </div>
 
       {entregables.length === 0 && !agregando && (
-        <p className="text-sm text-muted-foreground">
-          Sin entregables registrados. {puedeEditar ? 'Añade los pactados en el contrato para hacerles seguimiento antes de aprobar las cuentas de cobro.' : ''}
-        </p>
+        <p className="py-3 text-sm text-muted-foreground">Sin entregables.</p>
       )}
 
-      <ul className="space-y-1.5">
+      <ul className="divide-y">
         {entregables.map((e) =>
           editando === e.id ? (
-            <li key={e.id}><Editor descripcion={descripcion} fecha={fecha} setDescripcion={setDescripcion} setFecha={setFecha} guardar={guardar} cerrar={cerrar} ocupado={ocupado} /></li>
+            <li key={e.id} className="py-2"><Editor descripcion={descripcion} fecha={fecha} setDescripcion={setDescripcion} setFecha={setFecha} guardar={guardar} cerrar={cerrar} ocupado={ocupado} /></li>
           ) : (
-            <li key={e.id} className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm">
+            <li key={e.id} className="flex items-center gap-3 py-2.5 text-sm">
               {puedeEditar ? (
                 <input
                   type="checkbox"
@@ -115,7 +113,7 @@ export function Entregables({ contratoOpsId, entregables, puedeEditar }: {
               )}
               <div className="min-w-0 flex-1">
                 <span className={e.cumplido ? 'text-muted-foreground line-through' : ''}>{e.descripcion}</span>
-                {e.fechaEntrega && <span className="ml-2 text-xs text-muted-foreground">entrega: {e.fechaEntrega}</span>}
+                {e.fechaEntrega && <span className="block text-xs text-muted-foreground">Entrega {e.fechaEntrega.split('-').reverse().join('/')}</span>}
               </div>
               {puedeEditar && (
                 <div className="flex shrink-0 gap-0.5">
@@ -128,7 +126,7 @@ export function Entregables({ contratoOpsId, entregables, puedeEditar }: {
             </li>
           ),
         )}
-        {agregando && <li><Editor descripcion={descripcion} fecha={fecha} setDescripcion={setDescripcion} setFecha={setFecha} guardar={guardar} cerrar={cerrar} ocupado={ocupado} /></li>}
+        {agregando && <li className="py-2"><Editor descripcion={descripcion} fecha={fecha} setDescripcion={setDescripcion} setFecha={setFecha} guardar={guardar} cerrar={cerrar} ocupado={ocupado} /></li>}
       </ul>
     </div>
   )
@@ -144,14 +142,15 @@ function Editor({ descripcion, fecha, setDescripcion, setFecha, guardar, cerrar,
   ocupado: boolean
 }) {
   return (
-    <div className="space-y-2 rounded-md border p-3">
+    <div className="space-y-3 rounded-md border p-3">
       <div className="space-y-1.5">
-        <Label>Descripción</Label>
+        <Label>Descripción <span className="text-destructive">*</span></Label>
         <Input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="p. ej. Informe mensual de actividades" spellCheck lang="es" autoFocus />
       </div>
-      <div className="flex items-end gap-2">
+      {/* La fecha y los botones en una fila si caben; en el celular los botones bajan. */}
+      <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1.5">
-          <Label>Fecha de entrega (opcional)</Label>
+          <Label>Fecha de entrega</Label>
           <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
         </div>
         <div className="ml-auto flex gap-2">
