@@ -14,13 +14,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
 import { crearCuentaCobroEmpresa } from '../ops-acciones'
 
-export function NuevaCuentaEmpresa({ plantillas }: { plantillas: { id: string; nombre: string }[] }) {
+/** Datos con los que abre el formulario (desde Pagos OPS → Sin radicar). */
+export type CuentaInicial = { colaboradorId: string; nombre: string; periodo: string; valor: number | null; concepto: string }
+
+/**
+ * La empresa radica una cuenta de cobro a nombre del colaborador o contratista.
+ * Con `inicial` abre ya diligenciada para esa persona y ese mes, con un botón
+ * pequeño: es como se usa desde la lista de quienes aún no radican.
+ */
+export function NuevaCuentaEmpresa({ plantillas, inicial }: { plantillas: { id: string; nombre: string }[]; inicial?: CuentaInicial }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
-  const [colaboradorId, setColaboradorId] = useState('')
-  const [periodo, setPeriodo] = useState('')
-  const [valor, setValor] = useState('')
-  const [concepto, setConcepto] = useState('')
+  const [colaboradorId, setColaboradorId] = useState(inicial?.colaboradorId ?? '')
+  const [periodo, setPeriodo] = useState(inicial?.periodo ?? '')
+  const [valor, setValor] = useState(inicial?.valor ? String(inicial.valor) : '')
+  const [concepto, setConcepto] = useState(inicial?.concepto ?? '')
   const [plantillaId, setPlantillaId] = useState('')
   const [g, setG] = useState(false)
 
@@ -39,13 +47,18 @@ export function NuevaCuentaEmpresa({ plantillas }: { plantillas: { id: string; n
     const r = res.datos as { numero: string; vinculadaOps: boolean }
     toast.success(`Cuenta ${r.numero} radicada.${r.vinculadaOps ? ' Quedó ligada al contrato OPS: requiere planilla PILA verificada antes de aprobar.' : ''}`)
     setAbierto(false)
-    setColaboradorId(''); setPeriodo(''); setValor(''); setConcepto(''); setPlantillaId('')
+    if (!inicial) { setColaboradorId(''); setPeriodo(''); setValor(''); setConcepto('') }
+    setPlantillaId('')
     router.refresh()
   }
 
   return (
     <>
-      <Button size="sm" onClick={() => setAbierto(true)}><Plus className="size-4" /> Radicar cuenta</Button>
+      {inicial ? (
+        <Button size="sm" variant="outline" onClick={() => setAbierto(true)}><Receipt className="size-4" /> Radicar</Button>
+      ) : (
+        <Button size="sm" onClick={() => setAbierto(true)}><Plus className="size-4" /> Radicar cuenta</Button>
+      )}
       <Dialog open={abierto} onOpenChange={setAbierto}>
         <DialogContent className="max-h-[88vh] overflow-y-auto">
           <DialogHeader>
@@ -56,21 +69,23 @@ export function NuevaCuentaEmpresa({ plantillas }: { plantillas: { id: string; n
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Colaborador / contratista</Label>
-              <SelectorColaborador value={colaboradorId} onChange={setColaboradorId} />
+              <Label>Colaborador / contratista <span className="text-destructive">*</span></Label>
+              {inicial
+                ? <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm font-medium">{inicial.nombre}</p>
+                : <SelectorColaborador value={colaboradorId} onChange={setColaboradorId} />}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Periodo</Label>
+                <Label>Periodo <span className="text-destructive">*</span></Label>
                 <Input type="month" value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label>Valor</Label>
+                <Label>Valor <span className="text-destructive">*</span></Label>
                 <Input type="number" step="1" min="1" value={valor} onChange={(e) => setValor(e.target.value)} />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Concepto (opcional)</Label>
+              <Label>Concepto</Label>
               <Textarea rows={2} value={concepto} onChange={(e) => setConcepto(e.target.value)} placeholder="Honorarios del mes, comisiones, saldo a favor…" />
             </div>
             {plantillas.length > 0 && (
