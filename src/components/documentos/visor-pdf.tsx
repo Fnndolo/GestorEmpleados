@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Maximize2, Minimize2, ExternalLink, Download, ZoomIn, ZoomOut } from 'lucide-react'
+import { Maximize2, Minimize2, ExternalLink, Download } from 'lucide-react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -16,13 +16,12 @@ import { cn } from '@/lib/utils'
  * En escritorio usa el visor nativo del navegador (iframe). En móvil los
  * navegadores NO renderizan PDF en iframes, así que se renderizan las páginas
  * con pdf.js sobre canvas (carga diferida; el worker vive en /pdf.worker.min.mjs).
- * Las lupas propias aplican a las fotos y a ese PDF del celular; en escritorio
- * el visor nativo del navegador ya trae su propio acercamiento.
+ * El acercamiento propio (a mano, sin botones) aplica a las fotos y a ese PDF
+ * del celular; en escritorio el visor nativo del navegador ya trae el suyo.
  */
-/** Niveles de acercamiento: 1 = ajustado al ancho de la ventana. */
-const NIVELES_ZOOM = [0.5, 0.75, 1, 1.5, 2, 3, 4]
-const ZOOM_MIN = NIVELES_ZOOM[0]
-const ZOOM_MAX = NIVELES_ZOOM[NIVELES_ZOOM.length - 1]
+/** Límites del acercamiento: 1 = ajustado al ancho de la ventana. */
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 4
 const acotarZoom = (z: number) => Math.min(Math.max(z, ZOOM_MIN), ZOOM_MAX)
 /**
  * Lo que el navegador puede mostrar dentro de la ventana: PDF, imágenes,
@@ -89,13 +88,9 @@ export function VisorPdf({
   const controlado = abiertoControlado !== undefined
   const abierto = controlado ? abiertoControlado : abiertoPropio
   const [amplio, setAmplio] = useState(false)
+  // El acercamiento es a mano, sin botones: pellizco con los dedos (o el
+  // touchpad / Ctrl + rueda en el computador) y doble toque para alternar.
   const [zoom, setZoom] = useState(1)
-  // Con los dedos el acercamiento es continuo; las lupas saltan al nivel
-  // siguiente o anterior de la escala, partiendo de donde esté.
-  const acercar = (paso: 1 | -1) => setZoom((z) =>
-    paso === 1
-      ? NIVELES_ZOOM.find((n) => n > z + 0.01) ?? ZOOM_MAX
-      : NIVELES_ZOOM.findLast((n) => n < z - 0.01) ?? ZOOM_MIN)
   // URL de objeto del archivo local: se crea al abrir y se libera al cerrar,
   // que es lo que dura la ventana. Un archivo distinto la vuelve a crear.
   const [urlArchivo, setUrlArchivo] = useState<string | null>(null)
@@ -160,7 +155,6 @@ export function VisorPdf({
     : tipo?.startsWith('image/') ? 'imagen'
     : movil ? 'paginas'
     : 'nativo'
-  const conZoom = vista === 'imagen' || vista === 'paginas'
 
   return (
     <>
@@ -178,20 +172,6 @@ export function VisorPdf({
         >
           <DialogHeader className="flex-row items-center gap-1 space-y-0 pr-8">
             <DialogTitle className="min-w-0 flex-1 truncate text-sm">{titulo}</DialogTitle>
-            {conZoom && (
-              <div className="flex items-center">
-                <Button type="button" size="icon" variant="ghost" className="size-7" onClick={() => acercar(-1)} disabled={zoom <= ZOOM_MIN} title="Alejar" aria-label="Alejar">
-                  <ZoomOut className="size-4" />
-                </Button>
-                {/* El porcentaje devuelve al tamaño ajustado a la ventana. */}
-                <button type="button" onClick={() => setZoom(1)} className="w-10 rounded text-center text-xs tabular-nums text-muted-foreground hover:text-foreground" title="Ajustar a la ventana">
-                  {Math.round(zoom * 100)}%
-                </button>
-                <Button type="button" size="icon" variant="ghost" className="size-7" onClick={() => acercar(1)} disabled={zoom >= ZOOM_MAX} title="Acercar" aria-label="Acercar">
-                  <ZoomIn className="size-4" />
-                </Button>
-              </div>
-            )}
             <Button type="button" size="icon" variant="ghost" className="size-7" onClick={() => setAmplio((a) => !a)} title={amplio ? 'Reducir ventana' : 'Pantalla completa'} aria-label={amplio ? 'Reducir ventana' : 'Pantalla completa'}>
               {amplio ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
             </Button>
@@ -224,7 +204,6 @@ export function VisorPdf({
                   src={url}
                   alt={titulo}
                   draggable={false}
-                  onDoubleClick={() => setZoom((z) => (z === 1 ? 2 : 1))}
                   className={cn('mx-auto rounded-md bg-white shadow-sm', zoom === 1 ? 'max-w-full' : 'w-full')}
                 />
               </div>
@@ -247,7 +226,9 @@ export function VisorPdf({
  * de fotos:
  *  - Con los dedos: separarlos acerca y juntarlos aleja (pellizco), y el punto
  *    entre los dos dedos se queda quieto. Un solo dedo desplaza, como siempre.
- *  - Con el mouse: arrastrar para moverse por el documento acercado.
+ *  - En el computador: pellizco en el touchpad o Ctrl + rueda, hacia el cursor;
+ *    y arrastrar con el mouse para moverse por el documento acercado.
+ *  - Doble toque o doble clic: del tamaño ajustado al doble, y de vuelta.
  *
  * El pellizco va con eventos táctiles nativos y no con los de React: hay que
  * cancelarlos (`preventDefault`) para que el navegador no amplíe la página
@@ -257,8 +238,9 @@ function MarcoZoom({ zoom, setZoom, children }: { zoom: number; setZoom: (z: num
   const marcoRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(zoom)
   const arrastre = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
-  // Punto del contenido bajo los dedos, medido al empezar el pellizco.
-  const ancla = useRef<{ distancia: number; zoom: number; cx: number; cy: number; mx: number; my: number } | null>(null)
+  // Punto del contenido bajo los dedos (o el cursor), medido al empezar el
+  // gesto. `unaVez`: la rueda ancla cada paso por separado.
+  const ancla = useRef<{ distancia: number; zoom: number; cx: number; cy: number; mx: number; my: number; unaVez?: boolean } | null>(null)
 
   // Tras cada cambio del pellizco se corre el scroll para que el punto entre
   // los dedos no se escape; antes del pintado, para que no salte.
@@ -270,6 +252,7 @@ function MarcoZoom({ zoom, setZoom, children }: { zoom: number; setZoom: (z: num
     const r = zoom / a.zoom
     marco.scrollLeft = a.cx * r - a.mx
     marco.scrollTop = a.cy * r - a.my
+    if (a.unaVez) ancla.current = null
   }, [zoom])
 
   useEffect(() => {
@@ -297,11 +280,27 @@ function MarcoZoom({ zoom, setZoom, children }: { zoom: number; setZoom: (z: num
       setZoom(acotarZoom(a.zoom * (dedos(e.touches).distancia / a.distancia)))
     }
     const alSoltar = (e: TouchEvent) => { if (e.touches.length < 2) ancla.current = null }
+    // Computador: el pellizco del touchpad llega como rueda con Ctrl (y así
+    // también Ctrl + rueda del mouse). Se cancela para que no amplíe la página.
+    const alRodar = (e: WheelEvent) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      const caja = marco.getBoundingClientRect()
+      const mx = e.clientX - caja.left
+      const my = e.clientY - caja.top
+      const actual = zoomRef.current
+      const nuevo = acotarZoom(actual * Math.exp(-e.deltaY * 0.01))
+      if (nuevo === actual) return
+      ancla.current = { distancia: 1, zoom: actual, cx: marco.scrollLeft + mx, cy: marco.scrollTop + my, mx, my, unaVez: true }
+      setZoom(nuevo)
+    }
+    marco.addEventListener('wheel', alRodar, { passive: false })
     marco.addEventListener('touchstart', alTocar, { passive: false })
     marco.addEventListener('touchmove', alMover, { passive: false })
     marco.addEventListener('touchend', alSoltar)
     marco.addEventListener('touchcancel', alSoltar)
     return () => {
+      marco.removeEventListener('wheel', alRodar)
       marco.removeEventListener('touchstart', alTocar)
       marco.removeEventListener('touchmove', alMover)
       marco.removeEventListener('touchend', alSoltar)
@@ -326,6 +325,8 @@ function MarcoZoom({ zoom, setZoom, children }: { zoom: number; setZoom: (z: num
       }}
       onPointerUp={() => { arrastre.current = null }}
       onPointerCancel={() => { arrastre.current = null }}
+      // Doble toque (o doble clic): del tamaño ajustado al doble, y de vuelta.
+      onDoubleClick={() => setZoom(zoom === 1 ? 2 : 1)}
     >
       {children}
     </div>
