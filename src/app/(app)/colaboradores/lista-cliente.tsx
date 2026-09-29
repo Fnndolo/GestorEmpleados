@@ -151,7 +151,8 @@ export function ListaColaboradores({
               <div className="min-w-0 flex-1">
                 <p className="font-medium truncate">{c.nombres} {c.apellidos}</p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {c.cargo ?? 'Sin cargo'} · {c.sede}
+                  {/* El documento primero: es lo que se busca y no se corta en el celular. */}
+                  <span className="tabular-nums">{c.tipoDocumento} {documentoLegible(c.numeroDocumento)}</span> · {c.cargo ?? 'Sin cargo'} · {c.sede}
                 </p>
               </div>
               <div className="hidden sm:flex flex-col items-end gap-1">
@@ -173,4 +174,9 @@ export function ListaColaboradores({
       )}
     </div>
   )
+}
+
+/** "1085332211" → "1.085.332.211"; si trae letras (pasaporte, PPT) va tal cual. */
+function documentoLegible(numero: string): string {
+  return /^\d+$/.test(numero) ? Number(numero).toLocaleString('es-CO') : numero
 }
