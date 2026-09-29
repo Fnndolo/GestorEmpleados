@@ -14,7 +14,8 @@ export default async function CuentasRiesgoPage() {
 
   const cuentas = await prisma.cuentaCobroOps.findMany({
     where: {
-      contratoOpsId: { not: null }, // solo contratistas OPS requieren soporte de SS
+      contratoOpsId: { not: null }, // solo contratistas OPS requieren soporte de SS…
+      requierePila: true, // …y solo si se les pidió la planilla
       estado: { in: ['RADICADA', 'EN_VERIFICACION_SS', 'BLOQUEADA_SS'] },
       OR: [{ soporteSs: { is: null } }, { soporteSs: { estadoVerificacion: { not: 'VALIDA' } } }],
     },

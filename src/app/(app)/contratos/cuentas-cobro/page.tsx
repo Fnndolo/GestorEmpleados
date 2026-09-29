@@ -55,7 +55,8 @@ export default async function CuentasCobroPage() {
             colaborador: c.colaborador
               ? `${c.colaborador.nombres} ${c.colaborador.apellidos}`
               : c.contratoOps?.colaborador ? `${c.contratoOps.colaborador.nombres} ${c.contratoOps.colaborador.apellidos}` : '—',
-            esOps: !!c.contratoOpsId,
+            // «esOps» aquí es «se le exige la PILA»: solo entonces bloquea la aprobación.
+            esOps: !!c.contratoOpsId && c.requierePila,
             contratoOpsId: c.contratoOpsId,
             ssValida: c.soporteSs?.estadoVerificacion === 'VALIDA',
           }))}

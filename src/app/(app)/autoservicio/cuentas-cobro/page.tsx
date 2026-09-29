@@ -56,8 +56,8 @@ export default async function MisCuentasCobroPage() {
       ) : (
         <Card><CardContent className="p-0 divide-y">
           {cuentas.map((c) => {
-            // El soporte de seguridad social solo aplica a cuentas ligadas a contrato OPS.
-            const requiereSoporte = !!c.contratoOpsId
+            // El soporte de seguridad social solo aplica a cuentas OPS a las que se les pidió.
+            const requiereSoporte = !!c.contratoOpsId && c.requierePila
             const estadoSoporte = c.soporteSs?.estadoVerificacion ?? 'SIN_SOPORTE'
             const cuentaResuelta = c.estado === 'APROBADA' || c.estado === 'PAGADA' || c.estado === 'RECHAZADA'
             const puedeAdjuntar = requiereSoporte && !cuentaResuelta && estadoSoporte !== 'VALIDA'

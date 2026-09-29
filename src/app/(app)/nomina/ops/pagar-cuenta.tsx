@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Banknote, Paperclip } from 'lucide-react'
@@ -33,6 +33,8 @@ export function PagarCuenta({ cuentaId, numero, nombre, valor, hoy, pagada = fal
   const [fecha, setFecha] = useState(fechaPago ?? hoy)
   const [archivo, setArchivo] = useState<{ nombre: string; dataUri: string } | null>(null)
   const [g, setG] = useState(false)
+  // Único por instancia, para que la etiqueta abra el selector de ESTE diálogo.
+  const uid = useId()
 
   function elegir(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -74,16 +76,16 @@ export function PagarCuenta({ cuentaId, numero, nombre, valor, hoy, pagada = fal
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor={`fecha-${cuentaId}`}>Fecha del pago <span className="text-destructive">*</span></Label>
-              <Input id={`fecha-${cuentaId}`} type="date" value={fecha} max={hoy} onChange={(e) => setFecha(e.target.value)} />
+              <Label htmlFor={`fecha-${uid}`}>Fecha del pago <span className="text-destructive">*</span></Label>
+              <Input id={`fecha-${uid}`} type="date" value={fecha} max={hoy} onChange={(e) => setFecha(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`comprobante-${cuentaId}`}>Comprobante de la transferencia <span className="text-destructive">*</span></Label>
-              <label htmlFor={`comprobante-${cuentaId}`} className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground hover:bg-accent/50">
+              <Label htmlFor={`comprobante-${uid}`}>Comprobante de la transferencia <span className="text-destructive">*</span></Label>
+              <label htmlFor={`comprobante-${uid}`} className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground hover:bg-accent/50">
                 <Paperclip className="size-4 shrink-0" />
                 <span className="min-w-0 truncate">{archivo ? archivo.nombre : 'Elegir PDF o imagen'}</span>
               </label>
-              <input id={`comprobante-${cuentaId}`} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={elegir} />
+              <input id={`comprobante-${uid}`} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={elegir} />
             </div>
           </div>
           <DialogFooter>

@@ -35,6 +35,7 @@ export type ClaveEvento =
   | 'liquidacion_por_firmar'
   | 'liquidacion_firmada'
   | 'liquidacion_pagada'
+  | 'nomina_pagada'
   | 'carta_terminacion_por_firmar'
   | 'carta_terminacion_firmada'
   | 'paz_y_salvo_area_pendiente'
@@ -176,6 +177,7 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
   // Vencimientos / automáticas (incluye alertas de documentos y de obligaciones del calendario legal)
   { clave: 'vencimiento_alerta', etiqueta: 'Alerta de vencimiento', descripcion: 'Aviso automático de un vencimiento u obligación legal próxima (10 días hábiles antes y última alerta).', modulo: 'Vencimientos' },
   // Nómina · AsistencIA
+  { clave: 'nomina_pagada', etiqueta: 'Nómina pagada', descripcion: 'Se registra el pago de la nómina de la persona con el comprobante de su transferencia.', modulo: 'Nómina' },
   { clave: 'asistencia_resumen_dia', etiqueta: 'Tu jornada del día (AsistencIA)', descripcion: 'Cada noche, a cada colaborador que marcó: sus entradas y salidas, el tiempo trabajado, las horas extra y las novedades del día (reemplaza el correo diario de AsistencIA).', modulo: 'Nómina' },
   // Plataforma
   { clave: 'aviso_publicado', etiqueta: 'Aviso de la plataforma', descripcion: 'Talento Humano o el administrador publican un aviso: un módulo nuevo, una mejora o un cambio importante.', modulo: 'Plataforma' },

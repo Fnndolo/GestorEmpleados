@@ -19,6 +19,7 @@ enum EstadoUsuario {
   ACTIVO
   INACTIVO
   BLOQUEADO
+  SOLO_CONSULTA // entra y ve lo que su rol le deja ver, sin crear, editar, aprobar ni borrar
 
   @@map("estado_usuario")
 }
@@ -1556,6 +1557,9 @@ model CuentaCobroOps {
   fechaPago            DateTime?         @map("fecha_pago") @db.Date
   documentoId          String?           @map("documento_id") @db.Uuid // PDF de la cuenta de cobro
   creadaPorContratista Boolean           @default(false) @map("creada_por_contratista")
+  // Si se le pide al contratista OPS su planilla PILA (y exige verificarla antes de
+  // aprobar y pagar). La empresa lo decide al radicarla; las que radica él, siempre.
+  requierePila         Boolean           @default(true) @map("requiere_pila")
   creadoEn             DateTime          @default(now()) @map("creado_en")
   actualizadoEn        DateTime          @updatedAt @map("actualizado_en")
 
@@ -2069,6 +2073,10 @@ model LiquidacionNomina {
   totalDeducido  Decimal       @map("total_deducido") @db.Decimal(14, 2)
   neto           Decimal       @db.Decimal(14, 2)
   documentoId    String?       @map("documento_id") @db.Uuid // desprendible PDF
+  // Pago de la persona, con el comprobante de su transferencia. El periodo pasa
+  // a PAGADA cuando todas sus liquidaciones lo están.
+  pagadoEn           DateTime? @map("pagado_en") @db.Date
+  comprobantePagoId  String?   @map("comprobante_pago_id") @db.Uuid
   creadoEn       DateTime      @default(now()) @map("creado_en")
 
   detalles DetalleNomina[]

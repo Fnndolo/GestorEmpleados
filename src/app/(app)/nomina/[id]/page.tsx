@@ -5,13 +5,15 @@ import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Eye, TriangleAlert, TrendingUp, TrendingDown, Wallet, Calculator } from 'lucide-react'
+import { Eye, TriangleAlert, TrendingUp, TrendingDown, Wallet, Calculator, FileCheck2 } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Pill, Stat, AvatarColaborador, type PillTone } from '@/components/ui-kit'
 import { urlFoto } from '@/lib/foto'
 import { fmtCOP } from '@/lib/moneda'
 import { TIPO_CUENTA } from '@/lib/etiquetas'
+import { formatFechaCorta, hoyBogotaISO } from '@/lib/fechas'
+import { PagarPersona } from './pagar-persona'
 import { AccionesPeriodo } from './acciones-cliente'
 
 export const metadata = { title: 'Periodo de nómina · Smart Gadgets RH' }
@@ -78,7 +80,14 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
       ? { banco: l.colaborador.banco.nombre, tipo: l.colaborador.tipoCuenta ? TIPO_CUENTA[l.colaborador.tipoCuenta] : 'cuenta', numero: l.colaborador.numeroCuenta }
       : null,
     documentoId: l.documentoId,
+    pagadoEn: l.pagadoEn ? formatFechaCorta(l.pagadoEn) : null,
+    pagadoISO: l.pagadoEn ? l.pagadoEn.toISOString().slice(0, 10) : null,
+    comprobanteId: l.comprobantePagoId,
   }))
+  // Con el periodo cerrado se paga persona por persona, cada una con su comprobante.
+  const conPagos = periodo.estado === 'CERRADA' || periodo.estado === 'PAGADA'
+  const pagados = filas.filter((l) => l.pagadoEn).length
+  const hoy = hoyBogotaISO()
 
   // El periodo nace calculado. Si todavía no lo está (el cálculo falló al
   // crearlo), lo único que se necesita saber es si falta el SMMLV.
@@ -143,7 +152,12 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
               editable={periodo.estado === 'CALCULADA'}
             />
           )}
-          {periodo.estado === 'CERRADA' && <p className="mb-3 text-xs text-muted-foreground">Periodo cerrado. Reábrelo desde el menú para corregirlo, o usa un periodo de ajuste.</p>}
+          {periodo.estado === 'CERRADA' && (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+              <span><b className="tabular-nums">{pagados} de {filas.length}</b> pagados · registra el pago de cada persona con el comprobante de su transferencia.</span>
+              <span className="text-xs text-muted-foreground">{pagados === 0 ? 'Mientras no haya pagos, se puede reabrir desde el menú.' : 'Cuando estén todos, el periodo queda pagado.'}</span>
+            </div>
+          )}
           {periodo.estado === 'PAGADA' && <p className="mb-3 text-xs text-muted-foreground">Periodo pagado: ya no cambia. Para corregir, usa un periodo de ajuste.</p>}
 
           {/* Celular: una tarjeta por persona con el neto a la vista; la tabla no cabía. */}
@@ -161,6 +175,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <span className="text-sm font-semibold tabular-nums">{fmtCOP(l.neto)}</span>
                   <AccionesFila l={l} puedeOperar={puedeOperar} />
+                  {conPagos && <EstadoPago l={l} puedePagar={puedeAprobar} periodo={periodo.nombre} hoy={hoy} />}
                 </div>
               </div>
             ))}
@@ -176,6 +191,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
                   <th className="p-3 text-right font-medium">Deducido</th>
                   <th className="p-3 text-right font-medium">Neto</th>
                   <th className="p-3 text-left font-medium hidden md:table-cell">Cuenta de pago</th>
+                  {conPagos && <th className="p-3 text-left font-medium">Pago</th>}
                   <th className="p-3 w-10" />
                 </tr>
               </thead>
@@ -202,6 +218,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
                         ? <span className="text-xs"><span className="font-medium">{l.cuenta.banco}</span><span className="text-muted-foreground"> · {l.cuenta.tipo} · {l.cuenta.numero}</span></span>
                         : <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Sin cuenta registrada</span>}
                     </td>
+                    {conPagos && <td className="p-3"><EstadoPago l={l} puedePagar={puedeAprobar} periodo={periodo.nombre} hoy={hoy} /></td>}
                     <td className="p-3"><AccionesFila l={l} puedeOperar={puedeOperar} /></td>
                   </tr>
                 ))}
@@ -219,6 +236,29 @@ type Fila = {
   horasExtra: number; devengado: number; deducido: number; neto: number
   cuenta: { banco: string; tipo: string; numero: string } | null
   documentoId: string | null
+  pagadoEn: string | null
+  pagadoISO: string | null
+  comprobanteId: string | null
+}
+
+/** El pago de la persona: pagado con su comprobante, o el botón para registrarlo. */
+function EstadoPago({ l, puedePagar, periodo, hoy }: { l: Fila; puedePagar: boolean; periodo: string; hoy: string }) {
+  if (!l.pagadoEn) {
+    return puedePagar
+      ? <PagarPersona liquidacionId={l.id} nombre={l.nombre} neto={fmtCOP(l.neto)} periodo={periodo} hoy={hoy} />
+      : <Pill tone="muted">Por pagar</Pill>
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-1 sm:justify-start">
+      <Pill tone="ok">Pagado · {l.pagadoEn}</Pill>
+      {l.comprobanteId && (
+        <VisorPdf documentoId={l.comprobanteId} titulo={`Comprobante de pago · ${l.nombre}`} className={buttonVariants({ variant: 'ghost', size: 'icon' }) + ' size-7'}>
+          <FileCheck2 className="size-4" /><span className="sr-only">Ver comprobante</span>
+        </VisorPdf>
+      )}
+      {puedePagar && <PagarPersona liquidacionId={l.id} nombre={l.nombre} neto={fmtCOP(l.neto)} periodo={periodo} hoy={hoy} pagadoEn={l.pagadoISO} />}
+    </div>
+  )
 }
 
 /** Ver el desprendible y, para quien opera la nómina, rehacerlo o reemplazarlo. */

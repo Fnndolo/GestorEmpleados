@@ -30,7 +30,7 @@ export default async function ReportesPage() {
     prisma.contrato.findMany({ where: { estado: 'ACTIVO' }, select: { salarioBase: true } }),
     prisma.contrato.count({ where: { estado: 'ACTIVO', tipo: 'TERMINO_FIJO', fechaFin: { gte: hoy, lte: en60 } } }),
     prisma.contrato.count({ where: { estado: 'ACTIVO', periodoPruebaFin: { gte: hoy, lte: en60 } } }),
-    prisma.cuentaCobroOps.count({ where: { estado: { in: ['RADICADA', 'EN_VERIFICACION_SS', 'BLOQUEADA_SS'] }, soporteSs: { is: null } } }),
+    prisma.cuentaCobroOps.count({ where: { contratoOpsId: { not: null }, requierePila: true, estado: { in: ['RADICADA', 'EN_VERIFICACION_SS', 'BLOQUEADA_SS'] }, soporteSs: { is: null } } }),
     prisma.accidenteTrabajo.count({ where: { fecha: { gte: inicioAnio } } }),
     prisma.terminacion.count({ where: { fechaRetiro: { gte: inicioAnio } } }),
   ])

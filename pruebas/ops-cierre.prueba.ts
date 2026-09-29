@@ -87,8 +87,7 @@ describe('cierre de un contrato OPS', () => {
   it('por vencimiento del plazo: pasa a Terminado con la fecha de fin, motivo y quién, y apaga su alerta', async () => {
     const c = await ops(dias(-100), dias(-10))
     actuarComo(th)
-    const r = datosDe(await cerrarContratoOps({ contratoId: c.id, motivo: 'VENCIMIENTO_PLAZO', fechaCierre: '', observacion: 'Sigue con contrato nuevo' }))
-    expect(r.accesoRestringido).toBe(false)
+    datosDe(await cerrarContratoOps({ contratoId: c.id, motivo: 'VENCIMIENTO_PLAZO', fechaCierre: '', observacion: 'Sigue con contrato nuevo' }))
 
     const ahora = await prisma.contratoOps.findUniqueOrThrow({ where: { id: c.id } })
     expect(ahora.estado).toBe('TERMINADO')
@@ -124,14 +123,17 @@ describe('cierre de un contrato OPS', () => {
     const activo = await ops(dias(-20), dias(+90), 'ACTIVO')
     const firmado = await ops(dias(-15), dias(+90), 'FIRMADO')
     actuarComo(th)
-    const { id } = datosDe(await crearTerminacion({ colaboradorId, tipo: 'FIN_OPS', fechaRetiro: iso(hoy), motivo: MARCA }))
+    // Último día ayer: el retiro se aplica de una vez (con el último día por venir lo aplica el cron).
+    const { id } = datosDe(await crearTerminacion({ colaboradorId, tipo: 'FIN_OPS', fechaRetiro: iso(dias(-1)), motivo: MARCA }))
     try {
       for (const c of [activo, firmado]) {
         const ahora = await prisma.contratoOps.findUniqueOrThrow({ where: { id: c.id } })
         expect(ahora.estado).toBe('TERMINADO')
         expect(ahora.motivoCierre).toBe('RETIRO')
-        expect(iso(ahora.cerradoEn!)).toBe(iso(hoy))
+        expect(iso(ahora.cerradoEn!)).toBe(iso(dias(-1)))
       }
+      // La ficha no se desactiva sola: eso se hace a mano desde administración.
+      expect((await prisma.colaborador.findUniqueOrThrow({ where: { id: colaboradorId } })).estado).toBe('ACTIVO')
     } finally {
       // Anular revierte todo: la persona vuelve a estar activa y cada OPS a su estado.
       datosDe(await anularTerminacion({ id, motivo: `${MARCA}: se registró por error` }))

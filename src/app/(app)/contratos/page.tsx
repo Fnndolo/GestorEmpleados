@@ -66,7 +66,7 @@ export default async function ContratosPage({
   const abrirNuevo: ClaseNuevo | null = nuevo === 'ops' || nuevo === 'laboral' ? nuevo : null
 
   const cuentasSinSoporte = await prisma.cuentaCobroOps.count({
-    where: { contratoOpsId: { not: null }, estado: { in: ['RADICADA', 'EN_VERIFICACION_SS', 'BLOQUEADA_SS'] }, soporteSs: { is: null } },
+    where: { contratoOpsId: { not: null }, requierePila: true, estado: { in: ['RADICADA', 'EN_VERIFICACION_SS', 'BLOQUEADA_SS'] }, soporteSs: { is: null } },
   })
 
   const contratosLaboral = esOps ? [] : await prisma.contrato.findMany({

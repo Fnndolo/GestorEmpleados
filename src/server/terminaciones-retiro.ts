@@ -2,12 +2,16 @@ import 'server-only'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { resolverVencimiento } from '@/server/vencimientos/servicio'
-import { restringirAccesoSiSinVinculo } from '@/server/rol-consulta'
 import { hoyBogota } from '@/lib/fechas'
 
 /**
- * El retiro efectivo de quien termina su contrato: colaborador RETIRADO,
- * contrato TERMINADO, OPS vigentes cerrados y acceso de solo consulta.
+ * El retiro efectivo de quien termina su contrato: contrato TERMINADO y OPS
+ * vigentes cerrados.
+ *
+ * Ni la ficha ni el usuario se desactivan solos: la persona sigue ACTIVA y con su
+ * acceso hasta que alguien de administración la pase a Retirado (ficha) o a
+ * Inactivo / Solo consulta (Usuarios). Así lo pidió Talento Humano: el estado se
+ * decide a mano. La nómina no depende de eso — la saca la fecha de retiro.
  *
  * No se hace al registrar la terminación sino al terminar su último día (la
  * fecha de retiro): hasta entonces sigue trabajando y conserva sus trámites. Si
@@ -24,12 +28,12 @@ export function ultimoDiaPasado(fechaRetiro: Date): boolean {
   return fechaRetiro < hoyBogota()
 }
 
-/** Aplica el retiro de una terminación (idempotente). Devuelve si se restringió el acceso. */
-export async function aplicarRetiro(terminacionId: string, usuarioId: string | null): Promise<{ accesoRestringido: boolean }> {
+/** Aplica el retiro de una terminación (idempotente). */
+export async function aplicarRetiro(terminacionId: string, usuarioId: string | null): Promise<void> {
   const t = await prisma.terminacion.findUniqueOrThrow({ where: { id: terminacionId } })
-  if (t.retiroAplicadoEn) return { accesoRestringido: false }
+  if (t.retiroAplicadoEn) return
 
-  await dbAuditado.colaborador.update({ where: { id: t.colaboradorId }, data: { estado: 'RETIRADO', fechaRetiro: t.fechaRetiro } })
+  await dbAuditado.colaborador.update({ where: { id: t.colaboradorId }, data: { fechaRetiro: t.fechaRetiro } })
   const contrato = await prisma.contrato.findFirst({ where: { colaboradorId: t.colaboradorId, estado: 'ACTIVO' }, orderBy: { fechaInicio: 'desc' } })
   if (contrato) await dbAuditado.contrato.update({ where: { id: contrato.id }, data: { estado: 'TERMINADO' } })
 
@@ -47,9 +51,6 @@ export async function aplicarRetiro(terminacionId: string, usuarioId: string | n
   }
 
   await dbAuditado.terminacion.update({ where: { id: t.id }, data: { retiroAplicadoEn: new Date() } })
-  // Acceso de solo consulta: sin vínculo vigente ya no crea solicitudes ni radica
-  // nada; solo ve su historial (habeas data) y firma los documentos de su retiro.
-  return { accesoRestringido: await restringirAccesoSiSinVinculo(t.colaboradorId) }
 }
 
 /** Cron de cada noche: aplica los retiros cuyo último día ya terminó. */

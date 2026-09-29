@@ -27,7 +27,6 @@ import { fechaBreve } from '@/lib/notificaciones/texto'
 import { generarPdfCuentaCobro } from '@/server/cuentas-cobro'
 import { parseFuncionesTexto, type FuncionesCargo, type ClausulaPlantilla } from '@/lib/contrato-variables'
 import { ubicarFirmasEnPdf, contarPaginas } from '@/server/pdf/firma-en-pdf'
-import { restringirAccesoSiSinVinculo } from '@/server/rol-consulta'
 import { MOTIVO_CIERRE_TEXTO } from '@/lib/contratos-cierre'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
@@ -551,8 +550,8 @@ export const eliminarEntregableOps = accion(
  * La EMPRESA radica una cuenta de cobro a nombre de un colaborador/contratista
  * (contraparte de `crearMiCuentaCobro` del autoservicio): útil cuando el
  * contratista no maneja la app o la administración liquida el cobro del mes.
- * Si tiene contrato OPS vigente se vincula (exige verificación de seguridad
- * social antes de aprobar/pagar, igual que las radicadas por él).
+ * Si tiene contrato OPS vigente se vincula; la planilla PILA se le pide solo si
+ * se marca `requierePila` (entonces exige verificarla antes de aprobar/pagar).
  */
 export const crearCuentaCobroEmpresa = accion(
   {
@@ -564,6 +563,7 @@ export const crearCuentaCobroEmpresa = accion(
       valor: z.coerce.number().min(1),
       concepto: z.string().trim().max(200).optional(),
       plantillaId: z.union([z.uuid(), z.literal('')]).optional(),
+      requierePila: z.boolean().default(false),
     }),
   },
   async (d, usuario) => {
@@ -580,22 +580,24 @@ export const crearCuentaCobroEmpresa = accion(
         colaboradorId: d.colaboradorId, contratoOpsId: contrato?.id ?? null,
         numero: `CC-${total + 1}`, periodo: d.periodo, concepto: d.concepto || null,
         valor: d.valor, fechaRadicacion: hoyBogota(), estado: 'RADICADA', creadaPorContratista: false,
+        // La PILA solo aplica a contratistas OPS.
+        requierePila: !!contrato && d.requierePila,
       },
     })
     await generarPdfCuentaCobro(cuenta.id, d.plantillaId || null, usuario.id, null)
 
-    // El titular debe enterarse: revisa el documento y, si es OPS, adjunta su planilla PILA.
+    // El titular debe enterarse: revisa el documento y, si se le pidió, adjunta su planilla PILA.
     const usuarioColab = await usuarioDeColaborador(d.colaboradorId)
     if (usuarioColab) {
       await avisar(usuarioColab, {
         titulo: `Cuenta de cobro ${cuenta.numero} radicada a tu nombre`,
-        mensaje: `Periodo ${d.periodo}${d.concepto ? ` · ${d.concepto}` : ''}${contrato ? ' · Adjunta tu planilla PILA para que se apruebe.' : ''}`,
+        mensaje: `Periodo ${d.periodo}${d.concepto ? ` · ${d.concepto}` : ''}${cuenta.requierePila ? ' · Adjunta tu planilla PILA para que se apruebe.' : ''}`,
         enlace: '/autoservicio/cuentas-cobro', llamadoAccion: 'Ver mi cuenta de cobro', evento: 'cuenta_cobro_radicada',
       })
     }
     revalidatePath('/contratos/cuentas-cobro')
     if (contrato) revalidatePath(`/contratos/ops/${contrato.id}`)
-    return { id: cuenta.id, numero: cuenta.numero, vinculadaOps: !!contrato }
+    return { id: cuenta.id, numero: cuenta.numero, pidePila: cuenta.requierePila }
   },
 )
 
@@ -676,7 +678,7 @@ export const cambiarEstadoCuenta = accion(
     })
     // Regla legal SOLO para contratistas OPS (independientes): no se aprueba/paga sin
     // soporte de SS válido. Las cuentas de empleados no OPS (comisiones/saldos) no la requieren.
-    if (cuenta.contratoOpsId && (d.estado === 'APROBADA' || d.estado === 'PAGADA') && cuenta.soporteSs?.estadoVerificacion !== 'VALIDA') {
+    if (cuenta.contratoOpsId && cuenta.requierePila && (d.estado === 'APROBADA' || d.estado === 'PAGADA') && cuenta.soporteSs?.estadoVerificacion !== 'VALIDA') {
       throw new ErrorNegocio('No se puede aprobar ni pagar sin el soporte de seguridad social verificado como válido.')
     }
     await dbAuditado.cuentaCobroOps.update({
@@ -1127,15 +1129,15 @@ export const cerrarContratoOps = accion(
     // Un contrato cerrado ya no vence: se apaga su alerta.
     await publicarVencimientoOps(c.id)
 
-    let accesoRestringido = false
+    // El acceso del contratista no cambia al cerrar: si hay que quitárselo o
+    // dejarlo en solo consulta, se hace a mano desde Usuarios.
     if (c.colaboradorId) {
-      accesoRestringido = await restringirAccesoSiSinVinculo(c.colaboradorId)
       const uid = await usuarioDeColaborador(c.colaboradorId)
       if (uid) {
         await avisar(uid, {
           evento: 'contrato_cerrado',
           titulo: `Tu contrato ${c.numero} se cerró`,
-          mensaje: `Contrato ${c.numero} · ${fechaBreve(cerradoEn)} · ${MOTIVO_CIERRE_TEXTO[d.motivo]}${accesoRestringido ? ' · Tu acceso queda en solo consulta.' : ''}`,
+          mensaje: `Contrato ${c.numero} · ${fechaBreve(cerradoEn)} · ${MOTIVO_CIERRE_TEXTO[d.motivo]}`,
           enlace: '/autoservicio/contratos',
           llamadoAccion: 'Ver mis contratos',
         }).catch(() => {})
@@ -1145,7 +1147,7 @@ export const cerrarContratoOps = accion(
     revalidatePath('/contratos')
     revalidatePath(`/contratos/ops/${c.id}`)
     revalidatePath('/autoservicio/contratos')
-    return { ok: true, accesoRestringido }
+    return { ok: true }
   },
 )
 

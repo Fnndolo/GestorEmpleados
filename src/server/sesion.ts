@@ -48,6 +48,11 @@ export const obtenerSesion = cache(async (): Promise<UsuarioSesion | null> => {
     ),
   )
 
+  // Solo consulta: conserva únicamente los permisos de VER. Todo lo demás
+  // (botones, acciones del servidor, subidas) pasa por `tienePermiso`, así que
+  // con esto basta para que vea sin poder modificar nada.
+  const permisosEfectivos = usuario.estado === 'SOLO_CONSULTA' ? permisos.filter((p) => p.accion === 'VER') : permisos
+
   return {
     id: usuario.id,
     email: usuario.email,
@@ -59,7 +64,7 @@ export const obtenerSesion = cache(async (): Promise<UsuarioSesion | null> => {
     debeCambiarPassword: usuario.debeCambiarPassword,
     colaboradorId: usuario.colaborador?.id ?? null,
     sedeIds: usuario.sedes.map((s) => s.sedeId),
-    permisos,
+    permisos: permisosEfectivos,
   }
 })
 
@@ -67,7 +72,7 @@ export const obtenerSesion = cache(async (): Promise<UsuarioSesion | null> => {
 export async function requerirSesion(): Promise<UsuarioSesion> {
   const usuario = await obtenerSesion()
   if (!usuario) redirect('/login')
-  if (usuario.estado !== 'ACTIVO') redirect('/login?error=cuenta-inactiva')
+  if (usuario.estado !== 'ACTIVO' && usuario.estado !== 'SOLO_CONSULTA') redirect('/login?error=cuenta-inactiva')
   if (usuario.debeCambiarPassword) redirect('/cambiar-password')
   return usuario
 }

@@ -256,6 +256,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
             id: cc.id, numero: cc.numero, periodo: cc.periodo, valor: Number(cc.valor),
             estado: cc.estado, fechaRadicacion: formatFechaISO(cc.fechaRadicacion),
             fechaPago: cc.fechaPago ? formatFechaISO(cc.fechaPago) : null,
+            requierePila: cc.requierePila,
             soporte: cc.soporteSs ? {
               estadoVerificacion: cc.soporteSs.estadoVerificacion,
               periodoCotizado: cc.soporteSs.periodoCotizado,

@@ -7,7 +7,7 @@ import { saldoVacaciones } from '@/server/vacaciones'
 import { saldoVisibleEnAutoservicio } from '@/lib/vacaciones-config'
 import { liquidarVacaciones } from '@/server/vacaciones-liquidacion'
 import { Card, CardContent } from '@/components/ui/card'
-import { CalendarRange, ChevronRight, Clock, CreditCard, FileCheck2 } from 'lucide-react'
+import { CalendarRange, ChevronRight, Clock, CreditCard, Eye, FileCheck2 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { fmtCOP } from '@/lib/moneda'
@@ -422,6 +422,14 @@ export default async function AutoservicioPage() {
 
   return (
     <div className="max-w-7xl">
+      {/* Solo consulta: lo decide administración en Usuarios. Se dice de entrada
+          para que no busque por qué no aparecen los trámites. */}
+      {usuario.estado === 'SOLO_CONSULTA' && (
+        <p className="mb-3 flex items-center gap-2 rounded-xl border bg-muted/50 p-3 text-sm">
+          <Eye className="size-4 shrink-0" />
+          Tu acceso es de solo consulta: puedes ver y descargar tu información, pero no crear ni enviar trámites.
+        </p>
+      )}
       <BannerAvisos avisos={avisosNuevos.slice(0, 5).map((a) => ({ id: a.id, titulo: a.titulo, resumen: a.resumen, tipo: a.tipo, enlace: a.enlace }))} />
       {retiroPorFirmar > 0 && (
         <Link href="/autoservicio/retiro" className="mb-3 flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-950 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
@@ -469,6 +477,7 @@ export default async function AutoservicioPage() {
 
       <PanelTramites
         activo={colab.estado === 'ACTIVO'}
+        soloConsulta={usuario.estado === 'SOLO_CONSULTA'}
         tipoVinculo={colab.tipoVinculo}
         // La fecha de nacimiento cuenta: de ella sale la lista de cumpleaños.
         fichaFaltantes={[colab.fechaNacimiento, colab.direccion, colab.emergenciaNombre, colab.epsId, colab.afpId, colab.bancoId, colab.numeroCuenta].filter((x) => !x).length}

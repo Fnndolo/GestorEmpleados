@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
@@ -30,6 +31,8 @@ export function NuevaCuentaEmpresa({ plantillas, inicial }: { plantillas: { id: 
   const [valor, setValor] = useState(inicial?.valor ? String(inicial.valor) : '')
   const [concepto, setConcepto] = useState(inicial?.concepto ?? '')
   const [plantillaId, setPlantillaId] = useState('')
+  // Por ahora la PILA es opcional: se pide solo si se marca.
+  const [pedirPila, setPedirPila] = useState(false)
   const [g, setG] = useState(false)
 
   async function crear() {
@@ -41,14 +44,16 @@ export function NuevaCuentaEmpresa({ plantillas, inicial }: { plantillas: { id: 
       colaboradorId, periodo, valor: Number(valor),
       concepto: concepto.trim() || undefined,
       plantillaId: plantillaId || undefined,
+      requierePila: pedirPila,
     })
     setG(false)
     if (!res.ok) { toast.error(res.error); return }
-    const r = res.datos as { numero: string; vinculadaOps: boolean }
-    toast.success(`Cuenta ${r.numero} radicada.${r.vinculadaOps ? ' Quedó ligada al contrato OPS: requiere planilla PILA verificada antes de aprobar.' : ''}`)
+    const r = res.datos as { numero: string; pidePila: boolean }
+    toast.success(`Cuenta ${r.numero} radicada.${r.pidePila ? ' Se aprueba cuando su planilla PILA esté verificada.' : ''}`)
     setAbierto(false)
     if (!inicial) { setColaboradorId(''); setPeriodo(''); setValor(''); setConcepto('') }
     setPlantillaId('')
+    setPedirPila(false)
     router.refresh()
   }
 
@@ -64,7 +69,7 @@ export function NuevaCuentaEmpresa({ plantillas, inicial }: { plantillas: { id: 
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Receipt className="size-4" /> Radicar cuenta de cobro</DialogTitle>
             <DialogDescription>
-              La empresa la radica a nombre del colaborador o contratista; él recibe la notificación para revisarla (y adjuntar su planilla PILA si es OPS).
+              La empresa la radica a nombre del colaborador o contratista; recibe la notificación para revisarla.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -88,6 +93,13 @@ export function NuevaCuentaEmpresa({ plantillas, inicial }: { plantillas: { id: 
               <Label>Concepto</Label>
               <Textarea rows={2} value={concepto} onChange={(e) => setConcepto(e.target.value)} placeholder="Honorarios del mes, comisiones, saldo a favor…" />
             </div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+              <Switch checked={pedirPila} onCheckedChange={setPedirPila} className="mt-0.5" />
+              <span className="min-w-0 text-sm">
+                <span className="block font-medium">Pedir planilla PILA</span>
+                <span className="block text-xs text-muted-foreground">Solo contratistas OPS: la adjunta desde su autoservicio y la cuenta se aprueba cuando esté verificada.</span>
+              </span>
+            </label>
             {plantillas.length > 0 && (
               <div className="space-y-1.5">
                 <Label>Plantilla del PDF</Label>

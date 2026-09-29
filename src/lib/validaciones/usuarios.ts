@@ -22,7 +22,7 @@ export const editarUsuarioSchema = z.object({
   email: z.email('Correo inválido'),
   rolId: z.uuid('Selecciona un rol'),
   rolIdsExtra,
-  estado: z.enum(['ACTIVO', 'INACTIVO', 'BLOQUEADO']),
+  estado: z.enum(['ACTIVO', 'SOLO_CONSULTA', 'INACTIVO', 'BLOQUEADO']),
   telefonoE164: z.string().trim().max(20).optional().or(z.literal('')),
   sedeIds: z.array(z.uuid()),
   // Al corregir el correo hay que mandar la clave temporal al buzón nuevo: el

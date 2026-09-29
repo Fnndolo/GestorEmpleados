@@ -13,7 +13,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const usuario = await obtenerSesion()
   if (!usuario) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   // Quien edita fichas, o la propia persona sobre SU foto.
-  if (!tienePermiso(usuario, 'colaboradores', 'EDITAR') && usuario.colaboradorId !== id) {
+  if (!tienePermiso(usuario, 'colaboradores', 'EDITAR') && (usuario.colaboradorId !== id || usuario.estado !== 'ACTIVO')) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
 
@@ -48,7 +48,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params
   const usuario = await obtenerSesion()
   if (!usuario) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  if (!tienePermiso(usuario, 'colaboradores', 'EDITAR') && usuario.colaboradorId !== id) {
+  if (!tienePermiso(usuario, 'colaboradores', 'EDITAR') && (usuario.colaboradorId !== id || usuario.estado !== 'ACTIVO')) {
     return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
   }
 

@@ -109,7 +109,7 @@ export async function registrarPagoCuentaCobro(opts: {
   }
   // Misma regla que al marcarla pagada en Contratos: un contratista OPS no se
   // paga sin la seguridad social del periodo verificada como válida.
-  if (cuenta.contratoOpsId && cuenta.soporteSs?.estadoVerificacion !== 'VALIDA') {
+  if (cuenta.contratoOpsId && cuenta.requierePila && cuenta.soporteSs?.estadoVerificacion !== 'VALIDA') {
     throw new ErrorNegocio('No se puede pagar sin el soporte de seguridad social verificado como válido.')
   }
 

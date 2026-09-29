@@ -89,7 +89,7 @@ export const adjuntarMiSoporteSs = accion(
     })
     const dueno = cuenta.colaboradorId ?? cuenta.contratoOps?.colaboradorId
     if (dueno !== usuario.colaboradorId) throw new ErrorNegocio('Esta cuenta de cobro no es tuya.')
-    if (!cuenta.contratoOpsId) throw new ErrorNegocio('Esta cuenta no está ligada a un contrato OPS; no requiere soporte de seguridad social.')
+    if (!cuenta.contratoOpsId || !cuenta.requierePila) throw new ErrorNegocio('Esta cuenta no requiere la planilla PILA.')
     if (cuenta.estado === 'APROBADA' || cuenta.estado === 'PAGADA' || cuenta.estado === 'RECHAZADA') {
       throw new ErrorNegocio('Esta cuenta ya fue resuelta; el soporte no se puede modificar.')
     }

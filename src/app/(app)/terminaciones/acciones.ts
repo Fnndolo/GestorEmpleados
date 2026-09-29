@@ -91,16 +91,15 @@ export const crearTerminacion = accion(
 
     // La fecha de retiro va a la ficha de una vez: es lo que lo saca de la nómina
     // del periodo en que se retira (esos días se pagan en la liquidación). El
-    // retiro efectivo —RETIRADO, contrato TERMINADO, OPS cerrados, acceso de solo
-    // consulta— espera a que termine su último día: hasta entonces sigue
-    // trabajando. Si ese día ya pasó, se aplica ahora; si no, lo aplica el cron.
+    // retiro efectivo —contrato TERMINADO, OPS cerrados— espera a que termine su
+    // último día: hasta entonces sigue trabajando. Si ese día ya pasó, se aplica
+    // ahora; si no, lo aplica el cron. La ficha y el usuario NO se desactivan
+    // solos: eso se hace a mano desde administración.
     await dbAuditado.colaborador.update({ where: { id: d.colaboradorId }, data: { fechaRetiro } })
-    const { accesoRestringido } = ultimoDiaPasado(fechaRetiro)
-      ? await aplicarRetiro(terminacion.id, usuario.id)
-      : { accesoRestringido: false }
+    if (ultimoDiaPasado(fechaRetiro)) await aplicarRetiro(terminacion.id, usuario.id)
 
     revalidatePath('/terminaciones')
-    return { id: terminacion.id, accesoRestringido }
+    return { id: terminacion.id }
   },
 )
 

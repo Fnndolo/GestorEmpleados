@@ -6,8 +6,9 @@ export const runtime = 'nodejs'
 
 /**
  * Cron de cada noche (Vercel Cron, 05:10 UTC ≈ 12:10 a. m. Bogotá): quien
- * terminó ayer su último día queda retirado (colaborador RETIRADO, contrato
- * TERMINADO, acceso de solo consulta). Hasta entonces seguía activo.
+ * terminó ayer su último día queda con el contrato TERMINADO y los OPS cerrados.
+ * La ficha y el usuario no se desactivan solos: eso se hace a mano desde
+ * administración.
  * Protegido con CRON_SECRET.
  */
 export async function GET(req: NextRequest) {

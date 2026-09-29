@@ -22,6 +22,8 @@ type Planilla = { id: string; nombre: string; esImagen: boolean }
 type Cuenta = {
   id: string; numero: string; periodo: string; valor: number; estado: string
   fechaRadicacion: string; fechaPago: string | null; soporte: Soporte | null; planilla: Planilla | null
+  /** Se le pidió la planilla PILA: sin ella verificada no se aprueba ni se paga. */
+  requierePila: boolean
 }
 
 const ESTADO_SS: Record<string, string> = { VALIDA: 'válida', INVALIDA: 'inválida', PENDIENTE: 'pendiente' }
@@ -68,11 +70,13 @@ export function CuentasCobro({
 
                 {/* Seguridad social: requisito para aprobar y pagar. */}
                 <div className="flex flex-wrap items-center gap-2 pl-11">
-                  <EstadoSS estado={cc.soporte?.estadoVerificacion} />
+                  {(cc.requierePila || cc.soporte) && <EstadoSS estado={cc.soporte?.estadoVerificacion} />}
                   <p className="min-w-[10rem] flex-1 truncate text-xs">
                     {cc.soporte
                       ? <>Seguridad social <b>{ESTADO_SS[cc.soporte.estadoVerificacion] ?? cc.soporte.estadoVerificacion}</b> · {cc.soporte.periodoCotizado}{cc.soporte.ibcDeclarado != null ? ` · IBC ${fmtCOP(cc.soporte.ibcDeclarado)}` : ''}</>
-                      : <span className="text-amber-700 dark:text-amber-400">Sin soporte de seguridad social</span>}
+                      : cc.requierePila
+                        ? <span className="text-amber-700 dark:text-amber-400">Sin soporte de seguridad social</span>
+                        : <span className="text-muted-foreground">No se pidió planilla PILA</span>}
                   </p>
                   {/* Archivo de la planilla adjuntada por el contratista: se ve en la app. */}
                   {cc.planilla && (
@@ -150,7 +154,7 @@ function AccionEstado({
     const fechaPago = requiereFecha ? new Date().toISOString().slice(0, 10) : undefined
     const res = await cambiarEstadoCuenta({ id, estado: estado as 'APROBADA', fechaPago })
     setCargando(false)
-    if (res.ok) { toast.success(`Cuenta ${label.toLowerCase()}.`); onDone() }
+    if (res.ok) { toast.success(estado === 'PAGADA' ? 'Cuenta marcada como pagada.' : 'Cuenta aprobada.'); onDone() }
     else toast.error(res.error)
   }
   return (

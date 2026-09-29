@@ -30,7 +30,7 @@ async function esSolicitudDeIncapacidad(solicitudId: string): Promise<boolean> {
 /**
  * ¿El documento es del propio usuario? (habeas data: siempre puede ver lo suyo,
  * aunque sea de nivel restringido). Su ficha, el soporte de su solicitud o de
- * su incapacidad.
+ * su incapacidad, o el comprobante del pago de su nómina.
  */
 export async function esDocumentoPropio(usuario: UsuarioSesion, doc: { entidadTipo: string; entidadId: string }): Promise<boolean> {
   const propio = usuario.colaboradorId
@@ -38,6 +38,10 @@ export async function esDocumentoPropio(usuario: UsuarioSesion, doc: { entidadTi
   if (doc.entidadTipo === 'Colaborador') return doc.entidadId === propio
   if (doc.entidadTipo === 'Solicitud') {
     return (await prisma.solicitud.findUnique({ where: { id: doc.entidadId }, select: { colaboradorId: true } }))?.colaboradorId === propio
+  }
+  // El comprobante del pago de su nómina (se guarda con la liquidación del periodo).
+  if (doc.entidadTipo === 'PagoNomina') {
+    return (await prisma.liquidacionNomina.findUnique({ where: { id: doc.entidadId }, select: { colaboradorId: true } }))?.colaboradorId === propio
   }
   if (doc.entidadTipo === 'Incapacidad') {
     return (await prisma.incapacidad.findUnique({ where: { id: doc.entidadId }, select: { colaboradorId: true } }))?.colaboradorId === propio

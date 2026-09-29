@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   }
   let esAporteDelColaborador = false
   // Las excepciones "de dueño" exigen poder ACTUAR en autoservicio: un usuario
-  // en solo consulta (rol "Consulta (retirado)") no puede subir nada.
+  // en Solo consulta (o con el rol "Consulta (retirado)") no puede subir nada.
   const puedeActuarEnAutoservicio = tienePermiso(usuario, 'autoservicio', 'CREAR')
   if (!permitido && puedeActuarEnAutoservicio && usuario.colaboradorId && entidadTipo === 'Colaborador' && entidadId === usuario.colaboradorId) {
     permitido = true

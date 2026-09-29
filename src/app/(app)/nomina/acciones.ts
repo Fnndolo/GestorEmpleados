@@ -11,6 +11,7 @@ import { generarDesprendibles } from '@/server/nomina/desprendibles'
 import { generarPazSalvoPrestamo } from '@/server/prestamos'
 import { parseFechaISO } from '@/lib/fechas'
 import { registrarPagoCuentaCobro } from '@/server/cuentas-cobro'
+import { registrarPagoNomina } from '@/server/nomina/pagos'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { fmtCOP } from '@/lib/moneda'
 import { fechaBreve } from '@/lib/notificaciones/texto'
@@ -102,6 +103,9 @@ export const reabrirPeriodo = accion(
     const p = await prisma.periodoNomina.findUniqueOrThrow({ where: { id: periodoId } })
     if (p.estado === 'PAGADA') throw new ErrorNegocio('El periodo ya fue pagado: corrige con un periodo de ajuste.')
     if (p.estado === 'BORRADOR') throw new ErrorNegocio('El periodo ya está abierto.')
+    // Con pagos registrados ya no se reabre: recalcular borraría lo que se pagó.
+    const pagados = await prisma.liquidacionNomina.count({ where: { periodoId, pagadoEn: { not: null } } })
+    if (pagados > 0) throw new ErrorNegocio(`Ya hay ${pagados} pago(s) registrado(s) en este periodo: no se puede reabrir. Corrige con un periodo de ajuste.`)
 
     await revertirEfectosPeriodo(periodoId)
     await dbAuditado.periodoNomina.update({ where: { id: periodoId }, data: { estado: 'BORRADOR' } })
@@ -364,5 +368,37 @@ export const pagarCuentaCobro = accion(
     revalidatePath('/nomina/ops')
     revalidatePath('/contratos/cuentas-cobro')
     revalidatePath('/contratos/ops')
+  },
+)
+
+/**
+ * Registra el pago de la nómina de una persona en un periodo cerrado, con el
+ * comprobante de su transferencia. Le avisa, y el periodo pasa a Pagada cuando
+ * ya están pagados todos.
+ */
+export const pagarNominaPersona = accion(
+  {
+    modulo: 'nomina',
+    accion: 'APROBAR',
+    schema: z.object({
+      liquidacionId: z.uuid(),
+      fechaPago: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Indica la fecha del pago.'),
+      comprobante: z.string().startsWith('data:', 'Adjunta el comprobante del pago.'),
+    }),
+  },
+  async (d, usuario) => {
+    const r = await registrarPagoNomina({ liquidacionId: d.liquidacionId, fechaPago: parseFechaISO(d.fechaPago)!, comprobanteDataUri: d.comprobante, usuarioId: usuario.id })
+    const uid = await usuarioDeColaborador(r.colaboradorId)
+    if (uid) {
+      await avisar(uid, {
+        evento: 'nomina_pagada',
+        titulo: `Se pagó tu nómina de ${r.periodoNombre}`,
+        mensaje: `${fmtCOP(r.neto)} · pago del ${fechaBreve(d.fechaPago)}. El desprendible y el comprobante están en Mis desprendibles.`,
+        enlace: '/autoservicio/desprendibles',
+        llamadoAccion: 'Ver mis desprendibles',
+      }).catch(() => {})
+    }
+    revalidatePath('/nomina')
+    return { periodoPagado: r.periodoPagado }
   },
 )

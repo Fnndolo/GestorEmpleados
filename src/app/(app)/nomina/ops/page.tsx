@@ -141,7 +141,7 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
       fechaPagoISO: c.fechaPago ? c.fechaPago.toISOString().slice(0, 10) : null,
       comprobanteId: comprobanteDe.get(c.id) ?? null,
       documentoId: c.documentoId,
-      esOps: Boolean(c.contratoOpsId),
+      esOps: Boolean(c.contratoOpsId) && c.requierePila,
       ss: c.soporteSs?.estadoVerificacion ?? null,
       periodo: c.periodo,
       cuentaBancaria: banco && cuenta ? `${banco} · ${tipo ?? 'cuenta'} · ${cuenta}` : null,

@@ -57,9 +57,7 @@ export function CerrarContratoOps({ contratoId, numero, fechaFin, vencido, hoy, 
     empezar(async () => {
       const res = await cerrarContratoOps({ contratoId, motivo, fechaCierre: motivo === 'VENCIMIENTO_PLAZO' ? '' : fecha, observacion })
       if (!res.ok) { toast.error(res.error); return }
-      toast.success(res.datos.accesoRestringido
-        ? 'Contrato cerrado. El contratista no tiene otro contrato vigente: su acceso queda en solo consulta.'
-        : 'Contrato cerrado.')
+      toast.success('Contrato cerrado.')
       setAbierto(false)
       router.refresh()
     })

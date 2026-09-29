@@ -34,8 +34,13 @@ type Usuario = {
 type Rol = { id: string; nombre: string }
 type Sede = { id: string; nombre: string; ciudad: string }
 
-const ESTADO_VARIANTE: Record<string, 'default' | 'secondary' | 'destructive'> = {
-  ACTIVO: 'default', INACTIVO: 'secondary', BLOQUEADO: 'destructive',
+const ESTADO_VARIANTE: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  ACTIVO: 'default', SOLO_CONSULTA: 'outline', INACTIVO: 'secondary', BLOQUEADO: 'destructive',
+}
+
+/** Cómo se lee cada estado (el enum va en mayúsculas). */
+const ESTADO_USUARIO: Record<string, string> = {
+  ACTIVO: 'Activo', SOLO_CONSULTA: 'Solo consulta', INACTIVO: 'Inactivo', BLOQUEADO: 'Bloqueado',
 }
 
 export function UsuariosCliente({
@@ -88,7 +93,7 @@ export function UsuariosCliente({
                   {u.sedeNombres.length ? u.sedeNombres.join(', ') : 'Todas'}
                 </TableCell>
                 <TableCell>
-                  <Badge variant={ESTADO_VARIANTE[u.estado]}>{u.estado}</Badge>
+                  <Badge variant={ESTADO_VARIANTE[u.estado]}>{ESTADO_USUARIO[u.estado] ?? u.estado}</Badge>
                   {u.debeCambiarPassword && (
                     <p className="text-[10px] text-amber-600 mt-0.5">Pendiente 1er ingreso</p>
                   )}
@@ -379,6 +384,8 @@ function DialogEditar({ usuario, roles, sedes, onClose }: { usuario: Usuario; ro
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ACTIVO">Activo</SelectItem>
+                  {/* Entra y ve lo que su rol le deja ver, sin crear, editar, aprobar ni borrar. */}
+                  <SelectItem value="SOLO_CONSULTA">Solo consulta</SelectItem>
                   <SelectItem value="INACTIVO">Inactivo</SelectItem>
                   <SelectItem value="BLOQUEADO">Bloqueado</SelectItem>
                 </SelectContent>

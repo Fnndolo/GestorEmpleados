@@ -3,7 +3,7 @@ import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
-import { Receipt, Download } from 'lucide-react'
+import { Receipt, Download, FileCheck2 } from 'lucide-react'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
@@ -58,9 +58,19 @@ export default async function MisDesprendiblesPage() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{l.periodo.nombre}</p>
                 <p className="text-xs text-muted-foreground">
-                  Pagado {formatFechaCorta(l.periodo.fechaFin)} · Neto <span className="font-medium text-foreground">{fmtCOP(Number(l.neto))}</span>
+                  {l.pagadoEn ? `Pagado el ${formatFechaCorta(l.pagadoEn)}` : `Periodo al ${formatFechaCorta(l.periodo.fechaFin)}`} · Neto <span className="font-medium text-foreground">{fmtCOP(Number(l.neto))}</span>
                 </p>
               </div>
+              {/* El comprobante de la transferencia, cuando Talento Humano registra el pago. */}
+              {l.comprobantePagoId && (
+                <VisorPdf
+                  documentoId={l.comprobantePagoId}
+                  titulo={`Comprobante de pago · ${l.periodo.nombre}`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors hover:bg-accent"
+                >
+                  <FileCheck2 className="size-4" /> <span className="hidden sm:inline">Comprobante</span>
+                </VisorPdf>
+              )}
               {l.documentoId && (
                 <VisorPdf
                   documentoId={l.documentoId}

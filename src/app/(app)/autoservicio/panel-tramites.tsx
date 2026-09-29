@@ -72,8 +72,10 @@ function Seccion({
 
 
 export function PanelTramites({
-  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, mostrarSaldoVacaciones = false, bloqueoPermiso = null, documentosFaltantes, dotacionPorFirmar, horasExtraPorFirmar, retiroPorFirmar = 0, entregasPorVerificar = 0, esResponsableArea = false, hrefsNuevos = [],
+  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, mostrarSaldoVacaciones = false, bloqueoPermiso = null, documentosFaltantes, dotacionPorFirmar, horasExtraPorFirmar, retiroPorFirmar = 0, entregasPorVerificar = 0, esResponsableArea = false, hrefsNuevos = [], soloConsulta = false,
 }: {
+  /** Usuario en «Solo consulta» (Usuarios): ve sus canales, pero no pide nada. */
+  soloConsulta?: boolean
   /** Colaborador con vínculo activo: solo entonces se ofrecen los trámites operativos. */
   activo: boolean
   /** Decide qué trámites aplican: el OPS no tiene los laborales. */
@@ -244,14 +246,14 @@ export function PanelTramites({
 
   return (
     <>
-      {!activo && (
+      {!activo && !soloConsulta && (
         <div className="mt-6 rounded-xl border border-amber-500/40 bg-amber-500/5 p-3.5 text-sm text-amber-800 dark:text-amber-300">
           Tu vínculo laboral no está activo. Puedes consultar tu historial y descargar documentos,
           pero no crear solicitudes de vacaciones, permisos, licencias ni incapacidades.
         </div>
       )}
 
-      <Seccion titulo="¿Qué necesitas solicitar?" items={conNuevo(solicitudes)} onSolicitar={setSolicitar} />
+      {!soloConsulta && <Seccion titulo="¿Qué necesitas solicitar?" items={conNuevo(solicitudes)} onSolicitar={setSolicitar} />}
       <Seccion titulo="Canales" items={conNuevo(canales)} onSolicitar={setSolicitar} />
 
       {/* Se monta al abrir para que el formulario arranque limpio en cada trámite. */}

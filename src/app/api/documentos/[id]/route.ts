@@ -41,6 +41,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (doc.entidadTipo === 'AcuerdoEvaluacion' && !tienePermiso(usuario, 'contratos', 'VER')) {
       return NextResponse.json({ error: 'Sin permiso para este documento' }, { status: 403 })
     }
+    // El comprobante del pago de la nómina de una persona: de ella, o de quien
+    // maneja la nómina. El nivel RRHH solo no basta: el empleado tiene permiso de
+    // ver colaboradores (su propia ficha) y abriría el comprobante de cualquiera.
+    if (doc.entidadTipo === 'PagoNomina' && !esPropio && !tienePermiso(usuario, 'nomina', 'VER')) {
+      return NextResponse.json({ error: 'Sin permiso para este documento' }, { status: 403 })
+    }
   }
 
   try {
@@ -100,6 +106,9 @@ export async function HEAD(_req: NextRequest, { params }: { params: Promise<{ id
     const esPropio = await esDocumentoPropio(usuario, doc)
     if (!esPropio && !puedeVerNivel(usuario, doc.nivelAcceso)) return new NextResponse(null, { status: 403 })
     if (doc.entidadTipo === 'AcuerdoEvaluacion' && !tienePermiso(usuario, 'contratos', 'VER')) {
+      return new NextResponse(null, { status: 403 })
+    }
+    if (doc.entidadTipo === 'PagoNomina' && !esPropio && !tienePermiso(usuario, 'nomina', 'VER')) {
       return new NextResponse(null, { status: 403 })
     }
   }
