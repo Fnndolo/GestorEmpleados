@@ -45,6 +45,8 @@ export function EditorTexto({
   empresa: EmpresaPreview
 }) {
   const def = TEXTOS[clave]
+  // El bloque que pone la app: la tabla o, en la cuenta de cobro, la firma.
+  const marcador = `[${def.marcador ?? 'tabla'}]`
   const router = useRouter()
   const [titulo, setTitulo] = useState(plantilla.titulo)
   const [contenido, setContenido] = useState(plantilla.contenido)
@@ -129,7 +131,7 @@ export function EditorTexto({
           <div className="flex items-start justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2.5">
             <div className="min-w-0">
               <Label htmlFor={`${id}-membrete`} className="text-sm font-medium">Papel membretado</Label>
-              <p className="text-xs text-muted-foreground">{usaMembrete ? 'Con logo y pie de contacto' : 'Encabezado sencillo con nombre y NIT'}</p>
+              <p className="text-xs text-muted-foreground">{usaMembrete ? 'Con logo y pie de contacto' : def.sinEncabezado ? 'Hoja limpia, sin encabezado de la empresa' : 'Encabezado sencillo con nombre y NIT'}</p>
             </div>
             <Switch id={`${id}-membrete`} checked={usaMembrete} onCheckedChange={setUsaMembrete} disabled={!puedeEditar} aria-label="Usar papel membretado" />
           </div>
@@ -161,10 +163,10 @@ export function EditorTexto({
                   type="button"
                   title={def.tabla}
                   disabled={!puedeEditar}
-                  onClick={() => insertar('[tabla]', true)}
+                  onClick={() => insertar(marcador, true)}
                   className="rounded-md border border-primary/30 bg-primary/5 px-2 py-0.5 font-mono text-[11px] transition-colors hover:bg-accent disabled:opacity-60"
                 >
-                  [tabla]
+                  {marcador}
                 </button>
               )}
               {def.variables.map((v) => (
@@ -185,10 +187,10 @@ export function EditorTexto({
               <summary className="cursor-pointer select-none font-medium text-foreground">¿Cómo dar formato?</summary>
               <p className="mt-1.5">
                 Cada línea es un párrafo. <code>**negrita**</code>, <code>__subrayado__</code>. Listas: <code>- </code> viñeta, <code>✓ </code> casilla, <code>1. </code> numeración; <code>~ </code> letra pequeña bajo la firma.
-                Lo que va entre <code>[[ ]]</code> solo sale si sus variables tienen valor.{def.tabla && <> <code>[tabla]</code> marca dónde va la tabla.</>} {def.fijo}
+                Lo que va entre <code>[[ ]]</code> solo sale si sus variables tienen valor.{def.tabla && <> <code>[{def.marcador ?? 'tabla'}]</code> marca dónde va {def.marcador === 'firma' ? 'la firma' : 'la tabla'}.</>} {def.fijo}
               </p>
               <ul className="mt-1.5 grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
-              {def.tabla && <li><span className="font-mono text-foreground">[tabla]</span> · {def.tabla}</li>}
+              {def.tabla && <li><span className="font-mono text-foreground">{marcador}</span> · {def.tabla}</li>}
               {def.variables.map((v) => (
                 <li key={v.clave}><span className="font-mono text-foreground">{v.clave}</span> · {v.descripcion}</li>
               ))}

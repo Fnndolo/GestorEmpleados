@@ -2,7 +2,7 @@
 
 import { useMemo, type ReactNode } from 'react'
 import { HojaCarta } from './hoja-carta'
-import { conTablaImplicita, resolverTexto, type ClaveTexto, type EmpresaTexto, type PlantillaTexto } from '@/lib/plantillas-documento/textos'
+import { TEXTOS, conTablaImplicita, resolverTexto, type ClaveTexto, type EmpresaTexto, type PlantillaTexto } from '@/lib/plantillas-documento/textos'
 import { muestraTexto, type TablaMuestra } from '@/lib/plantillas-documento/textos-muestra'
 import type { Tramo } from '@/lib/plantillas-documento/autorizacion-datos'
 
@@ -30,6 +30,16 @@ function Tramos({ tramos }: { tramos: Tramo[] }) {
 }
 
 function Tabla({ t }: { t: TablaMuestra }) {
+  if (t.tipo === 'firma') {
+    return (
+      <div style={{ margin: '4pt 0 14pt', width: '320pt' }}>
+        <CajaFirma ancho="150pt" alto="56pt" />
+        <div style={{ borderTop: '1pt solid #1e293b', paddingTop: '4pt' }}>
+          {t.lineas.map((l) => <div key={l}>{l}</div>)}
+        </div>
+      </div>
+    )
+  }
   if (t.tipo === 'pares') {
     return (
       <div style={{ margin: '8pt 0 12pt' }}>
@@ -111,6 +121,9 @@ export function PreviewTexto({
   const r = useMemo(() => resolverTexto(plantilla, m.vars), [plantilla, m])
   const bloques = m.tabla ? conTablaImplicita(r.bloques) : r.bloques.filter((b) => b.tipo !== 'tabla')
   const fondo = membrete
+  // Sin membrete, la hoja lleva el encabezado de la empresa… salvo en los
+  // documentos que no emite ella (la cuenta de cobro es del contratista).
+  const encabezado = !fondo && !TEXTOS[clave].sinEncabezado
   const orden = m.fijos.cabecera === 'fondo'
 
   const cuerpo: ReactNode = bloques.map((b, i) => {
@@ -133,7 +146,7 @@ export function PreviewTexto({
     <HojaCarta membrete={fondo} fuente="helvetica" padding={fondo ? '122pt 56pt 96pt' : '48pt 56pt 64pt'} version={version}>
       {/* Alto mínimo de una hoja (792 − márgenes) para que el pie caiga abajo, como en el PDF. */}
       <div style={{ minHeight: fondo ? '574pt' : '680pt', display: 'flex', flexDirection: 'column' }}>
-      {!fondo && (
+      {encabezado && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2pt solid #0f172a', paddingBottom: '12pt', marginBottom: '24pt' }}>
           <div>
             <div style={{ fontSize: '16pt', fontWeight: 'bold', color: '#020617', lineHeight: 1.2 }}>{empresa.nombreComercial || empresa.razonSocial}</div>
@@ -179,7 +192,7 @@ export function PreviewTexto({
         <p key={i} style={{ margin: '18pt 0 0', fontSize: '8pt', color: GRIS, textAlign: 'center' }}><Tramos tramos={n} /></p>
       ))}
 
-      {!fondo && (
+      {encabezado && (
         <div style={{ marginTop: 'auto', paddingTop: '24pt' }}>
           <div style={{ fontSize: '8pt', color: GRIS, borderTop: '1pt solid #e2e8f0', paddingTop: '8pt', textAlign: 'center' }}>{m.fijos.pie}</div>
         </div>

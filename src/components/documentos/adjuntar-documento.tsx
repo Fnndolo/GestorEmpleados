@@ -9,8 +9,6 @@ import { adjuntarDocumentoGenerado } from '@/app/(app)/documentos-adjuntos-accio
 import { regenerarDocumento, type DestinoGenerable } from '@/app/(app)/documentos-regenerar-acciones'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -40,7 +38,7 @@ const GENERABLES = new Set<string>([
  * subida, y se dice por qué.
  */
 export function AdjuntarDocumento({
-  destino, id, etiqueta = 'Documento', tieneDocumento = false, plantillas, variante = 'default', tamano = 'sm', className,
+  destino, id, etiqueta = 'Documento', tieneDocumento = false, variante = 'default', tamano = 'sm', className,
 }: {
   destino: DestinoAdjunto
   /** Id del registro (la liquidación, el otrosí, el acta…). */
@@ -48,12 +46,6 @@ export function AdjuntarDocumento({
   etiqueta?: string
   /** Si ya hay documento, los textos hablan de reemplazarlo. */
   tieneDocumento?: boolean
-  /**
-   * Plantillas disponibles para armarlo. Cuando el tipo de documento tiene
-   * varias —como las cuentas de cobro—, se puede elegir; si no se elige, va la
-   * de por defecto. Sin plantillas, no se muestra el selector.
-   */
-  plantillas?: { id: string; nombre: string }[]
   variante?: 'default' | 'outline' | 'ghost' | 'secondary'
   tamano?: 'sm' | 'icon'
   className?: string
@@ -63,7 +55,6 @@ export function AdjuntarDocumento({
   const [abierto, setAbierto] = useState(false)
   const [archivo, setArchivo] = useState<File | null>(null)
   const [ocupado, setOcupado] = useState<'generar' | 'subir' | null>(null)
-  const [plantillaId, setPlantillaId] = useState('')
 
   const sePuedeGenerar = GENERABLES.has(destino)
 
@@ -74,7 +65,7 @@ export function AdjuntarDocumento({
 
   async function generar() {
     setOcupado('generar')
-    const res = await regenerarDocumento({ destino: destino as DestinoGenerable, id, plantillaId: plantillaId || undefined })
+    const res = await regenerarDocumento({ destino: destino as DestinoGenerable, id })
     setOcupado(null)
     if (res.ok) {
       toast.success('Documento generado desde la plantilla del sistema.')
@@ -143,17 +134,6 @@ export function AdjuntarDocumento({
                     </p>
                   </div>
                 </div>
-                {plantillas && plantillas.length > 0 && (
-                  <div className="mt-3 space-y-1.5">
-                    <Label className="text-xs">Plantilla (opcional)</Label>
-                    <Select value={plantillaId} onValueChange={setPlantillaId}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="La de por defecto" /></SelectTrigger>
-                      <SelectContent>
-                        {plantillas.map((pl) => <SelectItem key={pl.id} value={pl.id}>{pl.nombre}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
                 <Button className="mt-3 w-full" size="sm" onClick={generar} disabled={ocupado !== null}>
                   {ocupado === 'generar' ? <Spinner /> : <Sparkles className="size-4" />}
                   {tieneDocumento ? 'Volver a generarlo' : 'Generar'}

@@ -273,6 +273,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
     toast.success(
       edicion ? 'Permiso actualizado. Le avisamos a quien lo aprueba.'
         : tipo === 'INCAPACIDAD' ? 'Incapacidad enviada a Talento Humano.'
+        : tipo === 'CERTIFICACION_LABORAL' ? 'Certificación pedida. Talento Humano la emite y te llega aquí mismo.'
         : lic?.derecho ? 'Licencia reportada. Talento Humano valida el soporte y la registra; no requiere aprobación.'
         : 'Solicitud enviada. Quedó en aprobación de tu jefe inmediato.',
     )

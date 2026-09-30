@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Check, X, CalendarClock, Paperclip, FilePenLine, Scale, TriangleAlert, ChevronDown } from 'lucide-react'
+import { Check, X, CalendarClock, Paperclip, FilePenLine, Scale, TriangleAlert, ChevronDown, Eye, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Pill } from '@/components/ui-kit'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -18,7 +18,7 @@ import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FirmaCaptura } from '@/components/firma/firma-captura'
-import { resolverPaso, emitirCertificacion, proponerFechas } from '../acciones'
+import { resolverPaso, emitirCertificacion, previsualizarCertificacion, proponerFechas } from '../acciones'
 
 type Solicitud = {
   id: string; pasoId: string; tipo: string; esPasoJefe: boolean; colaborador: string; colaboradorId: string; sede: string
@@ -363,6 +363,17 @@ function DialogCertificacion({ solicitud, onClose, onDone }: { solicitud: Solici
   const [firma, setFirma] = useState<string | null>(null)
   const [archivo, setArchivo] = useState<File | null>(null)
   const [g, setG] = useState(false)
+  // Vista previa de la generada: se revisa antes de enviarla al colaborador.
+  const [previa, setPrevia] = useState<Blob | null>(null)
+
+  async function verPrevia() {
+    setG(true)
+    const res = await previsualizarCertificacion({ pasoId: solicitud.pasoId, firmaDataUri: firma ?? undefined })
+    setG(false)
+    if (!res.ok) { toast.error(res.error); return }
+    const bytes = Uint8Array.from(atob(res.datos.pdf), (ch) => ch.charCodeAt(0))
+    setPrevia(new Blob([bytes], { type: 'application/pdf' }))
+  }
 
   async function emitir() {
     setG(true)
@@ -370,8 +381,8 @@ function DialogCertificacion({ solicitud, onClose, onDone }: { solicitud: Solici
       if (modo === 'GENERAR') {
         const res = await emitirCertificacion({ pasoId: solicitud.pasoId, modo: 'GENERAR', firmaDataUri: firma ?? undefined })
         if (!res.ok) { toast.error(res.error); setG(false); return }
-        toast.success('Certificación emitida y enviada al colaborador.')
-        window.open(`/api/documentos/${(res.datos as { documentoId: string }).documentoId}`, '_blank')
+        toast.success('Certificación generada y enviada al colaborador.')
+        setPrevia(null)
       } else {
         if (!archivo) { toast.error('Selecciona el archivo del certificado.'); setG(false); return }
         const fd = new FormData()
@@ -392,34 +403,72 @@ function DialogCertificacion({ solicitud, onClose, onDone }: { solicitud: Solici
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <>
+    {previa && (
+      <VisorPdf
+        archivo={previa}
+        titulo={`Vista previa · Certificación de ${solicitud.colaborador}`}
+        abierto
+        onAbiertoChange={(v) => { if (!v && !g) setPrevia(null) }}
+        pie={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" onClick={() => setPrevia(null)} disabled={g}>Volver</Button>
+            <Button onClick={emitir} disabled={g}>{g ? <Spinner /> : <Send className="size-4" />} Enviar al colaborador</Button>
+          </div>
+        }
+      />
+    )}
+    <Dialog open={!previa} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Emitir certificación</DialogTitle>
-          <DialogDescription>Genera el certificado membretado (con firma opcional) o sube uno ya elaborado. Se enviará a {solicitud.colaborador}.</DialogDescription>
+          <DialogDescription>Para {solicitud.colaborador}. Elige cómo emitirla.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="flex gap-1.5">
-            <Button type="button" size="sm" variant={modo === 'GENERAR' ? 'default' : 'outline'} onClick={() => setModo('GENERAR')}>Generar</Button>
-            <Button type="button" size="sm" variant={modo === 'SUBIR' ? 'default' : 'outline'} onClick={() => setModo('SUBIR')}>Subir</Button>
+          {/* Dos opciones para elegir (no son acciones): lo que emite es el botón de abajo. */}
+          <div className="grid gap-2 sm:grid-cols-2" role="radiogroup">
+            {([
+              ['GENERAR', 'Generarla automáticamente', 'Con la plantilla de la empresa y los datos de la ficha.'],
+              ['SUBIR', 'Subir la hecha en físico', 'El PDF o la foto de la certificación ya firmada.'],
+            ] as const).map(([valor, titulo, desc]) => (
+              <button
+                key={valor} type="button" role="radio" aria-checked={modo === valor} onClick={() => setModo(valor)}
+                className={cn('rounded-lg border p-3 text-left transition-colors', modo === valor ? 'border-foreground bg-foreground/5 ring-1 ring-foreground' : 'hover:bg-accent/50')}
+              >
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <span className={cn('grid size-4 place-items-center rounded-full border', modo === valor && 'border-foreground')}>
+                    {modo === valor && <span className="size-2 rounded-full bg-foreground" />}
+                  </span>
+                  {titulo}
+                </span>
+                <span className="mt-1 block pl-6 text-xs text-muted-foreground">{desc}</span>
+              </button>
+            ))}
           </div>
           {modo === 'GENERAR' ? (
             <div className="space-y-1.5">
-              <Label>Firma digital (opcional)</Label>
+              <Label>Firma digital</Label>
               <FirmaCaptura onChange={setFirma} />
             </div>
           ) : (
             <div className="space-y-1.5">
-              <Label>Archivo del certificado (PDF o imagen)</Label>
+              <Label>Archivo del certificado (PDF o imagen) <span className="text-destructive">*</span></Label>
               <Input type="file" accept="application/pdf,image/*" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />
             </div>
           )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Dejar para luego</Button>
-          <Button onClick={emitir} disabled={g}>{g && <Spinner />} Emitir y enviar</Button>
+          {/* La vista previa es opcional: el ojo la abre, pero se puede enviar sin verla. */}
+          {modo === 'GENERAR' && (
+            <Button variant="outline" size="icon" onClick={verPrevia} disabled={g} title="Vista previa" aria-label="Vista previa">
+              <Eye className="size-4" />
+            </Button>
+          )}
+          <Button onClick={emitir} disabled={g || (modo === 'SUBIR' && !archivo)}>{g && <Spinner />} {modo === 'GENERAR' ? 'Generar y enviar' : 'Subir y enviar'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   )
 }

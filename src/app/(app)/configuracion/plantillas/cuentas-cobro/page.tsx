@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 
-/** Las plantillas de cuenta de cobro se editan en una ventana emergente de la lista de documentos. */
+/** La cuenta de cobro se edita como los demás textos, en la lista de documentos. */
 export default function PlantillasCuentaCobroPage() {
-  redirect('/configuracion/plantillas?abrir=cuentas-cobro')
+  redirect('/configuracion/plantillas?abrir=CUENTA_COBRO')
 }

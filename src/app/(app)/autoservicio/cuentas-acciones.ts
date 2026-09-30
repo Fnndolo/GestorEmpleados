@@ -19,7 +19,6 @@ export const crearMiCuentaCobro = accion(
       periodo: z.string().regex(/^\d{4}-\d{2}$/, 'Periodo inválido (AAAA-MM)'),
       valor: z.coerce.number().min(1),
       concepto: z.string().trim().max(200).optional(),
-      plantillaId: z.union([z.uuid(), z.literal('')]).optional(),
       firmaDataUri: z.string().optional(),
     }),
   },
@@ -44,8 +43,8 @@ export const crearMiCuentaCobro = accion(
       },
     })
 
-    // Generar el PDF desde la plantilla elegida (o la de defecto), con firma opcional
-    await generarPdfCuentaCobro(cuenta.id, d.plantillaId || null, usuario.id, d.firmaDataUri || null)
+    // El PDF sale del texto de Ajustes → Plantillas de documentos, con su firma si la puso.
+    await generarPdfCuentaCobro(cuenta.id, usuario.id, d.firmaDataUri || null)
 
     // Avisar a contabilidad y gerencia
     const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { nombres: true, apellidos: true } })

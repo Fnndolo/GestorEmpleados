@@ -3,65 +3,44 @@ import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { ErrorNegocio } from '@/server/accion'
 import { eliminarDocumento } from '@/server/documentos'
-import { subirArchivo, leerArchivo } from '@/server/storage'
+import { subirArchivo } from '@/server/storage'
 import { renderCuentaCobro } from '@/server/pdf/cuenta-cobro'
 import { hoyBogota } from '@/lib/fechas'
-import { CUERPO_DEFECTO_CUENTA_COBRO } from '@/lib/plantillas-documento/cuenta-cobro'
 
-const TIPO_CUENTA: Record<string, string> = { AHORROS: 'cuenta de ahorros', CORRIENTE: 'cuenta corriente', BILLETERA_DIGITAL: 'billetera digital' }
+const TIPO_CUENTA: Record<string, string> = { AHORROS: 'Ahorros', CORRIENTE: 'Corriente', BILLETERA_DIGITAL: 'Billetera digital' }
 
-/** Lee el logo de la plantilla y lo devuelve como data URI (para el PDF y las muestras). */
-export async function logoDataUri(logoPath: string | null): Promise<string | null> {
-  if (!logoPath) return null
-  try {
-    const buf = await leerArchivo(logoPath)
-    const ext = logoPath.split('.').pop()?.toLowerCase()
-    const mime = ext === 'png' ? 'image/png' : ext === 'svg' ? 'image/svg+xml' : 'image/jpeg'
-    return `data:${mime};base64,${buf.toString('base64')}`
-  } catch {
-    return null
-  }
-}
-
-/** Genera el PDF de una cuenta de cobro desde una plantilla y lo guarda como Documento. */
-export async function generarPdfCuentaCobro(cuentaId: string, plantillaId: string | null, usuarioId: string, firmaDataUri: string | null = null): Promise<string> {
+/**
+ * Genera el PDF de una cuenta de cobro y lo guarda como Documento. El texto es
+ * el de Ajustes → Plantillas de documentos → Cuenta de cobro; los datos salen
+ * de la cuenta, de la ficha del contratista y de la empresa.
+ */
+export async function generarPdfCuentaCobro(cuentaId: string, usuarioId: string, firmaDataUri: string | null = null): Promise<string> {
+  const incluir = { banco: true, sede: { include: { ciudad: true } } } as const
   const cuenta = await prisma.cuentaCobroOps.findUniqueOrThrow({
     where: { id: cuentaId },
-    include: {
-      contratoOps: true,
-      colaborador: { include: { banco: true, sede: { include: { ciudad: true } } } },
-    },
+    include: { colaborador: { include: incluir }, contratoOps: { include: { colaborador: { include: incluir } } } },
   })
   const empresa = await prisma.configuracionEmpresa.findFirstOrThrow()
-  const plantilla = plantillaId
-    ? await prisma.plantillaCuentaCobro.findUnique({ where: { id: plantillaId } })
-    : await prisma.plantillaCuentaCobro.findFirst({ where: { esDefecto: true, activa: true } })
-
-  const cuerpoDefecto = CUERPO_DEFECTO_CUENTA_COBRO
 
   // El dueño de la cuenta es el colaborador (directo) o, para OPS antiguas, el del contrato.
-  let c = cuenta.colaborador
-  if (!c) {
-    const conContrato = await prisma.cuentaCobroOps.findUniqueOrThrow({
-      where: { id: cuentaId },
-      include: { contratoOps: { include: { colaborador: { include: { banco: true, sede: { include: { ciudad: true } } } } } } },
-    })
-    c = conContrato.contratoOps?.colaborador ?? null
-  }
+  const c = cuenta.colaborador ?? cuenta.contratoOps?.colaborador ?? null
   if (!c) throw new Error('La cuenta de cobro no tiene colaborador asociado.')
 
   const pdf = await renderCuentaCobro({
-    empresa: { razonSocial: empresa.razonSocial, nombreComercial: empresa.nombreComercial, nit: empresa.nit, direccion: empresa.direccion },
-    contratista: {
-      nombre: `${c.nombres} ${c.apellidos}`, documento: `${c.tipoDocumento} ${c.numeroDocumento}`,
-      rut: cuenta.contratoOps?.rut ?? null, banco: c.banco?.nombre ?? null,
-      tipoCuenta: c.tipoCuenta ? TIPO_CUENTA[c.tipoCuenta] : null, numeroCuenta: c.numeroCuenta,
+    empresa: {
+      razonSocial: empresa.razonSocial, nombreComercial: empresa.nombreComercial, nit: empresa.nit,
+      direccion: empresa.direccion, emailContacto: empresa.emailContacto,
     },
-    plantilla: {
-      encabezado: plantilla?.encabezado ?? null,
-      cuerpo: plantilla?.cuerpo ?? cuerpoDefecto,
-      pieLegal: plantilla?.pieLegal ?? null,
-      logoDataUri: await logoDataUri(plantilla?.logoPath ?? null),
+    contratista: {
+      nombre: `${c.nombres} ${c.apellidos}`,
+      tipoDocumento: c.tipoDocumento,
+      numeroDocumento: c.numeroDocumento,
+      lugarExpedicion: c.lugarExpedicionDoc,
+      correo: c.emailPersonal ?? c.emailCorporativo,
+      celular: c.celular,
+      banco: c.banco?.nombre ?? null,
+      tipoCuenta: c.tipoCuenta ? TIPO_CUENTA[c.tipoCuenta] ?? null : null,
+      numeroCuenta: c.numeroCuenta,
     },
     numero: cuenta.numero,
     periodo: cuenta.periodo,

@@ -34,8 +34,6 @@ export const regenerarDocumento = accion(
     schema: z.object({
       destino: z.enum(GENERABLES),
       id: z.uuid(),
-      /** Plantilla con la que armarlo. Opcional: sin ella se usa la de por defecto. */
-      plantillaId: z.union([z.uuid(), z.literal('')]).optional(),
     }),
   },
   async (d, usuario) => {
@@ -54,21 +52,10 @@ export const regenerarDocumento = accion(
       case 'desprendible':
         documentoId = await generarDesprendibleDeLiquidacion(d.id, usuario.id)
         break
-      case 'cuentaCobro': {
-        // Con plantilla elegida se respeta; sin ella se usa la de por defecto,
-        // porque la cuenta no guarda con cuál se armó la vez anterior.
-        let plantillaId = d.plantillaId || null
-        if (!plantillaId) {
-          const porDefecto = await prisma.plantillaCuentaCobro.findFirst({
-            where: { activa: true },
-            orderBy: [{ esDefecto: 'desc' }, { nombre: 'asc' }],
-            select: { id: true },
-          })
-          plantillaId = porDefecto?.id ?? null
-        }
-        documentoId = await generarPdfCuentaCobro(d.id, plantillaId, usuario.id)
+      case 'cuentaCobro':
+        // Con el texto vigente de Ajustes → Plantillas de documentos.
+        documentoId = await generarPdfCuentaCobro(d.id, usuario.id)
         break
-      }
       case 'recibidoDotacion':
         documentoId = await generarRecibidoDotacion(d.id, usuario.id)
         break

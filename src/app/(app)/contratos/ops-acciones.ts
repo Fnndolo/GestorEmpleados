@@ -562,7 +562,6 @@ export const crearCuentaCobroEmpresa = accion(
       periodo: z.string().regex(/^\d{4}-\d{2}$/, 'Periodo inválido (AAAA-MM)'),
       valor: z.coerce.number().min(1),
       concepto: z.string().trim().max(200).optional(),
-      plantillaId: z.union([z.uuid(), z.literal('')]).optional(),
       requierePila: z.boolean().default(false),
     }),
   },
@@ -584,7 +583,7 @@ export const crearCuentaCobroEmpresa = accion(
         requierePila: !!contrato && d.requierePila,
       },
     })
-    await generarPdfCuentaCobro(cuenta.id, d.plantillaId || null, usuario.id, null)
+    await generarPdfCuentaCobro(cuenta.id, usuario.id, null)
 
     // El titular debe enterarse: revisa el documento y, si se le pidió, adjunta su planilla PILA.
     const usuarioColab = await usuarioDeColaborador(d.colaboradorId)
@@ -657,6 +656,47 @@ export const registrarSoporteSs = accion(
       }
     }
     revalidatePath('/contratos/ops')
+    return { ok: true }
+  },
+)
+
+/**
+ * Pedir (o dejar de pedir) la planilla PILA de una cuenta ya radicada, desde la
+ * lista de cuentas de cobro: lo mismo que el interruptor al radicarla. Solo en
+ * cuentas de contratistas OPS y mientras sigan abiertas; al pedirla se le avisa
+ * al contratista para que la adjunte desde su autoservicio.
+ */
+export const cambiarPilaCuenta = accion(
+  {
+    modulo: 'contratos',
+    accion: 'EDITAR',
+    schema: z.object({ id: z.uuid(), requierePila: z.boolean() }),
+  },
+  async (d) => {
+    const cuenta = await prisma.cuentaCobroOps.findUniqueOrThrow({
+      where: { id: d.id },
+      select: { numero: true, periodo: true, estado: true, contratoOpsId: true, colaboradorId: true, requierePila: true, contratoOps: { select: { colaboradorId: true } } },
+    })
+    if (!cuenta.contratoOpsId) throw new ErrorNegocio('La planilla PILA solo aplica a contratistas OPS.')
+    if (cuenta.estado === 'APROBADA' || cuenta.estado === 'PAGADA' || cuenta.estado === 'RECHAZADA') {
+      throw new ErrorNegocio('La cuenta ya se resolvió: la planilla ya no se puede pedir ni quitar.')
+    }
+    if (cuenta.requierePila === d.requierePila) return { ok: true }
+    await dbAuditado.cuentaCobroOps.update({ where: { id: d.id }, data: { requierePila: d.requierePila } })
+
+    if (d.requierePila) {
+      const duenoId = cuenta.colaboradorId ?? cuenta.contratoOps?.colaboradorId
+      const uid = duenoId ? await usuarioDeColaborador(duenoId) : null
+      if (uid) {
+        await avisar(uid, {
+          titulo: `Adjunta tu planilla PILA · cuenta ${cuenta.numero}`,
+          mensaje: `Periodo ${cuenta.periodo} · La cuenta se aprueba cuando la planilla esté verificada.`,
+          enlace: '/autoservicio/cuentas-cobro', llamadoAccion: 'Adjuntar planilla', evento: 'cuenta_cobro_estado',
+        }).catch(() => {})
+      }
+    }
+    revalidatePath('/contratos/cuentas-cobro')
+    revalidatePath(`/contratos/ops/${cuenta.contratoOpsId}`)
     return { ok: true }
   },
 )

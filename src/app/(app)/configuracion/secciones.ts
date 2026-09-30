@@ -27,7 +27,7 @@ export type SeccionConfig = {
 
 export type ContadorClave =
   | 'sedes' | 'areas' | 'cargos' | 'usuarios' | 'roles'
-  | 'tiposDocumento' | 'reglasAlerta' | 'parametrosNomina' | 'conceptosNomina' | 'plantillasCuentaCobro'
+  | 'tiposDocumento' | 'reglasAlerta' | 'parametrosNomina' | 'conceptosNomina'
   | 'plantillasContrato' | 'areasPazYSalvo'
 
 export type Contadores = Record<ContadorClave, number>
@@ -97,7 +97,7 @@ export const GRUPOS: { titulo: string; secciones: SeccionConfig[] }[] = [
 // `plantillasContrato` entra aquí: sin una plantilla activa no se puede generar
 // ningún contrato desde el sistema, que es justo el caso de producción hoy.
 const IMPRESCINDIBLES: ContadorClave[] = [
-  'parametrosNomina', 'reglasAlerta', 'tiposDocumento', 'plantillasCuentaCobro',
+  'parametrosNomina', 'reglasAlerta', 'tiposDocumento',
   // Sin generación desde plantilla, que no haya plantillas de contrato no rompe nada.
   ...(GENERAR_CONTRATOS_DESDE_PLANTILLA ? (['plantillasContrato'] as ContadorClave[]) : []),
 ]

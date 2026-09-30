@@ -9,7 +9,12 @@ const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', '
 function decenas(n: number): string {
   if (n < 10) return UNIDADES[n]
   if (n <= 15) return DIEZ_A_QUINCE[n - 10]
-  if (n < 20) return 'DIECI' + UNIDADES[n - 10].toLowerCase().toUpperCase()
+  // Las que llevan tilde: dieciséis, veintidós, veintitrés, veintiséis.
+  if (n === 16) return 'DIECISÉIS'
+  if (n < 20) return 'DIECI' + UNIDADES[n - 10]
+  if (n === 22) return 'VEINTIDÓS'
+  if (n === 23) return 'VEINTITRÉS'
+  if (n === 26) return 'VEINTISÉIS'
   if (n < 30) return n === 20 ? 'VEINTE' : 'VEINTI' + UNIDADES[n - 20]
   const d = Math.floor(n / 10)
   const u = n % 10
@@ -24,10 +29,15 @@ function centenas(n: number): string {
   return resto === 0 ? pre : `${pre} ${decenas(resto)}`.trim()
 }
 
+/** «Uno» delante de un sustantivo: «veintiún mil», «treinta y un millones». */
+function apocopar(letras: string): string {
+  return letras.replace(/VEINTIUNO$/, 'VEINTIÚN').replace(/UNO$/, 'UN')
+}
+
 function seccion(n: number, singular: string, plural: string): string {
   if (n === 0) return ''
   if (n === 1) return singular
-  return `${numeroALetras(n)} ${plural}`
+  return `${apocopar(numeroALetras(n))} ${plural}`
 }
 
 /** Convierte un entero no negativo a palabras en español (mayúsculas). */
@@ -39,7 +49,7 @@ export function numeroALetras(n: number): string {
   if (n < 1_000_000) {
     const miles = Math.floor(n / 1000)
     const resto = n % 1000
-    const pre = miles === 1 ? 'MIL' : `${numeroALetras(miles)} MIL`
+    const pre = miles === 1 ? 'MIL' : `${apocopar(numeroALetras(miles))} MIL`
     return resto === 0 ? pre : `${pre} ${centenas(resto)}`
   }
   if (n < 1_000_000_000) {
@@ -50,17 +60,20 @@ export function numeroALetras(n: number): string {
   }
   const miles = Math.floor(n / 1_000_000_000)
   const resto = n % 1_000_000_000
-  const pre = `${numeroALetras(miles)} MIL MILLONES`
+  const pre = `${apocopar(numeroALetras(miles))} MIL MILLONES`
   return resto === 0 ? pre : `${pre} ${numeroALetras(resto)}`
 }
 
 /** Valor en pesos: "UN MILLÓN QUINIENTOS MIL PESOS M/CTE ($1.500.000)". */
 export function pesosALetras(valor: number): string {
   const entero = Math.round(valor)
-  const letras = numeroALetras(entero)
+  // Ante «pesos», «uno» se apocopa: «un peso», «veintiún pesos».
+  const letras = apocopar(numeroALetras(entero))
   const formato = entero.toLocaleString('es-CO')
   const moneda = entero === 1 ? 'PESO' : 'PESOS'
-  return `${letras} ${moneda} M/CTE ($${formato})`
+  // Millones exactos llevan «de»: «un millón de pesos», «dos millones de pesos».
+  const de = /MILL(ÓN|ONES)$/.test(letras) ? ' DE' : ''
+  return `${letras}${de} ${moneda} M/CTE ($${formato})`
 }
 
 /** Fecha larga: "10 de julio de 2026" (usa componentes locales, sin corrimiento UTC). */

@@ -12,12 +12,7 @@ export default async function CuentasCobroPage() {
   const usuario = await requerirPermiso('contratos', 'VER')
   const puedeAprobar = tienePermiso(usuario, 'contratos', 'APROBAR')
   const puedeCrear = tienePermiso(usuario, 'contratos', 'CREAR')
-
-  // Se cargan también para quien solo aprueba: al rehacer una cuenta puede
-  // elegir con qué plantilla armarla.
-  const plantillas = puedeCrear || puedeAprobar
-    ? await prisma.plantillaCuentaCobro.findMany({ where: { activa: true }, orderBy: [{ esDefecto: 'desc' }, { nombre: 'asc' }] })
-    : []
+  const puedeEditar = tienePermiso(usuario, 'contratos', 'EDITAR')
 
   const cuentas = await prisma.cuentaCobroOps.findMany({
     orderBy: { creadoEn: 'desc' },
@@ -29,20 +24,30 @@ export default async function CuentasCobroPage() {
     },
   })
 
+  // La planilla PILA que adjuntó el contratista (va con la misma entidad que el
+  // PDF de la cuenta; se reconoce por el nombre). La más reciente de cada cuenta.
+  const planillas = await prisma.documento.findMany({
+    where: { entidadTipo: 'CuentaCobroOps', entidadId: { in: cuentas.map((c) => c.id) }, nombre: { startsWith: 'Planilla PILA' } },
+    orderBy: { creadoEn: 'desc' },
+    select: { id: true, entidadId: true, nombre: true, mimeType: true },
+  })
+  const planillaDe = new Map<string, { id: string; nombre: string; esImagen: boolean }>()
+  for (const d of planillas) if (!planillaDe.has(d.entidadId)) planillaDe.set(d.entidadId, { id: d.id, nombre: d.nombre, esImagen: d.mimeType.startsWith('image/') })
+
   return (
     <div className="max-w-5xl">
       <Encabezado
         volver
         titulo="Cuentas de cobro"
         descripcion="Cuentas de cobro radicadas por colaboradores y contratistas (o por la empresa a su nombre). Revísalas, verifica la seguridad social (contratistas OPS) y apruébalas o recházalas."
-        acciones={puedeCrear && <NuevaCuentaEmpresa plantillas={plantillas.map((p) => ({ id: p.id, nombre: p.nombre }))} />}
+        acciones={puedeCrear && <NuevaCuentaEmpresa />}
       />
       {cuentas.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">Sin cuentas de cobro radicadas.</CardContent></Card>
       ) : (
         <CuentasRevision
           puedeAprobar={puedeAprobar}
-          plantillas={plantillas.map((pl) => ({ id: pl.id, nombre: pl.nombre }))}
+          puedeEditar={puedeEditar}
           cuentas={cuentas.map((c) => ({
             id: c.id,
             numero: c.numero,
@@ -55,10 +60,12 @@ export default async function CuentasCobroPage() {
             colaborador: c.colaborador
               ? `${c.colaborador.nombres} ${c.colaborador.apellidos}`
               : c.contratoOps?.colaborador ? `${c.contratoOps.colaborador.nombres} ${c.contratoOps.colaborador.apellidos}` : '—',
-            // «esOps» aquí es «se le exige la PILA»: solo entonces bloquea la aprobación.
-            esOps: !!c.contratoOpsId && c.requierePila,
+            // La PILA solo aplica a contratistas OPS; si se pidió, bloquea la aprobación hasta verificarla.
+            esOps: !!c.contratoOpsId,
+            requierePila: c.requierePila,
             contratoOpsId: c.contratoOpsId,
-            ssValida: c.soporteSs?.estadoVerificacion === 'VALIDA',
+            ss: c.soporteSs?.estadoVerificacion ?? null,
+            planilla: planillaDe.get(c.id) ?? null,
           }))}
         />
       )}

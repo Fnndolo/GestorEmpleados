@@ -24,7 +24,7 @@ const SIN_MEMBRETE = { paddingTop: 48, paddingBottom: 64 }
  * pie de contacto lo trae el propio membrete); sin él, el encabezado sencillo
  * con la empresa y el NIT, y el pie de texto abajo.
  */
-export function HojaTexto({ empresa, membrete, fondo, pie, estilo, children }: {
+export function HojaTexto({ empresa, membrete, fondo, pie, estilo, sinEncabezado = false, children }: {
   empresa: DatosEmpresa
   membrete: boolean
   /** Membrete propio de la empresa como data URI (`fondoParaTexto`); sin él, el de fábrica. */
@@ -33,13 +33,15 @@ export function HojaTexto({ empresa, membrete, fondo, pie, estilo, children }: {
   pie: string
   /** Ajustes de página propios del documento (tamaño de letra, por ejemplo). */
   estilo?: Styles[string]
+  /** Sin membrete, hoja limpia: ni el encabezado de la empresa ni el pie (la cuenta de cobro es del contratista). */
+  sinEncabezado?: boolean
   children: ReactNode
 }) {
   return (
     <Page size="LETTER" style={[estilos.page, estilo ?? {}, membrete ? CON_MEMBRETE : SIN_MEMBRETE]}>
-      {membrete ? <MembreteFondo fondo={fondo} empresa={empresa} /> : <Membrete empresa={empresa} />}
+      {membrete ? <MembreteFondo fondo={fondo} empresa={empresa} /> : !sinEncabezado && <Membrete empresa={empresa} />}
       {children}
-      {!membrete && <Pie texto={pie} />}
+      {!membrete && !sinEncabezado && <Pie texto={pie} />}
     </Page>
   )
 }

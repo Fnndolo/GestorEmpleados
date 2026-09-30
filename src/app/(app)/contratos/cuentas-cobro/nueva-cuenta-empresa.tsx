@@ -11,7 +11,6 @@ import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
 import { crearCuentaCobroEmpresa } from '../ops-acciones'
 
@@ -23,14 +22,13 @@ export type CuentaInicial = { colaboradorId: string; nombre: string; periodo: st
  * Con `inicial` abre ya diligenciada para esa persona y ese mes, con un botón
  * pequeño: es como se usa desde la lista de quienes aún no radican.
  */
-export function NuevaCuentaEmpresa({ plantillas, inicial }: { plantillas: { id: string; nombre: string }[]; inicial?: CuentaInicial }) {
+export function NuevaCuentaEmpresa({ inicial }: { inicial?: CuentaInicial }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
   const [colaboradorId, setColaboradorId] = useState(inicial?.colaboradorId ?? '')
   const [periodo, setPeriodo] = useState(inicial?.periodo ?? '')
   const [valor, setValor] = useState(inicial?.valor ? String(inicial.valor) : '')
   const [concepto, setConcepto] = useState(inicial?.concepto ?? '')
-  const [plantillaId, setPlantillaId] = useState('')
   // Por ahora la PILA es opcional: se pide solo si se marca.
   const [pedirPila, setPedirPila] = useState(false)
   const [g, setG] = useState(false)
@@ -43,7 +41,6 @@ export function NuevaCuentaEmpresa({ plantillas, inicial }: { plantillas: { id: 
     const res = await crearCuentaCobroEmpresa({
       colaboradorId, periodo, valor: Number(valor),
       concepto: concepto.trim() || undefined,
-      plantillaId: plantillaId || undefined,
       requierePila: pedirPila,
     })
     setG(false)
@@ -52,7 +49,6 @@ export function NuevaCuentaEmpresa({ plantillas, inicial }: { plantillas: { id: 
     toast.success(`Cuenta ${r.numero} radicada.${r.pidePila ? ' Se aprueba cuando su planilla PILA esté verificada.' : ''}`)
     setAbierto(false)
     if (!inicial) { setColaboradorId(''); setPeriodo(''); setValor(''); setConcepto('') }
-    setPlantillaId('')
     setPedirPila(false)
     router.refresh()
   }
@@ -100,17 +96,6 @@ export function NuevaCuentaEmpresa({ plantillas, inicial }: { plantillas: { id: 
                 <span className="block text-xs text-muted-foreground">Solo contratistas OPS: la adjunta desde su autoservicio y la cuenta se aprueba cuando esté verificada.</span>
               </span>
             </label>
-            {plantillas.length > 0 && (
-              <div className="space-y-1.5">
-                <Label>Plantilla del PDF</Label>
-                <Select value={plantillaId} onValueChange={setPlantillaId}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Plantilla por defecto" /></SelectTrigger>
-                  <SelectContent>
-                    {plantillas.map((p) => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAbierto(false)}>Cancelar</Button>

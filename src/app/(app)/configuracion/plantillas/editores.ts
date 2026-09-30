@@ -9,5 +9,8 @@ import { CLAVES_TEXTO, type ClaveTexto } from '@/lib/plantillas-documento/textos
  * Los textos editables (actas de Mis entregas, orden de pago de horas extra,
  * certificaciones) se abren con su propia clave: `?abrir=CERTIFICACION_LABORAL`.
  */
-export type Editor = 'membrete' | 'autorizacion' | 'autorizacion-laboral' | 'cuentas-cobro' | ClaveTexto
-export const EDITORES: readonly Editor[] = ['membrete', 'autorizacion', 'autorizacion-laboral', 'cuentas-cobro', ...CLAVES_TEXTO]
+export type Editor = 'membrete' | 'autorizacion' | 'autorizacion-laboral' | ClaveTexto
+export const EDITORES: readonly Editor[] = ['membrete', 'autorizacion', 'autorizacion-laboral', ...CLAVES_TEXTO]
+
+/** Enlaces viejos: `?abrir=cuentas-cobro` abría la lista de plantillas de cuenta de cobro. */
+export const ALIAS_EDITOR: Record<string, Editor> = { 'cuentas-cobro': 'CUENTA_COBRO' }

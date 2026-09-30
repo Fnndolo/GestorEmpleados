@@ -6,8 +6,6 @@ import { renderContratoOps } from './contrato-ops'
 import { renderContratoLaboral } from './contrato-laboral'
 import { construirVariables, sustituir, type PlantillaResuelta } from '@/lib/contrato-variables'
 import { renderCuentaCobro } from './cuenta-cobro'
-import { logoDataUri } from '@/server/cuentas-cobro'
-import { CUERPO_DEFECTO_CUENTA_COBRO, MUESTRA_CUENTA_COBRO } from '@/lib/plantillas-documento/cuenta-cobro'
 import { renderActaActivo } from './acta-activo'
 import { renderActaDotacion } from './acta-dotacion'
 import { renderActaEpp } from './acta-epp'
@@ -21,7 +19,7 @@ import { plantillaTexto } from '@/server/plantillas-documento'
 import type { ClaveTexto, TextoDocumento } from '@/lib/plantillas-documento/textos'
 import {
   muestraActaActivo, muestraActaDotacion, muestraActaEpp, muestraCertificacion, muestraOrdenPago, muestraPazYSalvo, AREAS_PAZ_Y_SALVO_MUESTRA, muestraLiquidacion, LIQUIDACION_MUESTRA, muestraCarta,
-  muestraDesprendible, LINEAS_DESPRENDIBLE_MUESTRA,
+  muestraDesprendible, LINEAS_DESPRENDIBLE_MUESTRA, muestraCuentaCobro,
 } from '@/lib/plantillas-documento/textos-muestra'
 
 /**
@@ -332,6 +330,8 @@ export async function renderMuestraTexto(clave: ClaveTexto, variante: string, pl
     case 'ACTA_MUTUO_ACUERDO':
     case 'ORDEN_EXAMEN_EGRESO':
       return renderCartaTerminacion(clave, { ...muestraCarta(empresa), empresa }, texto)
+    case 'CUENTA_COBRO':
+      return renderCuentaCobro({ ...muestraCuentaCobro(empresa), empresa: { ...empresa, ...muestraCuentaCobro(empresa).empresa }, firmaDataUri: null }, texto)
     case 'CERTIFICACION_LABORAL':
     case 'CERTIFICACION_CONTRACTUAL':
       return renderCertificacion(
@@ -339,37 +339,4 @@ export async function renderMuestraTexto(clave: ClaveTexto, variante: string, pl
         texto,
       )
   }
-}
-
-/**
- * Muestra de una plantilla de cuenta de cobro (la indicada o, si no, la de
- * defecto), con datos ficticios: para revisar el texto sin radicar una cuenta.
- */
-export async function renderMuestraCuentaCobro(plantillaId: string | null): Promise<Buffer> {
-  const empresa = await empresaActual()
-  const plantilla = plantillaId
-    ? await prisma.plantillaCuentaCobro.findUnique({ where: { id: plantillaId } })
-    : (await prisma.plantillaCuentaCobro.findFirst({ where: { esDefecto: true, activa: true } })) ??
-      (await prisma.plantillaCuentaCobro.findFirst({ where: { activa: true }, orderBy: { creadoEn: 'desc' } }))
-  const m = MUESTRA_CUENTA_COBRO
-  return renderCuentaCobro({
-    empresa: { razonSocial: empresa.razonSocial, nombreComercial: empresa.nombreComercial, nit: empresa.nit, direccion: empresa.direccion },
-    contratista: {
-      nombre: m.contratista, documento: m.documento, rut: null,
-      banco: m.banco, tipoCuenta: m.tipoCuenta, numeroCuenta: m.numeroCuenta,
-    },
-    plantilla: {
-      encabezado: plantilla?.encabezado ?? null,
-      cuerpo: plantilla?.cuerpo ?? CUERPO_DEFECTO_CUENTA_COBRO,
-      pieLegal: plantilla?.pieLegal ?? null,
-      logoDataUri: await logoDataUri(plantilla?.logoPath ?? null),
-    },
-    numero: m.numero,
-    periodo: m.periodo,
-    concepto: m.concepto,
-    valor: m.valor,
-    ciudad: m.ciudad,
-    fecha: new Date(),
-    firmaDataUri: null,
-  })
 }

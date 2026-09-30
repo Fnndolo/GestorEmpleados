@@ -88,9 +88,16 @@ export async function procesarAlertas(): Promise<{ vencidos: number; alertas: nu
   const prefs = await prisma.preferenciaNotificacion.findMany({ select: { evento: true, correo: true } })
   const conCorreo = mandaCorreo('vencimiento_alerta', Object.fromEntries(prefs.map((p) => [p.evento, p.correo])))
 
+  // Al ponerse al día pueden estar pendientes varios pasos del mismo vencimiento
+  // (primer aviso, último y vencido): solo se avisa el más reciente, el que dice
+  // cómo está hoy. Los anteriores se marcan despachados sin avisar: si no, llegaban
+  // tres notificaciones iguales a la vez.
+  const ultimaDe = new Map<string, string>()
+  for (const a of pendientes) ultimaDe.set(a.vencimientoId, a.id)
+
   for (const alerta of pendientes) {
     const v = alerta.vencimiento
-    if (v.estado === 'RESUELTO' || v.estado === 'CANCELADO') {
+    if (v.estado === 'RESUELTO' || v.estado === 'CANCELADO' || ultimaDe.get(v.id) !== alerta.id) {
       await prisma.alertaVencimiento.update({ where: { id: alerta.id }, data: { despachada: true, despachadaEn: new Date() } })
       continue
     }

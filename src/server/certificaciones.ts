@@ -10,13 +10,15 @@ import { hoyBogota } from '@/lib/fechas'
  * Genera el PDF de una certificación laboral, lo guarda como Documento y crea
  * el registro CertificacionLaboral. Devuelve el id del documento (para descarga).
  */
-export async function generarCertificacion(opts: {
+type OpcionesCertificacion = {
   colaboradorId: string
   tipo: DatosCertificacion['tipo']
   dirigidaA?: string | null
-  generadoPorId: string
   firmaDataUri?: string | null
-}): Promise<{ certificacionId: string; documentoId: string }> {
+}
+
+/** Los datos con que se arma la certificación: los mismos para la vista previa y la definitiva. */
+async function datosCertificacion(opts: OpcionesCertificacion) {
   const colab = await prisma.colaborador.findUniqueOrThrow({
     where: { id: opts.colaboradorId },
     include: { cargo: true, sede: { include: { ciudad: true } } },
@@ -80,7 +82,17 @@ export async function generarCertificacion(opts: {
     fecha: hoyBogota(),
     firmaDataUri: opts.firmaDataUri ?? null,
   }
+  return { datos, colab }
+}
 
+/** El PDF tal como quedaría, sin guardarlo: para revisarlo antes de enviarlo. */
+export async function previaCertificacion(opts: OpcionesCertificacion): Promise<Buffer> {
+  const { datos } = await datosCertificacion(opts)
+  return renderCertificacion(datos)
+}
+
+export async function generarCertificacion(opts: OpcionesCertificacion & { generadoPorId: string }): Promise<{ certificacionId: string; documentoId: string }> {
+  const { datos, colab } = await datosCertificacion(opts)
   const pdf = await renderCertificacion(datos)
   const archivo = await subirArchivo(
     `colaborador/${colab.id}/certificaciones`,

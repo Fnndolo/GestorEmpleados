@@ -10,7 +10,7 @@ import { aplicaTramite, type Tramite } from '@/lib/tramites-vinculo'
 import { parseFechaISO, formatFechaCorta, hoyBogota, hoyBogotaISO } from '@/lib/fechas'
 import { comprobanteExigido, avisarComprobanteEntregado, comprobanteVencidoDe } from '@/server/comprobante-permiso'
 import { diasHabilesRango } from '@/app/(app)/novedades/acciones'
-import { generarCertificacion } from '@/server/certificaciones'
+import { generarCertificacion, previaCertificacion } from '@/server/certificaciones'
 import { avisar, avisarPorRol } from '@/server/notificaciones/avisar'
 import { miFichaSchema } from '@/lib/validaciones/colaborador'
 import { TIPOS_LICENCIA, defLicencia, esDerecho } from '@/lib/licencias'
@@ -290,7 +290,8 @@ export const crearSolicitud = accion(
     const jefeEsEmpresa = !!colab.jefeInmediato?.usuario?.rol && ROLES_EMPRESA.includes(colab.jefeInmediato.usuario.rol.nombre)
     // "Registro": lo valida Talento Humano, no lo decide el jefe.
     const esRegistro = d.tipo === 'INCAPACIDAD' || (d.tipo === 'LICENCIA' && esDerecho(d.licenciaTipo!))
-    const tieneJefeStep = !esRegistro && !!colab.jefeInmediatoId
+    // La certificación no la decide el jefe: es un derecho y la emite Talento Humano.
+    const tieneJefeStep = !esRegistro && d.tipo !== 'CERTIFICACION_LABORAL' && !!colab.jefeInmediatoId
 
     const pasos: { orden: number; usaJefeInmediato: boolean; rolAprobador: string | null }[] = []
     let orden = 1
@@ -691,6 +692,32 @@ async function ejecutarEfecto(solicitudId: string, usuarioId: string, opts?: { c
     await avisarSolicitante(solicitudId, aviso.titulo, nota ? `${aviso.mensaje} · "${nota}"` : aviso.mensaje)
   }
 }
+
+/**
+ * Vista previa de la certificación que se va a generar (con la firma dibujada),
+ * sin guardarla ni enviarla: Talento Humano la revisa antes de emitirla.
+ * Devuelve el PDF en base64.
+ */
+export const previsualizarCertificacion = accion(
+  {
+    modulo: 'autoservicio',
+    accion: 'APROBAR',
+    schema: z.object({ pasoId: z.uuid(), firmaDataUri: z.string().optional() }),
+  },
+  async (d, usuario) => {
+    const paso = await prisma.pasoAprobacion.findUniqueOrThrow({ where: { id: d.pasoId }, include: { solicitud: { include: { colaborador: true } } } })
+    if (paso.solicitud.tipo !== 'CERTIFICACION_LABORAL') throw new ErrorNegocio('Esta solicitud no es una certificación.')
+    if (!(await usuarioPuedeResolver(usuario, paso))) throw new ErrorNegocio('No tienes permiso para emitir esta certificación.')
+    const datos = paso.solicitud.datos as Record<string, string>
+    const pdf = await previaCertificacion({
+      colaboradorId: paso.solicitud.colaboradorId,
+      tipo: (datos.tipoCertificacion as 'SIMPLE') ?? 'SIMPLE',
+      dirigidaA: datos.dirigidaA ?? null,
+      firmaDataUri: d.firmaDataUri || null,
+    })
+    return { pdf: pdf.toString('base64') }
+  },
+)
 
 /**
  * Emite la certificación de una solicitud aprobada (último paso): genera el PDF

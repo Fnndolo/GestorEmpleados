@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { obtenerSesion, tienePermiso } from '@/server/sesion'
-import { renderMuestra, renderMuestraPlantilla, renderMuestraCuentaCobro, renderMuestraTexto, TIPOS_MUESTRA, type TipoMuestra } from '@/server/pdf/muestras'
+import { renderMuestra, renderMuestraPlantilla, renderMuestraTexto, TIPOS_MUESTRA, type TipoMuestra } from '@/server/pdf/muestras'
 import { esClaveTexto } from '@/lib/plantillas-documento/textos'
 import { respuestaPdf } from '@/server/pdf/respuesta-pdf'
 
@@ -44,10 +44,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Muestra de una plantilla de cuenta de cobro (o la de defecto), desde su editor.
+  // Enlace viejo de la cuenta de cobro: ahora es un texto editable más.
   if (tipo === 'cuenta-cobro') {
     try {
-      return respuestaPdf(await renderMuestraCuentaCobro(plantillaId), 'muestra-cuenta-cobro.pdf', descargar)
+      return respuestaPdf(await renderMuestraTexto('CUENTA_COBRO', ''), 'muestra-cuenta_cobro.pdf', descargar)
     } catch (e) {
       console.error('No se pudo generar la muestra de la cuenta de cobro:', e)
       return NextResponse.json({ error: 'No se pudo generar la muestra' }, { status: 500 })

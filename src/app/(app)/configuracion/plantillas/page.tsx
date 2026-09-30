@@ -6,7 +6,7 @@ import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import { plantillaAutorizacionDatos, plantillaTexto } from '@/server/plantillas-documento'
 import { CLAVES_TEXTO, type ClaveTexto } from '@/lib/plantillas-documento/textos'
 import { DocumentosPlantillas, type TextoEditable } from './documentos-cliente'
-import { EDITORES, type Editor } from './editores'
+import { ALIAS_EDITOR, EDITORES, type Editor } from './editores'
 
 export const metadata = { title: 'Plantillas de documentos · Configuración' }
 
@@ -20,18 +20,18 @@ export default async function PlantillasPage({ searchParams }: { searchParams: P
   const puedeEditar = tienePermiso(usuario, 'configuracion', 'EDITAR')
   const { abrir } = await searchParams
 
-  const [empresa, autorizacionOps, autorizacionLaboral, plantillasCC, plantillasContrato, textosLista] = await Promise.all([
+  const [empresa, autorizacionOps, autorizacionLaboral, plantillasContrato, textosLista] = await Promise.all([
     prisma.configuracionEmpresa.findFirst({
       select: { membreteFondoPath: true, emailContacto: true, nit: true, sitioWeb: true, razonSocial: true, nombreComercial: true, direccion: true, telefono: true },
     }),
     plantillaAutorizacionDatos('OPS'),
     plantillaAutorizacionDatos('LABORAL'),
-    prisma.plantillaCuentaCobro.findMany({ orderBy: { creadoEn: 'desc' } }),
     GENERAR_CONTRATOS_DESDE_PLANTILLA ? prisma.plantillaContrato.count({ where: { activa: true } }) : Promise.resolve(0),
     Promise.all(CLAVES_TEXTO.map((clave) => plantillaTexto(clave))),
   ])
 
-  const abrirInicial = EDITORES.includes(abrir as Editor) ? (abrir as Editor) : null
+  const pedido = abrir ? (ALIAS_EDITOR[abrir] ?? abrir) : null
+  const abrirInicial = EDITORES.includes(pedido as Editor) ? (pedido as Editor) : null
 
   // Mismo armado que el PDF real: ciudad de la sede + dirección de la empresa.
   const empresaAutorizacion = {
@@ -81,13 +81,6 @@ export default async function PlantillasPage({ searchParams }: { searchParams: P
           personalizada: autorizacionLaboral.personalizada,
           estado: estadoDe(autorizacionLaboral),
           empresa: empresaAutorizacion,
-        }}
-        cuentasCobro={{
-          plantillas: plantillasCC.map((p) => ({
-            id: p.id, nombre: p.nombre, encabezado: p.encabezado, cuerpo: p.cuerpo, pieLegal: p.pieLegal,
-            esDefecto: p.esDefecto, tieneLogo: Boolean(p.logoPath),
-          })),
-          empresa: { razonSocial: empresa?.razonSocial ?? 'Razón social sin configurar', nit: empresa?.nit ?? '—' },
         }}
         plantillasContrato={plantillasContrato}
         textos={textos}

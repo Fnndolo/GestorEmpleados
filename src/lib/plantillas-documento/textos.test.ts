@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   CLAVES_TEXTO, TEXTOS, conTablaImplicita, fechaEnDias, resolverOpcionales, resolverTexto, variablesActaActivo, variablesCertificacion,
-  variablesOrdenPago, type BloqueTexto,
+  variablesOrdenPago, periodoEnLetras, type BloqueTexto,
 } from './textos'
-import { muestraTexto } from './textos-muestra'
+import { muestraCuentaCobro, muestraTexto } from './textos-muestra'
 
 const EMPRESA = { razonSocial: 'KUPOCELL S.A.S.', nombreComercial: 'Smart Gadgets', nit: '900.000.000-1' }
 
@@ -154,5 +154,36 @@ describe('textos de fábrica', () => {
     const m = muestraTexto('ACTA_ACTIVO_ENTREGA', 'uno', EMPRESA)
     const r = resolverTexto(TEXTOS.ACTA_ACTIVO_ENTREGA.defecto, { ...m.vars, cargo: '' })
     expect(plano(r.bloques)).toContain('con documento 1.000.000.000, recibe el siguiente activo')
+  })
+})
+
+describe('cuenta de cobro', () => {
+  it('el texto de fábrica sigue el formato de la empresa: valor en letras, juramento y la firma en su sitio', () => {
+    const m = muestraTexto('CUENTA_COBRO', '', EMPRESA)
+    const r = resolverTexto(TEXTOS.CUENTA_COBRO.defecto, m.vars)
+    const texto = plano(r.bloques)
+    expect(r.titulo).toBe('Cuenta de cobro')
+    expect(texto).toContain('por el valor total de UN MILLÓN DE PESOS M/CTE ($1.000.000)')
+    expect(texto).toContain('parágrafo 2 del artículo 383 del Estatuto Tributario')
+    expect(texto).toContain('CC. No. 1.000.000.000 Ciudad de muestra')
+    // `[firma]` es el bloque que pone la app, entre «Firma del Acreedor» y el lugar de expedición.
+    const i = r.bloques.findIndex((b) => b.tipo === 'tabla')
+    expect(i).toBeGreaterThan(0)
+    expect(plano(r.bloques.slice(i + 1))).toContain('La presente cuenta de cobro se expide en la ciudad de Ciudad de muestra a los 15 días del mes de enero de 2026')
+  })
+
+  it('sin datos bancarios ni dirección de la empresa, esas líneas no salen', () => {
+    const d = muestraCuentaCobro(EMPRESA)
+    const m = muestraTexto('CUENTA_COBRO', '', EMPRESA)
+    const vars = { ...m.vars, banco: '', tipo_cuenta: '', numero_cuenta: '', direccion_empresa: '' }
+    const texto = plano(resolverTexto(TEXTOS.CUENTA_COBRO.defecto, vars).bloques)
+    expect(texto).not.toContain('Banco:')
+    expect(texto).not.toContain('Tipo de cuenta:')
+    expect(texto).toContain('Titular: ' + d.contratista.nombre)
+  })
+
+  it('el periodo se escribe en letras', () => {
+    expect(periodoEnLetras('2026-08')).toBe('agosto de 2026')
+    expect(periodoEnLetras('otro')).toBe('otro')
   })
 })

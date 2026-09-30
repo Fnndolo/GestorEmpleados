@@ -87,9 +87,6 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
   const totalSinRadicar = sinRadicar.reduce((t, m) => t + m.contratos.length, 0)
   // Las del mes que ya cerró son las atrasadas: se avisan también en las otras pestañas.
   const atrasadas = sinRadicar.find((m) => !m.enCurso)
-  const plantillas = vista === 'sin-radicar' && puedeRadicar
-    ? await prisma.plantillaCuentaCobro.findMany({ where: { activa: true }, orderBy: [{ esDefecto: 'desc' }, { nombre: 'asc' }], select: { id: true, nombre: true } })
-    : []
 
   // En «Sin radicar» no se listan cuentas (no existen todavía).
   const where: Prisma.CuentaCobroOpsWhereInput = vista === 'sin-radicar'
@@ -237,7 +234,6 @@ export default async function PagosOpsPage({ searchParams }: { searchParams: Pro
                           <span className="hidden sm:inline-flex"><Pill tone={m.enCurso ? 'muted' : 'warn'}>{m.enCurso ? 'Por radicar' : 'Atrasada'}</Pill></span>
                           {puedeRadicar && (
                             <NuevaCuentaEmpresa
-                              plantillas={plantillas}
                               inicial={{ colaboradorId: c.colaborador.id, nombre, periodo: m.periodo, valor: c.valorMensual != null ? Number(c.valorMensual) : null, concepto: 'Honorarios del mes' }}
                             />
                           )}

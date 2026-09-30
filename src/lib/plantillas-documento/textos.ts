@@ -16,6 +16,7 @@
  *
  *   - `[tabla]` sola en una línea: ahí va la tabla que arma la app (los activos,
  *     los elementos, las horas). Si no está, la tabla va tras el primer párrafo.
+ *     En la cuenta de cobro el bloque de la app es la firma y se marca `[firma]`.
  *   - `[[ … ]]` dentro de una línea: el trozo sale solo si sus variables tienen
  *     valor ("[[, en su cargo de {{cargo}}]]" desaparece cuando no hay cargo).
  *     Una línea que queda vacía no se imprime.
@@ -49,6 +50,7 @@ export const CLAVES_TEXTO = [
   'CARTA_NO_PRORROGA',
   'ACTA_MUTUO_ACUERDO',
   'ORDEN_EXAMEN_EGRESO',
+  'CUENTA_COBRO',
 ] as const
 export type ClaveTexto = (typeof CLAVES_TEXTO)[number]
 
@@ -75,6 +77,17 @@ export type DefinicionTexto = {
   variables: VariableTexto[]
   /** Qué trae la tabla que se inserta con `[tabla]`; sin esto el documento no tiene tabla. */
   tabla?: string
+  /**
+   * Cómo se llama en el texto el bloque que pone la app: `[tabla]` (de fábrica)
+   * o `[firma]` cuando ese bloque es la firma (cuenta de cobro).
+   */
+  marcador?: 'tabla' | 'firma'
+  /**
+   * Sin papel membretado, ¿la hoja va limpia (sin el encabezado de la empresa ni
+   * el pie)? Para los documentos que no emite la empresa, como la cuenta de
+   * cobro, que es del contratista.
+   */
+  sinEncabezado?: boolean
   /** Casos distintos que se pueden ver en la vista previa (tipo de certificación, un activo o varios…). */
   variantes: { valor: string; etiqueta: string }[]
 }
@@ -561,6 +574,68 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
     variables: V_CARTA,
     variantes: [],
   },
+
+  CUENTA_COBRO: {
+    clave: 'CUENTA_COBRO',
+    nombre: 'Cuenta de cobro',
+    descripcion: 'La radica el contratista desde su autoservicio (o la empresa a su nombre) y la firma él como acreedor.',
+    fijo: 'La app pone la firma del contratista donde va [firma], con su nombre, documento y celular.',
+    membrete: false,
+    sinEncabezado: true,
+    marcador: 'firma',
+    tabla: 'La firma del contratista, con su nombre, documento y celular',
+    defecto: {
+      titulo: 'Cuenta de cobro',
+      contenido: [
+        '**DEBE:**',
+        '{{razon_social}}',
+        'Nit No. {{nit}}',
+        '[[{{direccion_empresa}}]]',
+        '[[Email. {{correo_empresa}}]]',
+        '**A:**',
+        'Nombre: {{nombre}}',
+        '{{tipo_documento}}. No. {{documento}}[[ {{lugar_expedicion}}]]',
+        '[[Email. {{correo}}]]',
+        '**OBJETO DEL COBRO:**',
+        'Pago por concepto de {{concepto}}[[, correspondiente a {{periodo}}]], por el valor total de **{{valor_letras}}**.',
+        '**MANIFESTACIÓN BAJO GRAVEDAD DE JURAMENTO**',
+        'En cumplimiento de lo dispuesto en el parágrafo 2 del artículo 383 del Estatuto Tributario, modificado por la Ley 2277 de 2022, y el Decreto 1625 de 2016, manifiesto bajo la gravedad del juramento que los ingresos derivados del presente cobro corresponden a rentas de trabajo que no provienen de una relación laboral, legal o reglamentaria.',
+        'Asimismo, declaro que NO haré uso de costos y deducciones asociados a este pago o abono en cuenta en mi declaración del impuesto sobre la renta y complementarios para el presente año gravable. Por tanto, solicito amablemente que se me practique la retención en la fuente con base en la tabla establecida en el mencionado Artículo 383.',
+        '**FORMA DE PAGO:**',
+        'Favor consignar el total en la cuenta bancaria:',
+        '[[Banco: {{banco}}]]',
+        '[[Tipo de cuenta: {{tipo_cuenta}}]]',
+        '[[Número de cuenta: {{numero_cuenta}}]]',
+        'Titular: {{nombre}}',
+        '**Firma del Acreedor:**',
+        '[firma]',
+        'La presente cuenta de cobro se expide en la ciudad de {{ciudad}} a los {{fecha_dias}}.',
+      ].join('\n'),
+    },
+    variables: [
+      { clave: 'nombre', descripcion: 'Nombre completo del contratista, en mayúsculas' },
+      { clave: 'tipo_documento', descripcion: 'Tipo de documento abreviado (CC, CE…)' },
+      { clave: 'documento', descripcion: 'Número de documento del contratista' },
+      { clave: 'lugar_expedicion', descripcion: 'Lugar de expedición del documento (vacío si no está en la ficha)' },
+      { clave: 'correo', descripcion: 'Correo del contratista (vacío si no tiene)' },
+      { clave: 'celular', descripcion: 'Celular del contratista' },
+      { clave: 'numero', descripcion: 'Número de la cuenta de cobro (CC-1, CC-2…)' },
+      { clave: 'concepto', descripcion: 'Concepto escrito al radicar la cuenta' },
+      { clave: 'periodo', descripcion: 'Mes cobrado, en letras (agosto de 2026)' },
+      { clave: 'valor', descripcion: 'Valor de la cuenta, en cifras ($ 1.000.000)' },
+      { clave: 'valor_letras', descripcion: 'Valor en letras con la cifra: UN MILLÓN DE PESOS M/CTE ($1.000.000)' },
+      { clave: 'banco', descripcion: 'Banco de la cuenta del contratista (vacío si no está en la ficha)' },
+      { clave: 'tipo_cuenta', descripcion: 'Ahorros, corriente… (vacío si no está en la ficha)' },
+      { clave: 'numero_cuenta', descripcion: 'Número de la cuenta bancaria (vacío si no está en la ficha)' },
+      { clave: 'ciudad', descripcion: 'Ciudad de la sede del contratista' },
+      { clave: 'fecha', descripcion: 'Fecha de expedición, en letras' },
+      { clave: 'fecha_dias', descripcion: 'Fecha de expedición como "31 días del mes de agosto de 2026"' },
+      { clave: 'direccion_empresa', descripcion: 'Dirección de la empresa (Ajustes → Empresa)' },
+      { clave: 'correo_empresa', descripcion: 'Correo de contacto de la empresa (Ajustes → Empresa)' },
+      ...V_EMPRESA,
+    ],
+    variantes: [],
+  },
 }
 
 // ─── Resolución del texto ───────────────────────────────────────────────────
@@ -610,7 +685,7 @@ export function resolverTexto(plantilla: PlantillaTexto, vars: Record<string, st
   const notas: Tramo[][] = []
   let conTabla = false
   for (const linea of lineas) {
-    if (/^\[tabla\]$/i.test(linea)) {
+    if (/^\[(tabla|firma)\]$/i.test(linea)) {
       if (!conTabla) bloques.push({ tipo: 'tabla' })
       conTabla = true
       continue
@@ -891,7 +966,7 @@ export function variablesCertificacion(d: DatosVarsCertificacion): Record<string
     nombre: `${c.nombres} ${c.apellidos}`.toUpperCase(),
     tipo_documento: c.tipoDocumento,
     tipo_documento_nombre: (TIPO_DOCUMENTO_IDENTIDAD[c.tipoDocumento] ?? c.tipoDocumento).toLowerCase(),
-    documento: c.numeroDocumento,
+    documento: /^\d+$/.test(c.numeroDocumento) ? Number(c.numeroDocumento).toLocaleString('es-CO') : c.numeroDocumento,
     lugar_expedicion: c.lugarExpedicion?.trim() ?? '',
     comisiones: conValor && c.tieneComisiones ? FRASE_COMISIONES : '',
     destinatario: d.dirigidaA ?? '',
@@ -927,5 +1002,63 @@ export function variablesCertificacion(d: DatosVarsCertificacion): Record<string
     salario_letras: salario != null ? pesosEnLetras(salario) : '',
     salario_en_letras: salario != null ? pesosALetras(salario) : '',
     funciones: d.tipo === 'CON_FUNCIONES' ? (c.funciones ?? '') : '',
+  }
+}
+
+export type DatosVarsCuentaCobro = {
+  empresa: EmpresaTexto & { direccion: string | null; emailContacto: string | null }
+  contratista: {
+    nombre: string
+    tipoDocumento: string
+    numeroDocumento: string
+    lugarExpedicion: string | null
+    correo: string | null
+    celular: string | null
+    banco: string | null
+    tipoCuenta: string | null
+    numeroCuenta: string | null
+  }
+  numero: string
+  /** "2026-08". */
+  periodo: string
+  concepto: string | null
+  valor: number
+  ciudad: string
+  fecha: Date
+}
+
+/** "2026-08" → "agosto de 2026" (tal cual si no tiene esa forma). */
+export function periodoEnLetras(periodo: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(periodo)
+  if (!m) return periodo
+  const mes = new Intl.DateTimeFormat('es-CO', { timeZone: 'UTC', month: 'long' }).format(new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1)))
+  return `${mes} de ${m[1]}`
+}
+
+export function variablesCuentaCobro(d: DatosVarsCuentaCobro): Record<string, string> {
+  const c = d.contratista
+  const periodo = periodoEnLetras(d.periodo)
+  return {
+    nombre: c.nombre.toUpperCase(),
+    tipo_documento: c.tipoDocumento,
+    documento: /^\d+$/.test(c.numeroDocumento) ? Number(c.numeroDocumento).toLocaleString('es-CO') : c.numeroDocumento,
+    lugar_expedicion: c.lugarExpedicion?.trim() ?? '',
+    correo: c.correo?.trim() ?? '',
+    celular: c.celular?.trim() ?? '',
+    numero: d.numero,
+    // Sin concepto escrito, el periodo hace de concepto.
+    concepto: d.concepto?.trim() || `servicios prestados en ${periodo}`,
+    periodo,
+    valor: fmtCOP(d.valor),
+    valor_letras: pesosALetras(d.valor),
+    banco: c.banco?.trim() ?? '',
+    tipo_cuenta: c.tipoCuenta?.trim() ?? '',
+    numero_cuenta: c.numeroCuenta?.trim() ?? '',
+    ciudad: d.ciudad,
+    fecha: formatFechaLarga(d.fecha),
+    fecha_dias: fechaEnDias(d.fecha),
+    direccion_empresa: d.empresa.direccion?.trim() ?? '',
+    correo_empresa: d.empresa.emailContacto?.trim() ?? '',
+    ...varsEmpresa(d.empresa),
   }
 }

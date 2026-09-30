@@ -65,7 +65,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
   // el verificador debe poder VER el archivo, no solo los datos declarados.
   const docsPlanilla = c.cuentasCobro.length
     ? await prisma.documento.findMany({
-        where: { entidadTipo: 'CuentaCobroOps', entidadId: { in: c.cuentasCobro.map((cc) => cc.id) } },
+        where: { entidadTipo: 'CuentaCobroOps', entidadId: { in: c.cuentasCobro.map((cc) => cc.id) }, nombre: { startsWith: 'Planilla PILA' } },
         orderBy: { creadoEn: 'desc' },
         select: { id: true, entidadId: true, nombre: true, mimeType: true },
       })

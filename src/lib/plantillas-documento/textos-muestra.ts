@@ -7,9 +7,9 @@
 
 import { fmtCOP } from '@/lib/moneda'
 import {
-  variablesActaActivo, variablesDesprendible, variablesActaDotacion, variablesActaEpp, variablesCertificacion, variablesOrdenPago, variablesPazYSalvo, variablesLiquidacion, variablesCarta,
+  variablesActaActivo, variablesDesprendible, variablesCuentaCobro, variablesActaDotacion, variablesActaEpp, variablesCertificacion, variablesOrdenPago, variablesPazYSalvo, variablesLiquidacion, variablesCarta,
   type ClaveTexto, type DatosVarsActaActivo, type DatosVarsActaDotacion, type DatosVarsActaEpp, type DatosVarsPazYSalvo, type DatosVarsLiquidacion, type DatosVarsCarta,
-  type DatosVarsCertificacion, type DatosVarsOrdenPago, type DatosVarsDesprendible, type EmpresaTexto, type TipoCertificacion,
+  type DatosVarsCertificacion, type DatosVarsOrdenPago, type DatosVarsDesprendible, type DatosVarsCuentaCobro, type EmpresaTexto, type TipoCertificacion,
 } from './textos'
 
 export const MUESTRA_PERSONA = {
@@ -37,6 +37,8 @@ export type TablaMuestra =
   | { tipo: 'columnas'; columnas: { titulo: string; ancho: string; derecha?: boolean }[]; filas: string[][]; total?: string | null }
   | { tipo: 'pares'; pares: [string, string][] }
   | { tipo: 'horas'; filas: [string, string][]; totalHoras: string; totalPagar: string }
+  /** La firma que va donde dice `[firma]` (cuenta de cobro): el espacio, la raya y los datos debajo. */
+  | { tipo: 'firma'; lineas: string[] }
 
 /** Bloques fijos que rodean al texto: cómo es la cabecera y quién firma. */
 export type FijosMuestra = {
@@ -221,7 +223,40 @@ const ETIQUETA_HORA: Record<string, string> = { HED: 'Diurna', HEN: 'Nocturna', 
 const FIRMA_COLABORADOR = { nombre: MUESTRA_PERSONA.nombre, detalle: 'Colaborador · firmado digitalmente el (fecha de la firma)', conFirma: true }
 
 /** Variables, tabla y bloques fijos de la muestra de un texto, con la variante pedida. */
-export function muestraTexto(clave: ClaveTexto, variante: string, empresa: EmpresaTexto): MuestraTexto {
+/** Cuenta de cobro de muestra: un contratista ficticio que cobra un mes de honorarios. */
+export function muestraCuentaCobro(empresa: EmpresaTexto & { direccion?: string | null; emailContacto?: string | null }): DatosVarsCuentaCobro {
+  return {
+    empresa: { ...empresa, direccion: empresa.direccion ?? null, emailContacto: empresa.emailContacto ?? null },
+    contratista: {
+      nombre: MUESTRA_PERSONA.nombre,
+      tipoDocumento: 'CC',
+      numeroDocumento: '1000000000',
+      lugarExpedicion: 'Ciudad de muestra',
+      correo: 'correo.de.muestra@ejemplo.com',
+      celular: '300 000 0000',
+      banco: 'Banco de muestra',
+      tipoCuenta: 'Ahorros',
+      numeroCuenta: '000-000000-00',
+    },
+    numero: 'CC-0',
+    periodo: '2026-01',
+    concepto: 'servicios prestados como asesor comercial',
+    valor: 1_000_000,
+    ciudad: MUESTRA_PERSONA.ciudad,
+    fecha: FECHA_MUESTRA,
+  }
+}
+
+/** Lo que va bajo la raya de la firma del acreedor (igual en el PDF). */
+export function lineasFirmaCuentaCobro(vars: Record<string, string>): string[] {
+  return [
+    `Nombre: ${vars.nombre}`,
+    `${vars.tipo_documento}. No. ${vars.documento}${vars.lugar_expedicion ? ` ${vars.lugar_expedicion}` : ''}`,
+    ...(vars.celular ? [`Cel. ${vars.celular}`] : []),
+  ]
+}
+
+export function muestraTexto(clave: ClaveTexto, variante: string, empresa: EmpresaTexto & { direccion?: string | null; emailContacto?: string | null }): MuestraTexto {
   const pie = `${empresa.razonSocial} · NIT ${empresa.nit}`
   const firmaEmpresa = (rol: string) => ({ nombre: rol, detalle: empresa.nombreComercial || empresa.razonSocial, conFirma: false })
 
@@ -338,6 +373,11 @@ export function muestraTexto(clave: ClaveTexto, variante: string, empresa: Empre
       const firmaTH = { nombre: 'Talento Humano', detalle: 'Firmado electrónicamente el (fecha de envío)', conFirma: clave !== 'ORDEN_EXAMEN_EGRESO' }
       const firmas = clave === 'CARTA_RENUNCIA' ? [FIRMA_COLABORADOR] : clave === 'ORDEN_EXAMEN_EGRESO' ? [firmaTH] : [firmaTH, FIRMA_COLABORADOR]
       return { vars: variablesCarta(muestraCarta(empresa)), tabla: null, fijos: { cabecera: 'membrete', firmas, pie } }
+    }
+    case 'CUENTA_COBRO': {
+      // La firma va dentro del texto (`[firma]`), no al final: por eso no hay firmas fijas.
+      const vars = variablesCuentaCobro(muestraCuentaCobro(empresa))
+      return { vars, tabla: { tipo: 'firma', lineas: lineasFirmaCuentaCobro(vars) }, fijos: { cabecera: 'membrete', firmas: [], pie } }
     }
     case 'CERTIFICACION_LABORAL':
     case 'CERTIFICACION_CONTRACTUAL': {

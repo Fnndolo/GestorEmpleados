@@ -8,7 +8,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Eye, FileText } from 'lucide-react'
 import { fmtCOP } from '@/lib/moneda'
-import { formatFechaCorta, formatFechaISO } from '@/lib/fechas'
+import { periodoEnLetras } from '@/lib/plantillas-documento/textos'
 import { cn } from '@/lib/utils'
 import { MiCuentaCobro } from './mi-cuenta'
 import { PlanillaPila } from './planilla-pila'
@@ -34,22 +34,18 @@ export default async function MisCuentasCobroPage() {
     return <div className="max-w-5xl"><Encabezado volver titulo="Mis cuentas de cobro" /><Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Tu usuario no está vinculado a una ficha de colaborador.</CardContent></Card></div>
   }
 
-  const [cuentas, plantillas] = await Promise.all([
-    prisma.cuentaCobroOps.findMany({
-      where: { colaboradorId: usuario.colaboradorId },
-      include: { soporteSs: { select: { estadoVerificacion: true, observaciones: true } } },
-      orderBy: { creadoEn: 'desc' },
-    }),
-    prisma.plantillaCuentaCobro.findMany({ where: { activa: true }, orderBy: [{ esDefecto: 'desc' }, { nombre: 'asc' }] }),
-  ])
+  const cuentas = await prisma.cuentaCobroOps.findMany({
+    where: { colaboradorId: usuario.colaboradorId },
+    include: { soporteSs: { select: { estadoVerificacion: true, observaciones: true } } },
+    orderBy: { creadoEn: 'desc' },
+  })
 
   return (
     <div className="max-w-5xl">
       <Encabezado
         volver
         titulo="Mis cuentas de cobro"
-        descripcion="Crea y envía tu cuenta de cobro (servicios, comisiones o saldos a tu favor). Contabilidad y gerencia recibirán la notificación."
-        acciones={<MiCuentaCobro plantillas={plantillas.map((p) => ({ id: p.id, nombre: p.nombre }))} />}
+        acciones={<MiCuentaCobro />}
       />
       {cuentas.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground"><FileText className="size-8" /><p>Aún no has creado cuentas de cobro.</p></CardContent></Card>
@@ -67,10 +63,10 @@ export default async function MisCuentasCobroPage() {
                 <div className="flex items-center gap-3">
                   <FileText className="size-5 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm">{c.numero} · periodo {c.periodo}</p>
-                    <p className="text-xs text-muted-foreground">{c.concepto ?? 'Sin concepto'} · radicada {formatFechaCorta(c.fechaRadicacion)}</p>
+                    {/* Lo justo para reconocerla: el mes, su número y el valor. El resto está en el PDF. */}
+                    <p className="text-sm font-medium first-letter:uppercase">{periodoEnLetras(c.periodo)}</p>
+                    <p className="text-xs text-muted-foreground">{c.numero} · {fmtCOP(Number(c.valor))}</p>
                   </div>
-                  <span className="text-sm font-medium hidden sm:block">{fmtCOP(Number(c.valor))}</span>
                   {c.documentoId && (
                     <VisorPdf
                       documentoId={c.documentoId}
@@ -88,7 +84,6 @@ export default async function MisCuentasCobroPage() {
                       destino="cuentaCobro" id={c.id} tamano="icon" variante="ghost"
                       tieneDocumento={Boolean(c.documentoId)}
                       etiqueta={c.documentoId ? 'Rehacer o subir mi cuenta' : 'Generar o subir mi cuenta'}
-                      plantillas={plantillas.map((pl) => ({ id: pl.id, nombre: pl.nombre }))}
                     />
                   )}
                   <Badge variant={c.estado === 'PAGADA' || c.estado === 'APROBADA' ? 'default' : c.estado === 'RECHAZADA' || c.estado === 'BLOQUEADA_SS' ? 'destructive' : 'secondary'}>{ESTADO[c.estado]}</Badge>

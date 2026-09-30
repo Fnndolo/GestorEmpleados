@@ -14,7 +14,6 @@ import type { DatosAutorizacion, PlantillaAutorizacion } from '@/lib/plantillas-
 import { TEXTOS, esClaveTexto, type ClaveTexto, type TextoDocumento } from '@/lib/plantillas-documento/textos'
 import { MembretePanel } from './membrete/membrete-panel'
 import { EditorAutorizacion } from './autorizacion-datos/editor'
-import { PlantillasCliente } from './cuentas-cobro/plantillas-cliente'
 import { EditorTexto, type EmpresaPreview } from './textos/editor-texto'
 import type { Editor } from './editores'
 
@@ -40,10 +39,6 @@ type Props = {
   autorizacion: Autorizacion
   /** Autorización de datos del trabajador con contrato laboral. */
   autorizacionLaboral: Autorizacion
-  cuentasCobro: {
-    plantillas: React.ComponentProps<typeof PlantillasCliente>['plantillas']
-    empresa: { razonSocial: string; nit: string }
-  }
   plantillasContrato: number
   /** Textos editables: actas de Mis entregas, orden de pago de horas extra y certificaciones. */
   textos: Record<ClaveTexto, TextoEditable>
@@ -69,6 +64,7 @@ const ICONO_TEXTO: Record<ClaveTexto, LucideIcon> = {
   CARTA_NO_PRORROGA: CalendarX2,
   ACTA_MUTUO_ACUERDO: Handshake,
   ORDEN_EXAMEN_EGRESO: Stethoscope,
+  CUENTA_COBRO: Receipt,
 }
 
 function filaTexto(clave: ClaveTexto): Fila {
@@ -100,11 +96,7 @@ const GRUPOS: { titulo: string; filas: Fila[] }[] = [
         desc: 'Se genera con cada contrato de trabajo y la firma el trabajador: monitoreo de productividad, huella, videovigilancia e imagen promocional.',
         muestra: '/api/configuracion/membrete/muestra?tipo=autorizacion-laboral',
       },
-      {
-        clave: 'cuentas-cobro', icono: Receipt, titulo: 'Cuenta de cobro',
-        desc: 'La radican los contratistas OPS desde su autoservicio. Puede haber varias plantillas (días laborados, bonos, servicios…).',
-        muestra: '/api/configuracion/membrete/muestra?tipo=cuenta-cobro',
-      },
+      filaTexto('CUENTA_COBRO'),
     ],
   },
   { titulo: 'Certificaciones', filas: [filaTexto('CERTIFICACION_LABORAL'), filaTexto('CERTIFICACION_CONTRACTUAL')] },
@@ -128,7 +120,7 @@ const GRUPOS: { titulo: string; filas: Fila[] }[] = [
  * editor en una ventana emergente centrada: no hay pestañas ni páginas aparte.
  */
 export function DocumentosPlantillas({
-  abrirInicial, puedeEditar, membrete, autorizacion, autorizacionLaboral, cuentasCobro, plantillasContrato, textos, empresaTextos,
+  abrirInicial, puedeEditar, membrete, autorizacion, autorizacionLaboral, plantillasContrato, textos, empresaTextos,
 }: Props) {
   const [abierto, setAbierto] = useState<Editor | null>(abrirInicial)
 
@@ -140,12 +132,10 @@ export function DocumentosPlantillas({
     }
   }
 
-  const n = cuentasCobro.plantillas.length
   const estado: Record<string, string> = {
     membrete: membrete.tieneMembrete ? 'Propio' : 'De la app',
     autorizacion: autorizacion.estado,
     'autorizacion-laboral': autorizacionLaboral.estado,
-    'cuentas-cobro': `${n} plantilla${n === 1 ? '' : 's'}`,
     ...Object.fromEntries(Object.entries(textos).map(([k, t]) => [k, t.estado])),
   }
 
@@ -221,16 +211,6 @@ export function DocumentosPlantillas({
             puedeEditar={puedeEditar}
             empresa={autorizacionLaboral.empresa}
           />
-        </DialogContent>
-      </Dialog>
-
-      {/* Cuentas de cobro */}
-      <Dialog open={abierto === 'cuentas-cobro'} onOpenChange={(o) => !o && cerrar()}>
-        <DialogContent onOpenAutoFocus={enfocarDialogo} aria-describedby={undefined} className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Plantillas de cuenta de cobro</DialogTitle>
-          </DialogHeader>
-          <PlantillasCliente plantillas={cuentasCobro.plantillas} empresa={cuentasCobro.empresa} />
         </DialogContent>
       </Dialog>
 
