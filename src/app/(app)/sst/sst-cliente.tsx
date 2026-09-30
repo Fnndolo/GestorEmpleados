@@ -1,5 +1,6 @@
 'use client'
 
+import { reducirImagen } from '@/lib/reducir-imagen'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -671,7 +672,7 @@ function DialogExamen({ verSalud, onClose }: { verSalud: boolean; onClose: () =>
     if (archivo) {
       try {
         const fd = new FormData()
-        fd.append('archivo', archivo)
+        fd.append('archivo', await reducirImagen(archivo))
         fd.append('entidadTipo', 'ExamenMedico')
         fd.append('entidadId', examenId)
         fd.append('nombre', `Certificado examen ${f.tipo.toLowerCase()}`)
@@ -741,7 +742,7 @@ function DialogSeguimientoAccidente({ accidente, onClose }: { accidente: Props['
     if (archivo) {
       try {
         const fd = new FormData()
-        fd.append('archivo', archivo)
+        fd.append('archivo', await reducirImagen(archivo))
         fd.append('entidadTipo', 'AccidenteTrabajo')
         fd.append('entidadId', accidente.id)
         fd.append('nombre', archivo.name)
@@ -824,7 +825,7 @@ function DialogComiteDetalle({ comite, onClose }: { comite: Props['comites'][num
     if (actaArchivo) {
       try {
         const fd = new FormData()
-        fd.append('archivo', actaArchivo)
+        fd.append('archivo', await reducirImagen(actaArchivo))
         fd.append('entidadTipo', 'ReunionComite')
         fd.append('entidadId', reunionId)
         fd.append('nombre', `Acta ${TIPO_COMITE[comite.tipo]} ${fechaReunion}`)
@@ -999,7 +1000,7 @@ function DialogSeguimientoInspeccion({ inspeccion, onClose }: { inspeccion: Prop
     setG(true)
     try {
       const fd = new FormData()
-      fd.append('archivo', archivo)
+      fd.append('archivo', await reducirImagen(archivo))
       fd.append('entidadTipo', 'InspeccionSst')
       fd.append('entidadId', inspeccion.id)
       fd.append('nombre', `Inspección ${inspeccion.tipo} ${inspeccion.fecha}`)
@@ -1059,7 +1060,7 @@ function SeccionEmergencia({ titulo, puedeCrear, sedes, planes }: { titulo: stri
 
   async function adjuntar(planId: string, archivo: File) {
     const fd = new FormData()
-    fd.append('archivo', archivo)
+    fd.append('archivo', await reducirImagen(archivo))
     fd.append('entidadTipo', 'PlanEmergencia')
     fd.append('entidadId', planId)
     fd.append('nombre', `Plan de emergencias`)
@@ -1159,7 +1160,7 @@ function SeccionSimulacros({ puedeCrear, sedes, simulacros }: { puedeCrear: bool
     if (archivo) {
       try {
         const fd = new FormData()
-        fd.append('archivo', archivo)
+        fd.append('archivo', await reducirImagen(archivo))
         fd.append('entidadTipo', 'Simulacro')
         fd.append('entidadId', simulacroId)
         fd.append('nombre', `Acta simulacro ${f.tipo}`)
@@ -1251,7 +1252,7 @@ function DialogAutoeval({ onClose }: { onClose: () => void }) {
 async function subirDoc(archivo: File, entidadTipo: string, entidadId: string, nombre: string): Promise<string | null> {
   try {
     const fd = new FormData()
-    fd.append('archivo', archivo)
+    fd.append('archivo', await reducirImagen(archivo))
     fd.append('entidadTipo', entidadTipo)
     fd.append('entidadId', entidadId)
     fd.append('nombre', nombre)

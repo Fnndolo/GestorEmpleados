@@ -1,5 +1,6 @@
 'use client'
 
+import { reducirImagen } from '@/lib/reducir-imagen'
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -253,7 +254,7 @@ function DialogSubir({ colaboradorId, tipos, tipoInicial, onClose, onDone }: {
     setG(true)
     try {
       const fd = new FormData()
-      fd.append('archivo', archivo)
+      fd.append('archivo', await reducirImagen(archivo))
       fd.append('entidadTipo', 'Colaborador')
       fd.append('entidadId', colaboradorId)
       fd.append('nombre', nombre.trim() || tipo?.nombre || archivo.name)
@@ -344,7 +345,7 @@ function DialogEditar({ doc, colaboradorId, tipos, onClose, onDone }: {
     if (archivo) {
       try {
         const fd = new FormData()
-        fd.append('archivo', archivo)
+        fd.append('archivo', await reducirImagen(archivo))
         fd.append('entidadTipo', 'Colaborador')
         fd.append('entidadId', colaboradorId)
         fd.append('nombre', nombre.trim())

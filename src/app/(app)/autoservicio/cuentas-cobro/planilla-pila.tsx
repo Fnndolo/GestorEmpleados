@@ -1,5 +1,6 @@
 'use client'
 
+import { reducirImagen } from '@/lib/reducir-imagen'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -45,7 +46,7 @@ export function PlanillaPila({
     if (archivo) {
       try {
         const fd = new FormData()
-        fd.append('archivo', archivo)
+        fd.append('archivo', await reducirImagen(archivo))
         fd.append('entidadTipo', 'CuentaCobroOps')
         fd.append('entidadId', cuentaId)
         fd.append('nombre', `Planilla PILA — ${periodo}`)

@@ -1,5 +1,6 @@
 'use client'
 
+import { reducirImagen } from '@/lib/reducir-imagen'
 import { useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -251,7 +252,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
       for (const archivo of archivos) {
         try {
           const fd = new FormData()
-          fd.append('archivo', archivo)
+          fd.append('archivo', await reducirImagen(archivo))
           fd.append('entidadTipo', 'Solicitud')
           fd.append('entidadId', solicitudId)
           fd.append('nombre', `Soporte solicitud — ${archivo.name}`)

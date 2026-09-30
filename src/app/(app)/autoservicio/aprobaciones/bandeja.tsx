@@ -1,5 +1,6 @@
 'use client'
 
+import { reducirImagen } from '@/lib/reducir-imagen'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -386,7 +387,7 @@ function DialogCertificacion({ solicitud, onClose, onDone }: { solicitud: Solici
       } else {
         if (!archivo) { toast.error('Selecciona el archivo del certificado.'); setG(false); return }
         const fd = new FormData()
-        fd.append('archivo', archivo)
+        fd.append('archivo', await reducirImagen(archivo))
         fd.append('entidadTipo', 'Colaborador')
         fd.append('entidadId', solicitud.colaboradorId)
         fd.append('nombre', 'Certificación laboral')

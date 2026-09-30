@@ -1,5 +1,6 @@
 'use client'
 
+import { reducirImagen } from '@/lib/reducir-imagen'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -30,10 +31,13 @@ export function PagoLiquidacion({ terminacionId, total, firmada, pagadaEn, compr
   const [archivo, setArchivo] = useState<{ nombre: string; dataUri: string } | null>(null)
   const [g, setG] = useState(false)
 
-  function elegir(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]
-    if (!f) return
-    if (f.size > 8 * 1024 * 1024) { toast.error('El archivo pesa más de 8 MB.'); return }
+  async function elegir(e: React.ChangeEvent<HTMLInputElement>) {
+    const elegido = e.target.files?.[0]
+    if (!elegido) return
+    // Viaja dentro de la acción (tope de 4 MB, y en base64 pesa un tercio más): las fotos
+    // se achican antes; un PDF de más de 3 MB no cabría.
+    const f = await reducirImagen(elegido)
+    if (f.size > 3 * 1024 * 1024) { toast.error('El archivo pesa más de 3 MB. Toma una foto o expórtalo más liviano.'); return }
     const lector = new FileReader()
     lector.onload = () => setArchivo({ nombre: f.name, dataUri: String(lector.result) })
     lector.readAsDataURL(f)

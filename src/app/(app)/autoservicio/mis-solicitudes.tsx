@@ -1,5 +1,6 @@
 'use client'
 
+import { reducirImagen } from '@/lib/reducir-imagen'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -139,7 +140,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
     try {
       for (const file of archivosComprobante.files) {
         const fd = new FormData()
-        fd.append('archivo', file)
+        fd.append('archivo', await reducirImagen(file))
         fd.append('entidadTipo', 'Permiso')
         fd.append('entidadId', permisoId)
         fd.append('nombre', `Comprobante de asistencia — ${file.name}`)
@@ -163,7 +164,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
     setCorrigiendo(solicitudId)
     try {
       const fd = new FormData()
-      fd.append('archivo', archivoSoporte)
+      fd.append('archivo', await reducirImagen(archivoSoporte))
       fd.append('entidadTipo', 'Solicitud')
       fd.append('entidadId', solicitudId)
       fd.append('nombre', `Soporte corregido — ${archivoSoporte.name}`)

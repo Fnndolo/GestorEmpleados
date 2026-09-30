@@ -1,5 +1,6 @@
 'use client'
 
+import { reducirImagen } from '@/lib/reducir-imagen'
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -204,7 +205,7 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
     for (const archivo of archivos) {
       try {
         const fd = new FormData()
-        fd.append('archivo', archivo)
+        fd.append('archivo', await reducirImagen(archivo))
         fd.append('codigo', res.datos.codigo)
         const up = await fetch('/api/linea-etica/soporte', { method: 'POST', body: fd })
         if (!up.ok) fallidos++

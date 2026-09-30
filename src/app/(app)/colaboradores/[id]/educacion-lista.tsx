@@ -1,5 +1,6 @@
 'use client'
 
+import { reducirImagen } from '@/lib/reducir-imagen'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
@@ -103,7 +104,7 @@ function DialogEducacion({
     if (archivo) {
       try {
         const fd = new FormData()
-        fd.append('archivo', archivo)
+        fd.append('archivo', await reducirImagen(archivo))
         fd.append('entidadTipo', 'EducacionColaborador')
         fd.append('entidadId', (res.datos as { id: string }).id)
         fd.append('nombre', `Certificado — ${d.titulo}`)

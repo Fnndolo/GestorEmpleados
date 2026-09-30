@@ -1,5 +1,6 @@
 'use client'
 
+import { reducirImagen } from '@/lib/reducir-imagen'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -26,7 +27,7 @@ import { ZonaArchivos } from './_ui'
 /** Sube un archivo asociado a una entidad usando el endpoint existente y devuelve el id del Documento. */
 async function subirArchivoEntidad(entidadTipo: string, entidadId: string, file: File, nombre: string): Promise<string> {
   const fd = new FormData()
-  fd.append('archivo', file, file.name)
+  fd.append('archivo', await reducirImagen(file))
   fd.append('entidadTipo', entidadTipo)
   fd.append('entidadId', entidadId)
   fd.append('nombre', nombre)
