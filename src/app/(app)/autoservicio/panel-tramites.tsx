@@ -151,7 +151,9 @@ export function PanelTramites({
     {
       clave: 'cuentas', icono: Receipt,
       titulo: 'Cobrar', corto: 'Cuenta de cobro',
-      href: '/autoservicio/cuentas-cobro',
+      // En desarrollo: la pantalla real (/autoservicio/cuentas-cobro) sigue intacta,
+      // solo se desvía el acceso mientras se termina de habilitar.
+      href: '/autoservicio/en-desarrollo?titulo=Cuenta%20de%20cobro',
     },
   ].filter(Boolean) as Item[]
 
