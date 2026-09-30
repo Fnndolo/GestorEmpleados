@@ -14,7 +14,7 @@ import { TabsContent } from '@/components/ui/tabs'
 import { TabsResponsive } from '@/components/shell/tabs-responsive'
 import {
   Pencil, ShieldAlert, CalendarDays, FileText, Eye, Receipt,
-  IdCard, Landmark, Shirt, CalendarRange, Banknote, CalendarClock, CircleCheck, Clock, ChevronRight,
+  IdCard, Landmark, Shirt, CalendarRange, Banknote, CalendarClock, CircleCheck, Clock, ChevronRight, TriangleAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Stat } from '@/components/ui-kit'
@@ -635,6 +635,22 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
           {/* Historial de capacitaciones internas (RIT art. 95) */}
           <Card><CardContent className="py-4">
             <h3 className="mb-3 text-sm font-medium">Capacitaciones internas ({capacitacionesColab.length})</h3>
+            {/* La inducción es obligatoria (RIT arts. 7 y 95): a los 15 días del ingreso
+                sin ella, Talento Humano recibe un aviso. Aquí se dice si ya la tiene. */}
+            {(() => {
+              const induccion = capacitacionesColab.find((a) => a.capacitacion.tipo === 'INDUCCION')
+              return induccion ? (
+                <p className="mb-3 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300">
+                  <CircleCheck className="size-4 shrink-0" /> Inducción realizada el {formatFechaCorta(induccion.capacitacion.fecha)}
+                </p>
+              ) : (
+                <p className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                  <TriangleAlert className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1">Necesita inducción: no tiene ninguna registrada. Se registra en Capacitaciones, con una de tipo «Inducción» y su asistencia.</span>
+                  <Link href="/capacitaciones" className="font-medium underline underline-offset-2">Ir a Capacitaciones</Link>
+                </p>
+              )
+            })()}
             {capacitacionesColab.length === 0 ? (
               <p className="py-4 text-center text-sm text-muted-foreground">Sin capacitaciones registradas.</p>
             ) : (
