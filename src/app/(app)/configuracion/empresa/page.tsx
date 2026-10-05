@@ -1,6 +1,5 @@
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { Encabezado } from '@/components/shell/encabezado'
 import { EmpresaForm } from './form'
 import { FirmaRepLegalForm } from './firma-form'
 import { IdentidadEmpresa } from './identidad'
@@ -27,11 +26,8 @@ export default async function EmpresaPage() {
         sedes={sedes}
         colaboradores={colaboradores}
       />
-      <Encabezado
-        titulo="Datos de la empresa"
-        descripcion="Encabezan todo lo que la empresa firma: contratos, certificaciones, actas y desprendibles. Los documentos ya emitidos conservan los datos con que se firmaron."
-      />
       <EmpresaForm
+        puedeEditar={puedeEditar}
         valores={{
           razonSocial: empresa?.razonSocial ?? '',
           nombreComercial: empresa?.nombreComercial ?? '',

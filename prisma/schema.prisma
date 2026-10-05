@@ -49,15 +49,15 @@ model User {
   whatsappOptInFecha  DateTime?     @map("whatsapp_opt_in_fecha")
   ultimoAcceso        DateTime?     @map("ultimo_acceso")
 
-  sessions    Session[]
-  accounts    Account[]
-  sedes       UsuarioSede[]
-  avisosCreados  Aviso[]        @relation("AvisosCreados")
+  sessions       Session[]
+  accounts       Account[]
+  sedes          UsuarioSede[]
+  avisosCreados  Aviso[]         @relation("AvisosCreados")
   avisosLeidos   AvisoLectura[]
   // Roles adicionales al principal (`rolId`). Los permisos efectivos son la
   // unión de todos; ver fusionarPermisos() en src/lib/permisos/tipos.ts.
-  rolesExtra  UsuarioRol[]
-  colaborador Colaborador?
+  rolesExtra     UsuarioRol[]
+  colaborador    Colaborador?
   // Áreas del paz y salvo de las que es responsable (verifica la entrega).
   areasPazYSalvo AreaPazYSalvo[] @relation("ResponsableAreaPazYSalvo")
 
@@ -224,12 +224,14 @@ model Sede {
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
 
-  usuarios           UsuarioSede[]
-  colaboradores      Colaborador[]
-  contratos          Contrato[]
-  contratosOps       ContratoOps[]
-  activos            Activo[]
-  acuerdosEvaluacion AcuerdoEvaluacion[]
+  usuarios               UsuarioSede[]
+  colaboradores          Colaborador[]
+  contratos              Contrato[]
+  contratosOps           ContratoOps[]
+  activos                Activo[]
+  acuerdosEvaluacion     AcuerdoEvaluacion[]
+  turnosDominicales      TurnoDominical[]
+  cronogramasDominicales CronogramaDominical[]
 
   @@map("sede")
 }
@@ -285,6 +287,12 @@ model ConfiguracionEmpresa {
   asistenciaApiKey            String?  @map("asistencia_api_key")
   // Solo si la empresa usa una instalación distinta a la pública.
   asistenciaUrl               String?  @map("asistencia_url")
+  // Qué datos se comparten con AsistencIA, en las dos direcciones (Ajustes →
+  // Integraciones). Apagado, esa puerta se cierra aunque la clave sea válida.
+  asistenciaColaboradores     Boolean  @default(true) @map("asistencia_colaboradores")
+  asistenciaFotos             Boolean  @default(true) @map("asistencia_fotos")
+  asistenciaHoras             Boolean  @default(true) @map("asistencia_horas")
+  asistenciaHorarios          Boolean  @default(true) @map("asistencia_horarios")
   actualizadoEn               DateTime @updatedAt @map("actualizado_en")
 
   @@map("configuracion_empresa")
@@ -554,131 +562,133 @@ enum EstadoColaborador {
 }
 
 model Colaborador {
-  id                   String                  @id @default(uuid(7)) @db.Uuid
+  id                               String                  @id @default(uuid(7)) @db.Uuid
   // Identificación
-  tipoDocumento        TipoDocumentoIdentidad  @map("tipo_documento")
-  numeroDocumento      String                  @map("numero_documento")
-  fechaExpedicionDoc   DateTime?               @map("fecha_expedicion_doc") @db.Date
-  lugarExpedicionDoc   String?                 @map("lugar_expedicion_doc")
-  nombres              String
-  apellidos            String
-  fechaNacimiento      DateTime?               @map("fecha_nacimiento") @db.Date
-  lugarNacimiento      String?                 @map("lugar_nacimiento")
-  genero               Genero?
-  estadoCivil          EstadoCivil?            @map("estado_civil")
-  grupoSanguineo       GrupoSanguineo?         @map("grupo_sanguineo")
-  fotoPath             String?                 @map("foto_path")
+  tipoDocumento                    TipoDocumentoIdentidad  @map("tipo_documento")
+  numeroDocumento                  String                  @map("numero_documento")
+  fechaExpedicionDoc               DateTime?               @map("fecha_expedicion_doc") @db.Date
+  lugarExpedicionDoc               String?                 @map("lugar_expedicion_doc")
+  nombres                          String
+  apellidos                        String
+  fechaNacimiento                  DateTime?               @map("fecha_nacimiento") @db.Date
+  lugarNacimiento                  String?                 @map("lugar_nacimiento")
+  genero                           Genero?
+  estadoCivil                      EstadoCivil?            @map("estado_civil")
+  grupoSanguineo                   GrupoSanguineo?         @map("grupo_sanguineo")
+  fotoPath                         String?                 @map("foto_path")
   // Contacto
-  direccion            String?
-  barrio               String?
-  ciudadResidenciaId   String?                 @map("ciudad_residencia_id") @db.Uuid
-  ciudadResidencia     Ciudad?                 @relation(fields: [ciudadResidenciaId], references: [id])
-  celular              String
-  telefono             String?
-  emailPersonal        String?                 @map("email_personal")
-  emailCorporativo     String?                 @map("email_corporativo")
+  direccion                        String?
+  barrio                           String?
+  ciudadResidenciaId               String?                 @map("ciudad_residencia_id") @db.Uuid
+  ciudadResidencia                 Ciudad?                 @relation(fields: [ciudadResidenciaId], references: [id])
+  celular                          String
+  telefono                         String?
+  emailPersonal                    String?                 @map("email_personal")
+  emailCorporativo                 String?                 @map("email_corporativo")
   // Contacto de emergencia
-  emergenciaNombre     String?                 @map("emergencia_nombre")
-  emergenciaParentesco String?                 @map("emergencia_parentesco")
-  emergenciaTelefono   String?                 @map("emergencia_telefono")
+  emergenciaNombre                 String?                 @map("emergencia_nombre")
+  emergenciaParentesco             String?                 @map("emergencia_parentesco")
+  emergenciaTelefono               String?                 @map("emergencia_telefono")
   // Educación
-  nivelEducativoMax    NivelEducativo?         @map("nivel_educativo_max")
-  educacion            EducacionColaborador[]
+  nivelEducativoMax                NivelEducativo?         @map("nivel_educativo_max")
+  educacion                        EducacionColaborador[]
   // Salud / seguridad social (datos sensibles: módulo colaboradores_salud)
-  epsId                String?                 @map("eps_id") @db.Uuid
-  eps                  EntidadSeguridadSocial? @relation("ColEps", fields: [epsId], references: [id])
-  afpId                String?                 @map("afp_id") @db.Uuid
-  afp                  EntidadSeguridadSocial? @relation("ColAfp", fields: [afpId], references: [id])
-  fondoCesantiasId     String?                 @map("fondo_cesantias_id") @db.Uuid
-  fondoCesantias       EntidadSeguridadSocial? @relation("ColFondoCesantias", fields: [fondoCesantiasId], references: [id])
-  cajaCompensacionId   String?                 @map("caja_compensacion_id") @db.Uuid
-  cajaCompensacion     EntidadSeguridadSocial? @relation("ColCaja", fields: [cajaCompensacionId], references: [id])
-  arlId                String?                 @map("arl_id") @db.Uuid
-  arl                  EntidadSeguridadSocial? @relation("ColArl", fields: [arlId], references: [id])
-  claseRiesgoArl       ClaseRiesgoArl?         @map("clase_riesgo_arl")
+  epsId                            String?                 @map("eps_id") @db.Uuid
+  eps                              EntidadSeguridadSocial? @relation("ColEps", fields: [epsId], references: [id])
+  afpId                            String?                 @map("afp_id") @db.Uuid
+  afp                              EntidadSeguridadSocial? @relation("ColAfp", fields: [afpId], references: [id])
+  fondoCesantiasId                 String?                 @map("fondo_cesantias_id") @db.Uuid
+  fondoCesantias                   EntidadSeguridadSocial? @relation("ColFondoCesantias", fields: [fondoCesantiasId], references: [id])
+  cajaCompensacionId               String?                 @map("caja_compensacion_id") @db.Uuid
+  cajaCompensacion                 EntidadSeguridadSocial? @relation("ColCaja", fields: [cajaCompensacionId], references: [id])
+  arlId                            String?                 @map("arl_id") @db.Uuid
+  arl                              EntidadSeguridadSocial? @relation("ColArl", fields: [arlId], references: [id])
+  claseRiesgoArl                   ClaseRiesgoArl?         @map("clase_riesgo_arl")
   // Datos bancarios
-  bancoId              String?                 @map("banco_id") @db.Uuid
-  banco                Banco?                  @relation(fields: [bancoId], references: [id])
-  tipoCuenta           TipoCuentaBancaria?     @map("tipo_cuenta")
-  numeroCuenta         String?                 @map("numero_cuenta")
+  bancoId                          String?                 @map("banco_id") @db.Uuid
+  banco                            Banco?                  @relation(fields: [bancoId], references: [id])
+  tipoCuenta                       TipoCuentaBancaria?     @map("tipo_cuenta")
+  numeroCuenta                     String?                 @map("numero_cuenta")
   // Organizacional
-  tipoVinculo          TipoVinculo             @map("tipo_vinculo")
-  sedeId               String                  @map("sede_id") @db.Uuid
-  sede                 Sede                    @relation(fields: [sedeId], references: [id])
-  areaId               String?                 @map("area_id") @db.Uuid
-  area                 Area?                   @relation(fields: [areaId], references: [id])
-  cargoId              String?                 @map("cargo_id") @db.Uuid
-  cargo                Cargo?                  @relation(fields: [cargoId], references: [id])
-  jefeInmediatoId      String?                 @map("jefe_inmediato_id") @db.Uuid
-  jefeInmediato        Colaborador?            @relation("JefeInmediato", fields: [jefeInmediatoId], references: [id])
-  subordinados         Colaborador[]           @relation("JefeInmediato")
+  tipoVinculo                      TipoVinculo             @map("tipo_vinculo")
+  sedeId                           String                  @map("sede_id") @db.Uuid
+  sede                             Sede                    @relation(fields: [sedeId], references: [id])
+  areaId                           String?                 @map("area_id") @db.Uuid
+  area                             Area?                   @relation(fields: [areaId], references: [id])
+  cargoId                          String?                 @map("cargo_id") @db.Uuid
+  cargo                            Cargo?                  @relation(fields: [cargoId], references: [id])
+  jefeInmediatoId                  String?                 @map("jefe_inmediato_id") @db.Uuid
+  jefeInmediato                    Colaborador?            @relation("JefeInmediato", fields: [jefeInmediatoId], references: [id])
+  subordinados                     Colaborador[]           @relation("JefeInmediato")
   // Máxima autoridad de la empresa: sus solicitudes se auto-registran (no requieren
   // aprobación superior) y nadie más puede "aprobar" por encima de él.
-  esRepresentanteLegal Boolean                 @default(false) @map("es_representante_legal")
-  modalidadTrabajo     ModalidadTrabajo        @default(PRESENCIAL) @map("modalidad_trabajo")
-  fechaIngreso         DateTime                @map("fecha_ingreso") @db.Date
-  fechaRetiro          DateTime?               @map("fecha_retiro") @db.Date
+  esRepresentanteLegal             Boolean                 @default(false) @map("es_representante_legal")
+  modalidadTrabajo                 ModalidadTrabajo        @default(PRESENCIAL) @map("modalidad_trabajo")
+  fechaIngreso                     DateTime                @map("fecha_ingreso") @db.Date
+  fechaRetiro                      DateTime?               @map("fecha_retiro") @db.Date
   // Talento Humano confirma que ya cargó el historial de vacaciones de la persona
   // (las tomadas antes de la plataforma). Solo entonces su saldo es confiable y
   // se le muestra en Autoservicio. Null = aún sin confirmar.
-  vacacionesHistorialCompletoEn    DateTime? @map("vacaciones_historial_completo_en")
-  vacacionesHistorialCompletoPorId String?   @map("vacaciones_historial_completo_por_id") @db.Uuid
-  estado               EstadoColaborador       @default(ACTIVO)
+  vacacionesHistorialCompletoEn    DateTime?               @map("vacaciones_historial_completo_en")
+  vacacionesHistorialCompletoPorId String?                 @map("vacaciones_historial_completo_por_id") @db.Uuid
+  estado                           EstadoColaborador       @default(ACTIVO)
   // Dotación
-  tallaCamisa          String?                 @map("talla_camisa")
-  tallaPantalon        String?                 @map("talla_pantalon")
-  tallaCalzado         String?                 @map("talla_calzado")
+  tallaCamisa                      String?                 @map("talla_camisa")
+  tallaPantalon                    String?                 @map("talla_pantalon")
+  tallaCalzado                     String?                 @map("talla_calzado")
   // Acceso
-  usuarioId            String?                 @unique @map("usuario_id") @db.Uuid
-  usuario              User?                   @relation(fields: [usuarioId], references: [id])
+  usuarioId                        String?                 @unique @map("usuario_id") @db.Uuid
+  usuario                          User?                   @relation(fields: [usuarioId], references: [id])
 
   // Búsqueda insensible a tildes/mayúsculas (nombres + apellidos + documento)
   busquedaNormalizada String @default("") @map("busqueda_normalizada")
 
-  areasResponsable       Area[]                   @relation("AreaResponsable")
-  contratos              Contrato[]
-  contratosOps           ContratoOps[]
-  opsSupervisados        ContratoOps[]            @relation("SupervisorOps")
-  cuentasCobro           CuentaCobroOps[]
-  variacionesSalariales  VariacionSalarial[]
-  incapacidades          Incapacidad[]
-  licencias              Licencia[]
-  permisos               Permiso[]
+  areasResponsable         Area[]                   @relation("AreaResponsable")
+  contratos                Contrato[]
+  contratosOps             ContratoOps[]
+  opsSupervisados          ContratoOps[]            @relation("SupervisorOps")
+  cuentasCobro             CuentaCobroOps[]
+  variacionesSalariales    VariacionSalarial[]
+  incapacidades            Incapacidad[]
+  licencias                Licencia[]
+  permisos                 Permiso[]
   autorizacionesHorasExtra AutorizacionHorasExtra[]
-  vacaciones             Vacaciones[]
-  novedadesConcepto      NovedadConcepto[]
-  bonificaciones         Bonificacion[]
-  solicitudes            Solicitud[]
-  certificaciones        CertificacionLaboral[]
-  liquidaciones          LiquidacionNomina[]
-  novedadesHoras         NovedadHoras[]
-  pagosHorasExtra        PagoHorasExtra[]
-  comisiones             Comision[]
-  prestamos              Prestamo[]
-  terminaciones          Terminacion[]
-  asignacionesActivo     AsignacionActivo[]
-  entregasDotacion       EntregaDotacion[]
-  asistencias            AsistenciaCapacitacion[]
-  evaluaciones           EvaluacionDesempeno[]
-  procesosDisciplinarios ProcesoDisciplinario[]
-  llamadosAtencion       LlamadoAtencion[]
+  vacaciones               Vacaciones[]
+  novedadesConcepto        NovedadConcepto[]
+  bonificaciones           Bonificacion[]
+  solicitudes              Solicitud[]
+  certificaciones          CertificacionLaboral[]
+  liquidaciones            LiquidacionNomina[]
+  novedadesHoras           NovedadHoras[]
+  pagosHorasExtra          PagoHorasExtra[]
+  comisiones               Comision[]
+  prestamos                Prestamo[]
+  terminaciones            Terminacion[]
+  asignacionesActivo       AsignacionActivo[]
+  entregasDotacion         EntregaDotacion[]
+  asistencias              AsistenciaCapacitacion[]
+  evaluaciones             EvaluacionDesempeno[]
+  procesosDisciplinarios   ProcesoDisciplinario[]
+  llamadosAtencion         LlamadoAtencion[]
   // Celebraciones de cumpleaños: las suyas (homenajeado) y las que organiza (encargado).
-  cumpleanosCelebrados   CelebracionCumpleanos[]  @relation("CumpleanosHomenajeado")
-  cumpleanosACargo       CelebracionCumpleanos[]  @relation("CumpleanosEncargado")
-  autorizacionesDatos    AutorizacionDatos[]
-  consultasHabeas        ConsultaReclamoDatos[]
-  denunciasLineaEtica    DenunciaAcoso[]          @relation("DenunciasLineaEtica")
-  examenesMedicos        ExamenMedico[]
-  accidentes             AccidenteTrabajo[]
-  entregasEpp            EntregaEpp[]
-  membresiasComite       MiembroComite[]
-  brigadas               Brigadista[]
-  designacionesSgsst     ResponsableSgsst[]
-  novedadesArl           NovedadArl[]
+  cumpleanosCelebrados     CelebracionCumpleanos[]  @relation("CumpleanosHomenajeado")
+  cumpleanosACargo         CelebracionCumpleanos[]  @relation("CumpleanosEncargado")
+  autorizacionesDatos      AutorizacionDatos[]
+  consultasHabeas          ConsultaReclamoDatos[]
+  denunciasLineaEtica      DenunciaAcoso[]          @relation("DenunciasLineaEtica")
+  examenesMedicos          ExamenMedico[]
+  accidentes               AccidenteTrabajo[]
+  entregasEpp              EntregaEpp[]
+  membresiasComite         MiembroComite[]
+  asignacionesHorario      AsignacionHorario[]
+  turnosDominicales        TurnoDominical[]
+  brigadas                 Brigadista[]
+  designacionesSgsst       ResponsableSgsst[]
+  novedadesArl             NovedadArl[]
   /// Avisos que hablan de esta persona (para mostrar su foto en la campana).
-  notificaciones         Notificacion[]
+  notificaciones           Notificacion[]
   /// Acuerdo de evaluación del que nació esta ficha (si vino de una evaluación previa).
-  acuerdoEvaluacion      AcuerdoEvaluacion?       @relation("ColaboradorDesdeEvaluacion")
+  acuerdoEvaluacion        AcuerdoEvaluacion?       @relation("ColaboradorDesdeEvaluacion")
 
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
@@ -1436,37 +1446,37 @@ enum RolFirmaContrato {
 // Rastro probatorio de cada acto de firma (Ley 527 de 1999): quién, cuándo, desde
 // dónde y con qué huella de documento. Se registra en BD, no dentro del PDF.
 model EvidenciaFirmaContrato {
-  id            String           @id @default(uuid(7)) @db.Uuid
+  id                      String                 @id @default(uuid(7)) @db.Uuid
   // Exactamente uno de los dos: contrato OPS o contrato laboral. Si la firma fue
   // de un otrosí, además se señala el otrosí (y contratoId es el de su contrato).
-  contratoOpsId String?          @map("contrato_ops_id") @db.Uuid
-  contratoOps   ContratoOps?     @relation(fields: [contratoOpsId], references: [id], onDelete: Cascade)
-  contratoId    String?          @map("contrato_id") @db.Uuid
-  contrato      Contrato?        @relation(fields: [contratoId], references: [id], onDelete: Cascade)
-  otrosiId      String?          @map("otrosi_id") @db.Uuid
-  otrosi        OtrosiContrato?  @relation(fields: [otrosiId], references: [id], onDelete: Cascade)
+  contratoOpsId           String?                @map("contrato_ops_id") @db.Uuid
+  contratoOps             ContratoOps?           @relation(fields: [contratoOpsId], references: [id], onDelete: Cascade)
+  contratoId              String?                @map("contrato_id") @db.Uuid
+  contrato                Contrato?              @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  otrosiId                String?                @map("otrosi_id") @db.Uuid
+  otrosi                  OtrosiContrato?        @relation(fields: [otrosiId], references: [id], onDelete: Cascade)
   // O la firma fue de una orden de pago de horas extra (aparte de la nómina).
-  pagoHorasExtraId String?       @map("pago_horas_extra_id") @db.Uuid
-  pagoHorasExtra   PagoHorasExtra? @relation(fields: [pagoHorasExtraId], references: [id], onDelete: Cascade)
+  pagoHorasExtraId        String?                @map("pago_horas_extra_id") @db.Uuid
+  pagoHorasExtra          PagoHorasExtra?        @relation(fields: [pagoHorasExtraId], references: [id], onDelete: Cascade)
   // O la firma fue de un documento de la terminación: acta de paz y salvo o liquidación.
-  pazYSalvoId   String?          @map("paz_y_salvo_id") @db.Uuid
-  pazYSalvo     PazYSalvo?       @relation(fields: [pazYSalvoId], references: [id], onDelete: Cascade)
-  liquidacionDefinitivaId String? @map("liquidacion_definitiva_id") @db.Uuid
+  pazYSalvoId             String?                @map("paz_y_salvo_id") @db.Uuid
+  pazYSalvo               PazYSalvo?             @relation(fields: [pazYSalvoId], references: [id], onDelete: Cascade)
+  liquidacionDefinitivaId String?                @map("liquidacion_definitiva_id") @db.Uuid
   liquidacionDefinitiva   LiquidacionDefinitiva? @relation(fields: [liquidacionDefinitivaId], references: [id], onDelete: Cascade)
   // O de una carta de la terminación, o de la renuncia presentada en la app.
-  cartaTerminacionId String?      @map("carta_terminacion_id") @db.Uuid
-  cartaTerminacion   CartaTerminacion? @relation(fields: [cartaTerminacionId], references: [id], onDelete: Cascade)
-  renunciaId    String?          @map("renuncia_id") @db.Uuid
-  renuncia      Renuncia?        @relation(fields: [renunciaId], references: [id], onDelete: Cascade)
-  rol           RolFirmaContrato
-  userId        String?          @map("user_id") @db.Uuid
-  userEmail     String?          @map("user_email")
-  ip            String?
-  userAgent     String?          @map("user_agent")
-  metodoAuth    String           @default("SESION") @map("metodo_auth") // método con que se autenticó el firmante
+  cartaTerminacionId      String?                @map("carta_terminacion_id") @db.Uuid
+  cartaTerminacion        CartaTerminacion?      @relation(fields: [cartaTerminacionId], references: [id], onDelete: Cascade)
+  renunciaId              String?                @map("renuncia_id") @db.Uuid
+  renuncia                Renuncia?              @relation(fields: [renunciaId], references: [id], onDelete: Cascade)
+  rol                     RolFirmaContrato
+  userId                  String?                @map("user_id") @db.Uuid
+  userEmail               String?                @map("user_email")
+  ip                      String?
+  userAgent               String?                @map("user_agent")
+  metodoAuth              String                 @default("SESION") @map("metodo_auth") // método con que se autenticó el firmante
   // Documentos resultantes con su huella: [{ tipo, documentoId, sha256 }]
-  documentos    Json?
-  firmadoEn     DateTime         @default(now()) @map("firmado_en")
+  documentos              Json?
+  firmadoEn               DateTime               @default(now()) @map("firmado_en")
 
   @@index([contratoOpsId])
   @@map("evidencia_firma_contrato")
@@ -2061,23 +2071,23 @@ model NovedadConcepto {
 }
 
 model LiquidacionNomina {
-  id             String        @id @default(uuid(7)) @db.Uuid
-  periodoId      String        @map("periodo_id") @db.Uuid
-  periodo        PeriodoNomina @relation(fields: [periodoId], references: [id], onDelete: Cascade)
-  colaboradorId  String        @map("colaborador_id") @db.Uuid
-  colaborador    Colaborador   @relation(fields: [colaboradorId], references: [id])
-  diasTrabajados Decimal       @map("dias_trabajados") @db.Decimal(5, 2)
-  salarioBase    Decimal       @map("salario_base") @db.Decimal(14, 2)
-  ibc            Decimal       @db.Decimal(14, 2)
-  totalDevengado Decimal       @map("total_devengado") @db.Decimal(14, 2)
-  totalDeducido  Decimal       @map("total_deducido") @db.Decimal(14, 2)
-  neto           Decimal       @db.Decimal(14, 2)
-  documentoId    String?       @map("documento_id") @db.Uuid // desprendible PDF
+  id                String        @id @default(uuid(7)) @db.Uuid
+  periodoId         String        @map("periodo_id") @db.Uuid
+  periodo           PeriodoNomina @relation(fields: [periodoId], references: [id], onDelete: Cascade)
+  colaboradorId     String        @map("colaborador_id") @db.Uuid
+  colaborador       Colaborador   @relation(fields: [colaboradorId], references: [id])
+  diasTrabajados    Decimal       @map("dias_trabajados") @db.Decimal(5, 2)
+  salarioBase       Decimal       @map("salario_base") @db.Decimal(14, 2)
+  ibc               Decimal       @db.Decimal(14, 2)
+  totalDevengado    Decimal       @map("total_devengado") @db.Decimal(14, 2)
+  totalDeducido     Decimal       @map("total_deducido") @db.Decimal(14, 2)
+  neto              Decimal       @db.Decimal(14, 2)
+  documentoId       String?       @map("documento_id") @db.Uuid // desprendible PDF
   // Pago de la persona, con el comprobante de su transferencia. El periodo pasa
   // a PAGADA cuando todas sus liquidaciones lo están.
-  pagadoEn           DateTime? @map("pagado_en") @db.Date
-  comprobantePagoId  String?   @map("comprobante_pago_id") @db.Uuid
-  creadoEn       DateTime      @default(now()) @map("creado_en")
+  pagadoEn          DateTime?     @map("pagado_en") @db.Date
+  comprobantePagoId String?       @map("comprobante_pago_id") @db.Uuid
+  creadoEn          DateTime      @default(now()) @map("creado_en")
 
   detalles DetalleNomina[]
 
@@ -2138,32 +2148,32 @@ model NovedadHoras {
  * pago: lo que se firma no debe moverse si luego AsistencIA corrige algo.
  */
 model PagoHorasExtra {
-  id               String               @id @default(uuid(7)) @db.Uuid
-  colaboradorId    String               @map("colaborador_id") @db.Uuid
-  colaborador      Colaborador          @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
-  desde            DateTime             @db.Date
-  hasta            DateTime             @db.Date
-  horasExtra       Decimal              @map("horas_extra") @db.Decimal(7, 2)
-  valor            Decimal              @db.Decimal(14, 2)
+  id                  String                   @id @default(uuid(7)) @db.Uuid
+  colaboradorId       String                   @map("colaborador_id") @db.Uuid
+  colaborador         Colaborador              @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  desde               DateTime                 @db.Date
+  hasta               DateTime                 @db.Date
+  horasExtra          Decimal                  @map("horas_extra") @db.Decimal(7, 2)
+  valor               Decimal                  @db.Decimal(14, 2)
   // { HED, HEN, HEDDF, HENDF } en horas, para el detalle de la orden de pago.
-  detalleHoras     Json?                @map("detalle_horas")
-  estado           EstadoPagoHorasExtra @default(PENDIENTE)
-  ordenDocId       String?              @map("orden_doc_id") @db.Uuid // orden de pago (la arma la app; se re-arma firmada)
+  detalleHoras        Json?                    @map("detalle_horas")
+  estado              EstadoPagoHorasExtra     @default(PENDIENTE)
+  ordenDocId          String?                  @map("orden_doc_id") @db.Uuid // orden de pago (la arma la app; se re-arma firmada)
   // Firma electrónica del colaborador aceptando el monto (Ley 527), paso
   // obligatorio antes de poder marcar el pago: espejo simplificado de la firma
   // de contratos (sin las dos partes: aquí solo firma quien recibe el pago).
-  firmaPath        String?              @map("firma_path")
-  firmaFecha       DateTime?            @map("firma_fecha")
-  firmaPorId       String?              @map("firma_por_id") @db.Uuid
-  comprobanteDocId String?              @map("comprobante_doc_id") @db.Uuid // soporte de que ya se pagó (siempre se sube)
-  pagadoEn         DateTime?            @map("pagado_en")
-  pagadoPorId      String?              @map("pagado_por_id") @db.Uuid
+  firmaPath           String?                  @map("firma_path")
+  firmaFecha          DateTime?                @map("firma_fecha")
+  firmaPorId          String?                  @map("firma_por_id") @db.Uuid
+  comprobanteDocId    String?                  @map("comprobante_doc_id") @db.Uuid // soporte de que ya se pagó (siempre se sube)
+  pagadoEn            DateTime?                @map("pagado_en")
+  pagadoPorId         String?                  @map("pagado_por_id") @db.Uuid
   // Cuándo se le anotó a AsistencIA que estas horas quedaron pagadas y cerradas
   // (al firmar la orden); null si todavía no se pudo (se reintenta al marcar el pago).
-  asistenciaAnotadoEn DateTime?         @map("asistencia_anotado_en")
-  creadoEn         DateTime             @default(now()) @map("creado_en")
-  actualizadoEn    DateTime             @updatedAt @map("actualizado_en")
-  evidenciasFirma  EvidenciaFirmaContrato[]
+  asistenciaAnotadoEn DateTime?                @map("asistencia_anotado_en")
+  creadoEn            DateTime                 @default(now()) @map("creado_en")
+  actualizadoEn       DateTime                 @updatedAt @map("actualizado_en")
+  evidenciasFirma     EvidenciaFirmaContrato[]
 
   @@unique([colaboradorId, desde, hasta])
   @@map("pago_horas_extra")
@@ -2371,23 +2381,23 @@ enum EstadoPazYSalvo {
 }
 
 model PazYSalvo {
-  id            String          @id @default(uuid(7)) @db.Uuid
-  terminacionId String          @unique @map("terminacion_id") @db.Uuid
-  terminacion   Terminacion     @relation(fields: [terminacionId], references: [id], onDelete: Cascade)
-  estado        EstadoPazYSalvo @default(PENDIENTE)
+  id                String          @id @default(uuid(7)) @db.Uuid
+  terminacionId     String          @unique @map("terminacion_id") @db.Uuid
+  terminacion       Terminacion     @relation(fields: [terminacionId], references: [id], onDelete: Cascade)
+  estado            EstadoPazYSalvo @default(PENDIENTE)
   // El acta en PDF: la que se envió a firmar y, una vez firmada, la firmada.
-  documentoId   String?         @map("documento_id") @db.Uuid
+  documentoId       String?         @map("documento_id") @db.Uuid
   // Firma del trabajador (Ley 527): se envía con el checklist completo, la
   // firma desde su autoservicio y sin ella no se cierra la terminación.
-  enviadoFirmaEn DateTime?      @map("enviado_firma_en")
-  firmaPath     String?         @map("firma_path")
-  firmadoEn     DateTime?       @map("firmado_en")
-  firmadoPorId  String?         @map("firmado_por_id") @db.Uuid
+  enviadoFirmaEn    DateTime?       @map("enviado_firma_en")
+  firmaPath         String?         @map("firma_path")
+  firmadoEn         DateTime?       @map("firmado_en")
+  firmadoPorId      String?         @map("firmado_por_id") @db.Uuid
   // Firma de quien la envía, por la empresa (la dibuja al enviarla).
-  firmaEmpresaPath  String?     @map("firma_empresa_path")
-  firmaEmpresaEn    DateTime?   @map("firma_empresa_en")
-  firmaEmpresaPorId String?     @map("firma_empresa_por_id") @db.Uuid
-  creadoEn      DateTime        @default(now()) @map("creado_en")
+  firmaEmpresaPath  String?         @map("firma_empresa_path")
+  firmaEmpresaEn    DateTime?       @map("firma_empresa_en")
+  firmaEmpresaPorId String?         @map("firma_empresa_por_id") @db.Uuid
+  creadoEn          DateTime        @default(now()) @map("creado_en")
 
   items      PazYSalvoItem[]
   evidencias EvidenciaFirmaContrato[]
@@ -2480,20 +2490,22 @@ enum EstadoRenuncia {
 }
 
 model Renuncia {
-  id            String         @id @default(uuid(7)) @db.Uuid
-  colaboradorId String         @map("colaborador_id") @db.Uuid
-  colaborador   Colaborador    @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
-  fechaRetiro   DateTime       @map("fecha_retiro") @db.Date
-  motivo        String?
-  documentoId   String?        @map("documento_id") @db.Uuid
-  firmaPath     String?        @map("firma_path")
-  firmadoEn     DateTime       @map("firmado_en")
-  estado        EstadoRenuncia @default(PRESENTADA)
-  /** Por qué Talento Humano la devolvió, y cuándo. */
-  motivoDevolucion String?     @map("motivo_devolucion")
-  devueltaEn    DateTime?      @map("devuelta_en")
-  terminacionId String?        @unique @map("terminacion_id") @db.Uuid
-  creadoEn      DateTime       @default(now()) @map("creado_en")
+  id               String         @id @default(uuid(7)) @db.Uuid
+  colaboradorId    String         @map("colaborador_id") @db.Uuid
+  colaborador      Colaborador    @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  fechaRetiro      DateTime       @map("fecha_retiro") @db.Date
+  motivo           String?
+  documentoId      String?        @map("documento_id") @db.Uuid
+  firmaPath        String?        @map("firma_path")
+  firmadoEn        DateTime       @map("firmado_en")
+  estado           EstadoRenuncia @default(PRESENTADA)
+  /**
+   * Por qué Talento Humano la devolvió, y cuándo.
+   */
+  motivoDevolucion String?        @map("motivo_devolucion")
+  devueltaEn       DateTime?      @map("devuelta_en")
+  terminacionId    String?        @unique @map("terminacion_id") @db.Uuid
+  creadoEn         DateTime       @default(now()) @map("creado_en")
 
   evidencias EvidenciaFirmaContrato[]
 
@@ -2850,31 +2862,31 @@ enum EstadoAviso {
 }
 
 model Aviso {
-  id      String      @id @default(uuid(7)) @db.Uuid
-  titulo  String
+  id            String      @id @default(uuid(7)) @db.Uuid
+  titulo        String
   // Una o dos líneas: es lo que se ve en la tarjeta y en el icono de avisos.
-  resumen String
+  resumen       String
   // Qué puede hacer y cómo, en pasos cortos. Texto plano: una línea = un
   // párrafo; las que empiezan por "- " son viñetas.
-  detalle String?
-  tipo    TipoAviso   @default(NUEVO_MODULO)
+  detalle       String?
+  tipo          TipoAviso   @default(NUEVO_MODULO)
   // Ruta interna del módulo ("/autoservicio/dotacion"): botón "Ir al módulo" y,
   // mientras el aviso esté vigente, el punto de "nuevo" en la casilla que
   // apunte a esa ruta.
-  enlace  String?
+  enlace        String?
   // Captura de pantalla (storage), opcional.
-  imagenPath String?  @map("imagen_path")
+  imagenPath    String?     @map("imagen_path")
   // A quién va: { roles: string[], vinculos: ("LABORAL"|"OPS")[], sedeIds: string[] }.
   // Listas vacías = sin restricción en ese eje (todos).
-  audiencia Json      @default("{}")
-  estado    EstadoAviso @default(BORRADOR)
-  publicadoEn  DateTime? @map("publicado_en")
+  audiencia     Json        @default("{}")
+  estado        EstadoAviso @default(BORRADOR)
+  publicadoEn   DateTime?   @map("publicado_en")
   // Hasta cuándo se destaca (tarjeta y punto de "nuevo"); después queda solo en el historial.
-  vigenteHasta DateTime? @map("vigente_hasta") @db.Date
-  creadoPorId  String    @map("creado_por_id") @db.Uuid
-  creadoPor    User      @relation("AvisosCreados", fields: [creadoPorId], references: [id])
-  creadoEn      DateTime @default(now()) @map("creado_en")
-  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+  vigenteHasta  DateTime?   @map("vigente_hasta") @db.Date
+  creadoPorId   String      @map("creado_por_id") @db.Uuid
+  creadoPor     User        @relation("AvisosCreados", fields: [creadoPorId], references: [id])
+  creadoEn      DateTime    @default(now()) @map("creado_en")
+  actualizadoEn DateTime    @updatedAt @map("actualizado_en")
 
   lecturas AvisoLectura[]
 
@@ -2882,7 +2894,9 @@ model Aviso {
   @@map("aviso")
 }
 
-/** Quién ya leyó (tocó "Entendido") cada aviso. */
+/**
+ * Quién ya leyó (tocó "Entendido") cada aviso.
+ */
 model AvisoLectura {
   avisoId String   @map("aviso_id") @db.Uuid
   aviso   Aviso    @relation(fields: [avisoId], references: [id], onDelete: Cascade)
@@ -3547,4 +3561,94 @@ model LatidoSistema {
   cambio DateTime @default(now())
 
   @@map("latido_sistema")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HORARIOS Y CRONOGRAMA DE DOMINGOS Y FESTIVOS
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum OrigenHorario {
+  MANUAL // lo asignó Talento Humano aquí
+  ASISTENCIA // se trajo de AsistencIA ("Recuperar de AsistencIA")
+
+  @@map("origen_horario")
+}
+
+/// Plantilla de horario: la franja de cada día de la semana. Mismo formato que
+/// AsistencIA para que ir y venir no traduzca nada:
+/// { "0".."6": { entrada, salida, almuerzo_min, almuerzo_desde?, almuerzo_hasta? } },
+/// 0 = domingo … 6 = sábado; un día ausente es descanso.
+model Horario {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  nombre        String   @unique
+  descripcion   String?
+  dias          Json
+  activo        Boolean  @default(true)
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  asignaciones AsignacionHorario[]
+
+  @@map("horario")
+}
+
+/// El horario de una persona desde una fecha. Guarda su COPIA de los días (como
+/// AsistencIA): si después se edita la plantilla, lo asignado no cambia solo.
+/// La vigente es la de `hasta` nulo; las anteriores quedan como historial.
+model AsignacionHorario {
+  id                  String        @id @default(uuid(7)) @db.Uuid
+  colaboradorId       String        @map("colaborador_id") @db.Uuid
+  colaborador         Colaborador   @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  /// Plantilla de la que salió; nulo = horario propio de la persona.
+  horarioId           String?       @map("horario_id") @db.Uuid
+  horario             Horario?      @relation(fields: [horarioId], references: [id], onDelete: SetNull)
+  dias                Json
+  desde               DateTime      @db.Date
+  hasta               DateTime?     @db.Date
+  motivo              String?
+  origen              OrigenHorario @default(MANUAL)
+  /// Comunicación del cambio enviada al colaborador (PDF).
+  documentoId         String?       @map("documento_id") @db.Uuid
+  /// Cuándo quedó en AsistencIA; nulo = pendiente (o sin AsistencIA). Las que
+  /// empiezan en el futuro se envían el día que empiezan (cron diario).
+  sincronizadoEn      DateTime?     @map("sincronizado_en")
+  errorSincronizacion String?       @map("error_sincronizacion")
+  asignadoPorId       String?       @map("asignado_por_id") @db.Uuid
+  creadoEn            DateTime      @default(now()) @map("creado_en")
+
+  @@index([colaboradorId, desde])
+  @@map("asignacion_horario")
+}
+
+/// Quién trabaja un domingo o festivo. Se planea por sede y por mes.
+model TurnoDominical {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  fecha         DateTime    @db.Date
+  colaboradorId String      @map("colaborador_id") @db.Uuid
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  sedeId        String      @map("sede_id") @db.Uuid
+  sede          Sede        @relation(fields: [sedeId], references: [id])
+  creadoPorId   String?     @map("creado_por_id") @db.Uuid
+  creadoEn      DateTime    @default(now()) @map("creado_en")
+
+  @@unique([fecha, colaboradorId])
+  @@index([sedeId, fecha])
+  @@map("turno_dominical")
+}
+
+/// El cronograma de un mes en una sede: cuándo se avisó a la gente.
+model CronogramaDominical {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  sedeId         String    @map("sede_id") @db.Uuid
+  sede           Sede      @relation(fields: [sedeId], references: [id])
+  mes            String // "2026-11"
+  publicadoEn    DateTime? @map("publicado_en")
+  publicadoPorId String?   @map("publicado_por_id") @db.Uuid
+  /// Lo que se le avisó a cada uno al publicar: { colaboradorId: ["2026-11-01", …] }.
+  /// Al volver a publicar solo se avisa a quien le cambiaron los días.
+  avisados       Json?
+  actualizadoEn  DateTime  @updatedAt @map("actualizado_en")
+
+  @@unique([sedeId, mes])
+  @@map("cronograma_dominical")
 }

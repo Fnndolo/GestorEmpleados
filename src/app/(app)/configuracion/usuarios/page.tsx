@@ -1,7 +1,6 @@
 import { requerirPermiso } from '@/server/sesion'
 import { tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { Encabezado } from '@/components/shell/encabezado'
 import { UsuariosCliente } from './usuarios-cliente'
 import { urlFoto } from '@/lib/foto'
 
@@ -28,10 +27,7 @@ export default async function UsuariosPage() {
 
   return (
     <div>
-      <Encabezado
-        titulo="Usuarios"
-        descripcion="Crea cuentas, asigna rol y sedes. La invitación se envía por correo con una contraseña temporal. Si alguien cubre dos frentes a la vez, puedes darle roles adicionales: sus permisos serán la suma de todos."
-      />
+      {/* El título va en el cliente: el + de "Nuevo usuario" abre su diálogo. */}
       <UsuariosCliente
         usuarios={usuarios.map((u) => ({
           id: u.id,

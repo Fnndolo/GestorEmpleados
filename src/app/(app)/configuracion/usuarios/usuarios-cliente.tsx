@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { Plus, Pencil, Mail, KeyRound } from 'lucide-react'
+import { Pencil, Mail, KeyRound } from 'lucide-react'
 import {
   crearUsuarioSchema, editarUsuarioSchema,
   type CrearUsuarioInput, type EditarUsuarioInput,
@@ -24,6 +24,14 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Ayuda } from '@/components/ui-kit/ayuda'
+import { BotonAgregar } from '@/components/ui-kit/boton-agregar'
+import { Pista } from '@/components/ui-kit/pista'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Encabezado } from '@/components/shell/encabezado'
+import { SelectorMultiple } from '@/components/ui-kit/selector-multiple'
 
 type Usuario = {
   id: string; nombre: string; email: string; fotoUrl: string | null; rolId: string; rolNombre: string
@@ -52,36 +60,77 @@ export function UsuariosCliente({
   const [editar, setEditar] = useState<Usuario | null>(null)
 
   return (
-    <div className="space-y-4">
-      {puedeCrear && (
-        <div className="flex justify-end">
-          <Button onClick={() => setNuevo(true)}><Plus className="size-4" /> Nuevo usuario</Button>
-        </div>
-      )}
-      <Card><CardContent className="p-0 overflow-x-auto">
-        <Table>
+    <div>
+      <Encabezado
+        enLinea
+        titulo="Usuarios"
+        ayuda="Crea cuentas y asigna rol y sedes. La invitación llega por correo con una contraseña temporal. Con roles adicionales, sus permisos son la suma de todos."
+        acciones={puedeCrear && <BotonAgregar etiqueta="Nuevo usuario" onClick={() => setNuevo(true)} />}
+      />
+
+      {/* Hasta xl, una fila por usuario (nombre arriba; rol, correo y sedes
+          debajo). La tabla no cabía en el celular — Rol y Estado quedaban fuera
+          de la pantalla — ni junto al menú de Ajustes en pantallas medianas. */}
+      <Card className="py-0 xl:hidden"><CardContent className="divide-y p-0">
+        {usuarios.map((u) => {
+          const roles = [u.rolNombre, ...u.rolNombresExtra].join(', ')
+          return (
+            <div key={u.id} className="flex items-center gap-2.5 px-3 py-2.5">
+              <AvatarColaborador nombre={u.nombre} fotoUrl={u.fotoUrl} />
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-1.5 text-sm font-medium">
+                  <span className="truncate">{u.nombre}</span>
+                  {u.estado !== 'ACTIVO' && (
+                    <Badge variant={ESTADO_VARIANTE[u.estado]}>{ESTADO_USUARIO[u.estado] ?? u.estado}</Badge>
+                  )}
+                </p>
+                <p className="truncate text-xs text-muted-foreground" title={`${roles} · ${u.email}`}>
+                  {u.debeCambiarPassword && <span className="text-amber-600">Pendiente 1er ingreso · </span>}
+                  {roles} · {u.email}
+                  <span className="hidden sm:inline"> · {u.sedeNombres.length ? u.sedeNombres.join(', ') : 'Todas las sedes'}</span>
+                </p>
+              </div>
+              {puedeEditar && (
+                <>
+                  <Pista texto="Editar">
+                    <Button variant="ghost" size="icon" onClick={() => setEditar(u)} aria-label={`Editar ${u.nombre}`}>
+                      <Pencil className="size-4" />
+                    </Button>
+                  </Pista>
+                  <ReenviarBoton id={u.id} nombre={u.nombre} correo={u.email} />
+                </>
+              )}
+            </div>
+          )
+        })}
+      </CardContent></Card>
+
+      {/* Escritorio ancho: tabla de ancho fijo; los nombres largos se recortan
+          en vez de empujar la tabla fuera del panel. */}
+      <Card className="hidden py-0 xl:block"><CardContent className="p-0">
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead>Usuario</TableHead>
-              <TableHead>Rol</TableHead>
-              <TableHead className="hidden md:table-cell">Sedes</TableHead>
-              <TableHead>Estado</TableHead>
-              {puedeEditar && <TableHead className="w-24" />}
+              <TableHead className="pl-4">Usuario</TableHead>
+              <TableHead className="w-[20%]">Rol</TableHead>
+              <TableHead className="w-[18%]">Sedes</TableHead>
+              <TableHead className="w-28">Estado</TableHead>
+              {puedeEditar && <TableHead className="w-[5.5rem]" />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {usuarios.map((u) => (
               <TableRow key={u.id}>
-                <TableCell>
+                <TableCell className="pl-4">
                   <div className="flex items-center gap-2.5">
                     <AvatarColaborador nombre={u.nombre} fotoUrl={u.fotoUrl} />
                     <div className="min-w-0">
-                      <p className="font-medium">{u.nombre}</p>
-                      <p className="text-xs text-muted-foreground">{u.email}</p>
+                      <p className="truncate font-medium" title={u.nombre}>{u.nombre}</p>
+                      <p className="truncate text-xs text-muted-foreground" title={u.email}>{u.email}</p>
                     </div>
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="whitespace-normal">
                   <div className="flex flex-wrap gap-1">
                     <Badge variant="outline">{u.rolNombre}</Badge>
                     {u.rolNombresExtra.map((n) => (
@@ -89,22 +138,24 @@ export function UsuariosCliente({
                     ))}
                   </div>
                 </TableCell>
-                <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                <TableCell className="truncate text-sm text-muted-foreground" title={u.sedeNombres.join(', ')}>
                   {u.sedeNombres.length ? u.sedeNombres.join(', ') : 'Todas'}
                 </TableCell>
-                <TableCell>
+                <TableCell className="whitespace-normal">
                   <Badge variant={ESTADO_VARIANTE[u.estado]}>{ESTADO_USUARIO[u.estado] ?? u.estado}</Badge>
                   {u.debeCambiarPassword && (
-                    <p className="text-[10px] text-amber-600 mt-0.5">Pendiente 1er ingreso</p>
+                    <p className="mt-0.5 text-[10px] text-amber-600">Pendiente 1er ingreso</p>
                   )}
                 </TableCell>
                 {puedeEditar && (
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => setEditar(u)} aria-label="Editar">
-                        <Pencil className="size-4" />
-                      </Button>
-                      <ReenviarBoton id={u.id} />
+                      <Pista texto="Editar">
+                        <Button variant="ghost" size="icon" onClick={() => setEditar(u)} aria-label={`Editar ${u.nombre}`}>
+                          <Pencil className="size-4" />
+                        </Button>
+                      </Pista>
+                      <ReenviarBoton id={u.id} nombre={u.nombre} correo={u.email} />
                     </div>
                   </TableCell>
                 )}
@@ -120,42 +171,62 @@ export function UsuariosCliente({
   )
 }
 
-function ReenviarBoton({ id }: { id: string }) {
+/**
+ * Reenviar acceso le CAMBIA la contraseña a la persona (la actual deja de
+ * servir) y le manda una temporal por correo. Por eso pide confirmación: en el
+ * celular un toque por error la dejaba sin poder entrar.
+ */
+function ReenviarBoton({ id, nombre, correo }: { id: string; nombre: string; correo: string }) {
+  const [confirmar, setConfirmar] = useState(false)
   const [cargando, setCargando] = useState(false)
   async function reenviar() {
     setCargando(true)
     const res = await reenviarAcceso({ id })
     setCargando(false)
-    if (res.ok) toast.success('Acceso reenviado por correo.')
+    setConfirmar(false)
+    if (res.ok) toast.success(`Le enviamos una contraseña temporal a ${correo}.`)
     else toast.error(res.error)
   }
   return (
-    <Button variant="ghost" size="icon" onClick={reenviar} disabled={cargando} aria-label="Reenviar acceso" title="Reenviar acceso">
-      {cargando ? <Spinner /> : <KeyRound className="size-4" />}
-    </Button>
+    <>
+      <Pista texto="Reenviar acceso: contraseña temporal nueva por correo">
+        <Button variant="ghost" size="icon" onClick={() => setConfirmar(true)} disabled={cargando} aria-label={`Reenviar acceso a ${nombre}`}>
+          {cargando ? <Spinner /> : <KeyRound className="size-4" />}
+        </Button>
+      </Pista>
+      <AlertDialog open={confirmar} onOpenChange={(o) => { if (!cargando) setConfirmar(o) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Reenviar acceso a {nombre}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se le crea una contraseña temporal nueva y se le envía a {correo}. La que tiene ahora deja de servir.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cargando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); reenviar() }} disabled={cargando}>
+              {cargando && <Spinner />} Reenviar acceso
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
 function SelectorSedes({
   sedes, seleccionadas, onChange,
 }: { sedes: Sede[]; seleccionadas: string[]; onChange: (ids: string[]) => void }) {
-  function alternar(id: string, checked: boolean) {
-    onChange(checked ? [...seleccionadas, id] : seleccionadas.filter((x) => x !== id))
-  }
   return (
     <div className="space-y-1.5">
-      <Label>Sedes asignadas <span className="text-muted-foreground font-normal">(vacío = todas)</span></Label>
-      <div className="rounded-lg border p-3 space-y-2 max-h-40 overflow-y-auto">
-        {sedes.map((s) => (
-          <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer">
-            <Checkbox
-              checked={seleccionadas.includes(s.id)}
-              onCheckedChange={(v) => alternar(s.id, Boolean(v))}
-            />
-            {s.nombre} · {s.ciudad}
-          </label>
-        ))}
-      </div>
+      <Label htmlFor="usuario-sedes" className="flex items-center gap-1.5">
+        Sedes asignadas
+        <Ayuda texto="Si no marcas ninguna, ve todas las sedes." etiqueta="Sobre las sedes asignadas" />
+      </Label>
+      <SelectorMultiple
+        id="usuario-sedes" vacio="Todas las sedes" seleccionados={seleccionadas} onChange={onChange}
+        opciones={sedes.map((s) => ({ valor: s.id, etiqueta: s.nombre, detalle: s.ciudad }))}
+      />
     </div>
   )
 }
@@ -168,31 +239,19 @@ function SelectorRolesExtra({
   roles, rolPrincipalId, seleccionados, onChange,
 }: { roles: Rol[]; rolPrincipalId: string; seleccionados: string[]; onChange: (ids: string[]) => void }) {
   const disponibles = roles.filter((r) => r.id !== rolPrincipalId)
-  function alternar(id: string, checked: boolean) {
-    onChange(checked ? [...seleccionados, id] : seleccionados.filter((x) => x !== id))
-  }
   return (
     <div className="space-y-1.5">
-      <Label className="flex items-center gap-1.5">
-        Roles adicionales <span className="font-normal text-muted-foreground">(opcional)</span>
+      <Label htmlFor="usuario-roles-extra" className="flex items-center gap-1.5">
+        Roles adicionales
         <Ayuda
           texto="Para quien cubre más de un frente a la vez. Sus permisos serán la suma del rol principal y estos; cuando un permiso llega por ambos, gana el alcance más amplio."
           etiqueta="Sobre los roles adicionales"
         />
       </Label>
-      <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border p-3">
-        {disponibles.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No hay otros roles.</p>
-        ) : disponibles.map((r) => (
-          <label key={r.id} className="flex cursor-pointer items-center gap-2 text-sm">
-            <Checkbox
-              checked={seleccionados.includes(r.id)}
-              onCheckedChange={(v) => alternar(r.id, Boolean(v))}
-            />
-            {r.nombre}
-          </label>
-        ))}
-      </div>
+      <SelectorMultiple
+        id="usuario-roles-extra" vacio="Ninguno" seleccionados={seleccionados} onChange={onChange}
+        opciones={disponibles.map((r) => ({ valor: r.id, etiqueta: r.nombre }))}
+      />
     </div>
   )
 }
@@ -227,22 +286,22 @@ function DialogNuevo({ roles, sedes, onClose }: { roles: Rol[]; sedes: Sede[]; o
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Nuevo usuario</DialogTitle>
-          <DialogDescription>Recibirá un correo con una contraseña temporal.</DialogDescription>
+          <DialogDescription>Recibirá una contraseña temporal.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Nombre completo</Label>
+            <Label>Nombre completo <span className="text-destructive">*</span></Label>
             <Input {...register('nombre')} />
             {errors.nombre && <p className="text-xs text-destructive">{errors.nombre.message}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label>Correo electrónico</Label>
+            <Label>Correo electrónico <span className="text-destructive">*</span></Label>
             <Input type="email" {...register('email')} />
             {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Rol principal</Label>
+              <Label>Rol principal <span className="text-destructive">*</span></Label>
               <Select onValueChange={cambiarRolPrincipal}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
                 <SelectContent>{roles.map((r) => <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>)}</SelectContent>
@@ -250,7 +309,7 @@ function DialogNuevo({ roles, sedes, onClose }: { roles: Rol[]; sedes: Sede[]; o
               {errors.rolId && <p className="text-xs text-destructive">{errors.rolId.message}</p>}
             </div>
             <div className="space-y-1.5">
-              <Label>Teléfono (opcional)</Label>
+              <Label>Teléfono</Label>
               <Input {...register('telefonoE164')} placeholder="+57…" />
             </div>
           </div>
@@ -333,17 +392,17 @@ function DialogEditar({ usuario, roles, sedes, onClose }: { usuario: Usuario; ro
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Editar usuario</DialogTitle>
-          <DialogDescription>Creado con {usuario.email}</DialogDescription>
+          <DialogDescription className="truncate">Creado con {usuario.email}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Nombre completo</Label>
+            <Label>Nombre completo <span className="text-destructive">*</span></Label>
             <Input {...register('nombre')} />
             {errors.nombre && <p className="text-xs text-destructive">{errors.nombre.message}</p>}
           </div>
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5">
-              Correo electrónico
+              Correo electrónico <span className="text-destructive">*</span>
               <Ayuda
                 texto="Es el correo con el que la persona inicia sesión. Si se registró mal, corrígelo aquí y marca el envío de una contraseña nueva: la anterior viajó al buzón equivocado."
                 etiqueta="Sobre el correo de acceso"
@@ -352,34 +411,33 @@ function DialogEditar({ usuario, roles, sedes, onClose }: { usuario: Usuario; ro
             <Input type="email" {...register('email')} />
             {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             {correoCambio && (
-              <p className="text-xs text-amber-600">
-                Cambiará el correo de acceso y se cerrarán las sesiones abiertas de este usuario.
-              </p>
+              <p className="truncate text-xs text-amber-600">Se cerrarán sus sesiones abiertas.</p>
             )}
           </div>
-          <label className="flex items-start gap-2 rounded-lg border p-3 text-sm cursor-pointer">
-            <Checkbox
-              className="mt-0.5"
-              checked={reenviar}
-              onCheckedChange={(v) => { setReenvioTocado(true); setValue('reenviarAcceso', Boolean(v)) }}
+          {/* El ⓘ va fuera del <label>: tocarlo no debe marcar la casilla. */}
+          <div className="flex items-center gap-2 rounded-lg border p-3">
+            <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-sm">
+              <Checkbox
+                checked={reenviar}
+                onCheckedChange={(v) => { setReenvioTocado(true); setValue('reenviarAcceso', Boolean(v)) }}
+              />
+              Enviar contraseña nueva
+            </label>
+            <Ayuda
+              texto="Llega al correo de arriba. La contraseña anterior deja de servir y tendrá que crear una nueva al entrar."
+              etiqueta="Sobre la contraseña temporal"
             />
-            <span>
-              Enviar una contraseña temporal nueva
-              <span className="block text-xs text-muted-foreground">
-                Llega al correo de arriba. La contraseña anterior deja de servir y tendrá que crear una nueva al entrar.
-              </span>
-            </span>
-          </label>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Rol principal</Label>
+              <Label>Rol principal <span className="text-destructive">*</span></Label>
               <Select defaultValue={usuario.rolId} onValueChange={cambiarRolPrincipal}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>{roles.map((r) => <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Estado</Label>
+              <Label>Estado <span className="text-destructive">*</span></Label>
               <Select defaultValue={usuario.estado} onValueChange={(v) => setValue('estado', v as EditarUsuarioInput['estado'])}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>

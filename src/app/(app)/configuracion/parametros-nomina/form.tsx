@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CalendarPlus, Plus, Save } from 'lucide-react'
+import { CalendarPlus, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,10 +12,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Ayuda } from '@/components/ui-kit/ayuda'
 import {
   registrarVigenciaParametro, registrarVigenciaTipoHora, actualizarInterruptoresNomina,
 } from './acciones'
-import { FilaParametro, DialogNuevoParametro } from './fila-parametro'
+import { FilaParametro } from './fila-parametro'
 import { fmtValor } from './formato'
 
 export type VigenciaItem = {
@@ -43,7 +44,6 @@ export function ParametrosForm({ puedeEditar, parametros, tiposHora, aplicaRetef
 }) {
   const router = useRouter()
   const [editando, setEditando] = useState<ParametroItem | null>(null)
-  const [creando, setCreando] = useState(false)
   const [editandoHora, setEditandoHora] = useState<TipoHoraItem | null>(null)
 
   async function guardarInterruptores(retefuente: boolean, exonerada: boolean) {
@@ -54,38 +54,37 @@ export function ParametrosForm({ puedeEditar, parametros, tiposHora, aplicaRetef
 
   return (
     <div className="space-y-6">
-      {/* ── Interruptores ── */}
-      <Card><CardContent className="space-y-4 py-5">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium">Aplicar retención en la fuente</p>
-            <p className="text-xs text-muted-foreground">Procedimiento 1 (tabla art. 383 E.T.). Actívala si algún salario supera la base gravable.</p>
-          </div>
-          <Switch checked={aplicaRetefuente} disabled={!puedeEditar} onCheckedChange={(v) => guardarInterruptores(v, empresaExonerada)} />
+      {/* ── Interruptores: el rótulo a la vista y su explicación legal en el ⓘ ── */}
+      <Card className="py-0"><CardContent className="divide-y px-3 sm:px-4">
+        <div className="flex items-center justify-between gap-3 py-3">
+          <p className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+            <span className="truncate">Aplicar retención en la fuente</span>
+            <Ayuda
+              texto="Procedimiento 1 (tabla art. 383 E.T.). Actívala si algún salario supera la base gravable."
+              etiqueta="Sobre la retención en la fuente"
+            />
+          </p>
+          <Switch checked={aplicaRetefuente} disabled={!puedeEditar} onCheckedChange={(v) => guardarInterruptores(v, empresaExonerada)} aria-label="Aplicar retención en la fuente" />
         </div>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium">Empresa exonerada (Ley 114-1)</p>
-            <p className="text-xs text-muted-foreground">Sin aporte patronal de salud, SENA ni ICBF para salarios menores a 10 SMMLV.</p>
-          </div>
-          <Switch checked={empresaExonerada} disabled={!puedeEditar} onCheckedChange={(v) => guardarInterruptores(aplicaRetefuente, v)} />
+        <div className="flex items-center justify-between gap-3 py-3">
+          <p className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+            <span className="truncate">Empresa exonerada</span>
+            <Ayuda
+              texto="Ley 114-1: sin aporte patronal de salud, SENA ni ICBF para salarios menores a 10 SMMLV."
+              etiqueta="Sobre la empresa exonerada"
+            />
+          </p>
+          <Switch checked={empresaExonerada} disabled={!puedeEditar} onCheckedChange={(v) => guardarInterruptores(aplicaRetefuente, v)} aria-label="Empresa exonerada" />
         </div>
       </CardContent></Card>
 
-      {/* ── Parámetros legales ── */}
+      {/* ── Parámetros legales (el + para crear uno va en el encabezado) ── */}
       <section>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-[13px] font-bold">Parámetros legales</h2>
-          {puedeEditar && (
-            <Button size="sm" onClick={() => setCreando(true)}>
-              <Plus className="size-4" /> Nuevo parámetro
-            </Button>
-          )}
-        </div>
-        <Card><CardContent className="divide-y p-0">
+        <h2 className="mb-2 text-[13px] font-bold">Parámetros legales</h2>
+        <Card className="py-0"><CardContent className="divide-y p-0">
           {parametros.length === 0 && (
             <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-              No hay parámetros cargados. Sin el SMMLV la nómina no puede liquidar ni calcular una terminación.
+              No hay parámetros: sin el SMMLV la nómina no puede liquidar.
             </p>
           )}
           {parametros.map((p) => (
@@ -102,29 +101,37 @@ export function ParametrosForm({ puedeEditar, parametros, tiposHora, aplicaRetef
 
       {/* ── Tipos de hora ── */}
       <section>
-        <h2 className="mb-2 text-[13px] font-bold">Horas extra y recargos (factores)</h2>
-        <Card><CardContent className="divide-y p-0">
+        <h2 className="mb-2 flex items-center gap-1.5 text-[13px] font-bold">
+          Horas extra y recargos
+          <Ayuda
+            texto="Factores sobre la hora ordinaria. Así se aplican los cambios de ley sin programación: p. ej. el recargo dominical sube a 100% el 1-jul-2027 (Ley 2466) — regístralo aquí con esa fecha y la nómina lo usará automáticamente."
+            etiqueta="Sobre las horas extra y recargos"
+          />
+        </h2>
+        <Card className="py-0"><CardContent className="divide-y p-0">
           {tiposHora.map((t) => (
-            <div key={t.codigo} className="flex items-center gap-3 px-4 py-2.5">
+            <div key={t.codigo} className="flex items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{t.codigo} · {t.nombre}</p>
-                <p className="text-xs text-muted-foreground">vigente desde {t.desde}</p>
+                <p className="flex min-w-0 items-center text-sm font-medium">
+                  <span className="truncate">{t.codigo} · {t.nombre}</span>
+                  <span className="ml-auto shrink-0 pl-2 font-bold tabular-nums">{Math.round(t.factor * 100)}%</span>
+                </p>
+                <p className="truncate text-xs text-muted-foreground">desde {t.desde}</p>
               </div>
-              <p className="text-sm font-bold tabular-nums">{Math.round(t.factor * 100)}%</p>
               {puedeEditar && (
-                <Button size="sm" onClick={() => setEditandoHora(t)}>
-                  <CalendarPlus className="size-4" /> Nueva vigencia
+                <Button
+                  size="sm" variant="outline" className="max-sm:size-8 max-sm:px-0"
+                  onClick={() => setEditandoHora(t)}
+                  aria-label={`Nueva vigencia de ${t.codigo}`} title="Nueva vigencia"
+                >
+                  <CalendarPlus className="size-4" /> <span className="max-sm:sr-only">Nueva vigencia</span>
                 </Button>
               )}
             </div>
           ))}
         </CardContent></Card>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Así se aplican los cambios de ley sin programación: p. ej. el recargo dominical sube a 100% el 1-jul-2027 (Ley 2466) — regístralo aquí con esa fecha y la nómina lo usará automáticamente.
-        </p>
       </section>
 
-      {creando && <DialogNuevoParametro onClose={() => setCreando(false)} onDone={() => { setCreando(false); router.refresh() }} />}
       {editando && <DialogVigenciaParametro parametro={editando} onClose={() => setEditando(null)} onDone={() => { setEditando(null); router.refresh() }} />}
       {editandoHora && <DialogVigenciaHora tipo={editandoHora} onClose={() => setEditandoHora(null)} onDone={() => { setEditandoHora(null); router.refresh() }} />}
     </div>
@@ -154,21 +161,29 @@ function DialogVigenciaParametro({ parametro, onClose, onDone }: { parametro: Pa
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Nueva vigencia — {parametro.clave}</DialogTitle>
-          <DialogDescription>
-            La vigencia actual ({fmtValor(parametro.valor)}, desde {parametro.desde}) se cierra el día anterior y queda en el histórico para auditoría.
-          </DialogDescription>
+          <DialogDescription>Actual: {fmtValor(parametro.valor)}, desde {parametro.desde}.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Nuevo valor {esPorcentaje && <span className="text-xs text-muted-foreground">(decimal: 0.04 = 4%)</span>}</Label>
-            <Input type="number" step="any" value={valor} onChange={(e) => setValor(e.target.value)} />
+            <Label className="gap-1.5">
+              Nuevo valor <span className="text-destructive">*</span>
+              {esPorcentaje && <Ayuda texto="Porcentaje en decimal: 0.04 = 4%." etiqueta="Cómo escribir el valor" />}
+            </Label>
+            {/* autoFocus: si no, el diálogo enfoca el ⓘ (va antes) y abre su texto encima del título. */}
+            <Input type="number" step="any" value={valor} onChange={(e) => setValor(e.target.value)} autoFocus />
           </div>
           <div className="space-y-1.5">
-            <Label>Rige desde</Label>
+            <Label className="gap-1.5">
+              Rige desde <span className="text-destructive">*</span>
+              <Ayuda
+                texto="La vigencia actual se cierra el día anterior y queda en el histórico para auditoría."
+                etiqueta="Qué pasa con la vigencia actual"
+              />
+            </Label>
             <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>Fuente legal (opcional)</Label>
+            <Label>Fuente legal</Label>
             <Textarea rows={2} placeholder="Decreto, ley o resolución que sustenta el cambio" value={fuente} onChange={(e) => setFuente(e.target.value)} />
           </div>
         </div>
@@ -202,18 +217,27 @@ function DialogVigenciaHora({ tipo, onClose, onDone }: { tipo: TipoHoraItem; onC
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Nueva vigencia — {tipo.codigo} ({tipo.nombre})</DialogTitle>
-          <DialogDescription>
-            El factor actual ({Math.round(tipo.factor * 100)}%, desde {tipo.desde}) se cierra el día anterior; los periodos ya liquidados no cambian.
-          </DialogDescription>
+          <DialogDescription>Actual: {Math.round(tipo.factor * 100)}%, desde {tipo.desde}.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Nuevo factor (%)</Label>
-            <Input type="number" step="1" value={factor} onChange={(e) => setFactor(e.target.value)} />
-            <p className="text-xs text-muted-foreground">Ejemplo: 25 = recargo del 25% sobre la hora ordinaria; 90 = recargo dominical 2026.</p>
+            <Label className="gap-1.5">
+              Nuevo factor (%) <span className="text-destructive">*</span>
+              <Ayuda
+                texto="Ejemplo: 25 = recargo del 25% sobre la hora ordinaria; 90 = recargo dominical 2026."
+                etiqueta="Cómo escribir el factor"
+              />
+            </Label>
+            <Input type="number" step="1" value={factor} onChange={(e) => setFactor(e.target.value)} autoFocus />
           </div>
           <div className="space-y-1.5">
-            <Label>Rige desde</Label>
+            <Label className="gap-1.5">
+              Rige desde <span className="text-destructive">*</span>
+              <Ayuda
+                texto="El factor actual se cierra el día anterior; los periodos ya liquidados no cambian."
+                etiqueta="Qué pasa con el factor actual"
+              />
+            </Label>
             <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
           </div>
         </div>

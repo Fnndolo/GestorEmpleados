@@ -47,7 +47,7 @@ type Props = {
   comisiones: ComisionItem[]
   conceptosNovedades: ConceptoNovedadItem[]
   /** Conexión con AsistencIA (control de asistencia): de ahí llegan las horas. */
-  asistencia: { conectada: boolean; url: string | null }
+  asistencia: { conectada: boolean; apagada: boolean; url: string | null }
   /** El administrador ve el acceso a Ajustes → Integraciones desde el panel. */
   esAdmin: boolean
   /** Pestaña con la que abre (`?grupo=horas` desde Ajustes → Integraciones). */
@@ -143,7 +143,7 @@ export function NovedadesNomina(p: Props) {
       )}
 
       {grupo === 'horas' && (
-        <PanelAsistencia conectada={p.asistencia.conectada} esAdmin={p.esAdmin} hoy={p.hoy} />
+        <PanelAsistencia conectada={p.asistencia.conectada} apagada={p.asistencia.apagada} esAdmin={p.esAdmin} hoy={p.hoy} />
       )}
 
       {grupo === 'conceptos' && (

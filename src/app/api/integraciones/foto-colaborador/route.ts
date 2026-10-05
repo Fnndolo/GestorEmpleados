@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { ejecutarConContexto } from '@/server/contexto'
+import { puertaCerrada } from '@/server/asistencia/compartir'
 import { subirArchivo } from '@/server/storage'
 
 /**
@@ -31,6 +32,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'No autorizado' }, { status: 401 })
     }
   }
+  const cerrada = await puertaCerrada('fotos')
+  if (cerrada) return cerrada
 
   let cuerpo: { colaboradorId?: string; imagen?: string; consentimiento?: boolean }
   try {

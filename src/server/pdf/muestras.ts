@@ -6,6 +6,7 @@ import { renderContratoOps } from './contrato-ops'
 import { renderContratoLaboral } from './contrato-laboral'
 import { construirVariables, sustituir, type PlantillaResuelta } from '@/lib/contrato-variables'
 import { renderCuentaCobro } from './cuenta-cobro'
+import { renderCambioHorario } from './cambio-horario'
 import { renderActaActivo } from './acta-activo'
 import { renderActaDotacion } from './acta-dotacion'
 import { renderActaEpp } from './acta-epp'
@@ -19,7 +20,7 @@ import { plantillaTexto } from '@/server/plantillas-documento'
 import type { ClaveTexto, TextoDocumento } from '@/lib/plantillas-documento/textos'
 import {
   muestraActaActivo, muestraActaDotacion, muestraActaEpp, muestraCertificacion, muestraOrdenPago, muestraPazYSalvo, AREAS_PAZ_Y_SALVO_MUESTRA, muestraLiquidacion, LIQUIDACION_MUESTRA, muestraCarta,
-  muestraDesprendible, LINEAS_DESPRENDIBLE_MUESTRA, muestraCuentaCobro,
+  muestraDesprendible, LINEAS_DESPRENDIBLE_MUESTRA, muestraCuentaCobro, muestraCambioHorario, HORARIO_MUESTRA,
 } from '@/lib/plantillas-documento/textos-muestra'
 
 /**
@@ -330,6 +331,8 @@ export async function renderMuestraTexto(clave: ClaveTexto, variante: string, pl
     case 'ACTA_MUTUO_ACUERDO':
     case 'ORDEN_EXAMEN_EGRESO':
       return renderCartaTerminacion(clave, { ...muestraCarta(empresa), empresa }, texto)
+    case 'CAMBIO_HORARIO':
+      return renderCambioHorario({ ...muestraCambioHorario(empresa), empresa, dias: HORARIO_MUESTRA }, texto)
     case 'CUENTA_COBRO':
       return renderCuentaCobro({ ...muestraCuentaCobro(empresa), empresa: { ...empresa, ...muestraCuentaCobro(empresa).empresa }, firmaDataUri: null }, texto)
     case 'CERTIFICACION_LABORAL':

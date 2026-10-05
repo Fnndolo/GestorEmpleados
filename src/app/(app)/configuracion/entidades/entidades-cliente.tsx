@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Pencil } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,11 +11,12 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { crearEntidad, editarEntidad, alternarEntidad, crearBanco, editarBanco, alternarBanco } from './acciones'
 import { TIPOS_ENTIDAD_SS } from '@/lib/validaciones/catalogos'
 import { Ayuda } from '@/components/ui-kit/ayuda'
+import { BotonAgregar } from '@/components/ui-kit/boton-agregar'
 
 type TipoEntidad = (typeof TIPOS_ENTIDAD_SS)[number]
 type Entidad = { id: string; tipo: TipoEntidad; nombre: string; codigo: string; activa: boolean; asignados: number }
@@ -25,13 +26,14 @@ type Banco = { id: string; nombre: string; codigoAch: string; activo: boolean; a
 const BANCOS = '__bancos__'
 type Pestana = TipoEntidad | typeof BANCOS
 
-const ETIQUETAS: Record<Pestana, { plural: string; singular: string; codigo: string; ayudaCodigo: string }> = {
-  EPS: { plural: 'EPS', singular: 'EPS', codigo: 'Código PILA', ayudaCodigo: 'Código del operador en la planilla PILA.' },
-  ARL: { plural: 'ARL', singular: 'ARL', codigo: 'Código PILA', ayudaCodigo: 'Código del operador en la planilla PILA.' },
-  AFP: { plural: 'Pensiones', singular: 'fondo de pensiones', codigo: 'Código PILA', ayudaCodigo: 'Código del operador en la planilla PILA.' },
-  FONDO_CESANTIAS: { plural: 'Cesantías', singular: 'fondo de cesantías', codigo: 'Código PILA', ayudaCodigo: 'Código del operador en la planilla PILA.' },
-  CAJA_COMPENSACION: { plural: 'Cajas', singular: 'caja de compensación', codigo: 'Código PILA', ayudaCodigo: 'Código del operador en la planilla PILA.' },
-  [BANCOS]: { plural: 'Bancos', singular: 'banco', codigo: 'Código ACH', ayudaCodigo: 'Código del banco para el archivo de dispersión de nómina.' },
+/** `nuevo` lleva el género bien puesto: «Nuevo banco», no «Nueva banco». */
+const ETIQUETAS: Record<Pestana, { plural: string; singular: string; nuevo: string; codigo: string; ayudaCodigo: string }> = {
+  EPS: { plural: 'EPS', singular: 'EPS', nuevo: 'Nueva EPS', codigo: 'Código PILA', ayudaCodigo: 'Código del operador en la planilla PILA.' },
+  ARL: { plural: 'ARL', singular: 'ARL', nuevo: 'Nueva ARL', codigo: 'Código PILA', ayudaCodigo: 'Código del operador en la planilla PILA.' },
+  AFP: { plural: 'Pensiones', singular: 'fondo de pensiones', nuevo: 'Nuevo fondo de pensiones', codigo: 'Código PILA', ayudaCodigo: 'Código del operador en la planilla PILA.' },
+  FONDO_CESANTIAS: { plural: 'Cesantías', singular: 'fondo de cesantías', nuevo: 'Nuevo fondo de cesantías', codigo: 'Código PILA', ayudaCodigo: 'Código del operador en la planilla PILA.' },
+  CAJA_COMPENSACION: { plural: 'Cajas', singular: 'caja de compensación', nuevo: 'Nueva caja de compensación', codigo: 'Código PILA', ayudaCodigo: 'Código del operador en la planilla PILA.' },
+  [BANCOS]: { plural: 'Bancos', singular: 'banco', nuevo: 'Nuevo banco', codigo: 'Código ACH', ayudaCodigo: 'Código del banco para el archivo de dispersión de nómina.' },
 }
 
 const PESTANAS: Pestana[] = [...TIPOS_ENTIDAD_SS, BANCOS]
@@ -52,36 +54,42 @@ function Lista({
     return (
       <Card>
         <CardContent className="py-10 text-center text-sm text-muted-foreground">
-          Todavía no hay registros aquí. Usa «Agregar» para crear el primero.
+          Todavía no hay registros.
         </CardContent>
       </Card>
     )
   }
   return (
-    <Card>
+    <Card className="py-0">
       <CardContent className="p-0 divide-y">
         {items.map((item) => {
-          const activo = 'activa' in item ? item.activa : item.activo
-          const codigo = 'activa' in item ? item.codigo : item.codigoAch
+          const esEntidad = 'activa' in item
+          const activo = esEntidad ? item.activa : item.activo
+          const codigo = esEntidad ? item.codigo : item.codigoAch
+          // Una sola línea bajo el nombre: el código y cuántos la tienen asignada.
+          const detalle = [
+            codigo,
+            item.asignados > 0 ? `${item.asignados} colaborador${item.asignados === 1 ? '' : 'es'}` : null,
+          ].filter(Boolean).join(' · ')
           return (
-            <div key={item.id} className="flex items-center gap-3 p-3">
+            <div key={item.id} className="flex items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium">{item.nombre}</p>
-                  {!activo && <Badge variant="secondary">Inactivo</Badge>}
-                  {codigo && <Badge variant="outline">{codigo}</Badge>}
-                </div>
-                {item.asignados > 0 && (
-                  <p className="text-xs text-muted-foreground">{item.asignados} colaborador(es)</p>
-                )}
+                <p className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+                  <span className="truncate">{item.nombre}</span>
+                  {!activo && <Badge variant="secondary" className="shrink-0 text-[10px]">{esEntidad ? 'Inactiva' : 'Inactivo'}</Badge>}
+                </p>
+                {detalle && <p className="truncate text-xs text-muted-foreground">{detalle}</p>}
               </div>
               {puedeEditar && (
-                <>
-                  <Switch checked={activo} onCheckedChange={() => onAlternar(item)} />
-                  <Button size="sm" onClick={() => onEditar(item)}>
-                    <Pencil className="size-4" /> Editar
+                <div className="flex shrink-0 items-center gap-1">
+                  <Switch
+                    checked={activo} onCheckedChange={() => onAlternar(item)}
+                    aria-label={activo ? `Desactivar ${item.nombre}` : `Activar ${item.nombre}`}
+                  />
+                  <Button size="icon" variant="ghost" onClick={() => onEditar(item)} aria-label={`Editar ${item.nombre}`} title="Editar">
+                    <Pencil className="size-4" />
                   </Button>
-                </>
+                </div>
               )}
             </div>
           )
@@ -161,8 +169,11 @@ export function EntidadesCliente({
   return (
     <>
       <Tabs value={pestana} onValueChange={(v) => setPestana(v as Pestana)}>
-        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="-mx-1 overflow-x-auto px-1">
+        {/* Pestañas y el + en una sola fila: el + agrega al tipo de la pestaña abierta. */}
+        <div className="mb-3 flex items-center gap-2">
+          {/* En el celular no caben todas: se desplazan, y el borde derecho se
+              desvanece para que se note que hay más (el relleno deja ver la última). */}
+          <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1 [scrollbar-width:none] max-sm:pr-8 max-sm:[mask-image:linear-gradient(to_right,#000_calc(100%-2rem),transparent)]">
             <TabsList>
               {PESTANAS.map((p) => (
                 <TabsTrigger key={p} value={p}>
@@ -171,11 +182,7 @@ export function EntidadesCliente({
               ))}
             </TabsList>
           </div>
-          {puedeCrear && (
-            <Button size="sm" onClick={abrirNuevo} className="sm:shrink-0">
-              <Plus className="size-4" /> Agregar
-            </Button>
-          )}
+          {puedeCrear && <BotonAgregar etiqueta={etiqueta.nuevo} onClick={abrirNuevo} />}
         </div>
 
         {TIPOS_ENTIDAD_SS.map((t) => (
@@ -197,17 +204,18 @@ export function EntidadesCliente({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editandoId ? `Editar ${etiqueta.singular}` : `Nueva ${etiqueta.singular}`}
+              {editandoId ? `Editar ${etiqueta.singular}` : etiqueta.nuevo}
             </DialogTitle>
+            <DialogDescription className="sr-only">Nombre, código y estado del registro.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Nombre</Label>
+              <Label>Nombre <span className="text-destructive">*</span></Label>
               <Input value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} autoFocus />
             </div>
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5">
-                {etiqueta.codigo} <span className="font-normal text-muted-foreground">(opcional)</span>
+                {etiqueta.codigo}
                 <Ayuda texto={etiqueta.ayudaCodigo} etiqueta={`Sobre el ${etiqueta.codigo}`} />
               </Label>
               <Input value={f.codigo} onChange={(e) => setF({ ...f, codigo: e.target.value })} />

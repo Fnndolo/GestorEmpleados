@@ -1,7 +1,6 @@
 import { requerirPermiso } from '@/server/sesion'
 import { tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { Encabezado } from '@/components/shell/encabezado'
 import { MODULOS } from '@/lib/permisos/modulos'
 import { RolesCliente } from './roles-cliente'
 
@@ -18,10 +17,7 @@ export default async function RolesPage() {
 
   return (
     <div>
-      <Encabezado
-        titulo="Roles y permisos"
-        descripcion="Define qué módulos puede ver y editar cada rol, y con qué alcance de datos."
-      />
+      {/* El título va en el cliente: el + de "Nuevo rol" abre su diálogo. */}
       <RolesCliente
         roles={roles.map((r) => ({
           id: r.id,

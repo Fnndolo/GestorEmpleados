@@ -2,6 +2,7 @@ import 'server-only'
 import { prisma } from '@/lib/db'
 import { subirArchivo } from '@/server/storage'
 import { renderDesprendible } from '@/server/pdf/desprendible'
+import { eliminarDocumento } from '@/server/documentos'
 
 /** Genera los desprendibles PDF de un periodo en lotes y los guarda como Documento. */
 /**
@@ -70,6 +71,9 @@ export async function generarDesprendibles(
         },
       })
       await prisma.liquidacionNomina.update({ where: { id: liq.id }, data: { documentoId: doc.id } })
+      // El nuevo reemplaza al anterior: dos desprendibles del mismo mes en la ficha
+      // solo dejan la duda de cuál vale. Se borra después de reapuntar, como al adjuntar.
+      if (liq.documentoId && liq.documentoId !== doc.id) await eliminarDocumento(liq.documentoId).catch(() => {})
       documentos[liq.id] = doc.id
       generados++
     }

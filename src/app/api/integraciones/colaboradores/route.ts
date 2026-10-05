@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
+import { puertaCerrada } from '@/server/asistencia/compartir'
 
 /**
  * Colaboradores para el sistema de asistencia (ArriveControl), por HTTP.
@@ -31,6 +32,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'No autorizado' }, { status: 401 })
     }
   }
+  const cerrada = await puertaCerrada('colaboradores')
+  if (cerrada) return cerrada
 
   const { searchParams } = new URL(req.url)
   const buscar = (searchParams.get('buscar') ?? '').trim().toLowerCase()

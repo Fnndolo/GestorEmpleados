@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Building2, MapPin, Star } from 'lucide-react'
+import { Pencil, Building2, MapPin, Star } from 'lucide-react'
 import { sedeSchema, ciudadSchema, type SedeInput, type CiudadInput } from '@/lib/validaciones/catalogos'
 import { crearSede, editarSede, crearCiudad, editarCiudad, eliminarCiudad } from './acciones'
 import { Button } from '@/components/ui/button'
@@ -20,10 +20,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { BotonAgregar } from '@/components/ui-kit/boton-agregar'
+import { cn } from '@/lib/utils'
 
 type Sede = {
   id: string; nombre: string; ciudadId: string; ciudadNombre: string
@@ -49,98 +47,74 @@ export function SedesCliente({
     else toast.error(res.error)
   }
 
-  return (
-    <div className="space-y-8">
-      {/* Sedes */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="flex items-center gap-2 text-lg font-medium">
-            <Building2 className="size-5 text-muted-foreground" /> Sedes
-          </h2>
-          {puedeCrear && (
-            <Button size="sm" onClick={() => setNuevaSede(true)} disabled={ciudades.length === 0}>
-              <Plus className="size-4" /> Nueva sede
-            </Button>
-          )}
-        </div>
-        {ciudades.length === 0 ? (
-          <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Primero crea al menos una ciudad.
-          </CardContent></Card>
-        ) : (
-          <Card><CardContent className="p-0">
-            <TooltipProvider delayDuration={300}>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Sede</TableHead>
-                  <TableHead>Ciudad</TableHead>
-                  <TableHead className="hidden sm:table-cell">Dirección</TableHead>
-                  <TableHead>Estado</TableHead>
-                  {puedeEditar && <TableHead className="w-10" />}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sedes.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-medium">
-                      <span className="flex items-center gap-1.5">
-                        {s.esPrincipal && <Star className="size-3.5 fill-amber-400 text-amber-400" />}
-                        {s.nombre}
-                      </span>
-                    </TableCell>
-                    <TableCell>{s.ciudadNombre}</TableCell>
-                    {/* max-w-0 + w-full: la dirección toma el espacio que sobra y, si no cabe,
-                        se corta con puntos suspensivos en vez de desbordar la tabla. */}
-                    <TableCell className="hidden w-full max-w-0 text-muted-foreground sm:table-cell">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="block truncate">{s.direccion}</span>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" align="start">{s.direccion}</TooltipContent>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={s.activa ? 'default' : 'secondary'}>
-                        {s.activa ? 'Activa' : 'Inactiva'}
-                      </Badge>
-                    </TableCell>
-                    {puedeEditar && (
-                      <TableCell>
-                        <Button variant="ghost" size="icon" onClick={() => setEditar(s)} aria-label="Editar">
-                          <Pencil className="size-4" />
-                        </Button>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            </TooltipProvider>
-          </CardContent></Card>
-        )}
-      </section>
+  const [vista, setVista] = useState<'sedes' | 'ciudades'>('sedes')
+  const nueva = vista === 'sedes' ? 'Nueva sede' : 'Nueva ciudad'
 
-      {/* Ciudades */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="flex items-center gap-2 text-lg font-medium">
-            <MapPin className="size-5 text-muted-foreground" /> Ciudades
-          </h2>
-          {puedeCrear && (
-            <Button size="sm" onClick={() => setNuevaCiudad(true)}>
-              <Plus className="size-4" /> Nueva ciudad
-            </Button>
-          )}
+  return (
+    <div className="space-y-3">
+      {/* Arriba, qué se ve (sedes o ciudades) y el + para crear: sin títulos ni textos de más. */}
+      <div className="flex items-center gap-2">
+        <div className="flex min-w-0 gap-1.5 overflow-x-auto">
+          {([['sedes', 'Sedes', sedes.length, Building2], ['ciudades', 'Ciudades', ciudades.length, MapPin]] as const).map(([k, titulo, n, Icono]) => (
+            <button
+              key={k} type="button" onClick={() => setVista(k)}
+              className={cn('inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors', vista === k ? 'border-foreground bg-foreground text-background' : 'hover:bg-accent')}
+            >
+              <Icono className="size-4" /> {titulo}
+              <span className={cn('rounded-full px-1.5 text-xs tabular-nums', vista === k ? 'bg-background/20' : 'bg-muted text-muted-foreground')}>{n}</span>
+            </button>
+          ))}
         </div>
-        <div className="flex flex-wrap gap-2">
-          {ciudades.map((c) => (
-            <div key={c.id} className="flex items-center gap-1 rounded-md border py-1 pl-3 pr-1 text-sm">
-              <span>{c.nombre} · {c.departamento}</span>
-              {c.codigoDane && <Badge variant="secondary" className="ml-1">DANE {c.codigoDane}</Badge>}
+        {puedeCrear && (
+          <BotonAgregar
+            etiqueta={nueva} className="ml-auto"
+            onClick={() => (vista === 'sedes' ? setNuevaSede(true) : setNuevaCiudad(true))}
+            disabled={vista === 'sedes' && ciudades.length === 0}
+          />
+        )}
+      </div>
+
+      {vista === 'sedes' && (ciudades.length === 0 ? (
+        <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Primero crea una ciudad.</CardContent></Card>
+      ) : (
+        <Card className="py-0"><CardContent className="divide-y p-0">
+          {sedes.map((s) => (
+            <div key={s.id} className={cn('flex items-center gap-3 px-3 py-2.5 sm:px-4', !s.activa && 'opacity-60')}>
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-1.5 text-sm font-medium">
+                  {s.esPrincipal && <Star className="size-3.5 shrink-0 fill-amber-400 text-amber-400" aria-label="Sede principal" />}
+                  <span className="truncate">{s.nombre}</span>
+                  {!s.activa && <Badge variant="secondary">Inactiva</Badge>}
+                </p>
+                <p className="truncate text-xs text-muted-foreground" title={s.direccion}>
+                  {s.ciudadNombre}{s.direccion ? ` · ${s.direccion}` : ''}
+                </p>
+              </div>
               {puedeEditar && (
-                <Button size="icon" variant="ghost" className="size-7" onClick={() => setEditarCiudadItem(c)} aria-label="Editar ciudad">
-                  <Pencil className="size-3.5" />
+                <Button variant="ghost" size="icon" onClick={() => setEditar(s)} aria-label={`Editar ${s.nombre}`} title="Editar">
+                  <Pencil className="size-4" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </CardContent></Card>
+      ))}
+
+      {vista === 'ciudades' && (ciudades.length === 0 ? (
+        <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Aún no hay ciudades.</CardContent></Card>
+      ) : (
+        <Card className="py-0"><CardContent className="divide-y p-0">
+          {ciudades.map((c) => (
+            <div key={c.id} className="flex items-center gap-2 px-3 py-2.5 sm:px-4">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{c.nombre}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {[c.departamento, c.codigoDane && `DANE ${c.codigoDane}`, c.enUso ? `${c.enUso} en uso` : null].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+              {puedeEditar && (
+                <Button size="icon" variant="ghost" onClick={() => setEditarCiudadItem(c)} aria-label={`Editar ${c.nombre}`} title="Editar">
+                  <Pencil className="size-4" />
                 </Button>
               )}
               {/* La papelera queda visible pero inerte cuando la ciudad está en uso,
@@ -148,15 +122,14 @@ export function SedesCliente({
               {puedeEliminar && (
                 <BotonEliminar
                   onEliminar={() => borrarCiudad(c)}
-                  etiqueta="Eliminar ciudad"
+                  etiqueta={`Eliminar ${c.nombre}`}
                   motivoBloqueo={c.enUso > 0 ? `No se puede eliminar: la ciudad está en uso en ${c.enUso} registro(s), entre sedes y colaboradores.` : null}
                 />
               )}
             </div>
           ))}
-          {ciudades.length === 0 && <p className="text-sm text-muted-foreground">Aún no hay ciudades.</p>}
-        </div>
-      </section>
+        </CardContent></Card>
+      ))}
 
       {(nuevaSede || editar) && (
         <DialogSede

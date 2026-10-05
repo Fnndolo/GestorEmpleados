@@ -7,6 +7,7 @@ import { diasFueraDelVinculo, diasSuperpuestos, pagoIncapacidad } from './ausenc
 import { horasMesJornada } from './horas'
 import { CONTRATOS_DE_NOMINA } from '@/lib/vinculo-contrato'
 import { regenerarNovedadesAsistencia } from '@/server/asistencia/horas-asistencia'
+import { eliminarDocumento } from '@/server/documentos'
 
 /**
  * Liquida (o recalcula) un periodo de nómina completo: para cada colaborador
@@ -20,7 +21,11 @@ import { regenerarNovedadesAsistencia } from '@/server/asistencia/horas-asistenc
  * periodo, para que ninguna de esas operaciones deje rastros de dinero ya aplicado.
  */
 export async function revertirEfectosPeriodo(periodoId: string): Promise<void> {
+  // Sus desprendibles se van con ellas: tienen los valores de antes, y si se
+  // quedaran en la ficha nadie sabría que ya no valen. Se generan de nuevo.
+  const desprendibles = await prisma.liquidacionNomina.findMany({ where: { periodoId, documentoId: { not: null } }, select: { documentoId: true } })
   await prisma.liquidacionNomina.deleteMany({ where: { periodoId } })
+  for (const { documentoId } of desprendibles) await eliminarDocumento(documentoId!).catch(() => {})
 
   // Abonos de préstamo: devolver el saldo y dejar las cuotas del periodo como
   // estaban. Las del plan del préstamo (numero ≤ numeroCuotas) vuelven a quedar

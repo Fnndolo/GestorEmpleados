@@ -5,6 +5,7 @@ import { dbAuditado } from '@/lib/auditoria'
 import { ejecutarConContexto } from '@/server/contexto'
 import { dividirDiurnoNocturno, PAREJA_TIPO_HORA } from '@/server/nomina/horas'
 import { liquidarPeriodo } from '@/server/nomina/liquidador'
+import { puertaCerrada } from '@/server/asistencia/compartir'
 import { parseFechaISO } from '@/lib/fechas'
 
 /**
@@ -58,6 +59,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'No autorizado' }, { status: 401 })
     }
   }
+  const cerrada = await puertaCerrada('horas')
+  if (cerrada) return cerrada
 
   let cuerpo: unknown
   try {

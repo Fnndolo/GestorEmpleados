@@ -1,6 +1,6 @@
 import {
   Building2, Users, ShieldCheck, MapPin, Bell, BellRing, FileStack, Layers,
-  Receipt, Briefcase, Coins, Landmark, Network, FileImage, FileSignature, Cable, ClipboardCheck, type LucideIcon,
+  Receipt, Briefcase, Coins, Landmark, Network, FileImage, FileSignature, Cable, ClipboardCheck, CalendarDays, type LucideIcon,
 } from 'lucide-react'
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 
@@ -38,6 +38,7 @@ export const GRUPOS: { titulo: string; secciones: SeccionConfig[] }[] = [
     secciones: [
       { titulo: 'Empresa', desc: 'Razón social, NIT, representante legal y parámetros generales.', href: '/configuracion/empresa', icono: Building2, modulo: 'configuracion' },
       { titulo: 'Sedes y ciudades', desc: 'Dónde opera la empresa. Cada colaborador, activo y documento pertenece a una sede.', href: '/configuracion/sedes', icono: MapPin, modulo: 'configuracion', contador: 'sedes' },
+      { titulo: 'Festivos', desc: 'Calendario de festivos de Colombia por año. Se corrige solo si una ley cambia alguno.', href: '/configuracion/festivos', icono: CalendarDays, modulo: 'configuracion' },
       { titulo: 'Áreas', desc: 'Estructura organizativa. Los cargos se crean dentro de un área, así que estas van primero.', href: '/configuracion/areas', icono: Network, modulo: 'configuracion', contador: 'areas' },
       { titulo: 'Cargos', desc: 'Funciones para el contrato, clase de riesgo ARL y rol con que se crea el usuario.', href: '/configuracion/cargos', icono: Briefcase, modulo: 'configuracion', contador: 'cargos' },
     ],

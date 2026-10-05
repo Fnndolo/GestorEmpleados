@@ -23,13 +23,11 @@ export default async function NotificacionesConfigPage() {
   return (
     <div>
       <Encabezado
+        enLinea
         titulo="Notificaciones"
-        descripcion="Todos los eventos llegan a la campana y al celular. Aquí decides cuáles además muestran un pop-up y cuáles mandan correo. El correo viene apagado en todos: enciéndelo solo donde haga falta. Por correo salen siempre los códigos de firma, las contraseñas y lo que va al aspirante de una evaluación previa."
+        ayuda="Todo evento llega a la campana y al celular. Aquí eliges cuáles además muestran un pop-up (globo) o mandan correo (sobre); enciende el correo solo donde haga falta. Los códigos de firma, las contraseñas y lo que va al aspirante de una evaluación previa salen siempre por correo."
+        acciones={<BroadcastPrueba />}
       />
-      <div className="mb-6">
-        <BroadcastPrueba />
-      </div>
-
       <ConfigNotificaciones popupPorEvento={popupPorEvento} correoPorEvento={correoPorEvento} />
     </div>
   )

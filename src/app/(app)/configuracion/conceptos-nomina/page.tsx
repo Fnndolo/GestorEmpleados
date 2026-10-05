@@ -1,7 +1,7 @@
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
-import { ConceptosCliente } from './conceptos-cliente'
+import { ConceptosCliente, NuevoConcepto } from './conceptos-cliente'
 
 export const metadata = { title: 'Conceptos de nómina · Configuración' }
 
@@ -17,7 +17,9 @@ export default async function ConceptosNominaPage() {
     <div>
       <Encabezado
         titulo="Conceptos de nómina"
-        descripcion="Catálogo de devengados y deducciones. Cada concepto se marca como constitutivo o no de salario (arts. 127 y 128 CST): eso decide si entra al IBC de seguridad social y a las bases de prestaciones."
+        enLinea
+        ayuda="Devengados y deducciones. Cada concepto es constitutivo o no de salario (arts. 127 y 128 CST): eso decide si entra al IBC de seguridad social y a las bases de prestaciones."
+        acciones={puedeEditar && <NuevoConcepto />}
       />
       <ConceptosCliente
         puedeEditar={puedeEditar}

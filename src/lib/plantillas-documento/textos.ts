@@ -51,6 +51,7 @@ export const CLAVES_TEXTO = [
   'ACTA_MUTUO_ACUERDO',
   'ORDEN_EXAMEN_EGRESO',
   'CUENTA_COBRO',
+  'CAMBIO_HORARIO',
 ] as const
 export type ClaveTexto = (typeof CLAVES_TEXTO)[number]
 
@@ -636,6 +637,39 @@ export const TEXTOS: Record<ClaveTexto, DefinicionTexto> = {
     ],
     variantes: [],
   },
+
+  CAMBIO_HORARIO: {
+    clave: 'CAMBIO_HORARIO',
+    nombre: 'Comunicación de cambio de horario',
+    descripcion: 'Le llega al colaborador cuando Talento Humano le asigna un horario nuevo y queda en su autoservicio.',
+    fijo: 'La app pone el encabezado de la empresa, el horario nuevo día por día donde va [tabla], la firma de Talento Humano y el pie.',
+    membrete: false,
+    tabla: 'El horario nuevo, día por día: entrada, salida y almuerzo (o descanso)',
+    defecto: {
+      titulo: 'Comunicación de cambio de horario',
+      contenido: [
+        '{{ciudad}}, {{fecha}}',
+        'Señor(a) **{{nombre}}**, documento {{documento}}[[, {{cargo}}]]',
+        'Cordial saludo.',
+        'Le informamos que, a partir del **{{desde}}**, su horario de trabajo será el siguiente:',
+        '[tabla]',
+        'Para un total de **{{horas_semana}}** de trabajo a la semana[[, en reemplazo del horario que tenía ({{horario_anterior}})]].',
+        '[[Motivo del cambio: {{motivo}}]]',
+        'Este horario se ajusta a la jornada máxima legal vigente (Ley 2101 de 2021) y al Reglamento Interno de Trabajo. Si tiene alguna inquietud, comuníquese con Talento Humano.',
+        'Atentamente,',
+      ].join('\n'),
+    },
+    variables: [
+      ...V_ACTA,
+      { clave: 'desde', descripcion: 'Fecha desde la que rige el horario nuevo, en letras' },
+      { clave: 'horario', descripcion: 'Nombre del horario nuevo ("Horario propio" si no sale de una plantilla)' },
+      { clave: 'horario_resumen', descripcion: 'El horario nuevo en una línea (Lun–Vie 08:00–18:00 · Sáb 08:00–13:00)' },
+      { clave: 'horas_semana', descripcion: 'Horas de trabajo a la semana del horario nuevo' },
+      { clave: 'horario_anterior', descripcion: 'El horario que tenía, en una línea (vacío si no tenía)' },
+      { clave: 'motivo', descripcion: 'Motivo del cambio (vacío si no se escribió)' },
+    ],
+    variantes: [],
+  },
 }
 
 // ─── Resolución del texto ───────────────────────────────────────────────────
@@ -1060,5 +1094,34 @@ export function variablesCuentaCobro(d: DatosVarsCuentaCobro): Record<string, st
     direccion_empresa: d.empresa.direccion?.trim() ?? '',
     correo_empresa: d.empresa.emailContacto?.trim() ?? '',
     ...varsEmpresa(d.empresa),
+  }
+}
+
+export type DatosVarsCambioHorario = {
+  colaborador: ColaboradorActa
+  empresa: EmpresaTexto
+  ciudad: string
+  fecha: Date
+  /** Desde cuándo rige el horario nuevo. */
+  desde: Date
+  /** Nombre de la plantilla, o "Horario propio". */
+  horario: string
+  /** El horario nuevo en una línea. */
+  resumen: string
+  horasSemana: string
+  /** El que tenía, en una línea; null si es su primer horario. */
+  anterior: string | null
+  motivo: string | null
+}
+
+export function variablesCambioHorario(d: DatosVarsCambioHorario): Record<string, string> {
+  return {
+    ...varsActa(d),
+    desde: formatFechaLarga(d.desde),
+    horario: d.horario,
+    horario_resumen: d.resumen,
+    horas_semana: d.horasSemana,
+    horario_anterior: d.anterior ?? '',
+    motivo: d.motivo?.trim() ?? '',
   }
 }

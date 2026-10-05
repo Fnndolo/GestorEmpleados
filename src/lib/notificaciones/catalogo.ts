@@ -76,6 +76,9 @@ export type ClaveEvento =
   | 'vencimiento_alerta'
   // Nómina · AsistencIA
   | 'asistencia_resumen_dia'
+  // Horarios
+  | 'horario_cambiado'
+  | 'cronograma_dominical'
   // Plataforma
   | 'aviso_publicado'
 
@@ -148,6 +151,8 @@ export const EVENTOS_NOTIF: EventoNotif[] = [
   { clave: 'soporte_ss_invalido', etiqueta: 'Planilla rechazada', descripcion: 'El soporte de seguridad social no cumple y hay que corregirlo.', modulo: 'Cuentas de cobro' },
 
   // Vacaciones
+  { clave: 'horario_cambiado', etiqueta: 'Cambio de horario', descripcion: 'Talento Humano le asigna un horario nuevo al colaborador, con la comunicación del cambio.', modulo: 'Horarios' },
+  { clave: 'cronograma_dominical', etiqueta: 'Domingos y festivos asignados', descripcion: 'Se publica el cronograma del mes con los domingos y festivos que le toca trabajar.', modulo: 'Horarios' },
   { clave: 'vacaciones_programadas', etiqueta: 'Vacaciones programadas', descripcion: 'Se programan vacaciones al colaborador.', modulo: 'Vacaciones' },
   { clave: 'vacaciones_colectivas', etiqueta: 'Vacaciones colectivas', descripcion: 'Se decreta un periodo de vacaciones colectivas.', modulo: 'Vacaciones' },
   { clave: 'vacaciones_interrumpidas', etiqueta: 'Vacaciones interrumpidas', descripcion: 'Se interrumpe un disfrute en curso.', modulo: 'Vacaciones' },

@@ -5,12 +5,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Paperclip, OctagonAlert, Flame, ClipboardCheck, IdCard, Landmark, Scale, CircleCheck, FileWarning, LayoutGrid, ChartLine, ChevronLeft, ScrollText, UserCheck, CalendarCheck, CircleAlert } from 'lucide-react'
+import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Paperclip, OctagonAlert, Flame, ClipboardCheck, IdCard, Landmark, Scale, CircleCheck, FileWarning, LayoutGrid, ChartLine, ChevronLeft, ScrollText, UserCheck, CalendarCheck, CircleAlert, Eye, Siren, Trash2 } from 'lucide-react'
 import { Chip, Pill, Stat, AvatarColaborador, type PillTone } from '@/components/ui-kit'
 import { urlFoto } from '@/lib/foto'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { BotonVolver } from '@/components/shell/volver'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
 import { formatFechaCorta } from '@/lib/fechas'
 import { cn } from '@/lib/utils'
+import { BotonAgregar } from '@/components/ui-kit/boton-agregar'
 import {
   crearComite, registrarReunionComite, vincularActaReunion, agregarMiembroComite, eliminarMiembroComite,
   crearExamenMedico, vincularSoporteExamen, reportarAccidente, actualizarAccidente, entregarEpp, crearEpp,
@@ -101,7 +102,7 @@ type Props = {
   cargos: { id: string; nombre: string }[]
   profesiogramas: { id: string; cargoId: string; cargo: string; riesgosExpuestos: string; examenesRequeridos: string; aptitudesRequeridas: string; restricciones: string | null }[]
   planesEmergencia: { id: string; version: string; vigenciaDesde: string; vigenciaHasta: string; vencido: boolean; documentoId: string | null; sede: string | null }[]
-  brigadistas: { id: string; colaborador: string; rol: string; sede: string | null }[]
+  brigadistas: { id: string; colaborador: string; rol: string; sede: string | null; fotoUrl: string | null }[]
   simulacros: { id: string; fecha: string; tipo: string; participantes: number | null; observaciones: string | null; documentoId: string | null; sede: string | null }[]
   inspecciones: { id: string; fecha: string; tipo: string; area: string | null; hallazgos: string; responsable: string | null; estado: string; fechaCierre: string | null; documentoId: string | null; sede: string | null }[]
   semaforo: { clave: string; label: string; estado: 'ok' | 'warn' | 'bad'; detalle: string; tab: string }[]
@@ -340,7 +341,7 @@ export function SstCliente(p: Props) {
         )}
       </div>
 
-      <div className="grid items-start gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-stretch">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-stretch">
       {riel}
 
       {/* El contenido también tiene su propio desplazamiento. `min-h-0` es
@@ -610,11 +611,7 @@ export function SstCliente(p: Props) {
       ))}
 
       {tab === 'emergencias' && (
-        <div className="space-y-6">
-          <SeccionEmergencia titulo="Plan de emergencias" puedeCrear={p.puedeCrear} sedes={p.sedes} planes={p.planesEmergencia} />
-          <SeccionBrigadistas puedeCrear={p.puedeCrear} sedes={p.sedes} brigadistas={p.brigadistas} />
-          <SeccionSimulacros puedeCrear={p.puedeCrear} sedes={p.sedes} simulacros={p.simulacros} />
-        </div>
+        <Emergencias puedeCrear={p.puedeCrear} sedes={p.sedes} planes={p.planesEmergencia} brigadistas={p.brigadistas} simulacros={p.simulacros} />
       )}
 
       {tab === 'inspecciones' && (p.inspecciones.length === 0 ? <Vacio /> : (
@@ -1043,118 +1040,250 @@ function DialogSeguimientoInspeccion({ inspeccion, onClose }: { inspeccion: Prop
   </DialogContent></Dialog>)
 }
 
-function SeccionEmergencia({ titulo, puedeCrear, sedes, planes }: { titulo: string; puedeCrear: boolean; sedes: { id: string; nombre: string }[]; planes: Props['planesEmergencia'] }) {
-  const router = useRouter()
-  const [abierto, setAbierto] = useState(false)
-  const [f, setF] = useState<Record<string, string>>({ version: '1', vigenciaDesde: new Date().toISOString().slice(0, 10) })
-  const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
-  const [g, setG] = useState(false)
+type SedeOpcion = { id: string; nombre: string }
+type SubEmergencia = 'plan' | 'brigada' | 'simulacros'
 
-  async function crear() {
-    if (!f.vigenciaHasta) { toast.error('Define la vigencia hasta.'); return }
-    setG(true)
-    const res = await crearPlanEmergencia({ sedeId: f.sedeId, version: f.version, vigenciaDesde: f.vigenciaDesde, vigenciaHasta: f.vigenciaHasta })
-    if (!res.ok) { setG(false); toast.error(res.error); return }
-    setG(false); toast.success('Plan de emergencias registrado.'); setAbierto(false); router.refresh()
-  }
-
-  async function adjuntar(planId: string, archivo: File) {
-    const fd = new FormData()
-    fd.append('archivo', await reducirImagen(archivo))
-    fd.append('entidadTipo', 'PlanEmergencia')
-    fd.append('entidadId', planId)
-    fd.append('nombre', `Plan de emergencias`)
-    const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
-    if (up.ok) { const { id: documentoId } = await up.json(); await vincularDocumentoPlanEmergencia({ planId, documentoId }); toast.success('Documento adjuntado.'); router.refresh() }
-    else toast.error('No se pudo adjuntar.')
-  }
+/**
+ * Pestaña Plan de emergencias: un sub-filtro (plan, brigada, simulacros) para
+ * ver una cosa a la vez, y cada alta en su diálogo en vez de formularios
+ * sueltos en la página.
+ */
+function Emergencias({ puedeCrear, sedes, planes, brigadistas, simulacros }: {
+  puedeCrear: boolean
+  sedes: SedeOpcion[]
+  planes: Props['planesEmergencia']
+  brigadistas: Props['brigadistas']
+  simulacros: Props['simulacros']
+}) {
+  const [sub, setSub] = useState<SubEmergencia>('plan')
+  const [dialogo, setDialogo] = useState<SubEmergencia | null>(null)
+  const vigente = planes.find((pl) => !pl.vencido)
+  const opciones: { k: SubEmergencia; titulo: string; n: number; aviso?: boolean }[] = [
+    { k: 'plan', titulo: 'Plan', n: planes.length, aviso: !vigente },
+    { k: 'brigada', titulo: 'Brigada', n: brigadistas.length, aviso: brigadistas.length === 0 },
+    { k: 'simulacros', titulo: 'Simulacros', n: simulacros.length },
+  ]
+  const boton = { plan: 'Nuevo plan', brigada: 'Agregar brigadista', simulacros: 'Registrar simulacro' }[sub]
 
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between"><p className="text-sm font-medium">{titulo}</p>{puedeCrear && <Button size="sm" onClick={() => setAbierto((v) => !v)}><Plus className="size-4" /> Nuevo</Button>}</div>
-      {planes.length === 0 ? <p className="text-xs text-muted-foreground">Sin plan de emergencias registrado.</p> : (
-        <ul className="mb-3 space-y-2">{planes.map((pl) => (
-          <li key={pl.id} className="flex items-center gap-2 rounded-md border p-2 text-sm">
-            <Flame className="size-4 shrink-0 text-amber-500" />
-            <div className="min-w-0 flex-1">
-              <p>v{pl.version}{pl.sede ? ` · ${pl.sede}` : ''}</p>
-              <p className={`text-xs ${pl.vencido ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>{pl.vencido ? 'venció' : 'vigente hasta'} {formatFechaCorta(new Date(pl.vigenciaHasta))}</p>
-            </div>
-            {pl.documentoId ? (
-              <VisorPdf documentoId={pl.documentoId} titulo="Documento" className="text-xs text-primary hover:underline">Ver documento</VisorPdf>
-            ) : puedeCrear && <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) adjuntar(pl.id, f) }} className="w-40 text-xs" />}
-          </li>
-        ))}</ul>
-      )}
-      {abierto && (
-        <div className="space-y-2 rounded-md border p-3">
-          <div className="grid grid-cols-3 gap-2">
-            <Campo label="Versión"><Input value={f.version} onChange={(e) => set('version', e.target.value)} /></Campo>
-            <Campo label="Sede"><Select value={f.sedeId ?? ''} onValueChange={(v) => set('sedeId', v)}><SelectTrigger className="w-full"><SelectValue placeholder="Todas" /></SelectTrigger><SelectContent>{sedes.map((s) => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)}</SelectContent></Select></Campo>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Campo label="Vigencia desde"><Input type="date" value={f.vigenciaDesde} onChange={(e) => set('vigenciaDesde', e.target.value)} /></Campo>
-            <Campo label="Vigencia hasta"><Input type="date" onChange={(e) => set('vigenciaHasta', e.target.value)} /></Campo>
-          </div>
-          <Button size="sm" onClick={crear} disabled={g}>{g && <Spinner />}Registrar</Button>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <div className="flex min-w-0 gap-1.5 overflow-x-auto">
+          {opciones.map((o) => (
+            <button
+              key={o.k} type="button" onClick={() => setSub(o.k)}
+              className={cn('inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-sm transition-colors sm:gap-1.5 sm:px-3', sub === o.k ? 'border-foreground bg-foreground text-background' : 'hover:bg-accent')}
+            >
+              {o.titulo}
+              <span className={cn('rounded-full px-1.5 text-xs tabular-nums', sub === o.k ? 'bg-background/20' : o.aviso ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'bg-muted text-muted-foreground')}>{o.n}</span>
+            </button>
+          ))}
         </div>
-      )}
+        {puedeCrear && (
+          // En el celular solo el ícono, para que quepa en la fila del sub-filtro.
+          <BotonAgregar etiqueta={boton} onClick={() => setDialogo(sub)} className="ml-auto" />
+        )}
+      </div>
+
+      {sub === 'plan' && <ListaPlanes planes={planes} puedeCrear={puedeCrear} />}
+      {sub === 'brigada' && <ListaBrigada brigadistas={brigadistas} puedeCrear={puedeCrear} />}
+      {sub === 'simulacros' && <ListaSimulacros simulacros={simulacros} />}
+
+      {dialogo === 'plan' && <DialogPlanEmergencia sedes={sedes} onClose={() => setDialogo(null)} />}
+      {dialogo === 'brigada' && <DialogBrigadista sedes={sedes} onClose={() => setDialogo(null)} />}
+      {dialogo === 'simulacros' && <DialogSimulacro sedes={sedes} onClose={() => setDialogo(null)} />}
     </div>
   )
 }
 
-function SeccionBrigadistas({ puedeCrear, sedes, brigadistas }: { puedeCrear: boolean; sedes: { id: string; nombre: string }[]; brigadistas: Props['brigadistas'] }) {
+function VacioEmergencia({ icono: Icono, titulo, texto }: { icono: typeof Flame; titulo: string; texto: string }) {
+  return (
+    <Card><CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+      <Icono className="size-8 text-muted-foreground" />
+      <p className="text-sm font-medium">{titulo}</p>
+      <p className="max-w-md text-xs text-muted-foreground">{texto}</p>
+    </CardContent></Card>
+  )
+}
+
+function ListaPlanes({ planes, puedeCrear }: { planes: Props['planesEmergencia']; puedeCrear: boolean }) {
+  const router = useRouter()
+  const [subiendo, setSubiendo] = useState<string | null>(null)
+  async function adjuntar(planId: string, archivo: File) {
+    setSubiendo(planId)
+    const fd = new FormData()
+    fd.append('archivo', await reducirImagen(archivo))
+    fd.append('entidadTipo', 'PlanEmergencia')
+    fd.append('entidadId', planId)
+    fd.append('nombre', 'Plan de emergencias')
+    const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+    if (up.ok) { const { id: documentoId } = await up.json(); await vincularDocumentoPlanEmergencia({ planId, documentoId }); toast.success('Documento adjuntado.'); router.refresh() }
+    else toast.error('No se pudo adjuntar.')
+    setSubiendo(null)
+  }
+  if (planes.length === 0) {
+    return <VacioEmergencia icono={Flame} titulo="Sin plan de emergencias" texto="El plan de prevención, preparación y respuesta ante emergencias es obligatorio en el SG-SST (Decreto 1072 de 2015). Regístralo con su vigencia y adjunta el documento." />
+  }
+  return (
+    <Card className="py-0"><CardContent className="divide-y p-0">
+      {planes.map((pl) => (
+        <div key={pl.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
+          <Chip icono={Flame} color={TINTA} />
+          <div className="min-w-0 flex-1 basis-48">
+            <p className="text-sm font-medium">Versión {pl.version} · {pl.sede ?? 'Todas las sedes'}</p>
+            <p className="text-xs text-muted-foreground">{formatFechaCorta(new Date(pl.vigenciaDesde))} – {formatFechaCorta(new Date(pl.vigenciaHasta))}</p>
+          </div>
+          <Pill tone={pl.vencido ? 'bad' : 'ok'}>{pl.vencido ? 'Vencido' : 'Vigente'}</Pill>
+          {pl.documentoId ? (
+            <VisorPdf documentoId={pl.documentoId} titulo="Plan de emergencias" className={buttonVariants({ size: 'sm', variant: 'outline' })}><Eye className="size-4" /> Ver</VisorPdf>
+          ) : puedeCrear ? (
+            <label className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'cursor-pointer')}>
+              {subiendo === pl.id ? <Spinner /> : <Paperclip className="size-4" />} Adjuntar PDF
+              <input type="file" accept="application/pdf" className="sr-only" disabled={subiendo !== null} onChange={(e) => { const f = e.target.files?.[0]; if (f) adjuntar(pl.id, f) }} />
+            </label>
+          ) : <span className="text-xs text-muted-foreground">Sin documento</span>}
+        </div>
+      ))}
+    </CardContent></Card>
+  )
+}
+
+function ListaBrigada({ brigadistas, puedeCrear }: { brigadistas: Props['brigadistas']; puedeCrear: boolean }) {
+  const router = useRouter()
+  async function quitar(id: string) {
+    const res = await eliminarBrigadista({ id })
+    if (res.ok) { toast.success('Brigadista quitado.'); router.refresh() } else toast.error(res.error)
+  }
+  if (brigadistas.length === 0) {
+    return <VacioEmergencia icono={Users} titulo="Sin brigadistas" texto="La brigada atiende la emergencia mientras llega la ayuda: evacuación, primeros auxilios y control de incendios. Asigna al menos una persona por sede." />
+  }
+  return (
+    <Card className="py-0"><CardContent className="divide-y p-0">
+      {brigadistas.map((b) => (
+        <div key={b.id} className="flex items-center gap-3 p-3">
+          <AvatarColaborador nombre={b.colaborador} fotoUrl={b.fotoUrl} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{b.colaborador}</p>
+            <p className="truncate text-xs text-muted-foreground">{b.rol} · {b.sede ?? 'Todas las sedes'}</p>
+          </div>
+          {puedeCrear && (
+            <Button size="icon" variant="ghost" onClick={() => quitar(b.id)} aria-label={`Quitar a ${b.colaborador} de la brigada`} title="Quitar de la brigada"><Trash2 className="size-4 text-destructive" /></Button>
+          )}
+        </div>
+      ))}
+    </CardContent></Card>
+  )
+}
+
+function ListaSimulacros({ simulacros }: { simulacros: Props['simulacros'] }) {
+  if (simulacros.length === 0) {
+    return <VacioEmergencia icono={Siren} titulo="Sin simulacros" texto="Se recomienda al menos un simulacro al año por sede. Registra la fecha, los participantes y el acta como evidencia." />
+  }
+  return (
+    <Card className="py-0"><CardContent className="divide-y p-0">
+      {simulacros.map((s) => (
+        <div key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
+          <Chip icono={Siren} color={TINTA} />
+          <div className="min-w-0 flex-1 basis-48">
+            <p className="text-sm font-medium">{s.tipo} · {s.sede ?? 'Todas las sedes'}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatFechaCorta(new Date(s.fecha))}{s.participantes != null ? ` · ${s.participantes} participantes` : ''}
+            </p>
+            {s.observaciones && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{s.observaciones}</p>}
+          </div>
+          {s.documentoId && <VisorPdf documentoId={s.documentoId} titulo="Acta del simulacro" className={buttonVariants({ size: 'sm', variant: 'outline' })}><Eye className="size-4" /> Acta</VisorPdf>}
+        </div>
+      ))}
+    </CardContent></Card>
+  )
+}
+
+const Obligatorio = () => <span className="text-destructive">*</span>
+
+function SelectorSede({ sedes, value, onChange }: { sedes: SedeOpcion[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <Select value={value || 'todas'} onValueChange={(v) => onChange(v === 'todas' ? '' : v)}>
+      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="todas">Todas las sedes</SelectItem>
+        {sedes.map((s) => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  )
+}
+
+function DialogPlanEmergencia({ sedes, onClose }: { sedes: SedeOpcion[]; onClose: () => void }) {
+  const router = useRouter()
+  const [f, setF] = useState({ version: '1', sedeId: '', vigenciaDesde: new Date().toISOString().slice(0, 10), vigenciaHasta: '' })
+  const [g, setG] = useState(false)
+  async function crear() {
+    setG(true)
+    const res = await crearPlanEmergencia(f)
+    setG(false)
+    if (!res.ok) { toast.error(res.error); return }
+    toast.success('Plan de emergencias registrado. Adjunta el documento desde la lista.'); onClose(); router.refresh()
+  }
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o && !g) onClose() }}><DialogContent>
+      <DialogHeader><DialogTitle>Nuevo plan de emergencias</DialogTitle></DialogHeader>
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5"><Label>Versión <Obligatorio /></Label><Input value={f.version} onChange={(e) => setF({ ...f, version: e.target.value })} /></div>
+          <div className="space-y-1.5"><Label>Sede</Label><SelectorSede sedes={sedes} value={f.sedeId} onChange={(v) => setF({ ...f, sedeId: v })} /></div>
+          <div className="space-y-1.5"><Label>Vigente desde <Obligatorio /></Label><Input type="date" value={f.vigenciaDesde} onChange={(e) => setF({ ...f, vigenciaDesde: e.target.value })} /></div>
+          <div className="space-y-1.5"><Label>Vigente hasta <Obligatorio /></Label><Input type="date" min={f.vigenciaDesde} value={f.vigenciaHasta} onChange={(e) => setF({ ...f, vigenciaHasta: e.target.value })} /></div>
+        </div>
+        <p className="text-xs text-muted-foreground">Antes de que venza te llegará una alerta para actualizarlo.</p>
+      </div>
+      <DialogFooter><Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button><Button onClick={crear} disabled={g || !f.version.trim() || !f.vigenciaDesde || !f.vigenciaHasta}>{g && <Spinner />} Registrar</Button></DialogFooter>
+    </DialogContent></Dialog>
+  )
+}
+
+const ROLES_BRIGADA = ['Evacuación', 'Primeros auxilios', 'Control de incendios', 'Coordinador de brigada']
+
+function DialogBrigadista({ sedes, onClose }: { sedes: SedeOpcion[]; onClose: () => void }) {
   const router = useRouter()
   const [colaboradorId, setColaboradorId] = useState('')
   const [rol, setRol] = useState('')
   const [sedeId, setSedeId] = useState('')
   const [g, setG] = useState(false)
-
   async function agregar() {
-    if (!colaboradorId || !rol.trim()) { toast.error('Selecciona colaborador y rol.'); return }
     setG(true)
     const res = await agregarBrigadista({ colaboradorId, sedeId, rol: rol.trim() })
-    setG(false); if (res.ok) { setColaboradorId(''); setRol(''); toast.success('Brigadista agregado.'); router.refresh() } else toast.error(res.error)
+    setG(false)
+    if (!res.ok) { toast.error(res.error); return }
+    toast.success('Brigadista agregado.'); onClose(); router.refresh()
   }
-  async function quitar(id: string) {
-    const res = await eliminarBrigadista({ id })
-    if (res.ok) { toast.success('Brigadista eliminado.'); router.refresh() } else toast.error(res.error)
-  }
-
   return (
-    <div>
-      <p className="mb-2 text-sm font-medium">Brigada de emergencias</p>
-      {brigadistas.length === 0 ? <p className="mb-3 text-xs text-muted-foreground">Sin brigadistas asignados.</p> : (
-        <ul className="mb-3 space-y-1">{brigadistas.map((b) => (
-          <li key={b.id} className="flex items-center gap-2 text-sm">
-            <span className="min-w-0 flex-1 truncate">{b.colaborador} <span className="text-xs text-muted-foreground">— {b.rol}{b.sede ? ` · ${b.sede}` : ''}</span></span>
-            {puedeCrear && <button type="button" onClick={() => quitar(b.id)} className="text-xs text-destructive hover:underline">Quitar</button>}
-          </li>
-        ))}</ul>
-      )}
-      {puedeCrear && (
-        <div className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[2fr_1fr_1fr_auto]">
-          <SelectorColaborador value={colaboradorId} onChange={setColaboradorId} />
-          <Input placeholder="Rol (evacuación, primeros auxilios…)" value={rol} onChange={(e) => setRol(e.target.value)} />
-          <Select value={sedeId} onValueChange={setSedeId}><SelectTrigger className="w-full"><SelectValue placeholder="Sede" /></SelectTrigger><SelectContent>{sedes.map((s) => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)}</SelectContent></Select>
-          <Button size="sm" onClick={agregar} disabled={g}>{g && <Spinner />}Agregar</Button>
+    <Dialog open onOpenChange={(o) => { if (!o && !g) onClose() }}><DialogContent>
+      <DialogHeader><DialogTitle>Agregar brigadista</DialogTitle></DialogHeader>
+      <div className="space-y-4">
+        <div className="space-y-1.5"><Label>Colaborador <Obligatorio /></Label><SelectorColaborador value={colaboradorId} onChange={setColaboradorId} /></div>
+        <div className="space-y-1.5">
+          <Label>Rol <Obligatorio /></Label>
+          <div className="flex flex-wrap gap-1.5">
+            {ROLES_BRIGADA.map((r) => (
+              <button key={r} type="button" onClick={() => setRol(r)} className={cn('rounded-full border px-2.5 py-0.5 text-xs', rol === r ? 'border-foreground bg-foreground text-background' : 'hover:bg-accent')}>{r}</button>
+            ))}
+          </div>
+          <Input value={rol} onChange={(e) => setRol(e.target.value)} placeholder="O escribe otro rol" />
         </div>
-      )}
-    </div>
+        <div className="space-y-1.5"><Label>Sede</Label><SelectorSede sedes={sedes} value={sedeId} onChange={setSedeId} /></div>
+      </div>
+      <DialogFooter><Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button><Button onClick={agregar} disabled={g || !colaboradorId || rol.trim().length < 2}>{g && <Spinner />} Agregar</Button></DialogFooter>
+    </DialogContent></Dialog>
   )
 }
 
-function SeccionSimulacros({ puedeCrear, sedes, simulacros }: { puedeCrear: boolean; sedes: { id: string; nombre: string }[]; simulacros: Props['simulacros'] }) {
+function DialogSimulacro({ sedes, onClose }: { sedes: SedeOpcion[]; onClose: () => void }) {
   const router = useRouter()
-  const [abierto, setAbierto] = useState(false)
-  const [f, setF] = useState<Record<string, string>>({ tipo: 'Evacuación', fecha: new Date().toISOString().slice(0, 10) })
-  const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
+  const [f, setF] = useState({ tipo: 'Evacuación', fecha: new Date().toISOString().slice(0, 10), sedeId: '', participantes: '', observaciones: '' })
   const [archivo, setArchivo] = useState<File | null>(null)
   const [g, setG] = useState(false)
-
   async function registrar() {
     setG(true)
-    const res = await registrarSimulacro({ sedeId: f.sedeId, fecha: f.fecha, tipo: f.tipo, participantes: f.participantes ? Number(f.participantes) : undefined, observaciones: f.observaciones })
+    const res = await registrarSimulacro({ sedeId: f.sedeId, fecha: f.fecha, tipo: f.tipo.trim(), participantes: f.participantes ? Number(f.participantes) : undefined, observaciones: f.observaciones.trim() || undefined })
     if (!res.ok) { setG(false); toast.error(res.error); return }
     const simulacroId = (res.datos as { id: string }).id
     if (archivo) {
@@ -1169,34 +1298,29 @@ function SeccionSimulacros({ puedeCrear, sedes, simulacros }: { puedeCrear: bool
         else toast.warning('El simulacro se registró, pero el acta no se pudo adjuntar.')
       } catch { toast.warning('El simulacro se registró, pero el acta no se pudo adjuntar.') }
     }
-    setG(false); toast.success('Simulacro registrado.'); setAbierto(false); router.refresh()
+    setG(false); toast.success('Simulacro registrado.'); onClose(); router.refresh()
   }
-
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between"><p className="text-sm font-medium">Simulacros</p>{puedeCrear && <Button size="sm" onClick={() => setAbierto((v) => !v)}><Plus className="size-4" /> Nuevo</Button>}</div>
-      {simulacros.length === 0 ? <p className="mb-3 text-xs text-muted-foreground">Sin simulacros registrados.</p> : (
-        <ul className="mb-3 space-y-1">{simulacros.map((s) => (
-          <li key={s.id} className="flex items-center gap-2 text-sm">
-            <span className="min-w-0 flex-1 truncate">{formatFechaCorta(new Date(s.fecha))} · {s.tipo}{s.sede ? ` · ${s.sede}` : ''}{s.participantes != null ? ` · ${s.participantes} participantes` : ''}</span>
-            {s.documentoId && <VisorPdf documentoId={s.documentoId} titulo="Acta" className="text-xs text-primary hover:underline">Acta</VisorPdf>}
-          </li>
-        ))}</ul>
-      )}
-      {abierto && (
-        <div className="space-y-2 rounded-md border p-3">
-          <div className="grid grid-cols-3 gap-2">
-            <Campo label="Tipo"><Input value={f.tipo} onChange={(e) => set('tipo', e.target.value)} /></Campo>
-            <Campo label="Fecha"><Input type="date" value={f.fecha} onChange={(e) => set('fecha', e.target.value)} /></Campo>
-            <Campo label="Sede"><Select value={f.sedeId ?? ''} onValueChange={(v) => set('sedeId', v)}><SelectTrigger className="w-full"><SelectValue placeholder="Todas" /></SelectTrigger><SelectContent>{sedes.map((sd) => <SelectItem key={sd.id} value={sd.id}>{sd.nombre}</SelectItem>)}</SelectContent></Select></Campo>
-          </div>
-          <Campo label="Participantes"><Input type="number" onChange={(e) => set('participantes', e.target.value)} /></Campo>
-          <Campo label="Observaciones"><Textarea rows={2} onChange={(e) => set('observaciones', e.target.value)} /></Campo>
-          <Campo label="Acta del simulacro (opcional)"><input type="file" accept="image/*,application/pdf" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground" /></Campo>
-          <Button size="sm" onClick={registrar} disabled={g}>{g && <Spinner />}Registrar</Button>
+    <Dialog open onOpenChange={(o) => { if (!o && !g) onClose() }}><DialogContent className="max-h-[90dvh] overflow-y-auto">
+      <DialogHeader><DialogTitle>Registrar simulacro</DialogTitle></DialogHeader>
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5"><Label>Tipo <Obligatorio /></Label><Input value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })} placeholder="Evacuación, sismo, incendio…" /></div>
+          <div className="space-y-1.5"><Label>Fecha <Obligatorio /></Label><Input type="date" value={f.fecha} onChange={(e) => setF({ ...f, fecha: e.target.value })} /></div>
+          <div className="space-y-1.5"><Label>Sede</Label><SelectorSede sedes={sedes} value={f.sedeId} onChange={(v) => setF({ ...f, sedeId: v })} /></div>
+          <div className="space-y-1.5"><Label>Participantes</Label><Input type="number" min={0} value={f.participantes} onChange={(e) => setF({ ...f, participantes: e.target.value })} /></div>
         </div>
-      )}
-    </div>
+        <div className="space-y-1.5"><Label>Observaciones</Label><Textarea rows={2} value={f.observaciones} onChange={(e) => setF({ ...f, observaciones: e.target.value })} placeholder="Tiempo de evacuación, lo que salió bien y lo que hay que mejorar" /></div>
+        <div className="space-y-1.5">
+          <Label>Acta del simulacro</Label>
+          <label className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'max-w-full cursor-pointer')}>
+            <Paperclip className="size-4" /> <span className="truncate">{archivo ? archivo.name : 'Adjuntar PDF o foto'}</span>
+            <input type="file" accept="image/*,application/pdf" className="sr-only" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />
+          </label>
+        </div>
+      </div>
+      <DialogFooter><Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button><Button onClick={registrar} disabled={g || f.tipo.trim().length < 2 || !f.fecha}>{g && <Spinner />} Registrar</Button></DialogFooter>
+    </DialogContent></Dialog>
   )
 }
 

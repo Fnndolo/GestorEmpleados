@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     ayerPrueba.setUTCDate(ayerPrueba.getUTCDate() - 1)
     return NextResponse.json({ ok: true, prueba: true, ...(await enviarJornadaDePrueba(formatFechaISO(ayerPrueba), pruebaPara)) })
   }
-  if (!(await conexionAsistencia())) {
+  if (!(await conexionAsistencia('horas'))) {
     return NextResponse.json({ ok: true, omitido: 'AsistencIA no está conectada.' })
   }
 

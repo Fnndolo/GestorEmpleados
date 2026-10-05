@@ -22,7 +22,7 @@ function mimeDe(ruta: string): 'image/jpeg' | 'image/png' | 'image/webp' {
 
 /** Manda a AsistencIA la foto que el colaborador tiene hoy en el gestor. */
 export async function enviarFotoAsistencia(colaboradorId: string): Promise<ResultadoFoto> {
-  if (!(await conexionAsistencia())) return { ok: false, motivo: 'SIN_CONEXION' }
+  if (!(await conexionAsistencia('fotos'))) return { ok: false, motivo: 'SIN_CONEXION' }
   const c = await prisma.colaborador.findUnique({ where: { id: colaboradorId }, select: { numeroDocumento: true, fotoPath: true } })
   if (!c?.fotoPath) return { ok: false, motivo: 'SIN_FOTO' }
   try {
@@ -39,7 +39,7 @@ export async function enviarFotoAsistencia(colaboradorId: string): Promise<Resul
 
 /** Quita en AsistencIA la foto de una persona que la quitó aquí. */
 export async function quitarFotoAsistencia(colaboradorId: string): Promise<ResultadoFoto> {
-  if (!(await conexionAsistencia())) return { ok: false, motivo: 'SIN_CONEXION' }
+  if (!(await conexionAsistencia('fotos'))) return { ok: false, motivo: 'SIN_CONEXION' }
   const c = await prisma.colaborador.findUnique({ where: { id: colaboradorId }, select: { numeroDocumento: true } })
   if (!c) return { ok: false, motivo: 'NO_EXISTE' }
   try {

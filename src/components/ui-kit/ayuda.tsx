@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
  *
  * Radix abre el tooltip con hover y con foco de teclado, pero NO con un toque:
  * en móvil el usuario tocaría el signo y no pasaría nada. Por eso el estado va
- * controlado y el clic también lo abre.
+ * controlado y el clic también lo abre (sin alternar: ver el onClick).
  */
 export function Ayuda({ texto, etiqueta = 'Más información' }: { texto: string; etiqueta?: string }) {
   const [abierto, setAbierto] = useState(false)
@@ -27,7 +27,11 @@ export function Ayuda({ texto, etiqueta = 'Más información' }: { texto: string
             // tipo envía el formulario.
             type="button"
             aria-label={etiqueta}
-            onClick={() => setAbierto((v) => !v)}
+            // Un toque abre (no alterna): en el celular el foco que llega con el
+            // toque ya lo abrió, y alternar lo cerraba en el mismo gesto. Se cierra
+            // tocando fuera, con Escape o al perder el foco. preventDefault evita
+            // que Radix lo cierre al recibir el clic.
+            onClick={(e) => { e.preventDefault(); setAbierto(true) }}
             className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <HelpCircle className="size-3.5" />

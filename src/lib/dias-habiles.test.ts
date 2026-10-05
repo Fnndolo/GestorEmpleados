@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  festivosDeRango, esDiaHabil, sumarDiasHabiles, restarDiasHabiles, diasHabilesEntre, fechaAlerta,
+  festivosDeRango, festivosDelAnio, esDiaHabil, sumarDiasHabiles, restarDiasHabiles, diasHabilesEntre, fechaAlerta,
 } from './dias-habiles'
 import { parseFechaISO } from './fechas'
 
@@ -65,5 +65,38 @@ describe('días hábiles Colombia', () => {
   it('excepción ADD agrega un festivo decretado', () => {
     const conExcepcion = festivosDeRango(2026, 2026, [{ fecha: '2026-07-20', tipo: 'ADD' }])
     expect(conExcepcion.has('2026-07-20')).toBe(true)
+  })
+})
+
+// Calendario oficial (Ley 51 de 1983 + Ley 2578 de 2026). Si una ley crea o
+// quita un festivo, esta lista se actualiza junto con LEYES_NUEVAS.
+const OFICIAL: Record<number, string[]> = {
+  2025: ['01-01', '01-06', '03-24', '04-17', '04-18', '05-01', '06-02', '06-23', '06-30', '07-20', '08-07', '08-18', '10-13', '11-03', '11-17', '12-08', '12-25'],
+  2026: ['01-01', '01-12', '03-23', '04-02', '04-03', '05-01', '05-18', '06-08', '06-15', '06-29', '07-13', '07-20', '08-07', '08-17', '10-12', '11-02', '11-16', '12-08', '12-25'],
+  2027: ['01-01', '01-11', '03-22', '03-25', '03-26', '05-01', '05-10', '05-31', '06-07', '07-05', '07-12', '07-20', '08-07', '08-16', '10-18', '11-01', '11-15', '12-08', '12-25'],
+}
+
+describe('calendario oficial de festivos', () => {
+  for (const [anio, fechas] of Object.entries(OFICIAL)) {
+    it(`${anio} coincide con el calendario oficial`, () => {
+      const calc = [...festivosDeRango(Number(anio), Number(anio))].map((f) => f.slice(5)).sort()
+      expect(calc).toEqual(fechas)
+    })
+  }
+
+  it('la Virgen de Chiquinquirá (Ley 2578) rige desde 2026, no hacia atrás', () => {
+    expect(festivosDeRango(2026, 2026).has('2026-07-13')).toBe(true)
+    expect(festivosDeRango(2025, 2025).has('2025-07-14')).toBe(false)
+    expect(festivosDelAnio(2026).find((f) => f.fecha === '2026-07-13')?.ley).toBe('Ley 2578 de 2026')
+  })
+
+  it('las excepciones agregan o quitan y se ven en la lista del año', () => {
+    const lista = festivosDelAnio(2026, [
+      { fecha: '2026-07-13', tipo: 'REMOVE' },
+      { fecha: '2026-09-01', tipo: 'ADD', nombre: 'Decreto de prueba' },
+    ])
+    expect(lista.find((f) => f.fecha === '2026-07-13')?.origen).toBe('quitado')
+    expect(lista.find((f) => f.fecha === '2026-09-01')).toMatchObject({ nombre: 'Decreto de prueba', origen: 'agregado' })
+    expect(festivosDeRango(2026, 2026, [{ fecha: '2026-07-13', tipo: 'REMOVE' }]).has('2026-07-13')).toBe(false)
   })
 })

@@ -1,6 +1,5 @@
 import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { Encabezado } from '@/components/shell/encabezado'
 import { TiposDocumentoCliente } from './tipos-cliente'
 
 export const metadata = { title: 'Tipos de documento · Configuración' }
@@ -21,10 +20,7 @@ export default async function TiposDocumentoPage() {
 
   return (
     <div>
-      <Encabezado
-        titulo="Tipos de documento"
-        descripcion="Catálogo de documentos del expediente y cuáles son obligatorios según el tipo de vínculo. Los que llevan vencimiento alimentan las alertas y el tablero de vencimientos."
-      />
+      {/* El encabezado lo pone el cliente: ahí vive el + que abre el diálogo. */}
       <TiposDocumentoCliente
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}

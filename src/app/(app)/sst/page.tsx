@@ -2,6 +2,7 @@ import { requerirPermiso, tienePermiso, alcanceDe } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { sedeActualId } from '@/server/sede-actual'
 import { hoyBogota, formatFechaISO } from '@/lib/fechas'
+import { urlFoto } from '@/lib/foto'
 import { SstCliente } from './sst-cliente'
 
 export const metadata = { title: 'SST · Smart Gadgets RH' }
@@ -61,7 +62,7 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
     prisma.cargo.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' }, select: { id: true, nombre: true } }),
     prisma.sede.findMany({ where: { activa: true }, orderBy: { nombre: 'asc' }, select: { id: true, nombre: true } }),
     prisma.planEmergencia.findMany({ where: { activo: true, ...fSede }, orderBy: { creadoEn: 'desc' } }),
-    prisma.brigadista.findMany({ where: { activo: true, ...fSede }, include: { colaborador: { select: { nombres: true, apellidos: true } } }, orderBy: { creadoEn: 'desc' } }),
+    prisma.brigadista.findMany({ where: { activo: true, ...fSede }, include: { colaborador: { select: { nombres: true, apellidos: true, fotoPath: true } } }, orderBy: { creadoEn: 'desc' } }),
     prisma.simulacro.findMany({ where: fSede, orderBy: { fecha: 'desc' }, take: 40 }),
     prisma.inspeccionSst.findMany({ where: fSede, orderBy: { fecha: 'desc' }, take: 80 }),
     prisma.documentoLegal.findFirst({ where: { esSgSst: true } }),
@@ -227,6 +228,7 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
         }))}
         brigadistas={brigadistas.map((b) => ({
           id: b.id, colaborador: `${b.colaborador.nombres} ${b.colaborador.apellidos}`, rol: b.rol,
+          fotoUrl: urlFoto(b.colaboradorId, b.colaborador.fotoPath, true),
           sede: b.sedeId ? (sedeNombre.get(b.sedeId) ?? null) : null,
         }))}
         simulacros={simulacros.map((s) => ({

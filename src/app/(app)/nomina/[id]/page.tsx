@@ -14,6 +14,8 @@ import { fmtCOP } from '@/lib/moneda'
 import { TIPO_CUENTA } from '@/lib/etiquetas'
 import { formatFechaCorta, hoyBogotaISO } from '@/lib/fechas'
 import { PagarPersona } from './pagar-persona'
+import { CONTRATOS_DE_NOMINA, vinculoDeContrato } from '@/lib/vinculo-contrato'
+import { AvisoFuera } from './aviso-fuera'
 import { AccionesPeriodo } from './acciones-cliente'
 
 export const metadata = { title: 'Periodo de nómina · Smart Gadgets RH' }
@@ -39,7 +41,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
           // colaboradores.
           detalles: { where: { conceptoCodigo: 'HORAS_EXTRA' }, select: { valor: true } },
         },
-        orderBy: { colaborador: { apellidos: 'asc' } },
+        orderBy: [{ colaborador: { nombres: 'asc' } }, { colaborador: { apellidos: 'asc' } }],
       },
     },
   })
@@ -64,6 +66,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
     { devengado: 0, deducido: 0, neto: 0 },
   )
 
+  // Por nombre, como se muestra (nombres y luego apellidos), sin importar mayúsculas ni tildes.
   const filas: Fila[] = periodo.liquidaciones.map((l) => ({
     id: l.id,
     colaboradorId: l.colaboradorId,
@@ -83,7 +86,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
     pagadoEn: l.pagadoEn ? formatFechaCorta(l.pagadoEn) : null,
     pagadoISO: l.pagadoEn ? l.pagadoEn.toISOString().slice(0, 10) : null,
     comprobanteId: l.comprobantePagoId,
-  }))
+  })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
   // Con el periodo cerrado se paga persona por persona, cada una con su comprobante.
   const conPagos = periodo.estado === 'CERRADA' || periodo.estado === 'PAGADA'
   const pagados = filas.filter((l) => l.pagadoEn).length
@@ -99,6 +102,13 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
       })
     : null
 
+  // Quién trabaja con vínculo laboral y NO entra en esta nómina. La nómina solo
+  // liquida a quien tiene contrato laboral cargado, y antes lo hacía en silencio:
+  // a quien le faltaba el contrato no se le pagaba y nadie se enteraba. Se avisa
+  // mientras el periodo siga abierto, que es cuando todavía se puede corregir.
+  const abierto = periodo.estado !== 'CERRADA' && periodo.estado !== 'PAGADA'
+  const fuera = abierto && puedeOperar && !sinCalcular ? await colaboradoresFuera(periodo) : []
+
   return (
     <div className="max-w-7xl">
       <Encabezado
@@ -107,6 +117,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
         descripcion={`Periodo ${periodo.tipo === 'QUINCENAL' ? 'quincenal' : 'mensual'} · ${periodo.diasPeriodo} días`}
         acciones={
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {fuera.length > 0 && <AvisoFuera fuera={fuera} />}
             <Pill tone={TONO[periodo.estado] ?? 'muted'}>{ESTADO[periodo.estado]}</Pill>
             <AccionesPeriodo
               periodoId={periodo.id}
@@ -315,3 +326,40 @@ function LineaNovedades({ colaboradores, comisiones, totalComisiones, horas, con
     </div>
   )
 }
+
+/** Vínculos que se pagan por nómina (los de los contratos que liquida el motor). */
+const VINCULOS_DE_NOMINA = CONTRATOS_DE_NOMINA.map((t) => vinculoDeContrato(t))
+
+/**
+ * Colaboradores activos con vínculo laboral en el periodo que no quedaron
+ * liquidados, con el motivo. Quien tiene un contrato que empieza después del
+ * periodo no se cuenta: todavía no le tocaba (p. ej. pasó de OPS a laboral).
+ */
+async function colaboradoresFuera(periodo: { id: string; fechaFin: Date }): Promise<{ id: string; nombre: string; motivo: string }[]> {
+  const candidatos = await prisma.colaborador.findMany({
+    where: {
+      estado: 'ACTIVO',
+      tipoVinculo: { in: VINCULOS_DE_NOMINA },
+      fechaIngreso: { lte: periodo.fechaFin },
+      OR: [{ fechaRetiro: null }, { fechaRetiro: { gt: periodo.fechaFin } }],
+      liquidaciones: { none: { periodoId: periodo.id } },
+    },
+    select: {
+      id: true, nombres: true, apellidos: true,
+      contratos: { where: { tipo: { in: [...CONTRATOS_DE_NOMINA] } }, orderBy: { fechaInicio: 'desc' }, select: { estado: true, fechaInicio: true } },
+    },
+    orderBy: [{ nombres: 'asc' }, { apellidos: 'asc' }],
+  })
+  const fuera: { id: string; nombre: string; motivo: string }[] = []
+  for (const c of candidatos) {
+    const enPeriodo = c.contratos.filter((k) => k.fechaInicio <= periodo.fechaFin)
+    if (enPeriodo.length === 0 && c.contratos.length > 0) continue
+    const motivo = enPeriodo.length === 0 ? 'sin contrato'
+      : enPeriodo.some((k) => k.estado === 'ACTIVO' || k.estado === 'TERMINADO') ? 'contrato cargado después del cálculo'
+      : `contrato ${ESTADO_CONTRATO[enPeriodo[0].estado] ?? enPeriodo[0].estado.toLowerCase()}`
+    fuera.push({ id: c.id, nombre: `${c.nombres} ${c.apellidos}`, motivo })
+  }
+  return fuera
+}
+
+const ESTADO_CONTRATO: Record<string, string> = { BORRADOR: 'en borrador', SUSPENDIDO: 'suspendido' }

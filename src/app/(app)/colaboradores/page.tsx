@@ -32,7 +32,7 @@ export default async function ColaboradoresPage({
     prisma.colaborador.findMany({
       where: filtros,
       include: { cargo: true, sede: { include: { ciudad: true } } },
-      orderBy: [{ apellidos: 'asc' }, { nombres: 'asc' }],
+      orderBy: [{ nombres: 'asc' }, { apellidos: 'asc' }],
       take: 200,
     }),
     prisma.colaborador.groupBy({
@@ -41,6 +41,9 @@ export default async function ColaboradoresPage({
       _count: true,
     }),
   ])
+  // Por nombre, como se muestra (nombres y luego apellidos), sin importar mayúsculas ni tildes.
+  const porNombre = (x: { nombres: string; apellidos: string }) => `${x.nombres} ${x.apellidos}`
+  colaboradores.sort((a, b) => porNombre(a).localeCompare(porNombre(b), 'es', { sensitivity: 'base' }))
 
   const totalPorVinculo: Record<string, number> = {}
   let total = 0

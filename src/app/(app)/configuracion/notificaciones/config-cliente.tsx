@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Bell, Mail, MessageSquare } from 'lucide-react'
+import { Mail, MessageSquare } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
+import { Ayuda } from '@/components/ui-kit/ayuda'
 import { EVENTOS_NOTIF, type ClaveEvento } from '@/lib/notificaciones/catalogo'
 import { configurarPopupEvento, configurarCorreoEvento } from './acciones'
 
@@ -50,46 +51,46 @@ export function ConfigNotificaciones({
   }
 
   return (
-    <div className="space-y-6">
-      {/* La campana no tiene interruptor porque no se puede apagar: es el
-          registro del aviso, y sin él no quedaría rastro de que se notificó. */}
-      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5"><Bell className="size-3.5" /> Campana y celular: siempre</span>
-        <span className="flex items-center gap-1.5"><MessageSquare className="size-3.5" /> Pop-up en pantalla</span>
-        <span className="flex items-center gap-1.5"><Mail className="size-3.5" /> Correo</span>
-      </p>
-
+    <div className="space-y-5">
       {porModulo().map(([modulo, eventos]) => (
         <section key={modulo}>
-          <h2 className="mb-2 text-sm font-medium uppercase tracking-wider text-muted-foreground">{modulo}</h2>
-          <Card>
+          {/* Los íconos de las columnas van en la línea del módulo, alineados
+              con los interruptores: globo = pop-up, sobre = correo. La campana no
+              tiene interruptor porque no se puede apagar: es el registro del
+              aviso, y sin él no quedaría rastro de que se notificó. */}
+          <div className="mb-1.5 flex items-end gap-3 px-3 text-muted-foreground sm:px-4">
+            <h2 className="min-w-0 flex-1 truncate text-sm font-medium uppercase tracking-wider">{modulo}</h2>
+            <span className="grid w-8 place-items-center" title="Pop-up en pantalla">
+              <MessageSquare className="size-4" aria-hidden /><span className="sr-only">Pop-up</span>
+            </span>
+            <span className="grid w-8 place-items-center" title="Correo">
+              <Mail className="size-4" aria-hidden /><span className="sr-only">Correo</span>
+            </span>
+          </div>
+          <Card className="py-0">
             <CardContent className="divide-y p-0">
               {eventos.map((e) => (
-                <div key={e.clave} className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 transition-colors hover:bg-accent/40">
-                  <div className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium">{e.etiqueta}</span>
-                    <span className="block text-xs text-muted-foreground">{e.descripcion}</span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-5">
-                    <label className="flex items-center gap-2" htmlFor={`pop-${e.clave}`}>
-                      <MessageSquare className="size-4 text-muted-foreground" />
-                      <Switch
-                        id={`pop-${e.clave}`}
-                        checked={popup[e.clave] ?? true}
-                        onCheckedChange={(v) => alternarPopup(e.clave, v)}
-                        aria-label={`Pop-up de ${e.etiqueta}`}
-                      />
-                    </label>
-                    <label className="flex items-center gap-2" htmlFor={`mail-${e.clave}`}>
-                      <Mail className="size-4 text-muted-foreground" />
-                      <Switch
-                        id={`mail-${e.clave}`}
-                        checked={correo[e.clave] ?? false}
-                        onCheckedChange={(v) => alternarCorreo(e.clave, v)}
-                        aria-label={`Correo de ${e.etiqueta}`}
-                      />
-                    </label>
-                  </div>
+                <div key={e.clave} className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/40 sm:px-4">
+                  <p className="min-w-0 flex-1 text-sm font-medium leading-snug">
+                    {e.etiqueta}
+                    <span className="ml-1.5 inline-flex align-[-2px]">
+                      <Ayuda texto={e.descripcion} etiqueta={`Sobre ${e.etiqueta.toLowerCase()}`} />
+                    </span>
+                  </p>
+                  <span className="grid w-8 shrink-0 place-items-center">
+                    <Switch
+                      checked={popup[e.clave] ?? true}
+                      onCheckedChange={(v) => alternarPopup(e.clave, v)}
+                      aria-label={`Pop-up de ${e.etiqueta}`} title="Pop-up"
+                    />
+                  </span>
+                  <span className="grid w-8 shrink-0 place-items-center">
+                    <Switch
+                      checked={correo[e.clave] ?? false}
+                      onCheckedChange={(v) => alternarCorreo(e.clave, v)}
+                      aria-label={`Correo de ${e.etiqueta}`} title="Correo"
+                    />
+                  </span>
                 </div>
               ))}
             </CardContent>

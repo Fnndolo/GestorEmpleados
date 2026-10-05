@@ -26,7 +26,7 @@ const iso = (d: Date) => d.toISOString().slice(0, 10)
 
 /** ¿Está conectada AsistencIA para esta empresa? */
 export async function asistenciaConfigurada(): Promise<boolean> {
-  return (await conexionAsistencia()) !== null
+  return (await conexionAsistencia('horas')) !== null
 }
 
 export type NovedadDesdeTramo = {

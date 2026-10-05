@@ -46,8 +46,10 @@ function mesesRecientes(hoy: string): { valor: string; etiqueta: string }[] {
   })
 }
 
-export function PanelAsistencia({ conectada, esAdmin, hoy }: {
+export function PanelAsistencia({ conectada, apagada, esAdmin, hoy }: {
   conectada: boolean
+  /** Hay clave, pero compartir horas está apagado en Integraciones. */
+  apagada: boolean
   /** Solo el administrador ve el acceso a Ajustes → Integraciones. */
   esAdmin: boolean
   hoy: string
@@ -114,12 +116,14 @@ export function PanelAsistencia({ conectada, esAdmin, hoy }: {
           {!conectada ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">
-                {esAdmin
+                {apagada
+                  ? 'Compartir horas trabajadas con AsistencIA está apagado en Ajustes → Integraciones: las horas extra se registran a mano.'
+                  : esAdmin
                   ? 'Conecta la clave de API de la empresa en Ajustes → Integraciones para ver aquí las horas extra de cada período y traerlas a la nómina.'
                   : 'Pide al administrador que conecte AsistencIA en Ajustes → Integraciones.'}
               </p>
               {esAdmin && (
-                <Button size="sm" asChild><Link href="/configuracion/integraciones"><KeyRound className="size-4" /> Conectar</Link></Button>
+                <Button size="sm" asChild><Link href="/configuracion/integraciones"><KeyRound className="size-4" /> {apagada ? 'Ver Integraciones' : 'Conectar'}</Link></Button>
               )}
             </div>
           ) : (

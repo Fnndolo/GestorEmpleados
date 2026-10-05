@@ -1,7 +1,6 @@
 import { requerirPermiso } from '@/server/sesion'
 import { tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
-import { Encabezado } from '@/components/shell/encabezado'
 import { SedesCliente } from './sedes-cliente'
 
 export const metadata = { title: 'Sedes y ciudades · Configuración' }
@@ -24,10 +23,6 @@ export default async function SedesPage() {
 
   return (
     <div>
-      <Encabezado
-        titulo="Sedes y ciudades"
-        descripcion="Toda la información de la plataforma puede filtrarse por sede y ciudad."
-      />
       <SedesCliente
         sedes={sedes.map((s) => ({
           id: s.id,

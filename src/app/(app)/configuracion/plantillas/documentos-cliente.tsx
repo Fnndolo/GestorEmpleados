@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import {
-  FileSignature, FileText, Receipt, ScrollText, Pencil, Eye, FileBadge, Laptop, Undo2, Shirt, HardHat, Clock, FileCheck2, Calculator, DoorOpen, MailCheck, MailX, CalendarX2, Handshake, Stethoscope, type LucideIcon } from 'lucide-react'
+  FileSignature, FileText, Receipt, ScrollText, Pencil, Eye, FileBadge, Laptop, Undo2, Shirt, HardHat, Clock, FileCheck2, Calculator, DoorOpen, CalendarClock, MailCheck, MailX, CalendarX2, Handshake, Stethoscope, type LucideIcon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -65,6 +65,7 @@ const ICONO_TEXTO: Record<ClaveTexto, LucideIcon> = {
   ACTA_MUTUO_ACUERDO: Handshake,
   ORDEN_EXAMEN_EGRESO: Stethoscope,
   CUENTA_COBRO: Receipt,
+  CAMBIO_HORARIO: CalendarClock,
 }
 
 function filaTexto(clave: ClaveTexto): Fila {
@@ -97,6 +98,7 @@ const GRUPOS: { titulo: string; filas: Fila[] }[] = [
         muestra: '/api/configuracion/membrete/muestra?tipo=autorizacion-laboral',
       },
       filaTexto('CUENTA_COBRO'),
+      filaTexto('CAMBIO_HORARIO'),
     ],
   },
   { titulo: 'Certificaciones', filas: [filaTexto('CERTIFICACION_LABORAL'), filaTexto('CERTIFICACION_CONTRACTUAL')] },

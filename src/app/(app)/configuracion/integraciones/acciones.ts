@@ -9,6 +9,7 @@ import { esAdministrador } from '@/lib/permisos/tipos'
 import { hoyBogotaISO } from '@/lib/fechas'
 import { ASISTENCIA_URL_DEFECTO, ErrorAsistencia, conexionAsistencia, resumenAsistencia } from '@/server/asistencia/cliente'
 import { sincronizarFotosAsistencia } from '@/server/asistencia/fotos-asistencia'
+import { CAMPO_COMPARTIDO } from '@/lib/integraciones'
 
 /**
  * La clave de API de AsistencIA la conecta y la quita SOLO el administrador:
@@ -60,6 +61,7 @@ export const enviarFotosAsistencia = accion(
   async (_, usuario) => {
     soloAdmin(usuario)
     if (!(await conexionAsistencia())) throw new ErrorNegocio('Conecta primero AsistencIA.')
+    if (!(await conexionAsistencia('fotos'))) throw new ErrorNegocio('Compartir fotos de perfil está apagado: enciéndelo primero.')
     return sincronizarFotosAsistencia()
   },
 )
@@ -74,6 +76,23 @@ export const desconectarAsistencia = accion(
     }
     revalidatePath('/configuracion/integraciones')
     revalidatePath('/nomina/novedades')
+    return { ok: true }
+  },
+)
+
+/** Enciende o apaga un tipo de dato compartido con AsistencIA (las dos direcciones). */
+export const cambiarDatoCompartido = accion(
+  {
+    modulo: 'configuracion',
+    accion: 'EDITAR',
+    schema: z.object({ dato: z.enum(['colaboradores', 'fotos', 'horas', 'horarios']), activo: z.boolean() }),
+  },
+  async (d, usuario) => {
+    if (!esAdministrador(usuario)) throw new ErrorNegocio('Solo el administrador decide qué se comparte con AsistencIA.')
+    const actual = await prisma.configuracionEmpresa.findFirst()
+    if (!actual) throw new ErrorNegocio('Configura primero los datos de la empresa en Ajustes → Empresa.')
+    await dbAuditado.configuracionEmpresa.update({ where: { id: actual.id }, data: { [CAMPO_COMPARTIDO[d.dato]]: d.activo } })
+    revalidatePath('/', 'layout')
     return { ok: true }
   },
 )

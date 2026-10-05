@@ -7,6 +7,7 @@ import { publicarVencimientosOpsFaltantes } from '@/server/vencimientos/contrato
 import { alertarComprobantesPermisoVencidos } from '@/server/comprobante-permiso'
 import { recordarCumpleanosProximos } from '@/server/cumpleanos'
 import { limpiarDepositoTemporal } from '@/server/archivos-temporales'
+import { sincronizarHorariosPendientes } from '@/server/horarios'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -47,7 +48,10 @@ export async function GET(req: NextRequest) {
     // cerró el formulario, falló el alta, se cambió de archivo): sin esto se
     // quedan en el almacenamiento para siempre.
     const temporalesBorrados = await limpiarDepositoTemporal().catch(() => 0)
-    return NextResponse.json({ ok: true, ...resumen, opsFaltantes, vacaciones, dotacion, induccion, contratosVencidos, comprobantesPermiso, cumpleanos, temporalesBorrados })
+    // Horarios que empiezan hoy (o que no pudieron llegar antes): a AsistencIA,
+    // que calcula las horas extra con ellos.
+    const horarios = await sincronizarHorariosPendientes().catch(() => ({ enviados: 0, fallidos: 0 }))
+    return NextResponse.json({ ok: true, ...resumen, opsFaltantes, vacaciones, dotacion, induccion, contratosVencidos, comprobantesPermiso, cumpleanos, temporalesBorrados, horarios })
   } catch (e) {
     console.error('Error en cron de alertas:', e)
     return NextResponse.json({ error: 'Fallo en el procesamiento' }, { status: 500 })

@@ -1,6 +1,7 @@
 import { tramiteAplica, NoAplica } from '../no-aplica'
 import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
+import { NOMINA_VISIBLE } from '@/lib/nomina/visibilidad'
 import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { Receipt, Download, FileCheck2 } from 'lucide-react'
@@ -29,7 +30,8 @@ export default async function MisDesprendiblesPage() {
   }
 
   const liquidaciones = await prisma.liquidacionNomina.findMany({
-    where: { colaboradorId: usuario.colaboradorId, documentoId: { not: null } },
+    // Solo de nóminas aprobadas: antes los valores todavía pueden cambiar.
+    where: { colaboradorId: usuario.colaboradorId, documentoId: { not: null }, periodo: { estado: { in: [...NOMINA_VISIBLE] } } },
     include: { periodo: { select: { nombre: true, fechaFin: true } } },
     orderBy: { periodo: { fechaFin: 'desc' } },
     take: 120,

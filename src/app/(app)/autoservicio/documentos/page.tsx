@@ -1,5 +1,6 @@
 import { requerirPermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
+import { NOMINA_VISIBLE } from '@/lib/nomina/visibilidad'
 import { documentosRequeridosDe, TIPO_CONTRATO_FIRMADO } from '@/server/expediente'
 import { formatFechaCorta, formatFechaISO } from '@/lib/fechas'
 import { Encabezado } from '@/components/shell/encabezado'
@@ -25,7 +26,11 @@ export default async function MisDocumentosPage() {
   const [colab, documentos, tipos, contratosOps] = await Promise.all([
     prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { tipoVinculo: true, cargoId: true } }),
     prisma.documento.findMany({
-      where: { entidadTipo: 'Colaborador', entidadId: usuario.colaboradorId },
+      where: {
+        entidadTipo: 'Colaborador', entidadId: usuario.colaboradorId,
+        // El desprendible de una nómina sin aprobar todavía no es suyo para ver.
+        NOT: { id: { in: await desprendiblesSinAprobar(usuario.colaboradorId) } },
+      },
       include: { tipoDocumento: { select: { id: true, nombre: true } } },
       orderBy: { creadoEn: 'desc' },
     }),
@@ -122,4 +127,12 @@ export default async function MisDocumentosPage() {
       />
     </div>
   )
+}
+
+async function desprendiblesSinAprobar(colaboradorId: string): Promise<string[]> {
+  const liqs = await prisma.liquidacionNomina.findMany({
+    where: { colaboradorId, documentoId: { not: null }, periodo: { estado: { notIn: [...NOMINA_VISIBLE] } } },
+    select: { documentoId: true },
+  })
+  return liqs.map((l) => l.documentoId!)
 }

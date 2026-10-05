@@ -6,10 +6,11 @@
  */
 
 import { fmtCOP } from '@/lib/moneda'
+import { NOMBRE_DIA, ORDEN_DIAS, horasSemana, resumenHorario, textoFranja, textoHoras, type DiasHorario } from '@/lib/horarios'
 import {
-  variablesActaActivo, variablesDesprendible, variablesCuentaCobro, variablesActaDotacion, variablesActaEpp, variablesCertificacion, variablesOrdenPago, variablesPazYSalvo, variablesLiquidacion, variablesCarta,
+  variablesActaActivo, variablesDesprendible, variablesCuentaCobro, variablesCambioHorario, variablesActaDotacion, variablesActaEpp, variablesCertificacion, variablesOrdenPago, variablesPazYSalvo, variablesLiquidacion, variablesCarta,
   type ClaveTexto, type DatosVarsActaActivo, type DatosVarsActaDotacion, type DatosVarsActaEpp, type DatosVarsPazYSalvo, type DatosVarsLiquidacion, type DatosVarsCarta,
-  type DatosVarsCertificacion, type DatosVarsOrdenPago, type DatosVarsDesprendible, type DatosVarsCuentaCobro, type EmpresaTexto, type TipoCertificacion,
+  type DatosVarsCertificacion, type DatosVarsOrdenPago, type DatosVarsDesprendible, type DatosVarsCuentaCobro, type DatosVarsCambioHorario, type EmpresaTexto, type TipoCertificacion,
 } from './textos'
 
 export const MUESTRA_PERSONA = {
@@ -223,6 +224,28 @@ const ETIQUETA_HORA: Record<string, string> = { HED: 'Diurna', HEN: 'Nocturna', 
 const FIRMA_COLABORADOR = { nombre: MUESTRA_PERSONA.nombre, detalle: 'Colaborador · firmado digitalmente el (fecha de la firma)', conFirma: true }
 
 /** Variables, tabla y bloques fijos de la muestra de un texto, con la variante pedida. */
+/** Horario de muestra: tienda de lunes a sábado. */
+export const HORARIO_MUESTRA: DiasHorario = {
+  ...Object.fromEntries((['1', '2', '3', '4', '5'] as const).map((d) => [d, { entrada: '08:00', salida: '18:00', almuerzo_min: 60, almuerzo_desde: '13:00', almuerzo_hasta: '14:00' }])),
+  '6': { entrada: '08:00', salida: '13:00', almuerzo_min: 0 },
+}
+
+/** Cambio de horario de muestra: de jornada de oficina a la de tienda. */
+export function muestraCambioHorario(empresa: EmpresaTexto): DatosVarsCambioHorario {
+  return {
+    colaborador: { nombre: MUESTRA_PERSONA.nombre, documento: MUESTRA_PERSONA.documento, cargo: MUESTRA_PERSONA.cargo },
+    empresa,
+    ciudad: MUESTRA_PERSONA.ciudad,
+    fecha: FECHA_MUESTRA,
+    desde: new Date(Date.UTC(2026, 0, 19)),
+    horario: 'Tienda lunes a sábado',
+    resumen: resumenHorario(HORARIO_MUESTRA),
+    horasSemana: textoHoras(horasSemana(HORARIO_MUESTRA)),
+    anterior: 'Lun–Vie 07:00–16:00',
+    motivo: 'Apertura del horario extendido de la tienda.',
+  }
+}
+
 /** Cuenta de cobro de muestra: un contratista ficticio que cobra un mes de honorarios. */
 export function muestraCuentaCobro(empresa: EmpresaTexto & { direccion?: string | null; emailContacto?: string | null }): DatosVarsCuentaCobro {
   return {
@@ -373,6 +396,14 @@ export function muestraTexto(clave: ClaveTexto, variante: string, empresa: Empre
       const firmaTH = { nombre: 'Talento Humano', detalle: 'Firmado electrónicamente el (fecha de envío)', conFirma: clave !== 'ORDEN_EXAMEN_EGRESO' }
       const firmas = clave === 'CARTA_RENUNCIA' ? [FIRMA_COLABORADOR] : clave === 'ORDEN_EXAMEN_EGRESO' ? [firmaTH] : [firmaTH, FIRMA_COLABORADOR]
       return { vars: variablesCarta(muestraCarta(empresa)), tabla: null, fijos: { cabecera: 'membrete', firmas, pie } }
+    }
+    case 'CAMBIO_HORARIO': {
+      const vars = variablesCambioHorario(muestraCambioHorario(empresa))
+      return {
+        vars,
+        tabla: { tipo: 'pares', pares: ORDEN_DIAS.map((d): [string, string] => [NOMBRE_DIA[d], HORARIO_MUESTRA[d] ? textoFranja(HORARIO_MUESTRA[d]) : 'Descanso']) },
+        fijos: { cabecera: 'membrete', firmas: [firmaEmpresa('Talento Humano')], pie },
+      }
     }
     case 'CUENTA_COBRO': {
       // La firma va dentro del texto (`[firma]`), no al final: por eso no hay firmas fijas.

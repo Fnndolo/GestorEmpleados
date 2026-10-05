@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Pencil } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { crearTipoDocumento, editarTipoDocumento, alternarTipoDocumento, eliminarTipoDocumento } from './acciones'
 import type { TipoDocumentoInput } from '@/lib/validaciones/catalogos'
 import { Ayuda } from '@/components/ui-kit/ayuda'
+import { BotonAgregar } from '@/components/ui-kit/boton-agregar'
+import { Encabezado } from '@/components/shell/encabezado'
+import { cn } from '@/lib/utils'
 
 type Vinculo = TipoDocumentoInput['vinculosObligatorios'][number]
 type Tipo = {
@@ -36,12 +39,28 @@ const VINCULOS: { v: Vinculo; l: string }[] = [
 ]
 
 const NIVELES: { v: string; l: string }[] = [
-  { v: 'GENERAL', l: 'General — cualquiera con acceso al expediente' },
+  { v: 'GENERAL', l: 'General' },
   { v: 'RRHH', l: 'Talento Humano' },
   { v: 'SST_MEDICO', l: 'SST / médico (dato sensible)' },
   { v: 'JURIDICA', l: 'Jurídica' },
   { v: 'ADMIN', l: 'Solo administrador' },
 ]
+/** Nombre corto del nivel para la línea de detalle de la lista. */
+const NIVEL_CORTO: Record<string, string> = {
+  RRHH: 'Talento Humano', SST_MEDICO: 'SST / médico', JURIDICA: 'Jurídica', ADMIN: 'Solo administrador',
+}
+
+const plural = (n: number, palabra: string) => `${n} ${palabra}${n === 1 ? '' : 's'}`
+
+/** Una sola línea con lo que antes eran insignias y texto suelto. */
+function detalle(t: Tipo) {
+  return [
+    t.vinculosObligatorios.length > 0 ? `Obligatorio en ${plural(t.vinculosObligatorios.length, 'vínculo')}` : 'Opcional',
+    t.requiereVencimiento && 'Con vencimiento',
+    NIVEL_CORTO[t.nivelAcceso],
+    t.documentos > 0 && plural(t.documentos, 'cargado'),
+  ].filter(Boolean).join(' · ')
+}
 
 type Formulario = {
   nombre: string; descripcion: string; requiereVencimiento: boolean; nivelAcceso: string
@@ -126,46 +145,48 @@ export function TiposDocumentoCliente({
 
   return (
     <>
-      {puedeCrear && (
-        <div className="mb-3 flex justify-end">
-          <Button size="sm" onClick={abrirNuevo}><Plus className="size-4" /> Nuevo tipo</Button>
-        </div>
-      )}
+      <Encabezado
+        enLinea
+        titulo="Tipos de documento"
+        ayuda="El catálogo del expediente y cuáles son obligatorios según el tipo de vínculo. Los que vencen alimentan las alertas y el tablero de vencimientos."
+        acciones={puedeCrear && <BotonAgregar etiqueta="Nuevo tipo de documento" onClick={abrirNuevo} />}
+      />
 
-      <Card><CardContent className="p-0 divide-y">
+      <Card className="py-0"><CardContent className="divide-y p-0">
         {tipos.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">
-            Aún no hay tipos de documento. Crea el primero para armar el expediente.
-          </p>
+          <p className="py-10 text-center text-sm text-muted-foreground">Aún no hay tipos de documento.</p>
         ) : tipos.map((t) => (
-          <div key={t.id} className="flex items-center gap-3 p-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-medium">{t.nombre}</p>
+          <div key={t.id} className="flex items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
+            <div className={cn('min-w-0 flex-1', !t.activo && 'opacity-60')}>
+              <p className="flex items-center gap-1.5 text-sm font-medium">
+                {/* Dos renglones en el celular: truncado a uno, varios nombres
+                    ("Certificado de afiliación…") se verían iguales. */}
+                <span className="line-clamp-2 sm:line-clamp-1" title={t.nombre}>{t.nombre}</span>
                 {!t.activo && <Badge variant="secondary">Inactivo</Badge>}
-                {t.requiereVencimiento && <Badge variant="outline">Con vencimiento</Badge>}
-                {t.nivelAcceso !== 'GENERAL' && <Badge variant="outline">{t.nivelAcceso}</Badge>}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {t.vinculosObligatorios.length > 0
-                  ? `Obligatorio en ${t.vinculosObligatorios.length} tipo(s) de vínculo`
-                  : 'Opcional en todos los vínculos'}
-                {t.documentos > 0 && ` · ${t.documentos} cargado(s)`}
               </p>
+              <p className="truncate text-xs text-muted-foreground" title={detalle(t)}>{detalle(t)}</p>
             </div>
             {puedeEditar && (
               <>
-                <Switch checked={t.activo} onCheckedChange={() => alternar(t)} />
-                <Button size="sm" onClick={() => abrirEditar(t)}>
-                  <Pencil className="size-4" /> Editar
+                <Switch
+                  checked={t.activo} onCheckedChange={() => alternar(t)}
+                  aria-label={`${t.activo ? 'Desactivar' : 'Activar'} ${t.nombre}`} title={t.activo ? 'Activo' : 'Inactivo'}
+                />
+                <Button variant="ghost" size="icon" onClick={() => abrirEditar(t)} aria-label={`Editar ${t.nombre}`} title="Editar">
+                  <Pencil className="size-4" />
                 </Button>
               </>
             )}
+            {/* Caja de ancho fijo: la papelera bloqueada mide distinto que la activa
+                y descuadraba la columna de interruptores. */}
             {puedeEliminar && (
-              <BotonEliminar
-                onEliminar={() => eliminar(t)}
-                motivoBloqueo={t.documentos > 0 ? `No se puede eliminar: hay ${t.documentos} documento(s) cargado(s) de este tipo. Desactívalo si ya no se debe usar.` : null}
-              />
+              <span className="grid w-9 shrink-0 place-items-center">
+                <BotonEliminar
+                  onEliminar={() => eliminar(t)}
+                  etiqueta={`Eliminar ${t.nombre}`}
+                  motivoBloqueo={t.documentos > 0 ? `No se puede eliminar: hay ${t.documentos} documento(s) cargado(s) de este tipo. Desactívalo si ya no se debe usar.` : null}
+                />
+              </span>
             )}
           </div>
         ))}
@@ -178,17 +199,17 @@ export function TiposDocumentoCliente({
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Nombre</Label>
+              <Label>Nombre <span className="text-destructive">*</span></Label>
               <Input value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} autoFocus />
             </div>
             <div className="space-y-1.5">
-              <Label>Descripción (opcional)</Label>
+              <Label>Descripción</Label>
               <Textarea rows={2} value={f.descripcion} onChange={(e) => setF({ ...f, descripcion: e.target.value })} />
             </div>
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5">
                 Nivel de acceso
-                <Ayuda texto="Restringe quién puede ver los archivos de este tipo dentro del expediente." etiqueta="Sobre el nivel de acceso" />
+                <Ayuda texto="Restringe quién puede ver los archivos de este tipo dentro del expediente. General: cualquiera con acceso al expediente." etiqueta="Sobre el nivel de acceso" />
               </Label>
               <Select value={f.nivelAcceso} onValueChange={(v) => setF({ ...f, nivelAcceso: v })}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
@@ -209,8 +230,8 @@ export function TiposDocumentoCliente({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-1.5">
-                    Primera alerta (días antes)
-                    <Ayuda texto="Déjalo vacío para usar los días configurados en Reglas de alerta." etiqueta="Sobre los días de alerta" />
+                    Primera alerta
+                    <Ayuda texto="Días antes del vencimiento en que se avisa. Vacío: usa los de Reglas de alerta." etiqueta="Sobre los días de alerta" />
                   </Label>
                   <Input
                     type="number" min={1} max={365} value={f.diasPrimeraAlerta}
@@ -219,7 +240,7 @@ export function TiposDocumentoCliente({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Última alerta (días antes)</Label>
+                  <Label>Última alerta</Label>
                   <Input
                     type="number" min={1} max={365} value={f.diasUltimaAlerta}
                     onChange={(e) => setF({ ...f, diasUltimaAlerta: e.target.value })}

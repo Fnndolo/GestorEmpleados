@@ -1,9 +1,11 @@
 import { cn } from '@/lib/utils'
 import { BotonVolver } from '@/components/shell/volver'
+import { Ayuda } from '@/components/ui-kit/ayuda'
 
 export function Encabezado({
   titulo,
   descripcion,
+  ayuda,
   acciones,
   fijo,
   enLinea,
@@ -13,6 +15,11 @@ export function Encabezado({
 }: {
   titulo: string
   descripcion?: string
+  /**
+   * La explicación de la pantalla detrás de un ⓘ junto al título, en vez de un
+   * párrafo: la pantalla queda limpia y quien quiera leerla la abre.
+   */
+  ayuda?: string
   acciones?: React.ReactNode
   /**
    * Flecha de "atrás" antes del título. Devuelve a la última pantalla desde la
@@ -81,7 +88,10 @@ export function Encabezado({
       <div className={volver ? 'flex min-w-0 items-start gap-1.5' : 'min-w-0 space-y-1'}>
         {volver && <BotonVolver fallback={typeof volver === 'string' ? volver : undefined} className="-ml-2 mt-0.5" />}
         <div className="min-w-0 space-y-1">
-          <h1 className={enLinea ? 'truncate text-xl font-semibold tracking-tight sm:text-2xl' : 'text-2xl font-semibold tracking-tight'}>{titulo}</h1>
+          <h1 className={cn('flex min-w-0 items-center gap-1.5', enLinea ? 'text-xl font-semibold tracking-tight sm:text-2xl' : 'text-2xl font-semibold tracking-tight')}>
+            <span className={enLinea ? 'truncate' : undefined}>{titulo}</span>
+            {ayuda && <Ayuda texto={ayuda} etiqueta={`Sobre ${titulo.toLowerCase()}`} />}
+          </h1>
           {descripcion && <p className="text-sm text-muted-foreground">{descripcion}</p>}
         </div>
       </div>

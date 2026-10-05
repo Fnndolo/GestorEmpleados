@@ -15,7 +15,7 @@ export async function anotarPagoPeriodoEnAsistencia(
   periodoId: string,
   pagado: boolean,
 ): Promise<{ anotados: number; omitido?: boolean; error?: string }> {
-  if (!(await conexionAsistencia())) return { anotados: 0, omitido: true }
+  if (!(await conexionAsistencia('horas'))) return { anotados: 0, omitido: true }
   const filas = await prisma.novedadHoras.findMany({
     where: { periodoId, referenciaExterna: { not: null } },
     select: { referenciaExterna: true },
@@ -42,7 +42,7 @@ export async function anotarPagoPeriodoEnAsistencia(
 export async function cerrarPagoPersonaEnAsistencia(
   pago: { colaboradorId: string; desde: Date; hasta: Date },
 ): Promise<{ cerrado: boolean; omitido?: boolean; error?: string }> {
-  if (!(await conexionAsistencia())) return { cerrado: false, omitido: true }
+  if (!(await conexionAsistencia('horas'))) return { cerrado: false, omitido: true }
   const colab = await prisma.colaborador.findUniqueOrThrow({ where: { id: pago.colaboradorId }, select: { numeroDocumento: true } })
   const cedula = normalizarCedula(colab.numeroDocumento)
   const periodo = { desde: pago.desde.toISOString().slice(0, 10), hasta: pago.hasta.toISOString().slice(0, 10) }

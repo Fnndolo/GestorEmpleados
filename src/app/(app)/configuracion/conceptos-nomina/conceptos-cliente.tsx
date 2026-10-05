@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Landmark, Lock, Pencil, Plus, Save } from 'lucide-react'
+import { Landmark, Lock, Pencil, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -15,6 +15,8 @@ import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
+import { BotonAgregar } from '@/components/ui-kit/boton-agregar'
+import { Ayuda } from '@/components/ui-kit/ayuda'
 import { guardarConceptoNomina, alternarConceptoNomina, actualizarCuentaContable, eliminarConceptoNomina } from './acciones'
 
 export type ConceptoItem = {
@@ -28,7 +30,6 @@ const fmtCOP = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency'
 export function ConceptosCliente({ puedeEditar, conceptos }: { puedeEditar: boolean; conceptos: ConceptoItem[] }) {
   const router = useRouter()
   const [editando, setEditando] = useState<ConceptoItem | null>(null)
-  const [creando, setCreando] = useState(false)
   const [cuentaDe, setCuentaDe] = useState<ConceptoItem | null>(null)
 
   async function borrar(c: ConceptoItem) {
@@ -43,72 +44,76 @@ export function ConceptosCliente({ puedeEditar, conceptos }: { puedeEditar: bool
     else toast.error(res.error)
   }
 
-  const grupos: { titulo: string; items: ConceptoItem[] }[] = [
-    { titulo: 'Del sistema (tratamiento de ley, solo lectura)', items: conceptos.filter((c) => c.esSistema) },
-    { titulo: 'Configurables de la empresa', items: conceptos.filter((c) => !c.esSistema) },
+  const grupos: { titulo: string; ayuda?: string; items: ConceptoItem[] }[] = [
+    {
+      titulo: 'Del sistema',
+      ayuda: 'Tratamiento de ley, solo lectura: sus banderas las aplica el motor de nómina. De estos solo se cambia la cuenta contable.',
+      items: conceptos.filter((c) => c.esSistema),
+    },
+    { titulo: 'De la empresa', items: conceptos.filter((c) => !c.esSistema) },
   ]
 
   return (
     <div className="space-y-6">
-      {puedeEditar && (
-        <div className="flex justify-end">
-          <Button onClick={() => setCreando(true)}><Plus className="size-4" /> Nuevo concepto</Button>
-        </div>
-      )}
-
       {grupos.map((g) => (
         <section key={g.titulo}>
-          <h2 className="mb-2 text-[13px] font-bold">{g.titulo}</h2>
+          <h2 className="mb-2 flex items-center gap-1.5 text-[13px] font-bold">
+            {g.titulo}
+            {g.ayuda && <Ayuda texto={g.ayuda} etiqueta={`Sobre los conceptos ${g.titulo.toLowerCase()}`} />}
+          </h2>
           {g.items.length === 0 ? (
             <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
-              Aún no hay conceptos propios. Crea el primero (p. ej. «Auxilio de alimentación»).
+              Aún no hay conceptos propios.
             </CardContent></Card>
           ) : (
-            <Card><CardContent className="divide-y p-0">
+            <Card className="py-0"><CardContent className="divide-y p-0">
               {g.items.map((c) => (
-                <div key={c.id} className="flex items-center gap-3 px-4 py-2.5">
+                <div key={c.id} className="flex items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
                   <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                    <p className="text-sm font-medium">
                       {c.nombre}
-                      <span className="text-xs font-normal text-muted-foreground">({c.codigo})</span>
-                      <Badge variant={c.tipo === 'DEVENGADO' ? 'default' : 'destructive'} className="text-[10px]">
-                        {c.tipo === 'DEVENGADO' ? 'Devengado' : 'Deducción'}
-                      </Badge>
-                      {c.tipo === 'DEVENGADO' && (
-                        <Badge variant="secondary" className="text-[10px]">
-                          {c.constitutivoSalario ? 'Constitutivo de salario' : 'No constitutivo'}
-                        </Badge>
-                      )}
-                      {!c.activo && <Badge variant="outline" className="text-[10px]">Inactivo</Badge>}
+                      {!c.activo && <Badge variant="outline" className="ml-1.5 align-middle text-[10px]">Inactivo</Badge>}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    {/* Completo (sin cortar): código, si constituye salario, a qué bases entra y la cuenta. */}
+                    <p className="text-xs leading-snug text-muted-foreground">
                       {[
-                        c.afectaIbcSs ? 'IBC' : null,
-                        c.basePrestaciones ? 'prestaciones' : null,
-                        c.baseVacaciones ? 'vacaciones' : null,
-                      ].filter(Boolean).join(' · ') || (c.tipo === 'DEVENGADO' ? 'No afecta bases' : 'Descuento del neto')}
-                      {c.valorFijo ? ` · valor fijo ${fmtCOP(c.valorFijo)}` : ''}
-                      {c.cuentaContable ? ` · cta. ${c.cuentaContable}` : ''}
+                        c.codigo,
+                        c.tipo === 'DEVENGADO' ? (c.constitutivoSalario ? 'Constitutivo' : 'No constitutivo') : null,
+                        [
+                          c.afectaIbcSs ? 'IBC' : null,
+                          c.basePrestaciones ? 'prestaciones' : null,
+                          c.baseVacaciones ? 'vacaciones' : null,
+                        ].filter(Boolean).join(' · ') || (c.tipo === 'DEVENGADO' ? 'No afecta bases' : 'Descuento del neto'),
+                        c.valorFijo ? `valor fijo ${fmtCOP(c.valorFijo)}` : null,
+                        c.cuentaContable ? `cta. ${c.cuentaContable}` : null,
+                      ].filter(Boolean).join(' · ')}
                     </p>
                   </div>
+                  {/* Columna fija: Devengado/Deducción queda en el mismo sitio en todas las filas. */}
+                  <Badge variant={c.tipo === 'DEVENGADO' ? 'default' : 'destructive'} className="w-[76px] shrink-0 justify-center text-[10px]">
+                    {c.tipo === 'DEVENGADO' ? 'Devengado' : 'Deducción'}
+                  </Badge>
                   {c.esSistema ? (
                     puedeEditar ? (
                       // Lo único suyo que sí se puede cambiar: la cuenta contable
                       // no entra en ningún cálculo y cada empresa tiene su plan.
-                      <Button size="icon" variant="ghost" className="size-8" onClick={() => setCuentaDe(c)} title="Cambiar la cuenta contable">
+                      <Button
+                        size="icon" variant="ghost" className="size-8" onClick={() => setCuentaDe(c)}
+                        title="Cambiar la cuenta contable" aria-label={`Cambiar la cuenta contable de ${c.nombre}`}
+                      >
                         <Landmark className="size-4" />
                       </Button>
                     ) : (
-                      <Lock className="size-4 shrink-0 text-muted-foreground" />
+                      <Lock className="size-4 shrink-0 text-muted-foreground" aria-label="Solo lectura" />
                     )
                   ) : puedeEditar ? (
-                    <>
-                      <Switch checked={c.activo} onCheckedChange={(v) => alternar(c, v)} />
-                      <Button size="icon" variant="ghost" className="size-8" onClick={() => setEditando(c)} title="Editar">
+                    <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+                      <Switch checked={c.activo} onCheckedChange={(v) => alternar(c, v)} aria-label={c.activo ? 'Desactivar' : 'Activar'} className="mr-1" />
+                      <Button size="icon" variant="ghost" className="size-8" onClick={() => setEditando(c)} title="Editar" aria-label={`Editar ${c.nombre}`}>
                         <Pencil className="size-4" />
                       </Button>
-                      <BotonEliminar onEliminar={() => borrar(c)} />
-                    </>
+                      <BotonEliminar onEliminar={() => borrar(c)} etiqueta={`Eliminar ${c.nombre}`} />
+                    </div>
                   ) : null}
                 </div>
               ))}
@@ -117,11 +122,11 @@ export function ConceptosCliente({ puedeEditar, conceptos }: { puedeEditar: bool
         </section>
       ))}
 
-      {(creando || editando) && (
+      {editando && (
         <DialogConcepto
           concepto={editando}
-          onClose={() => { setCreando(false); setEditando(null) }}
-          onDone={() => { setCreando(false); setEditando(null); router.refresh() }}
+          onClose={() => setEditando(null)}
+          onDone={() => { setEditando(null); router.refresh() }}
         />
       )}
       {cuentaDe && (
@@ -132,6 +137,23 @@ export function ConceptosCliente({ puedeEditar, conceptos }: { puedeEditar: bool
         />
       )}
     </div>
+  )
+}
+
+/**
+ * El + del encabezado de la página. Lleva su propio estado para que la página
+ * (server) lo pueda poner en el encabezado sin volverse cliente.
+ */
+export function NuevoConcepto() {
+  const router = useRouter()
+  const [abierto, setAbierto] = useState(false)
+  return (
+    <>
+      <BotonAgregar etiqueta="Nuevo concepto" onClick={() => setAbierto(true)} />
+      {abierto && (
+        <DialogConcepto concepto={null} onClose={() => setAbierto(false)} onDone={() => { setAbierto(false); router.refresh() }} />
+      )}
+    </>
   )
 }
 
@@ -159,15 +181,18 @@ function DialogCuentaContable({ concepto, onClose, onDone }: { concepto: Concept
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Cuenta contable — {concepto.nombre}</DialogTitle>
-          <DialogDescription>
-            Es el único dato editable de un concepto del sistema: no interviene en el cálculo, solo
-            en el asiento contable, y cada empresa tiene su propio plan de cuentas.
-          </DialogDescription>
+          <DialogDescription>Solo afecta el asiento contable, no el cálculo.</DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
-          <Label>Cuenta</Label>
-          <Input value={cuenta} onChange={(e) => setCuenta(e.target.value)} placeholder="510506" />
-          <p className="text-xs text-muted-foreground">Déjala vacía para quitarla.</p>
+          <Label className="gap-1.5">
+            Cuenta
+            <Ayuda
+              texto="Es el único dato editable de un concepto del sistema: cada empresa tiene su propio plan de cuentas. Déjala vacía para quitarla."
+              etiqueta="Sobre la cuenta contable"
+            />
+          </Label>
+          {/* autoFocus: si no, el diálogo enfoca el ⓘ (va antes) y abre su texto encima del título. */}
+          <Input value={cuenta} onChange={(e) => setCuenta(e.target.value)} placeholder="510506" autoFocus />
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
@@ -221,18 +246,16 @@ function DialogConcepto({ concepto, onClose, onDone }: { concepto: ConceptoItem 
       <DialogContent className="max-h-[88vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{concepto ? `Editar ${concepto.nombre}` : 'Nuevo concepto de nómina'}</DialogTitle>
-          <DialogDescription>
-            Si el pago retribuye directamente el trabajo, es constitutivo de salario (art. 127 CST). Los auxilios y beneficios pactados como no salariales (art. 128) no afectan las bases.
-          </DialogDescription>
+          <DialogDescription className="sr-only">Código, tipo y bases a las que entra el concepto.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Código</Label>
+              <Label>Código {!concepto && <span className="text-destructive">*</span>}</Label>
               <Input value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} placeholder="AUX_ALIMENTACION" disabled={!!concepto} />
             </div>
             <div className="space-y-1.5">
-              <Label>Tipo</Label>
+              <Label>Tipo <span className="text-destructive">*</span></Label>
               <Select value={tipo} onValueChange={(v) => setTipo(v as 'DEVENGADO')}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -243,19 +266,23 @@ function DialogConcepto({ concepto, onClose, onDone }: { concepto: ConceptoItem 
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Nombre</Label>
+            <Label>Nombre <span className="text-destructive">*</span></Label>
             <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Auxilio de alimentación" />
           </div>
 
           {tipo === 'DEVENGADO' && (
             <div className="space-y-2.5 rounded-lg border p-3">
-              <label className="flex items-start gap-2.5 text-sm">
-                <Checkbox checked={constitutivo} onCheckedChange={(v) => cambiarConstitutivo(v === true)} className="mt-0.5" />
-                <span>
-                  <span className="font-medium">Constitutivo de salario</span>
-                  <span className="block text-xs text-muted-foreground">Entra al IBC de seguridad social y a las bases de cesantías, prima y vacaciones.</span>
-                </span>
-              </label>
+              {/* El ⓘ va fuera del <label>: tocarlo no debe marcar la casilla. */}
+              <div className="flex items-center gap-1.5">
+                <label className="flex items-center gap-2.5 text-sm font-medium">
+                  <Checkbox checked={constitutivo} onCheckedChange={(v) => cambiarConstitutivo(v === true)} />
+                  Constitutivo de salario
+                </label>
+                <Ayuda
+                  texto="Si el pago retribuye directamente el trabajo, es constitutivo de salario (art. 127 CST): entra al IBC de seguridad social y a las bases de cesantías, prima y vacaciones. Los auxilios y beneficios pactados como no salariales (art. 128) no afectan las bases."
+                  etiqueta="Sobre el salario constitutivo"
+                />
+              </div>
               <div className="grid gap-1.5 pl-7 text-xs">
                 <label className="flex items-center gap-2"><Checkbox checked={ibc} onCheckedChange={(v) => setIbc(v === true)} /> Afecta IBC (salud, pensión, ARL)</label>
                 <label className="flex items-center gap-2"><Checkbox checked={prest} onCheckedChange={(v) => setPrest(v === true)} /> Base de cesantías y prima</label>
@@ -266,11 +293,14 @@ function DialogConcepto({ concepto, onClose, onDone }: { concepto: ConceptoItem 
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Valor fijo (opcional)</Label>
-              <Input type="number" step="1" value={valorFijo} onChange={(e) => setValorFijo(e.target.value)} placeholder="Se puede indicar al aplicarlo" />
+              <Label className="gap-1.5">
+                Valor fijo
+                <Ayuda texto="Si lo dejas vacío, el valor se indica al aplicarlo." etiqueta="Sobre el valor fijo" />
+              </Label>
+              <Input type="number" step="1" value={valorFijo} onChange={(e) => setValorFijo(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Cuenta contable (opcional)</Label>
+              <Label>Cuenta contable</Label>
               <Input value={cuenta} onChange={(e) => setCuenta(e.target.value)} placeholder="510530" />
             </div>
           </div>

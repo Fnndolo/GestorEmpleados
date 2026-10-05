@@ -56,3 +56,17 @@ describe('fusionarPermisos', () => {
     expect(fusionarPermisos([])).toEqual([])
   })
 })
+
+describe('catálogo de la matriz de permisos', () => {
+  it('cada módulo con acciones en uso está en un grupo, una sola vez', async () => {
+    const { ACCIONES_EN_USO, GRUPOS_MODULOS, MODULOS } = await import('./modulos')
+    const agrupados = GRUPOS_MODULOS.flatMap((g) => g.modulos)
+    expect(new Set(agrupados).size).toBe(agrupados.length)
+    const enUso = (Object.keys(MODULOS) as (keyof typeof MODULOS)[]).filter((m) => ACCIONES_EN_USO[m].length > 0)
+    expect([...agrupados].sort()).toEqual([...enUso].sort())
+  })
+  it('toda acción en uso incluye Ver', async () => {
+    const { ACCIONES_EN_USO } = await import('./modulos')
+    for (const acciones of Object.values(ACCIONES_EN_USO)) if (acciones.length) expect(acciones).toContain('VER')
+  })
+})

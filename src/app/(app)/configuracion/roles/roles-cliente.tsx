@@ -2,11 +2,13 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, ShieldCheck, ChevronRight, Pencil, Save } from 'lucide-react'
-import { ACCIONES, type Accion, type Alcance } from '@/lib/permisos/modulos'
+import { ShieldCheck, ListChecks, Lock, Pencil, Save, ChevronRight } from 'lucide-react'
+import { ACCIONES, ACCIONES_EN_USO, GRUPOS_MODULOS, MODULOS_CON_ALCANCE, type Accion, type Alcance, type ModuloSistema } from '@/lib/permisos/modulos'
 import { crearRol, editarRol, eliminarRol, guardarMatriz } from './acciones'
 import { Button } from '@/components/ui/button'
 import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
+import { BotonAgregar } from '@/components/ui-kit/boton-agregar'
+import { Encabezado } from '@/components/shell/encabezado'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -22,6 +24,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Pill } from '@/components/ui-kit'
+import { cn } from '@/lib/utils'
+import { Ayuda } from '@/components/ui-kit/ayuda'
 
 type Permiso = { modulo: string; accion: string; alcance: string }
 type Rol = {
@@ -51,51 +56,60 @@ export function RolesCliente({
   const [eliminar, setEliminar] = useState<Rol | null>(null)
 
   return (
-    <div className="space-y-4">
-      {puedeEditar && (
-        <div className="flex justify-end">
-          <Button onClick={() => setNuevo(true)}><Plus className="size-4" /> Nuevo rol</Button>
-        </div>
-      )}
-      <div className="grid gap-3 sm:grid-cols-2">
+    <div>
+      <Encabezado
+        enLinea
+        titulo="Roles y permisos"
+        ayuda="Qué módulos puede ver y editar cada rol, y con qué alcance de datos."
+        acciones={puedeEditar && <BotonAgregar etiqueta="Nuevo rol" onClick={() => setNuevo(true)} />}
+      />
+
+      {/* Una fila por rol: nombre arriba; usuarios y descripción en un renglón. */}
+      <Card className="py-0"><CardContent className="divide-y p-0">
         {roles.map((r) => (
-          <Card key={r.id} className="group">
-            <CardContent className="py-4">
-              <div className="flex items-start gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <ShieldCheck className="size-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium">{r.nombre}</p>
-                    {r.esSistema && <Badge variant="secondary" className="text-[10px]">Sistema</Badge>}
-                  </div>
-                  <p className="text-sm text-muted-foreground line-clamp-2">{r.descripcion}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {r.usuarios} usuario(s) · {r.permisos.length} permisos
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1 mt-3">
-                <Button size="sm" className="flex-1" onClick={() => setEditandoMatriz(r)}>
-                  Permisos <ChevronRight className="size-4" />
-                </Button>
-                {puedeEditar && (
+          <div key={r.id} className="flex items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-4">
+            <span className="hidden size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary sm:grid">
+              <ShieldCheck className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <span className="truncate">{r.nombre}</span>
+                {/* En el celular un candado en vez de la etiqueta: deja ver el nombre. */}
+                {r.esSistema && (
                   <>
-                    <Button variant="ghost" size="icon" onClick={() => setEditandoRol(r)} aria-label="Editar">
-                      <Pencil className="size-4" />
-                    </Button>
-                    <BotonEliminar
-                      onEliminar={() => setEliminar(r)}
-                      motivoBloqueo={r.esSistema ? 'No se puede eliminar: es un rol del sistema. Puedes ajustar sus permisos, pero no borrarlo.' : null}
-                    />
+                    <Badge variant="secondary" className="hidden text-[10px] sm:inline-flex">Sistema</Badge>
+                    <span className="shrink-0 text-muted-foreground sm:hidden" title="Rol del sistema">
+                      <Lock className="size-3" aria-hidden /><span className="sr-only">Rol del sistema</span>
+                    </span>
                   </>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </p>
+              <p className="truncate text-xs text-muted-foreground" title={r.descripcion ?? undefined}>
+                {r.usuarios} usuario(s)
+                <span className="hidden sm:inline"> · {r.permisos.length} permisos</span>
+                {r.descripcion && ` · ${r.descripcion}`}
+              </p>
+            </div>
+            <Button variant="outline" className="max-sm:size-8 max-sm:px-0" onClick={() => setEditandoMatriz(r)} aria-label={`Permisos de ${r.nombre}`} title="Permisos">
+              <ListChecks className="size-4" /> <span className="max-sm:sr-only">Permisos</span>
+            </Button>
+            {puedeEditar && (
+              <>
+                <Button variant="ghost" size="icon" onClick={() => setEditandoRol(r)} aria-label={`Editar ${r.nombre}`} title="Editar">
+                  <Pencil className="size-4" />
+                </Button>
+                {/* Ancho fijo: la papelera bloqueada mide distinto y descuadraba la columna. */}
+                <span className="grid w-9 shrink-0 place-items-center">
+                  <BotonEliminar
+                    onEliminar={() => setEliminar(r)}
+                    motivoBloqueo={r.esSistema ? 'No se puede eliminar: es un rol del sistema. Puedes ajustar sus permisos, pero no borrarlo.' : null}
+                  />
+                </span>
+              </>
+            )}
+          </div>
         ))}
-      </div>
+      </CardContent></Card>
 
       {editandoMatriz && (
         <DialogMatriz rol={editandoMatriz} modulos={modulos} puedeEditar={puedeEditar} onClose={() => setEditandoMatriz(null)} />
@@ -128,11 +142,34 @@ export function RolesCliente({
   )
 }
 
+type EstadoModulo = { acciones: Set<Accion>; alcance: Alcance }
+type Nivel = 'nada' | 'ver' | 'todo'
+
+/** Lo que tiene un módulo, en palabras: «Sin acceso», «Solo ver», «Todo» o la lista. */
+function resumen(e: EstadoModulo, enUso: readonly Accion[]): { texto: string; tono: 'muted' | 'ok' | 'info' } {
+  const marcadas = enUso.filter((a) => e.acciones.has(a))
+  if (!marcadas.length) return { texto: 'Sin acceso', tono: 'muted' }
+  if (marcadas.length === enUso.length) return { texto: enUso.length === 1 ? 'Ver' : 'Todo', tono: 'ok' }
+  if (marcadas.length === 1) return { texto: 'Solo ver', tono: 'info' }
+  const lista = marcadas.map((a) => ACCION_ETIQUETA[a].toLowerCase()).join(', ')
+  return { texto: lista.charAt(0).toUpperCase() + lista.slice(1), tono: 'info' }
+}
+
+const AYUDA_ALCANCE = 'A quiénes alcanza: todas las sedes, solo las sedes asignadas al usuario, su equipo (las personas a su cargo) o solo sus propios datos.'
+const AYUDA_PERMISOS = 'Cada usuario tiene un rol (y puede tener roles adicionales). El rol dice, por cada módulo, qué puede hacer: Ver le muestra el módulo en el menú; Crear, Editar, Eliminar, Aprobar y Exportar habilitan esos botones. El alcance dice a quiénes llega. Solo aparecen las acciones que cada módulo usa.'
+const NIVELES: [Nivel, string][] = [['nada', 'Sin acceso'], ['ver', 'Solo ver'], ['todo', 'Todo']]
+
+/**
+ * Matriz de permisos de un rol: por módulo, qué acciones y con qué alcance.
+ * Solo se muestran las acciones que el código revisa (ACCIONES_EN_USO) y el
+ * alcance donde filtra algo; lo demás guardado se conserva tal cual al guardar.
+ * Marcar cualquier acción marca Ver (sin ver no se llega a la pantalla), y
+ * quitar Ver quita todo el módulo.
+ */
 function DialogMatriz({
   rol, modulos, puedeEditar, onClose,
 }: { rol: Rol; modulos: Modulo[]; puedeEditar: boolean; onClose: () => void }) {
-  // Estado: por módulo, set de acciones marcadas + alcance
-  const inicial: Record<string, { acciones: Set<Accion>; alcance: Alcance }> = {}
+  const inicial: Record<string, EstadoModulo> = {}
   for (const m of modulos) {
     const permisos = rol.permisos.filter((p) => p.modulo === m.clave)
     inicial[m.clave] = {
@@ -141,28 +178,37 @@ function DialogMatriz({
     }
   }
   const [estado, setEstado] = useState(inicial)
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
   const [guardando, setGuardando] = useState(false)
+  const etiqueta: Record<string, string> = Object.fromEntries(modulos.map((m) => [m.clave, m.etiqueta]))
+  const enUso = (m: string): readonly Accion[] => ACCIONES_EN_USO[m as ModuloSistema] ?? []
 
   function alternarAccion(modulo: string, accion: Accion, checked: boolean) {
     setEstado((prev) => {
-      const acciones = new Set(prev[modulo].acciones)
-      if (checked) acciones.add(accion)
+      let acciones = new Set(prev[modulo].acciones)
+      if (checked) { acciones.add(accion); acciones.add('VER') }
+      else if (accion === 'VER') acciones = new Set()
       else acciones.delete(accion)
+      return { ...prev, [modulo]: { ...prev[modulo], acciones } }
+    })
+  }
+  function ponerNivel(modulo: string, nivel: Nivel) {
+    setEstado((prev) => {
+      const acciones = nivel === 'nada' ? new Set<Accion>() : nivel === 'ver' ? new Set<Accion>(['VER']) : new Set<Accion>([...prev[modulo].acciones, ...enUso(modulo)])
       return { ...prev, [modulo]: { ...prev[modulo], acciones } }
     })
   }
   function cambiarAlcance(modulo: string, alcance: Alcance) {
     setEstado((prev) => ({ ...prev, [modulo]: { ...prev[modulo], alcance } }))
   }
+  function alternarAbierto(m: string) {
+    setAbiertos((prev) => { const n = new Set(prev); if (n.has(m)) n.delete(m); else n.add(m); return n })
+  }
 
   async function guardar() {
     setGuardando(true)
     const permisos = modulos.flatMap((m) =>
-      [...estado[m.clave].acciones].map((accion) => ({
-        modulo: m.clave,
-        accion,
-        alcance: estado[m.clave].alcance,
-      })),
+      [...estado[m.clave].acciones].map((accion) => ({ modulo: m.clave, accion, alcance: estado[m.clave].alcance })),
     )
     const res = await guardarMatriz({ rolId: rol.id, permisos })
     setGuardando(false)
@@ -170,104 +216,110 @@ function DialogMatriz({
     else toast.error(res.error)
   }
 
+  const grupos = GRUPOS_MODULOS.map((g) => ({ ...g, modulos: g.modulos.filter((m) => m in estado) })).filter((g) => g.modulos.length)
+  const selectorAlcance = (m: string) => (
+    <Select disabled={!puedeEditar || !estado[m].acciones.size} value={estado[m].alcance} onValueChange={(v) => cambiarAlcance(m, v as Alcance)}>
+      <SelectTrigger size="sm" className="w-full" aria-label={`Alcance de ${etiqueta[m]}`}><SelectValue /></SelectTrigger>
+      <SelectContent>{ALCANCES.map((al) => <SelectItem key={al.valor} value={al.valor}>{al.etiqueta}</SelectItem>)}</SelectContent>
+    </Select>
+  )
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      {/* Ancho fijado a mano y no con max-w-*: la tabla son ocho columnas y con
-          768px la de Módulo y la de Ver quedaban fuera, obligando a desplazarse
-          de lado para marcar casillas sin ver de qué módulo eran. */}
-      <DialogContent className="flex max-h-[88vh] w-[min(96vw,1080px)] flex-col overflow-hidden sm:max-w-[1080px]">
+      {/* Sin foco inicial: caería en el (?) del título y su globo taparía la lista. */}
+      <DialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="flex max-h-[88dvh] w-[min(96vw,1080px)] flex-col overflow-hidden sm:max-w-[1080px]">
         <DialogHeader>
-          <DialogTitle>Permisos · {rol.nombre}</DialogTitle>
-          <DialogDescription>
-            Marca las acciones por módulo y define el alcance de datos. {!puedeEditar && '(Solo lectura)'}
-          </DialogDescription>
+          <DialogTitle className="flex items-center gap-1.5">
+            Permisos · {rol.nombre}
+            <Ayuda etiqueta="Cómo funcionan los permisos" texto={AYUDA_PERMISOS} />
+          </DialogTitle>
+          <DialogDescription>{puedeEditar ? 'Toca un módulo para elegir qué puede hacer.' : 'Solo lectura.'}</DialogDescription>
         </DialogHeader>
         <div className="-mx-6 flex-1 overflow-y-auto px-6">
-          {/* Escritorio: la tabla es lo más legible, ocho columnas caben de sobra. */}
+          {/* Escritorio: la tabla, por grupos; «—» donde la acción no existe en ese módulo. */}
           <table className="hidden w-full text-sm lg:table">
-            <thead className="sticky top-0 bg-background">
+            <thead className="sticky top-0 z-10 bg-background">
               <tr className="border-b text-left">
-                <th className="w-[38%] py-2 font-medium">Módulo</th>
-                {ACCIONES.map((a) => (
-                  <th key={a} className="w-[7.5%] px-1 py-2 text-center text-xs font-medium">{ACCION_ETIQUETA[a]}</th>
-                ))}
-                <th className="py-2 pl-2 font-medium">Alcance</th>
+                <th className="w-[36%] py-2 font-medium">Módulo</th>
+                {ACCIONES.map((a) => <th key={a} className="w-[7.5%] px-1 py-2 text-center text-xs font-medium">{ACCION_ETIQUETA[a]}</th>)}
+                <th className="py-2 pl-2 font-medium"><span className="inline-flex items-center gap-1">Alcance <Ayuda etiqueta="Sobre el alcance" texto={AYUDA_ALCANCE} /></span></th>
               </tr>
             </thead>
-            <tbody>
-              {modulos.map((m) => (
-                <tr key={m.clave} className="border-b last:border-0">
-                  <td className="py-2 pr-2">{m.etiqueta}</td>
-                  {ACCIONES.map((a) => (
-                    <td key={a} className="py-2 px-1 text-center">
-                      <Checkbox
-                        disabled={!puedeEditar}
-                        checked={estado[m.clave].acciones.has(a)}
-                        onCheckedChange={(v) => alternarAccion(m.clave, a, Boolean(v))}
-                      />
+            {grupos.map((g) => (
+              <tbody key={g.titulo}>
+                <tr><td colSpan={ACCIONES.length + 2} className="pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{g.titulo}</td></tr>
+                {g.modulos.map((m) => (
+                  <tr key={m} className="border-b last:border-0">
+                    <td className="py-2 pr-2">{etiqueta[m]}</td>
+                    {ACCIONES.map((a) => (
+                      <td key={a} className="px-1 py-2 text-center">
+                        {enUso(m).includes(a)
+                          ? <Checkbox disabled={!puedeEditar} checked={estado[m].acciones.has(a)} onCheckedChange={(v) => alternarAccion(m, a, Boolean(v))} aria-label={`${ACCION_ETIQUETA[a]} en ${etiqueta[m]}`} />
+                          : <span className="text-muted-foreground/40" aria-hidden>—</span>}
+                      </td>
+                    ))}
+                    <td className="w-[17%] py-2 pl-2">
+                      {MODULOS_CON_ALCANCE.includes(m) ? selectorAlcance(m) : <span className="text-xs text-muted-foreground/60">—</span>}
                     </td>
-                  ))}
-                  <td className="w-[17%] py-2 pl-2">
-                    <Select
-                      disabled={!puedeEditar || estado[m.clave].acciones.size === 0}
-                      value={estado[m.clave].alcance}
-                      onValueChange={(v) => cambiarAlcance(m.clave, v as Alcance)}
-                    >
-                      <SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {ALCANCES.map((al) => <SelectItem key={al.valor} value={al.valor}>{al.etiqueta}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+                  </tr>
+                ))}
+              </tbody>
+            ))}
           </table>
 
-          {/* Móvil: la misma tabla obligaba a desplazarse a los lados, y la
-              columna de Exportar quedaba fuera de la pantalla — se marcaban
-              permisos sin ver cuáles. Una tarjeta por módulo cabe entera. */}
-          <div className="space-y-3 lg:hidden">
-            {modulos.map((m) => {
-              const marcadas = estado[m.clave].acciones
-              return (
-                <div key={m.clave} className="rounded-lg border p-3">
-                  <div className="mb-2 flex items-baseline justify-between gap-2">
-                    <p className="text-sm font-medium">{m.etiqueta}</p>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {marcadas.size === 0 ? 'Sin acceso' : `${marcadas.size} de ${ACCIONES.length}`}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                    {ACCIONES.map((a) => (
-                      <label key={a} className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                          disabled={!puedeEditar}
-                          checked={marcadas.has(a)}
-                          onCheckedChange={(v) => alternarAccion(m.clave, a, Boolean(v))}
-                        />
-                        {ACCION_ETIQUETA[a]}
-                      </label>
-                    ))}
-                  </div>
-                  {marcadas.size > 0 && (
-                    <div className="mt-3">
-                      <p className="mb-1 text-xs text-muted-foreground">Alcance de datos</p>
-                      <Select
-                        disabled={!puedeEditar}
-                        value={estado[m.clave].alcance}
-                        onValueChange={(v) => cambiarAlcance(m.clave, v as Alcance)}
-                      >
-                        <SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {ALCANCES.map((al) => <SelectItem key={al.valor} value={al.valor}>{al.etiqueta}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
+          {/* Celular: un acordeón por módulo. Cerrado se ve el resumen; abierto,
+              los atajos (sin acceso / solo ver / todo), las acciones y el alcance. */}
+          <div className="space-y-4 lg:hidden">
+            {grupos.map((g) => (
+              <section key={g.titulo}>
+                <p className="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {g.titulo}
+                  <span className="font-normal normal-case tracking-normal">{g.modulos.filter((m) => estado[m].acciones.size).length} de {g.modulos.length} con acceso</span>
+                </p>
+                <div className="divide-y rounded-lg border">
+                  {g.modulos.map((m) => {
+                    const r = resumen(estado[m], enUso(m))
+                    const abierto = abiertos.has(m)
+                    const marcadas = enUso(m).filter((a) => estado[m].acciones.has(a)).length
+                    const nivel: Nivel | null = marcadas === 0 ? 'nada' : marcadas === enUso(m).length ? 'todo' : marcadas === 1 ? 'ver' : null
+                    return (
+                      <div key={m}>
+                        <button type="button" onClick={() => alternarAbierto(m)} aria-expanded={abierto} className="flex w-full items-center gap-2 px-3 py-2.5 text-left">
+                          <ChevronRight className={cn('size-4 shrink-0 text-muted-foreground transition-transform', abierto && 'rotate-90')} />
+                          <span className="min-w-0 flex-1 text-sm font-medium">{etiqueta[m]}</span>
+                          <Pill tone={r.tono} className="max-w-[45%] shrink-0 truncate">{r.texto}</Pill>
+                        </button>
+                        {abierto && (
+                          <div className="space-y-3 px-3 pb-3 pl-9">
+                            {puedeEditar && enUso(m).length > 1 && (
+                              <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1 text-xs">
+                                {NIVELES.map(([k, t]) => (
+                                  <button key={k} type="button" onClick={() => ponerNivel(m, k)} className={cn('rounded-md py-1.5 font-medium', nivel === k ? 'bg-background shadow-sm' : 'text-muted-foreground')}>{t}</button>
+                                ))}
+                              </div>
+                            )}
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                              {enUso(m).map((a) => (
+                                <label key={a} className="flex items-center gap-2 text-sm">
+                                  <Checkbox disabled={!puedeEditar} checked={estado[m].acciones.has(a)} onCheckedChange={(v) => alternarAccion(m, a, Boolean(v))} />
+                                  {ACCION_ETIQUETA[a]}
+                                </label>
+                              ))}
+                            </div>
+                            {MODULOS_CON_ALCANCE.includes(m) && estado[m].acciones.size > 0 && (
+                              <div className="space-y-1">
+                                <p className="flex items-center gap-1 text-xs text-muted-foreground">Alcance <Ayuda etiqueta="Sobre el alcance" texto={AYUDA_ALCANCE} /></p>
+                                {selectorAlcance(m)}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
-              )
-            })}
+              </section>
+            ))}
           </div>
         </div>
         <DialogFooter>
@@ -303,11 +355,11 @@ function DialogRol({ rol, onClose }: { rol: Rol | null; onClose: () => void }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{rol ? 'Editar rol' : 'Nuevo rol'}</DialogTitle>
-          <DialogDescription>Luego define sus permisos desde el botón «Permisos».</DialogDescription>
+          <DialogDescription>{rol ? `${rol.usuarios} usuario(s) con este rol.` : 'Los permisos se marcan después.'}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Nombre</Label>
+            <Label>Nombre <span className="text-destructive">*</span></Label>
             <Input value={nombre} onChange={(e) => setNombre(e.target.value)} />
           </div>
           <div className="space-y-1.5">

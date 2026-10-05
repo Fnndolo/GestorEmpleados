@@ -1,5 +1,6 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
+import { CAMPO_COMPARTIDO, DATOS_COMPARTIDOS, type DatoCompartido } from '@/lib/integraciones'
 
 /**
  * Cliente de la API de AsistencIA (ArriveControl), el sistema de control de
@@ -89,7 +90,7 @@ export type PeriodoAsistencia = { mes: string; quincena?: 1 | 2 | null } | { des
 export class ErrorAsistencia extends Error {
   constructor(
     mensaje: string,
-    public readonly codigo: 'SIN_CLAVE' | 'CLAVE_INVALIDA' | 'NO_RESPONDE' | 'NO_EXISTE' | 'RECHAZADA',
+    public readonly codigo: 'SIN_CLAVE' | 'CLAVE_INVALIDA' | 'NO_RESPONDE' | 'NO_EXISTE' | 'RECHAZADA' | 'DESACTIVADO',
   ) {
     super(mensaje)
   }
@@ -116,10 +117,18 @@ export function rangoDePeriodo(mes: string, quincena: 1 | 2 | null | undefined):
  * entorno queda como respaldo de las instalaciones que la configuraron así
  * antes de que existiera el ajuste.
  */
-export async function conexionAsistencia(): Promise<{ url: string; clave: string } | null> {
-  const c = await prisma.configuracionEmpresa.findFirst({ select: { asistenciaApiKey: true, asistenciaUrl: true } })
+/**
+ * La conexión con AsistencIA, o null si no hay clave. Con `dato`, también null
+ * cuando ese tipo de dato está apagado en Ajustes → Integraciones: para quien
+ * pregunta es como si no hubiera conexión, y sigue sin ella sin fallar.
+ */
+export async function conexionAsistencia(dato?: DatoCompartido): Promise<{ url: string; clave: string } | null> {
+  const c = await prisma.configuracionEmpresa.findFirst({
+    select: { asistenciaApiKey: true, asistenciaUrl: true, asistenciaColaboradores: true, asistenciaFotos: true, asistenciaHoras: true, asistenciaHorarios: true },
+  })
   const clave = c?.asistenciaApiKey?.trim() || process.env.ARRIVECONTROL_API_KEY?.trim() || ''
   if (!clave) return null
+  if (dato && c && !c[CAMPO_COMPARTIDO[dato]]) return null
   const url = (c?.asistenciaUrl?.trim() || process.env.ARRIVECONTROL_URL?.trim() || ASISTENCIA_URL_DEFECTO).replace(/\/+$/, '')
   return { url, clave }
 }
@@ -135,6 +144,14 @@ function query(p: PeriodoAsistencia): string {
   return `desde=${p.desde}&hasta=${p.hasta}`
 }
 
+/** Qué tipo de dato viaja por cada ruta de AsistencIA. */
+function datoDeRuta(ruta: string): DatoCompartido | null {
+  if (ruta.startsWith('/api/empleados/')) return 'fotos'
+  if (ruta.startsWith('/api/horas') || ruta.startsWith('/api/resumen-diario')) return 'horas'
+  if (ruta.startsWith('/api/horarios') || ruta.startsWith('/api/jornadas')) return 'horarios'
+  return null
+}
+
 /**
  * Una petición a AsistencIA con la clave de la empresa. Traduce cada fallo a
  * un mensaje que la persona pueda resolver: sin clave, clave regenerada allá,
@@ -143,6 +160,11 @@ function query(p: PeriodoAsistencia): string {
 async function llamar<T>(ruta: string, init: RequestInit = {}, conexion?: { url: string; clave: string }): Promise<T> {
   const con = conexion ?? (await conexionAsistencia())
   if (!con) throw new ErrorAsistencia('AsistencIA no está conectada: falta la clave de API de la empresa.', 'SIN_CLAVE')
+  // Red de seguridad: aunque quien llama no lo haya revisado, un dato apagado no sale.
+  const dato = datoDeRuta(ruta)
+  if (!conexion && dato && !(await conexionAsistencia(dato))) {
+    throw new ErrorAsistencia(`Compartir ${DATOS_COMPARTIDOS.find((d) => d.clave === dato)!.titulo.toLowerCase()} con AsistencIA está apagado en Ajustes → Integraciones.`, 'DESACTIVADO')
+  }
 
   let res: Response
   try {
@@ -258,4 +280,40 @@ export async function reabrirEnAsistencia(periodo: { desde: string; hasta: strin
     body: JSON.stringify({ desde: periodo.desde, hasta: periodo.hasta, documentos: cedulas }),
   })
   return { reabiertos: r.reabiertos ?? [] }
+}
+
+/** Un horario (plantilla) de AsistencIA: mismo formato de días que aquí. */
+export type HorarioAsistencia = { id: string; nombre: string; dias: Record<string, unknown> }
+
+/** La jornada de una persona en AsistencIA (por cédula). */
+export type JornadaEmpleadoAsistencia = {
+  documento: string
+  nombre: string | null
+  sede: string | null
+  /** Su mapa de días; null = solo tiene la franja uniforme de respaldo. */
+  dias: Record<string, unknown> | null
+  entrada: string | null
+  salida: string | null
+  almuerzo_min: number | null
+}
+
+/** Los horarios (plantillas) de AsistencIA, para importarlos. */
+export async function horariosAsistencia(conexion?: { url: string; clave: string }): Promise<HorarioAsistencia[]> {
+  const r = await llamar<{ horarios: HorarioAsistencia[] }>('/api/horarios', {}, conexion)
+  return r.horarios ?? []
+}
+
+/** La jornada de cada empleado activo de AsistencIA, para importarla. */
+export async function jornadasAsistencia(conexion?: { url: string; clave: string }): Promise<JornadaEmpleadoAsistencia[]> {
+  const r = await llamar<{ jornadas: JornadaEmpleadoAsistencia[] }>('/api/jornadas', {}, conexion)
+  return (r.jornadas ?? []).map((j) => ({ ...j, documento: normalizarCedula(j.documento) }))
+}
+
+/**
+ * Le pone a una persona su jornada por días en AsistencIA (por cédula). Es lo
+ * que mantiene allá el horario con que se calculan las horas extra. 404 si la
+ * cédula no existe allá.
+ */
+export async function ponerJornadaAsistencia(cedula: string, dias: Record<string, unknown>): Promise<void> {
+  await llamar<unknown>(`/api/jornadas/${encodeURIComponent(normalizarCedula(cedula))}`, { method: 'PUT', body: JSON.stringify({ dias }) })
 }

@@ -41,8 +41,9 @@ export function BotonEliminar({ onEliminar, motivoBloqueo, etiqueta = 'Eliminar'
             role="button"
             aria-disabled
             aria-label={`${etiqueta} (bloqueado)`}
-            onClick={() => setAbierto((v) => !v)}
-            className="inline-flex size-9 shrink-0 cursor-not-allowed items-center justify-center rounded-md text-muted-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            // Abre, no alterna: en el celular el foco del toque ya lo abrió (ver Ayuda).
+            onClick={(e) => { e.preventDefault(); setAbierto(true) }}
+            className="inline-flex size-8 shrink-0 cursor-not-allowed items-center justify-center rounded-md text-muted-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Trash2 className="size-4" />
           </span>

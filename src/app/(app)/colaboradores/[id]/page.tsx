@@ -37,6 +37,7 @@ import { RegistrarDisfrute } from './registrar-disfrute'
 import { HistorialVacaciones } from './historial-vacaciones'
 import { urlFoto } from '@/lib/foto'
 import { HistorialDisciplinario, type ItemHistorial } from './historial-disciplinario'
+import { HorarioFicha } from './horario-ficha'
 import { formatFechaLarga, formatFechaISO, formatFechaCorta, calcularEdad, antiguedad, hoyBogota, duracionContrato } from '@/lib/fechas'
 
 const TIPO_CAPACITACION: Record<string, string> = { INDUCCION: 'Inducción', REINDUCCION: 'Reinducción', FORMACION: 'Formación', SST: 'SST' }
@@ -47,6 +48,7 @@ const TIPO_CAPACITACION: Record<string, string> = { INDUCCION: 'Inducción', REI
  * selector para no duplicar el archivo, y su casilla del semáforo se resuelve desde ahí.
  */
 const TIPO_CONTRATO_FIRMADO = 'Contrato firmado'
+import { NOMINA_VISIBLE } from '@/lib/nomina/visibilidad'
 import {
   TIPO_VINCULO, MODALIDAD_TRABAJO, ESTADO_COLABORADOR, TIPO_DOCUMENTO_IDENTIDAD,
   GENERO, ESTADO_CIVIL, GRUPO_SANGUINEO, NIVEL_EDUCATIVO, TIPO_CUENTA, CLASE_RIESGO_ARL,
@@ -55,7 +57,8 @@ import {
 
 export const metadata = { title: 'Ficha del colaborador · Smart Gadgets RH' }
 
-export default async function FichaColaboradorPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function FichaColaboradorPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams
   const { id } = await params
   const usuario = await requerirPermiso('colaboradores', 'VER')
   const puedeEditar = tienePermiso(usuario, 'colaboradores', 'EDITAR')
@@ -107,12 +110,17 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
   // Mis documentos (la API ya lo permite y avisa a Talento Humano); borrar no.
   const puedeSubirPropios = esPropia && tienePermiso(usuario, 'autoservicio', 'CREAR')
   const mostrarPagos = tienePermiso(usuario, 'nomina', 'VER') || esPropia
+  // Horario: quien gestiona horarios, o la propia persona (solo lo ve). Al OPS no se le fija horario.
+  const mostrarHorario = !esOps(c.tipoVinculo) && (tienePermiso(usuario, 'horarios', 'VER') || esPropia)
   const [contratos, contratosOps, eduDocs, liquidaciones, variacionesSalariales, auxTransporte] = await Promise.all([
     prisma.contrato.findMany({ where: { colaboradorId: id }, include: { cargo: true, sede: true }, orderBy: { fechaInicio: 'desc' } }),
     prisma.contratoOps.findMany({ where: { colaboradorId: id }, include: { sede: true }, orderBy: { fechaInicio: 'desc' } }),
     prisma.documento.findMany({ where: { entidadTipo: 'EducacionColaborador', entidadId: { in: c.educacion.map((e) => e.id) } }, select: { id: true, entidadId: true } }),
     mostrarPagos
-      ? prisma.liquidacionNomina.findMany({ where: { colaboradorId: id, documentoId: { not: null } }, include: { periodo: { select: { nombre: true } } }, orderBy: { creadoEn: 'desc' }, take: 60 })
+      ? prisma.liquidacionNomina.findMany({
+          // Quien no es de nómina (el propio empleado) solo ve los de nóminas ya aprobadas.
+          where: { colaboradorId: id, documentoId: { not: null }, ...(tienePermiso(usuario, 'nomina', 'VER') ? {} : { periodo: { estado: { in: [...NOMINA_VISIBLE] } } }) },
+          include: { periodo: { select: { nombre: true } } }, orderBy: { creadoEn: 'desc' }, take: 60 })
       : Promise.resolve([]),
     // Historial de variaciones salariales (requerimiento 3.4); cada otrosí de salario crea una.
     prisma.variacionSalarial.findMany({ where: { colaboradorId: id }, orderBy: { fechaVigencia: 'desc' } }),
@@ -396,7 +404,9 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
           ...(puedeAprobar ? [{ valor: 'solicitudes', label: 'Solicitudes' }] : []),
           ...(verDisciplinario ? [{ valor: 'disciplinario', label: 'Disciplinario' }] : []),
           ...(mostrarPagos ? [{ valor: 'pagos', label: 'Pagos' }] : []),
+          ...(mostrarHorario ? [{ valor: 'horario', label: 'Horario' }] : []),
         ]}
+        defecto={tab === 'horario' && mostrarHorario ? 'horario' : undefined}
       >
 
         {/* Resumen */}
@@ -712,6 +722,12 @@ export default async function FichaColaboradorPage({ params }: { params: Promise
                 </div>
               ))}
             </CardContent></Card>
+          </TabsContent>
+        )}
+
+        {mostrarHorario && (
+          <TabsContent value="horario">
+            <HorarioFicha colaboradorId={id} nombre={`${c.nombres} ${c.apellidos}`} puedeEditar={tienePermiso(usuario, 'horarios', 'EDITAR')} />
           </TabsContent>
         )}
       </TabsResponsive>

@@ -23,7 +23,9 @@ const LIMITE = 200
 export default async function NovedadesNominaPage({ searchParams }: { searchParams: Promise<{ grupo?: string }> }) {
   const { grupo } = await searchParams
   const usuario = await requerirPermiso('nomina', 'CREAR')
-  const conexion = await conexionAsistencia()
+  const conexion = await conexionAsistencia('horas')
+  // Hay clave pero compartir horas está apagado: se dice eso, no «conecta AsistencIA».
+  const horasApagadas = !conexion && Boolean(await conexionAsistencia())
 
   const nomColab = { colaborador: { select: { nombres: true, apellidos: true } } }
   const conPeriodo = { periodo: { select: { nombre: true } } }
@@ -71,7 +73,7 @@ export default async function NovedadesNominaPage({ searchParams }: { searchPara
           concepto: n.concepto.nombre, tipo: n.concepto.tipo, valor: Number(n.valor),
           pagadaEn: n.periodo?.nombre ?? null,
         }))}
-        asistencia={{ conectada: Boolean(conexion), url: conexion ? `${conexion.url}/admin?tab=equipo` : null }}
+        asistencia={{ conectada: Boolean(conexion), apagada: horasApagadas, url: conexion ? `${conexion.url}/admin?tab=equipo` : null }}
         esAdmin={esAdministrador(usuario)}
         // Horas extra primero: es lo que más se consulta aquí.
         grupoInicial={grupo === 'comisiones' || grupo === 'conceptos' ? grupo : 'horas'}

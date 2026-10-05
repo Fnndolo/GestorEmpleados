@@ -4,6 +4,7 @@ import { formatFechaISO } from '@/lib/fechas'
 import { esClaveDelMotor } from '@/lib/nomina/claves-motor'
 import { Encabezado } from '@/components/shell/encabezado'
 import { ParametrosForm, type ParametroItem, type TipoHoraItem } from './form'
+import { NuevoParametro } from './fila-parametro'
 
 export const metadata = { title: 'Parámetros de nómina · Configuración' }
 
@@ -68,7 +69,9 @@ export default async function ParametrosNominaPage() {
     <div>
       <Encabezado
         titulo="Parámetros de nómina"
-        descripcion="Valores legales vigentes que usa el motor de nómina. Registra una nueva vigencia cuando cambie la norma: el histórico se conserva para auditoría."
+        enLinea
+        ayuda="Valores legales vigentes que usa el motor de nómina. Cuando cambie la norma, registra una nueva vigencia: el histórico se conserva para auditoría."
+        acciones={puedeEditar && <NuevoParametro />}
       />
       <ParametrosForm
         puedeEditar={puedeEditar}

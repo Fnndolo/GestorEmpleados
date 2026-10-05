@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Upload, Trash2, PenLine, ShieldAlert } from 'lucide-react'
+import { Upload, Trash2, PenLine } from 'lucide-react'
+import { Ayuda } from '@/components/ui-kit/ayuda'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -55,58 +56,40 @@ export function FirmaRepLegalForm({
   }
 
   return (
-    <Card className="mt-4">
-      <CardContent className="py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="flex items-center gap-1.5 text-sm font-medium">
-                <PenLine className="size-4 text-muted-foreground" /> Firma del representante legal
-              </p>
-              <Badge variant={tieneFirma ? 'default' : 'secondary'}>
-                {tieneFirma ? 'Cargada' : 'Sin cargar'}
-              </Badge>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {tieneFirma
-                ? `Los acuerdos de evaluación previa salen ya firmados por ${repLegal || 'el representante legal'}, así el aspirante solo pone la suya.`
-                : 'Sin firma cargada, los acuerdos salen con la línea en blanco para firmarlos a mano.'}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              PNG o WEBP <span className="font-medium">con fondo transparente</span>, hasta 1 MB. Un JPG
-              pintaría un recuadro blanco sobre la línea.
-            </p>
-
-            <p className="mt-2 flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs text-amber-800 dark:text-amber-300">
-              <ShieldAlert className="mt-0.5 size-3.5 shrink-0" />
-              <span>
-                La imagen no se muestra ni se puede descargar desde ninguna pantalla: solo se usa al
-                generar el PDF. Cambiarla o quitarla exige permiso de edición y queda registrado en
-                auditoría. Para ver cómo queda, abre un documento de muestra en Plantillas.
-              </span>
-            </p>
-          </div>
-
-          {puedeEditar && (
-            <div className="flex shrink-0 items-center gap-2">
-              <label className={buttonVariants({ size: 'sm' }) + ' cursor-pointer gap-2'}>
-                {ocupado ? <Spinner /> : <Upload className="size-4" />}
-                {tieneFirma ? 'Reemplazar' : 'Cargar firma'}
-                <input
-                  type="file"
-                  accept="image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) subir(f); e.target.value = '' }}
-                />
-              </label>
-              {tieneFirma && (
-                <Button size="icon" variant="ghost" onClick={quitar} disabled={ocupado} aria-label="Quitar firma">
-                  <Trash2 className="size-4" />
-                </Button>
-              )}
-            </div>
-          )}
+    <Card className="mt-4 py-0">
+      <CardContent className="space-y-3 p-4 sm:p-5">
+        <div className="flex items-center gap-1.5">
+          <PenLine className="size-4 shrink-0 text-muted-foreground" />
+          <p className="min-w-0 truncate text-sm font-semibold">Firma del representante legal</p>
+          <Ayuda
+            etiqueta="Sobre la firma"
+            texto={`${tieneFirma
+              ? `Los acuerdos de evaluación previa salen ya firmados por ${repLegal || 'el representante legal'}, así el aspirante solo pone la suya.`
+              : 'Sin firma cargada, los acuerdos salen con la línea en blanco para firmarlos a mano.'} Usa PNG o WEBP con fondo transparente (un JPG pinta un recuadro blanco), hasta 1 MB. La imagen no se muestra ni se descarga en ninguna pantalla: solo se usa al generar el PDF, y cambiarla queda en auditoría. Para ver cómo queda, abre una muestra en Plantillas.`}
+          />
+          <span className="flex-1" />
+          <Badge variant={tieneFirma ? 'default' : 'secondary'}>{tieneFirma ? 'Cargada' : 'Sin cargar'}</Badge>
         </div>
+        <p className="truncate text-xs text-muted-foreground">PNG o WEBP transparente, hasta 1 MB.</p>
+        {puedeEditar && (
+          <div className="flex items-center gap-2">
+            <label className={buttonVariants({ size: 'sm' }) + ' cursor-pointer gap-2 max-sm:flex-1'}>
+              {ocupado ? <Spinner /> : <Upload className="size-4" />}
+              {tieneFirma ? 'Reemplazar firma' : 'Cargar firma'}
+              <input
+                type="file"
+                accept="image/png,image/webp"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) subir(f); e.target.value = '' }}
+              />
+            </label>
+            {tieneFirma && (
+              <Button size="icon" variant="outline" onClick={quitar} disabled={ocupado} aria-label="Quitar firma" title="Quitar firma">
+                <Trash2 className="size-4" />
+              </Button>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
