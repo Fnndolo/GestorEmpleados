@@ -138,11 +138,9 @@ export async function guardarCronograma(opts: { sedeId: string; mes: string; tur
     ...(antes?.ids.includes(id) ? [antes.fecha] : []),
     ...(despues?.ids.includes(id) ? [despues.fecha] : []),
   ]]))
+  // Dos seguidos se evita, pero se permite como excepción cuando no alcanza la
+  // gente: la pantalla lo marca y pide confirmarlo; aquí queda en la auditoría.
   const cruces = crucesDeTurnos(conBordes, secuencia)
-  if (cruces.length) {
-    const c = cruces[0]
-    throw new ErrorNegocio(`${nombre.get(c.colaboradorId)} quedaría en dos domingos/festivos seguidos (${c.fechas.map(fechaCorta).join(' y ')}). Nadie puede trabajar dos seguidos.`)
-  }
 
   const [desde, hasta] = rangoMes(opts.mes)
   const filas = Object.entries(limpios).flatMap(([colaboradorId, fechas]) =>
@@ -163,7 +161,7 @@ export async function guardarCronograma(opts: { sedeId: string; mes: string; tur
   // El reemplazo de turnos es masivo y el cliente auditado no lo registra solo: queda la foto completa.
   await auditar('EDITAR', 'TurnoDominical', {
     registroId: cronograma.id,
-    descripcion: `Cronograma ${opts.mes}: ${Object.entries(limpios).map(([id, f]) => `${nombre.get(id)} (${[...f].sort().map(fechaCorta).join(', ')})`).join('; ') || 'sin turnos'}`,
+    descripcion: `Cronograma ${opts.mes}: ${Object.entries(limpios).map(([id, f]) => `${nombre.get(id)} (${[...f].sort().map(fechaCorta).join(', ')})`).join('; ') || 'sin turnos'}${cruces.length ? ` · Excepciones (dos seguidos): ${cruces.map((c) => `${nombre.get(c.colaboradorId)} ${c.fechas.map(fechaCorta).join(' y ')}`).join('; ')}` : ''}`,
   })
   return { turnos: filas.length }
 }

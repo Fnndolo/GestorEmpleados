@@ -92,7 +92,8 @@ export function CronogramaCliente({ filtros, sedeId, mes, nombreMes, especiales,
       setTurnos({ ...turnos, [p.id]: suyas.filter((f) => f !== fecha) })
     } else {
       const choca = bloqueo(p.id, fecha)
-      if (choca) { toast.error(`${p.nombre.split(' ')[0]} trabaja el ${larga(choca)}: no puede el ${larga(fecha)} (nadie trabaja dos domingos/festivos seguidos).`); return }
+      // Dos seguidos solo como excepción (cuando no alcanza la gente): se confirma.
+      if (choca && !window.confirm(`${p.nombre.split(' ')[0]} ya trabaja el ${larga(choca)}. ¿Asignarle también el ${larga(fecha)}? Quedaría dos domingos/festivos seguidos (excepción).`)) return
       setTurnos({ ...turnos, [p.id]: [...suyas, fecha] })
     }
     setCambios(true)
@@ -107,8 +108,12 @@ export function CronogramaCliente({ filtros, sedeId, mes, nombreMes, especiales,
     })
     setTurnos(r.turnos)
     setCambios(true)
-    if (r.faltan.length) toast.warning(`No alcanza la gente para ${porDia} por día sin repetir seguido: faltan personas el ${r.faltan.map((f) => larga(f.fecha)).join(', ')}.`, { duration: 9000 })
-    else toast.success('Reparto sugerido. Revísalo y guarda.')
+    if (r.faltan.length) toast.warning(`No hay suficientes personas para ${porDia} por día: faltan el ${r.faltan.map((f) => larga(f.fecha)).join(', ')}.`, { duration: 9000 })
+    if (r.excepciones.length) {
+      const nombre = (id: string) => personas.find((p) => p.id === id)?.corto ?? ''
+      toast.warning(`No alcanzaba la gente: ${r.excepciones.map((e) => `${nombre(e.persona)} repite el ${larga(e.fecha)}`).join(', ')}. Quedan marcados en ámbar.`, { duration: 10000 })
+    }
+    if (!r.faltan.length && !r.excepciones.length) toast.success('Reparto sugerido. Revísalo y guarda.')
   }
 
   async function guardar(): Promise<boolean> {
@@ -300,13 +305,13 @@ export function CronogramaCliente({ filtros, sedeId, mes, nombreMes, especiales,
                 return (
                   <li key={p.id}>
                     <button
-                      type="button" disabled={!editable || !!choca} onClick={() => alternar(p, diaAbierto)} aria-pressed={marcado}
+                      type="button" disabled={!editable} onClick={() => alternar(p, diaAbierto)} aria-pressed={marcado}
                       className={cn('flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left', marcado ? 'bg-foreground/5' : 'active:bg-accent', choca && 'opacity-60')}
                     >
                       <AvatarColaborador nombre={p.nombre} fotoUrl={p.fotoUrl} className="size-8" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{p.nombre}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{choca ? `Trabaja el ${larga(choca)}` : `${(turnos[p.id] ?? []).length} en el mes${p.trabajaDomingo === false ? ' · su horario no incluye domingo' : ''}`}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{choca ? `Trabaja el ${larga(choca)} · solo como excepción` : `${(turnos[p.id] ?? []).length} en el mes${p.trabajaDomingo === false ? ' · su horario no incluye domingo' : ''}`}</span>
                       </span>
                       <span className={cn('grid size-7 shrink-0 place-items-center rounded-md border', marcado && 'border-foreground bg-foreground text-background', choca && 'border-dashed')}>
                         {marcado && <Check className="size-4" />}
@@ -366,19 +371,21 @@ export function CronogramaCliente({ filtros, sedeId, mes, nombreMes, especiales,
                   {especiales.map((d) => {
                     const marcado = (turnos[p.id] ?? []).includes(d.fecha)
                     const choca = !marcado ? bloqueo(p.id, d.fecha) : null
+                    const excepcion = marcado ? bloqueo(p.id, d.fecha) : null
                     return (
                       <td key={d.fecha} className="p-1 text-center">
                         <button
                           type="button"
                           onClick={() => alternar(p, d.fecha)}
                           disabled={!editable}
-                          title={marcado ? `Trabaja el ${larga(d.fecha)}` : choca ? `Trabaja el ${larga(choca)}: no puede este día` : `Asignar el ${larga(d.fecha)}`}
+                          title={excepcion ? `Excepción: también trabaja el ${larga(excepcion)}` : marcado ? `Trabaja el ${larga(d.fecha)}` : choca ? `Trabaja el ${larga(choca)}: solo como excepción` : `Asignar el ${larga(d.fecha)}`}
                           aria-label={`${p.nombre} · ${larga(d.fecha)}${marcado ? ' · trabaja' : ''}`}
                           aria-pressed={marcado}
                           className={cn(
                             'mx-auto grid size-9 place-items-center rounded-md border transition-colors sm:size-8',
-                            marcado ? 'border-foreground bg-foreground text-background'
-                              : choca ? 'cursor-not-allowed border-dashed bg-[repeating-linear-gradient(135deg,transparent,transparent_4px,var(--muted)_4px,var(--muted)_6px)] text-muted-foreground'
+                            excepcion ? 'border-amber-500 bg-amber-500 text-white'
+                              : marcado ? 'border-foreground bg-foreground text-background'
+                              : choca ? 'border-dashed bg-[repeating-linear-gradient(135deg,transparent,transparent_4px,var(--muted)_4px,var(--muted)_6px)] text-muted-foreground hover:bg-accent'
                                 : 'hover:bg-accent',
                             !editable && 'cursor-default',
                           )}

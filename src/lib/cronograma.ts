@@ -99,10 +99,11 @@ export function sugerirReparto(opts: {
   despues?: ReadonlySet<string>
   /** Número al azar en [0, 1). Se puede fijar en las pruebas para repetir el reparto. */
   azar?: () => number
-}): { turnos: TurnosPorPersona; faltan: { fecha: string; faltan: number }[] } {
+}): { turnos: TurnosPorPersona; faltan: { fecha: string; faltan: number }[]; excepciones: { fecha: string; persona: string }[] } {
   const turnos: TurnosPorPersona = Object.fromEntries(opts.personas.map((p) => [p, []]))
   const domingos: Record<string, number> = Object.fromEntries(opts.personas.map((p) => [p, 0]))
   const faltan: { fecha: string; faltan: number }[] = []
+  const excepciones: { fecha: string; persona: string }[] = []
   let anteriores = new Set(opts.antes ?? [])
   const azar = opts.azar ?? Math.random
   // Cuántas veces ha trabajado cada pareja el mismo día en este reparto.
@@ -121,6 +122,18 @@ export function sugerirReparto(opts: {
       libres.sort((x, y) => turnos[x].length - turnos[y].length || coincidencias(x) - coincidencias(y) || domingos[x] - domingos[y])
       elegidos.push(libres.shift()!)
     }
+    // Excepción: si no alcanza la gente libre, se completa con quien trabajó el
+    // día anterior (o trabaja el siguiente), los de menos turnos primero. Mejor
+    // repetir seguido que dejar el día corto; queda marcado para revisarlo.
+    if (elegidos.length < Math.max(0, opts.porDia)) {
+      const repiten = barajar(opts.personas.filter((p) => !elegidos.includes(p)), azar)
+        .sort((x, y) => turnos[x].length - turnos[y].length || domingos[x] - domingos[y])
+      while (elegidos.length < opts.porDia && repiten.length) {
+        const p = repiten.shift()!
+        elegidos.push(p)
+        excepciones.push({ fecha: dia.fecha, persona: p })
+      }
+    }
     for (let a = 0; a < elegidos.length; a++) for (let b = a + 1; b < elegidos.length; b++) {
       juntos.set(par(elegidos[a], elegidos[b]), (juntos.get(par(elegidos[a], elegidos[b])) ?? 0) + 1)
     }
@@ -131,5 +144,5 @@ export function sugerirReparto(opts: {
     if (elegidos.length < opts.porDia) faltan.push({ fecha: dia.fecha, faltan: opts.porDia - elegidos.length })
     anteriores = new Set(elegidos)
   })
-  return { turnos, faltan }
+  return { turnos, faltan, excepciones }
 }

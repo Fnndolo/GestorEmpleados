@@ -74,9 +74,17 @@ describe('reparto sugerido', () => {
     }
   })
 
-  it('si no alcanza la gente, dice cuántos faltan', () => {
-    const { faltan } = sugerirReparto({ especiales: noviembre.slice(0, 2), personas: ['a', 'b', 'c'], porDia: 2 })
-    expect(faltan).toEqual([{ fecha: '2026-11-02', faltan: 1 }])
+  it('si no alcanza la gente, repite seguido como excepción en vez de dejar el día corto', () => {
+    const { turnos, faltan, excepciones } = sugerirReparto({ especiales: noviembre.slice(0, 2), personas: ['a', 'b', 'c'], porDia: 2 })
+    expect(faltan).toEqual([])
+    expect(excepciones).toHaveLength(1)
+    expect(excepciones[0].fecha).toBe('2026-11-02')
+    expect(turnos[excepciones[0].persona]).toEqual(['2026-11-01', '2026-11-02'])
+  })
+
+  it('solo falta gente si no hay suficientes personas en total', () => {
+    const { faltan } = sugerirReparto({ especiales: noviembre.slice(0, 1), personas: ['a'], porDia: 2 })
+    expect(faltan).toEqual([{ fecha: '2026-11-01', faltan: 1 }])
   })
 
   it('cuenta los domingos (no los festivos) para el trabajo dominical habitual', () => {
