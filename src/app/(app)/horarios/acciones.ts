@@ -8,7 +8,7 @@ import { accion, ErrorNegocio } from '@/server/accion'
 import { validarDias } from '@/lib/horarios'
 import { parseFechaISO, hoyBogota } from '@/lib/fechas'
 import { asignarHorario, cancelarCambioProgramado, importarDeAsistencia, vistaPreviaComunicacion } from '@/server/horarios'
-import { guardarCronograma, publicarCronograma } from '@/server/cronograma'
+import { guardarCronograma, publicarCronograma, avisosDelCronograma } from '@/server/cronograma'
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida')
 
@@ -176,6 +176,12 @@ export const guardarCronogramaMes = accion(
 )
 
 /** Publica el cronograma: le avisa a cada persona sus días (solo a quien le cambiaron). */
+/** Lo que le llegaría a cada persona al publicar estos turnos (aún sin guardar), sin avisar a nadie. */
+export const previsualizarAvisosCronograma = accion(
+  { modulo: 'horarios', accion: 'EDITAR', schema: z.object({ sedeId: z.uuid(), mes, turnos: z.record(z.string(), z.array(z.string())) }) },
+  async (d) => avisosDelCronograma(d.sedeId, d.mes, d.turnos),
+)
+
 export const publicarCronogramaMes = accion(
   { modulo: 'horarios', accion: 'EDITAR', schema: z.object({ sedeId: z.uuid(), mes }) },
   async (d, usuario) => {

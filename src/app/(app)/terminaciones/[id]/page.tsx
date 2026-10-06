@@ -58,7 +58,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   const t = await prisma.terminacion.findUnique({
     where: { id },
     include: {
-      colaborador: { select: { id: true, nombres: true, apellidos: true, numeroDocumento: true, fechaIngreso: true } },
+      colaborador: { select: { id: true, nombres: true, apellidos: true, numeroDocumento: true, fechaIngreso: true, tipoVinculo: true, _count: { select: { contratos: true } } } },
       liquidacion: true,
       pazYSalvo: { include: { items: { orderBy: { id: 'asc' } } } },
       cartas: true,
@@ -73,7 +73,10 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   const nombre = `${t.colaborador.nombres} ${t.colaborador.apellidos}`
 
   // Meses sobre los que se promedia el salario variable (para rehacer el cálculo).
-  const ventana = puedeEditar && liq && !liq.enviadoFirmaEn
+  // Laboral: lleva liquidación definitiva (un OPS no). Sin contrato registrado no hay con qué calcularla.
+  const llevaLiquidacion = t.colaborador.tipoVinculo !== 'OPS'
+  const tieneContrato = t.colaborador._count.contratos > 0
+  const ventana = puedeEditar && (liq ? !liq.enviadoFirmaEn : llevaLiquidacion && tieneContrato)
     ? await mesesParaPromedios(t.colaborador.id, t.colaborador.fechaIngreso, t.fechaRetiro)
     : { meses: [], mesesAnual: 0, mesesSemestre: 0 }
   const variableGuardado = Object.fromEntries((detalle?.ajustes?.variablePorMes ?? []).map((m) => [m.mes, m.valor]))
@@ -145,6 +148,9 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
     estado: examenHecho ? 'hecho' : 'opcional',
     opcional: true,
   })
+  if (!liq && llevaLiquidacion) {
+    pasos.push({ id: 'liquidacion', titulo: 'Liquidación', detalle: tieneContrato ? 'Falta calcularla' : 'Falta el contrato para calcularla', estado: 'pendiente' })
+  }
   if (liq) {
     pasos.push({
       id: 'liquidacion',
@@ -165,6 +171,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
 
   const requisitos = [
     { texto: `${NOMBRE_CARTA[tipoCarta]} firmada por el trabajador`, ok: !!carta?.firmadoEn },
+    ...(!liq && llevaLiquidacion ? [{ texto: 'Liquidación definitiva calculada', ok: false }] : []),
     ...(liq ? [
       { texto: 'Recibido de la liquidación firmado', ok: !!liq.firmadoEn },
       { texto: 'Pago de la liquidación con comprobante', ok: !!liq.pagadoEn },
@@ -248,7 +255,27 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
         puedeEditar={puedeEditar}
       />
     ),
-    liquidacion: liq && (
+    liquidacion: !liq && llevaLiquidacion ? (
+      <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+        <p className="font-medium">Todavía no tiene liquidación definitiva.</p>
+        {tieneContrato ? (
+          <>
+            <p className="text-muted-foreground">Calcúlala con «Rehacer el cálculo»: revisa la fecha de retiro y las bases antes de guardar.</p>
+            {!cerrada && puedeEditar && (
+              <AccionesLiquidacion
+                terminacionId={t.id} colaborador={nombre} fechaRetiro={formatFechaISO(t.fechaRetiro)}
+                bases={bases} ventana={ventana} variableGuardado={variableGuardado} puedeEditar puedeEliminar={false}
+              />
+            )}
+          </>
+        ) : (
+          <p className="text-muted-foreground">
+            No tiene ningún contrato registrado, y sin él no hay salario ni fecha de inicio con qué calcularla. Súbelo en su ficha (Contratación → Subir contrato existente) y vuelve aquí; mientras tanto, si se liquida por fuera, sube el soporte en «Soportes».
+            {' '}<Link href={`/colaboradores/${t.colaborador.id}`} className="font-medium text-primary hover:underline">Ir a la ficha</Link>
+          </p>
+        )}
+      </div>
+    ) : liq && (
       <div className="space-y-3">
         <ResumenLiquidacion liq={liq} detalle={detalle} />
         {!cerrada && !liq.enviadoFirmaEn && puedeEditar && (

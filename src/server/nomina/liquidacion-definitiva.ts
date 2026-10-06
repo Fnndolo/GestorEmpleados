@@ -173,8 +173,11 @@ export function liquidacionDefinitiva(e: EntradaLiquidacionDef): ResultadoLiquid
   // ── Indemnización (solo sin justa causa / terminación anticipada) ──
   let indemnizacion = new Decimal(0)
   if (e.tipo === 'SIN_JUSTA_CAUSA' || e.tipo === 'TERMINACION_ANTICIPADA') {
+    // Base: el salario (con el promedio variable), SIN auxilio de transporte:
+    // el art. 64 CST indemniza salarios, y el auxilio no es salario.
+    const baseIndemnizacion = salarioBase.plus(e.promedioVariableAnual)
     indemnizacion = calcularIndemnizacion(
-      baseCesantias, baseCesantias.dividedBy(30), totalDias,
+      baseIndemnizacion, baseIndemnizacion.dividedBy(30), totalDias,
       e.tipoContrato, e.fechaRetiro, e.fechaFinContrato, e.smmlv,
     )
   }
@@ -230,9 +233,11 @@ function calcularIndemnizacion(
   tipoContrato: string, fechaRetiro: Date, fechaFinContrato: Date | null, smmlv: number,
 ): Decimal {
   if (tipoContrato === 'TERMINO_FIJO' || tipoContrato === 'OBRA_LABOR') {
-    // Días que faltan hasta el fin del contrato (mínimo 15 días)
-    const diasRestantes = fechaFinContrato ? Math.max(15, dias360(fechaRetiro, fechaFinContrato)) : 15
-    return salarioDiario.times(diasRestantes)
+    // Los salarios del tiempo que faltaba para terminar el contrato. El mínimo
+    // de 15 días es solo para obra o labor (art. 64 CST); el término fijo no
+    // lo tiene. Sin fecha de fin, la acción lo exige antes de llegar aquí.
+    const faltan = fechaFinContrato ? dias360(fechaRetiro, fechaFinContrato) : 0
+    return salarioDiario.times(tipoContrato === 'OBRA_LABOR' ? Math.max(15, faltan) : faltan)
   }
   // Indefinido (CST art. 64)
   const anios = totalDias / 360

@@ -4,9 +4,10 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Timer, KeyRound, ArrowRight, Images } from 'lucide-react'
+import { Timer, KeyRound, ArrowRight, Images, ChevronRight, RefreshCw } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner'
 import { cambiarDatoCompartido, enviarFotosAsistencia } from './acciones'
+import { importarHorariosAsistencia } from '@/app/(app)/horarios/acciones'
 import { Switch } from '@/components/ui/switch'
 import { DATOS_COMPARTIDOS, type DatoCompartido } from '@/lib/integraciones'
 import { Button } from '@/components/ui/button'
@@ -15,17 +16,6 @@ import { Chip, Pill } from '@/components/ui-kit'
 import { Ayuda } from '@/components/ui-kit/ayuda'
 import { DialogConectarAsistencia } from '@/components/integraciones/dialog-asistencia'
 
-/**
- * Una línea por dato compartido, encendido y apagado. La explicación completa
- * (la de lib/integraciones) queda detrás del ⓘ de cada fila.
- */
-const CORTO: Record<DatoCompartido, { que: string; apagado: string }> = {
-  colaboradores: { que: 'Nombre, cédula, sede y si sigue activo', apagado: 'no llegan ingresos ni retiros' },
-  fotos: { que: 'La foto de perfil, en las dos direcciones', apagado: 'cada plataforma con sus fotos' },
-  horas: { que: 'Horas extra y recargos para Nómina', apagado: 'horas extra a mano' },
-  horarios: { que: 'El horario de cada persona', apagado: 'el horario se cambia en ambas' },
-}
-
 /** Estado de la conexión con AsistencIA y el botón para conectarla o cambiarla. */
 export function TarjetaAsistencia({ conectada, url, compartidos }: { conectada: boolean; url: string | null; compartidos: Record<string, boolean> }) {
   const router = useRouter()
@@ -33,6 +23,22 @@ export function TarjetaAsistencia({ conectada, url, compartidos }: { conectada: 
   const [enviando, setEnviando] = useState(false)
 
   const [cambiando, setCambiando] = useState<DatoCompartido | null>(null)
+  const [datoAbierto, setDatoAbierto] = useState<DatoCompartido | null>(null)
+  const [sincronizando, setSincronizando] = useState(false)
+  const encendidos = DATOS_COMPARTIDOS.filter((d) => compartidos[d.clave] !== false).length
+
+  // Trae de AsistencIA las plantillas y el horario de cada persona (lo mismo que
+  // «Recuperar de AsistencIA» en Horarios). Lo distinto queda como cambio desde hoy.
+  async function sincronizarHorarios() {
+    setSincronizando(true)
+    const res = await importarHorariosAsistencia({})
+    setSincronizando(false)
+    if (!res.ok) { toast.error(res.error, { duration: 10000 }); return }
+    const r = res.datos
+    toast.success(`Horarios sincronizados: ${r.personasActualizadas} persona${r.personasActualizadas === 1 ? '' : 's'} actualizada${r.personasActualizadas === 1 ? '' : 's'}, ${r.personasIguales} ya estaban igual, ${r.plantillasNuevas} plantilla${r.plantillasNuevas === 1 ? '' : 's'} nueva${r.plantillasNuevas === 1 ? '' : 's'}.`, { duration: 8000 })
+    if (r.sinFicha.length) toast.warning(`En AsistencIA sin ficha activa aquí: ${r.sinFicha.join(', ')}.`, { duration: 10000 })
+    router.refresh()
+  }
   async function cambiar(dato: DatoCompartido, activo: boolean) {
     setCambiando(dato)
     const res = await cambiarDatoCompartido({ dato, activo })
@@ -85,47 +91,64 @@ export function TarjetaAsistencia({ conectada, url, compartidos }: { conectada: 
             </Button>
           </div>
 
-          <div className="mt-4 space-y-2">
-            <p className="flex items-center gap-1.5 text-sm font-semibold">
-              Qué se comparte
+          {/* Qué se comparte: una cajita cerrada con el resumen; dentro, un acordeón
+              por dato con su interruptor y la acción que le toca (enviar fotos,
+              ver las horas, sincronizar horarios). */}
+          <details className="group/comparte mt-3 rounded-lg border">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm [&::-webkit-details-marker]:hidden">
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-open/comparte:rotate-90" />
+              <span className="font-semibold">Qué se comparte</span>
               <Ayuda
                 etiqueta="Sobre qué se comparte"
-                texto={`Nunca pasan salarios, contratos, salud, cuentas bancarias, contacto ni documentos. Lo que apagues aquí deja de salir y de entrar, aunque la clave sea correcta.${conectada ? '' : ' Puedes dejarlo listo antes de conectar: se aplica apenas conectes AsistencIA.'}`}
+                texto={`Nunca pasan salarios, contratos, salud, cuentas bancarias, contacto ni documentos. Lo que apagues deja de salir y de entrar, aunque la clave sea correcta.${conectada ? '' : ' Puedes dejarlo listo antes de conectar.'}`}
               />
-            </p>
-            <ul className="divide-y rounded-lg border">
+              <span className="ml-auto text-xs text-muted-foreground">{encendidos} de {DATOS_COMPARTIDOS.length}</span>
+            </summary>
+            <ul className="divide-y border-t">
               {DATOS_COMPARTIDOS.map((d) => {
                 const activo = compartidos[d.clave] !== false
+                const abiertoDato = datoAbierto === d.clave
                 return (
-                  <li key={d.clave} className="flex items-center gap-3 px-3 py-2.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-1.5 text-sm font-medium">
-                        {d.titulo}
-                        <Ayuda texto={`${d.que} Si se apaga: ${d.siSeApaga.charAt(0).toLowerCase()}${d.siSeApaga.slice(1)}`} etiqueta={`Sobre ${d.titulo.toLowerCase()}`} />
-                      </p>
-                      {activo
-                        ? <p className="truncate text-xs text-muted-foreground">{CORTO[d.clave].que}</p>
-                        : <p className="truncate text-xs text-amber-700 dark:text-amber-400">Apagado: {CORTO[d.clave].apagado}</p>}
+                  <li key={d.clave}>
+                    <div className="flex items-center gap-2 px-3 py-2">
+                      <button type="button" onClick={() => setDatoAbierto(abiertoDato ? null : d.clave)} aria-expanded={abiertoDato} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                        <ChevronRight className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${abiertoDato ? 'rotate-90' : ''}`} />
+                        <span className="truncate text-sm">{d.titulo}</span>
+                        {!activo && <span className="shrink-0 text-xs text-amber-700 dark:text-amber-400">Apagado</span>}
+                      </button>
+                      {cambiando === d.clave ? <Spinner /> : (
+                        <Switch checked={activo} onCheckedChange={(v) => cambiar(d.clave, v)} disabled={cambiando !== null} aria-label={`Compartir ${d.titulo.toLowerCase()}`} />
+                      )}
                     </div>
-                    {cambiando === d.clave ? <Spinner /> : (
-                      <Switch checked={activo} onCheckedChange={(v) => cambiar(d.clave, v)} disabled={cambiando !== null} aria-label={`Compartir ${d.titulo.toLowerCase()}`} />
+                    {abiertoDato && (
+                      <div className="space-y-2 px-3 pb-3 pl-8 text-xs text-muted-foreground">
+                        <p>{d.que}</p>
+                        <p className={activo ? undefined : 'text-amber-700 dark:text-amber-400'}>Si se apaga: {d.siSeApaga.charAt(0).toLowerCase() + d.siSeApaga.slice(1)}</p>
+                        {d.clave === 'fotos' && (
+                          <Button size="sm" variant="outline" onClick={enviarFotos} disabled={!conectada || !activo || enviando}>
+                            {enviando ? <Spinner /> : <Images className="size-4" />} Enviar todas las fotos
+                          </Button>
+                        )}
+                        {d.clave === 'horas' && conectada && activo && (
+                          <Link href="/nomina/novedades?grupo=horas" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                            Ver las horas extra en Nómina <ArrowRight className="size-3.5" />
+                          </Link>
+                        )}
+                        {d.clave === 'horarios' && (
+                          <Button size="sm" variant="outline" onClick={sincronizarHorarios} disabled={!conectada || !activo || sincronizando}>
+                            {sincronizando ? <Spinner /> : <RefreshCw className="size-4" />} Sincronizar horarios
+                          </Button>
+                        )}
+                        {(d.clave === 'fotos' || d.clave === 'horarios') && (!conectada || !activo) && (
+                          <p>{!conectada ? 'Conecta AsistencIA para usarlo.' : 'Enciéndelo para usarlo.'}</p>
+                        )}
+                      </div>
                     )}
                   </li>
                 )
               })}
             </ul>
-          </div>
-
-          {conectada && (
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-              <Button size="sm" onClick={enviarFotos} disabled={enviando || compartidos.fotos === false} title="Manda a AsistencIA la foto de perfil de todos los colaboradores activos">
-                {enviando ? <Spinner /> : <Images className="size-4" />} Enviar fotos
-              </Button>
-              <Link href="/nomina/novedades?grupo=horas" className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-medium text-primary hover:underline">
-                Horas extra en Nómina <ArrowRight className="size-4" />
-              </Link>
-            </div>
-          )}
+          </details>
         </CardContent>
       </Card>
       {abierto && (

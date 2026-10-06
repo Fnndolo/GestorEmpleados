@@ -182,6 +182,19 @@ describe('liquidación definitiva · reglas', () => {
     expect(r.indemnizacion).toBe(peso((1_750_905 / 30) * 151))
   })
 
+  it('la indemnización no lleva auxilio de transporte (no es salario)', () => {
+    const r = liquidacionDefinitiva({ ...base, tipo: 'SIN_JUSTA_CAUSA', auxilioTransporte: 249_095 })
+    expect(r.indemnizacion).toBe(peso((1_750_905 / 30) * 30))
+  })
+
+  it('término fijo sin mínimo de 15 días; obra o labor sí lo tiene', () => {
+    const fijo = liquidacionDefinitiva({ ...base, tipo: 'SIN_JUSTA_CAUSA', tipoContrato: 'TERMINO_FIJO', fechaFinContrato: D(2026, 8, 5) })
+    // 31 jul → 5 ago: 5 días (30/360).
+    expect(fijo.indemnizacion).toBe(peso((1_750_905 / 30) * 5))
+    const obra = liquidacionDefinitiva({ ...base, tipo: 'SIN_JUSTA_CAUSA', tipoContrato: 'OBRA_LABOR', fechaFinContrato: D(2026, 8, 5) })
+    expect(obra.indemnizacion).toBe(peso((1_750_905 / 30) * 15))
+  })
+
   it('retiro el mismo día del ingreso: se liquida ese único día trabajado', () => {
     const r = liquidacionDefinitiva({ ...base, fechaRetiro: D(2026, 1, 15) })
     expect(r.diasLiquidados).toBe(1)

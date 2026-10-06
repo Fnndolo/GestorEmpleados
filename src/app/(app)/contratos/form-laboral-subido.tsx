@@ -21,6 +21,7 @@ import { fmtCOP } from '@/lib/moneda'
 import { duracionContrato } from '@/lib/fechas'
 import { avisoVinculoAjustado, avisoReactivacion, type AjusteVinculo, type Reactivacion } from '@/lib/vinculo-contrato'
 import type { ContratoInput } from '@/lib/validaciones/contrato'
+import { Ayuda } from '@/components/ui-kit/ayuda'
 import { analizarPdfContratoLaboral, subirContratoParaFirma } from './acciones'
 
 /**
@@ -73,6 +74,12 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
   })
   // El PDF ya viene firmado por el representante legal: solo firma el empleado.
   const [empleadorFirmo, setEmpleadorFirmo] = useState(false)
+  // Otrosí: la persona ya trabaja con contrato vigente pero no se encontró el documento.
+  const [documento, setDocumento] = useState<'CONTRATO' | 'OTROSI'>('CONTRATO')
+  const esOtrosi = documento === 'OTROSI'
+  // El periodo de prueba es opcional: una casilla, y solo si se marca, los días.
+  const [conPrueba, setConPrueba] = useState(false)
+  const nombreDoc = esOtrosi ? 'otrosí' : 'contrato'
   // La autorización de datos (Ley 1581) la arma la app y la firma el empleado
   // con el contrato. No siempre hace falta: a veces ya se recogió aparte.
   const [generarAutorizacion, setGenerarAutorizacion] = useState(true)
@@ -132,13 +139,14 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
   }
 
   function guardar() {
-    if (!pdf || !archivoPdf || !pdfRef) { toast.error('Adjunta el PDF del contrato.'); return }
+    if (!pdf || !archivoPdf || !pdfRef) { toast.error(`Adjunta el PDF del ${nombreDoc}.`); return }
     if (!f.colaboradorId) { toast.error('Selecciona al colaborador que va a firmar.'); return }
     if (!f.sedeId) { toast.error('Selecciona la sede.'); return }
     if (!f.fechaInicio) { toast.error('Indica la fecha de inicio.'); return }
     if (f.tipo === 'TERMINO_FIJO' && !f.fechaFin) { toast.error('Un contrato a término fijo requiere fecha de fin.'); return }
     if (f.tipo === 'OBRA_LABOR' && !f.objetoObraLabor.trim()) { toast.error('Indica el objeto de la obra o labor.'); return }
     if (salario <= 0) { toast.error('Indica el salario base.'); return }
+    if (conPrueba && !(Number(f.periodoPruebaDias) > 0)) { toast.error('Indica los días del periodo de prueba.'); return }
 
     empezar(async () => {
       const res = await subirContratoParaFirma({
@@ -159,17 +167,20 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
         fechaFin: f.tipo === 'TERMINO_FIJO' ? f.fechaFin : '',
         objetoObraLabor: f.tipo === 'OBRA_LABOR' ? f.objetoObraLabor : '',
         etapaAprendizaje: f.tipo === 'APRENDIZAJE_SENA' ? (f.etapaAprendizaje as 'LECTIVA' | 'PRODUCTIVA' | '') : '',
-        periodoPruebaDias: f.periodoPruebaDias ? Number(f.periodoPruebaDias) : undefined,
+        periodoPruebaDias: conPrueba && f.periodoPruebaDias ? Number(f.periodoPruebaDias) : undefined,
         observaciones: f.observaciones,
         posicionEmpleado: posiciones.contratista,
         posicionEmpleador: empleadorFirmo ? undefined : posiciones.contratante,
         empleadorFirmoEnPdf: empleadorFirmo,
         generarAutorizacion,
+        esOtrosi,
       })
       if (!res.ok) { toast.error(res.error ?? 'No se pudo subir el contrato.'); return }
-      toast.success(empleadorFirmo
-        ? 'Contrato subido. Con la firma del empleado desde su autoservicio quedará completo.'
-        : 'Contrato subido. El empleado ya puede firmarlo desde su autoservicio.')
+      toast.success(esOtrosi
+        ? 'Contrato registrado con su otrosí. El empleado ya puede firmar el otrosí desde su autoservicio.'
+        : empleadorFirmo
+          ? 'Contrato subido. Con la firma del empleado desde su autoservicio quedará completo.'
+          : 'Contrato subido. El empleado ya puede firmarlo desde su autoservicio.')
       const datos = res.datos as { id: string; vinculoAjustado?: AjusteVinculo; reactivado?: Reactivacion | null }
       for (const aviso of [avisoReactivacion(datos.reactivado), avisoVinculoAjustado(datos.vinculoAjustado)]) {
         if (aviso) toast.info(aviso, { duration: 8000 })
@@ -195,12 +206,35 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label>Tipo de contrato</Label>
-          <Select value={f.tipo} onValueChange={(v) => set('tipo', v as ContratoInput['tipo'])}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{TIPOS.map((t) => <SelectItem key={t.v} value={t.v}>{t.l}</SelectItem>)}</SelectContent>
+          <Label className="flex items-center gap-1.5">
+            Tipo de contrato
+            <Ayuda
+              etiqueta="Sobre el otrosí"
+              texto="Elige «Otrosí» cuando la persona ya trabaja con un contrato vigente pero no se encontró el documento: llenas los datos de ese contrato (con su fecha de inicio original), subes el PDF del otrosí y se manda a firmar igual que un contrato. Así queda registrado y la nómina y la liquidación tienen con qué calcular."
+            />
+          </Label>
+          {/* «Otrosí» no es un tipo de contrato: es el documento. El tipo real
+              (indefinido, fijo…) se elige al lado, porque de él depende cómo se liquida. */}
+          <Select
+            value={esOtrosi ? 'OTROSI' : f.tipo}
+            onValueChange={(v) => { if (v === 'OTROSI') setDocumento('OTROSI'); else { setDocumento('CONTRATO'); set('tipo', v as ContratoInput['tipo']) } }}
+          >
+            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {TIPOS.map((t) => <SelectItem key={t.v} value={t.v}>{t.l}</SelectItem>)}
+              <SelectItem value="OTROSI">Otrosí (contrato vigente sin documento)</SelectItem>
+            </SelectContent>
           </Select>
         </div>
+        {esOtrosi && (
+          <div className="space-y-1.5">
+            <Label>El contrato vigente es <span className="text-destructive">*</span></Label>
+            <Select value={f.tipo} onValueChange={(v) => set('tipo', v as ContratoInput['tipo'])}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>{TIPOS.map((t) => <SelectItem key={t.v} value={t.v}>{t.l}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label>Modalidad de trabajo</Label>
           <Select value={f.modalidadTrabajo} onValueChange={(v) => set('modalidadTrabajo', v as ContratoInput['modalidadTrabajo'])}>
@@ -285,7 +319,7 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
           <Input type="number" min={1} max={60} value={f.horasSemanales} onChange={(e) => set('horasSemanales', e.target.value)} placeholder="42" />
         </div>
         <div className="space-y-1.5">
-          <Label>Fecha de inicio</Label>
+          <Label>{esOtrosi ? 'Fecha de inicio del contrato vigente' : 'Fecha de inicio'}</Label>
           <Input type="date" value={f.fechaInicio} onChange={(e) => set('fechaInicio', e.target.value)} />
         </div>
         {f.tipo === 'TERMINO_FIJO' && (
@@ -295,9 +329,22 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
             {duracion && <p className="text-[11px] text-muted-foreground">Duración: {duracion}. El último día cuenta.</p>}
           </div>
         )}
-        <div className="space-y-1.5">
-          <Label>Días de periodo de prueba</Label>
-          <Input type="number" min={0} max={365} value={f.periodoPruebaDias} onChange={(e) => set('periodoPruebaDias', e.target.value)} placeholder="60" />
+        <div className="space-y-1.5 sm:col-span-2">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+            <Checkbox checked={conPrueba} onCheckedChange={(c) => setConPrueba(c === true)} />
+            Tiene periodo de prueba
+            <Ayuda etiqueta="Sobre el periodo de prueba" texto="Máximo dos meses (60 días). En un contrato a término fijo de menos de un año, no puede pasar de la quinta parte de su duración (CST art. 78)." />
+          </label>
+          {conPrueba && (
+            <div className="flex items-center gap-2 pl-6">
+              <Input
+                type="text" inputMode="numeric" maxLength={2} aria-label="Días de periodo de prueba" autoFocus
+                value={f.periodoPruebaDias} onChange={(e) => set('periodoPruebaDias', e.target.value.replace(/[^0-9]/g, ''))}
+                className="w-16 text-center tabular-nums" placeholder="60"
+              />
+              <span className="text-sm text-muted-foreground">días <span className="text-destructive">*</span></span>
+            </div>
+          )}
         </div>
         {f.tipo === 'APRENDIZAJE_SENA' && (
           <div className="space-y-1.5">
@@ -326,7 +373,7 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
       {/* ── PDF y posición de las firmas ── */}
       <div className="space-y-3 border-t pt-4">
         <div className="space-y-1.5">
-          <Label>PDF del contrato</Label>
+          <Label>PDF del {nombreDoc}</Label>
           <Input
             type="file"
             accept="application/pdf"

@@ -3,7 +3,7 @@
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Check, ChevronRight, Megaphone, Save, Sparkles, TriangleAlert, Users } from 'lucide-react'
+import { Bell, Check, ChevronRight, Megaphone, Save, Sparkles, TriangleAlert, UserX, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DOMINGOS_HABITUAL, domingosPorPersona, sugerirReparto, type DiaEspecial, type TurnosPorPersona } from '@/lib/cronograma'
 import { cn } from '@/lib/utils'
 import { AvatarColaborador } from '@/components/ui-kit'
-import { guardarCronogramaMes, publicarCronogramaMes } from './acciones'
+import { guardarCronogramaMes, previsualizarAvisosCronograma, publicarCronogramaMes } from './acciones'
 
 type Persona = { id: string; nombre: string; corto: string; cargo: string | null; fotoUrl: string | null; trabajaDomingo: boolean | null }
 type Vecino = { fecha: string; ids: string[] } | null
@@ -56,7 +56,10 @@ export function CronogramaCliente({ filtros, sedeId, mes, nombreMes, especiales,
   const router = useRouter()
   const [turnos, setTurnos] = useState<TurnosPorPersona>(inicial)
   const [cambios, setCambios] = useState(false)
-  const [porDia, setPorDia] = useState(1)
+  // Texto y no type=number: sin flechas, y se puede borrar para escribir otro
+  // número. Vale lo escrito (mínimo 1); al salir del campo se normaliza.
+  const [porDiaTexto, setPorDiaTexto] = useState('1')
+  const porDia = Math.max(1, Number.parseInt(porDiaTexto, 10) || 1)
   const [ocupado, setOcupado] = useState<'guardar' | 'publicar' | null>(null)
   /** Celular: el día que se está editando. */
   const [diaAbierto, setDiaAbierto] = useState<string | null>(null)
@@ -117,7 +120,20 @@ export function CronogramaCliente({ filtros, sedeId, mes, nombreMes, especiales,
     return true
   }
 
+  // Antes de publicar, a quién le llega el aviso y qué dice (con los turnos tal
+  // como están en pantalla, aunque no se hayan guardado). No avisa a nadie.
+  const [previa, setPrevia] = useState<{ colaboradorId: string; nombre: string; usuarioId: string | null; titulo: string; mensaje: string }[] | null>(null)
+  const [cargandoPrevia, setCargandoPrevia] = useState(false)
+  async function verPrevia() {
+    setCargandoPrevia(true)
+    const res = await previsualizarAvisosCronograma({ sedeId, mes, turnos })
+    setCargandoPrevia(false)
+    if (!res.ok) { toast.error(res.error); return }
+    setPrevia(res.datos)
+  }
+
   async function publicar() {
+    setPrevia(null)
     if (cambios && !(await guardar())) return
     setOcupado('publicar')
     const res = await publicarCronogramaMes({ sedeId, mes })
@@ -148,15 +164,21 @@ export function CronogramaCliente({ filtros, sedeId, mes, nombreMes, especiales,
         {editable && (
           <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Input type="number" min={1} max={20} value={porDia} onChange={(e) => setPorDia(Math.max(1, Number(e.target.value) || 1))} className="h-8 w-14 text-center" aria-label="Personas por día" />
+              <Input
+                type="text" inputMode="numeric" pattern="[0-9]*" maxLength={2} value={porDiaTexto}
+                onChange={(e) => setPorDiaTexto(e.target.value.replace(/[^0-9]/g, ''))}
+                onBlur={() => setPorDiaTexto(String(porDia))}
+                onFocus={(e) => e.target.select()}
+                className="h-8 w-12 text-center tabular-nums" aria-label="Personas por día"
+              />
               por día
             </span>
             <Button size="sm" variant="outline" onClick={sugerir} disabled={ocupado !== null} title="Sugerir reparto" aria-label="Sugerir reparto" className="max-sm:size-8 max-sm:px-0"><Sparkles className="size-4" /> <span className="max-sm:sr-only">Sugerir</span></Button>
             <Button size="sm" variant="outline" onClick={() => guardar().then((ok) => ok && toast.success('Cronograma guardado.'))} disabled={!cambios || ocupado !== null} title="Guardar" aria-label="Guardar" className="max-sm:size-8 max-sm:px-0">
               {ocupado === 'guardar' ? <Spinner /> : <Save className="size-4" />} <span className="max-sm:sr-only">Guardar</span>
             </Button>
-            <Button size="sm" onClick={publicar} disabled={ocupado !== null || (!cambios && publicadoEn !== null && pendientesDeAviso === 0)}>
-              {ocupado === 'publicar' ? <Spinner /> : <Megaphone className="size-4" />} {publicadoEn ? 'Avisar cambios' : 'Publicar y avisar'}
+            <Button size="sm" onClick={verPrevia} disabled={ocupado !== null || cargandoPrevia || (!cambios && publicadoEn !== null && pendientesDeAviso === 0)}>
+              {ocupado === 'publicar' || cargandoPrevia ? <Spinner /> : <Megaphone className="size-4" />} {publicadoEn ? 'Avisar cambios' : 'Publicar y avisar'}
             </Button>
           </div>
         )}
@@ -226,6 +248,40 @@ export function CronogramaCliente({ filtros, sedeId, mes, nombreMes, especiales,
           {editable && <p className="border-t px-3 py-2 text-xs text-muted-foreground">La casilla dice quién entra en el reparto sugerido.</p>}
         </details>
       </div>
+
+      {previa && (
+        <Dialog open onOpenChange={(o) => { if (!o) setPrevia(null) }}>
+          <DialogContent className="flex max-h-[85dvh] flex-col">
+            <DialogHeader>
+              <DialogTitle>{publicadoEn ? 'Avisar cambios' : 'Publicar y avisar'} · {nombreMes}</DialogTitle>
+              <DialogDescription>
+                {previa.length === 0
+                  ? 'Nadie tiene cambios: no se envía ningún aviso.'
+                  : `Le llega a ${previa.filter((a) => a.usuarioId).length} persona${previa.filter((a) => a.usuarioId).length === 1 ? '' : 's'}, en la app y en el celular.`}
+              </DialogDescription>
+            </DialogHeader>
+            <ul className="-mx-1 flex-1 space-y-1.5 overflow-y-auto px-1">
+              {previa.map((a) => (
+                <li key={a.colaboradorId} className={cn('rounded-lg border p-2.5', !a.usuarioId && 'opacity-60')}>
+                  <p className="flex items-center gap-1.5 text-sm font-medium">
+                    {a.usuarioId ? <Bell className="size-3.5 shrink-0 text-muted-foreground" /> : <UserX className="size-3.5 shrink-0 text-amber-600" />}
+                    <span className="truncate">{a.nombre}</span>
+                  </p>
+                  <p className="mt-1 text-xs font-medium">{a.titulo}</p>
+                  <p className="text-xs text-muted-foreground">{a.mensaje}</p>
+                  {!a.usuarioId && <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">No tiene usuario en la plataforma: no le llega.</p>}
+                </li>
+              ))}
+            </ul>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setPrevia(null)}>Cancelar</Button>
+              <Button onClick={publicar} disabled={ocupado !== null}>
+                {ocupado === 'publicar' ? <Spinner /> : <Megaphone className="size-4" />} {previa.length ? 'Publicar y avisar' : 'Publicar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {diaAbierto && (
         <Dialog open onOpenChange={(o) => { if (!o) setDiaAbierto(null) }}>

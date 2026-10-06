@@ -177,34 +177,52 @@ function fechaCorta(f: string): string {
   return `${DIAS[d.getUTCDay()]} ${d.getUTCDate()} ${MESES[d.getUTCMonth()].slice(0, 3)}`
 }
 
+export type AvisoCronograma = { colaboradorId: string; nombre: string; usuarioId: string | null; titulo: string; mensaje: string }
+
+/**
+ * Los avisos que saldrían al publicar estos turnos: uno por persona a la que le
+ * cambiaron los días desde la última publicación (o a todas, la primera vez),
+ * con el mismo texto que le llega. Lo usan la vista previa y la publicación.
+ */
+export async function avisosDelCronograma(sedeId: string, mes: string, turnos: TurnosPorPersona): Promise<AvisoCronograma[]> {
+  const [especiales, personas, previo] = await Promise.all([
+    especialesDe(mes),
+    personasDelCronograma(sedeId),
+    prisma.cronogramaDominical.findUnique({ where: { sedeId_mes: { sedeId, mes } } }),
+  ])
+  const nombres = new Map(personas.map((p) => [p.id, p.nombre]))
+  const delMes = Object.fromEntries(Object.entries(turnos).filter(([id]) => nombres.has(id)))
+  const festivo = new Set(especiales.filter((d) => d.festivo && !d.domingo).map((d) => d.fecha))
+  const avisadosAntes = (previo?.avisados ?? {}) as TurnosPorPersona
+  const nombreMes = MESES[Number(mes.slice(5, 7)) - 1]
+  const avisos: AvisoCronograma[] = []
+  for (const id of personasConCambios(delMes, avisadosAntes)) {
+    if (!nombres.has(id)) continue
+    const fechas = [...(delMes[id] ?? [])].sort()
+    const lista = fechas.map((f) => `${fechaCorta(f).replace(/ \w+$/, '')}${festivo.has(f) ? ' (festivo)' : ''}`)
+    avisos.push({
+      colaboradorId: id,
+      nombre: nombres.get(id)!,
+      usuarioId: await usuarioDeColaborador(id),
+      ...(fechas.length
+        ? { titulo: `Tus domingos y festivos de ${nombreMes}`, mensaje: `Te toca trabajar: ${lista.length > 1 ? `${lista.slice(0, -1).join(', ')} y ${lista.at(-1)}` : lista[0]}.` }
+        : { titulo: `Cambió tu cronograma de ${nombreMes}`, mensaje: `Ya no te toca trabajar ningún domingo ni festivo en ${nombreMes}.` }),
+    })
+  }
+  return avisos.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+}
+
 /**
  * Publica el cronograma: le avisa a cada persona sus domingos y festivos del
  * mes. Al volver a publicar solo le llega a quien le cambiaron los días (y a
  * quien se los quitaron todos).
  */
 export async function publicarCronograma(opts: { sedeId: string; mes: string; usuarioId: string }): Promise<{ avisados: number }> {
-  const { turnos, especiales } = await datosCronograma(opts.sedeId, opts.mes)
-  const festivo = new Set(especiales.filter((d) => d.festivo && !d.domingo).map((d) => d.fecha))
-  const previo = await prisma.cronogramaDominical.findUnique({ where: { sedeId_mes: { sedeId: opts.sedeId, mes: opts.mes } } })
-  const avisadosAntes = (previo?.avisados ?? {}) as TurnosPorPersona
-  const nombreMes = MESES[Number(opts.mes.slice(5, 7)) - 1]
+  const { turnos } = await datosCronograma(opts.sedeId, opts.mes)
   let avisados = 0
-  for (const id of personasConCambios(turnos, avisadosAntes)) {
-    const uid = await usuarioDeColaborador(id)
-    if (!uid) continue
-    const fechas = [...(turnos[id] ?? [])].sort()
-    const lista = fechas.map((f) => `${fechaCorta(f).replace(/ \w+$/, '')}${festivo.has(f) ? ' (festivo)' : ''}`)
-    await avisar(uid, fechas.length
-      ? {
-          titulo: `Tus domingos y festivos de ${nombreMes}`,
-          mensaje: `Te toca trabajar: ${lista.length > 1 ? `${lista.slice(0, -1).join(', ')} y ${lista.at(-1)}` : lista[0]}.`,
-          evento: 'cronograma_dominical', colaboradorId: id,
-        }
-      : {
-          titulo: `Cambió tu cronograma de ${nombreMes}`,
-          mensaje: `Ya no te toca trabajar ningún domingo ni festivo en ${nombreMes}.`,
-          evento: 'cronograma_dominical', colaboradorId: id,
-        }).catch(() => {})
+  for (const a of await avisosDelCronograma(opts.sedeId, opts.mes, turnos)) {
+    if (!a.usuarioId) continue
+    await avisar(a.usuarioId, { titulo: a.titulo, mensaje: a.mensaje, evento: 'cronograma_dominical', colaboradorId: a.colaboradorId }).catch(() => {})
     avisados++
   }
   await dbAuditado.cronogramaDominical.upsert({

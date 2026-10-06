@@ -240,6 +240,7 @@ async function registrarContratoSubido(
   origen: {
     origenPdf: 'SUBIDO' | 'SUBIDO_PARA_FIRMA'
     firmaEmpleadorEnPdf?: boolean
+    esOtrosi?: boolean
   },
 ) {
   if (d.tipo === 'TERMINO_FIJO' && !d.fechaFin) throw new ErrorNegocio('Un contrato a término fijo requiere fecha de fin.')
@@ -292,7 +293,8 @@ async function registrarContratoSubido(
       estado: 'ACTIVO',
       origenPdf: origen.origenPdf,
       firmaEmpleadorEnPdf: origen.firmaEmpleadorEnPdf ?? false,
-      observaciones: v(d.observaciones),
+      // Con otrosí queda dicho en el contrato por qué su documento no es el original.
+      observaciones: [v(d.observaciones), origen.esOtrosi ? 'Documento firmado: otrosí (no se encontró el contrato original).' : null].filter(Boolean).join('\n') || null,
     },
   })
 
@@ -305,7 +307,7 @@ async function registrarContratoSubido(
     data: {
       entidadTipo: 'Contrato',
       entidadId: contrato.id,
-      nombre: `Contrato laboral ${numero}${comprimido ? ' (comprimido)' : ''}`,
+      nombre: origen.esOtrosi ? `Otrosí al contrato laboral ${numero}` : `Contrato laboral ${numero}${comprimido ? ' (comprimido)' : ''}`,
       bucket: archivo.bucket,
       storagePath: archivo.storagePath,
       mimeType: adjunto.mimeType,
@@ -401,7 +403,7 @@ export const subirContratoParaFirma = accion(
     }
 
     const { contrato, numero, documentoId } = await registrarContratoSubido(d, usuario, {
-      origenPdf: 'SUBIDO_PARA_FIRMA', firmaEmpleadorEnPdf: empleadorFirmoEnPdf,
+      origenPdf: 'SUBIDO_PARA_FIRMA', firmaEmpleadorEnPdf: empleadorFirmoEnPdf, esOtrosi: d.esOtrosi === true,
     })
     await dbAuditado.contrato.update({
       where: { id: contrato.id },
@@ -433,7 +435,7 @@ export const subirContratoParaFirma = accion(
 
     await avisar(uid, {
       evento: 'contrato_pendiente_firma',
-      titulo: `Firma tu contrato ${numero}`,
+      titulo: d.esOtrosi ? `Firma el otrosí de tu contrato ${numero}` : `Firma tu contrato ${numero}`,
       mensaje: 'Está listo en tu autoservicio.',
       enlace: '/autoservicio/contratos',
       llamadoAccion: 'Revisar y firmar el contrato',

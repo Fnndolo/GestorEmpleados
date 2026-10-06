@@ -79,6 +79,16 @@ export const DOMINGOS_HABITUAL = 3
  * quien lleva menos turnos, y entre iguales, quien menos domingos tiene.
  * Si un día no alcanza la gente, queda con menos y se dice cuántos faltan.
  */
+/** Fisher-Yates: una copia en orden al azar. */
+function barajar<T>(lista: readonly T[], azar: () => number): T[] {
+  const r = [...lista]
+  for (let i = r.length - 1; i > 0; i--) {
+    const j = Math.floor(azar() * (i + 1));
+    [r[i], r[j]] = [r[j], r[i]]
+  }
+  return r
+}
+
 export function sugerirReparto(opts: {
   especiales: readonly DiaEspecial[]
   personas: readonly string[]
@@ -87,17 +97,33 @@ export function sugerirReparto(opts: {
   antes?: ReadonlySet<string>
   /** Quienes ya trabajan el primero del mes siguiente. */
   despues?: ReadonlySet<string>
+  /** Número al azar en [0, 1). Se puede fijar en las pruebas para repetir el reparto. */
+  azar?: () => number
 }): { turnos: TurnosPorPersona; faltan: { fecha: string; faltan: number }[] } {
   const turnos: TurnosPorPersona = Object.fromEntries(opts.personas.map((p) => [p, []]))
   const domingos: Record<string, number> = Object.fromEntries(opts.personas.map((p) => [p, 0]))
   const faltan: { fecha: string; faltan: number }[] = []
   let anteriores = new Set(opts.antes ?? [])
+  const azar = opts.azar ?? Math.random
+  // Cuántas veces ha trabajado cada pareja el mismo día en este reparto.
+  const juntos = new Map<string, number>()
+  const par = (p: string, q: string) => (p < q ? `${p}|${q}` : `${q}|${p}`)
   opts.especiales.forEach((dia, i) => {
     const esUltimo = i === opts.especiales.length - 1
-    const candidatos = opts.personas
-      .filter((p) => !anteriores.has(p) && !(esUltimo && opts.despues?.has(p)))
-      .sort((x, y) => turnos[x].length - turnos[y].length || domingos[x] - domingos[y])
-    const elegidos = candidatos.slice(0, Math.max(0, opts.porDia))
+    // Se elige de a uno. Manda quien lleva menos turnos (reparto parejo); entre
+    // esos, quien menos ha coincidido con los ya elegidos ese día (que no
+    // trabajen siempre las mismas juntas); luego menos domingos, y el empate lo
+    // decide el azar (barajado antes), así cada sugerencia sale distinta.
+    const libres = barajar(opts.personas.filter((p) => !anteriores.has(p) && !(esUltimo && opts.despues?.has(p))), azar)
+    const elegidos: string[] = []
+    const coincidencias = (p: string) => elegidos.reduce((n, q) => n + (juntos.get(par(p, q)) ?? 0), 0)
+    while (elegidos.length < Math.max(0, opts.porDia) && libres.length) {
+      libres.sort((x, y) => turnos[x].length - turnos[y].length || coincidencias(x) - coincidencias(y) || domingos[x] - domingos[y])
+      elegidos.push(libres.shift()!)
+    }
+    for (let a = 0; a < elegidos.length; a++) for (let b = a + 1; b < elegidos.length; b++) {
+      juntos.set(par(elegidos[a], elegidos[b]), (juntos.get(par(elegidos[a], elegidos[b])) ?? 0) + 1)
+    }
     for (const p of elegidos) {
       turnos[p].push(dia.fecha)
       if (dia.domingo) domingos[p]++
