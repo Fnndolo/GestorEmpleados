@@ -63,6 +63,8 @@ export function SubirContratoExistente({
 
   // Campos comunes / laborales
   const [tipo, setTipo] = useState<TipoLaboral>('TERMINO_INDEFINIDO')
+  // Otrosí: contrato vigente cuyo documento no se encontró; se sube el otrosí firmado en físico.
+  const [esOtrosi, setEsOtrosi] = useState(false)
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaFin, setFechaFin] = useState('')
   const [salario, setSalario] = useState('')
@@ -76,7 +78,7 @@ export function SubirContratoExistente({
   function limpiar() {
     setPdf(null); setAutorizacion(null); setFechaInicio(''); setFechaFin(''); setSalario('')
     setTieneAuxTransporte(true); setObjetoObra(''); setObjeto(''); setValorTotal(''); setValorMensual('')
-    setTipo('TERMINO_INDEFINIDO'); setClase('LABORAL')
+    setTipo('TERMINO_INDEFINIDO'); setClase('LABORAL'); setEsOtrosi(false)
   }
 
   async function guardar() {
@@ -107,6 +109,7 @@ export function SubirContratoExistente({
           salarioBase: Number(salario) || 0, tieneAuxTransporte, fechaInicio, fechaFin: fechaFin || '',
           objetoObraLabor: objetoObra, pdfRef,
           autorizacionRef,
+          esOtrosi,
         })
       : await subirContratoOpsExistente({
           colaboradorId, sedeId, objeto,
@@ -118,7 +121,7 @@ export function SubirContratoExistente({
 
     setGuardando(false)
     if (res.ok) {
-      toast.success('Contrato cargado y registrado (firmado en físico).')
+      toast.success(clase === 'LABORAL' && esOtrosi ? 'Contrato registrado con su otrosí (firmado en físico).' : 'Contrato cargado y registrado (firmado en físico).')
       const datos = res.datos as { vinculoAjustado?: AjusteVinculo; reactivado?: Reactivacion | null }
       for (const aviso of [avisoReactivacion(datos.reactivado), avisoVinculoAjustado(datos.vinculoAjustado)]) {
         if (aviso) toast.info(aviso, { duration: 8000 })
@@ -160,14 +163,31 @@ export function SubirContratoExistente({
             {clase === 'LABORAL' ? (
               <>
                 <div className="space-y-1.5">
-                  <Label>Tipo de contrato</Label>
-                  <Select value={tipo} onValueChange={(v) => setTipo(v as TipoLaboral)}>
+                  <Label className="flex items-center gap-1.5">
+                    Tipo de contrato
+                    <Ayuda texto="Elige «Otrosí» cuando la persona tiene un contrato vigente cuyo documento no se encontró, pero sí un otrosí firmado en físico: llenas los datos de ese contrato (con su fecha de inicio original) y subes el otrosí escaneado. Así queda registrado y la nómina y la liquidación tienen con qué calcular." />
+                  </Label>
+                  {/* «Otrosí» no es un tipo de contrato: es el documento. El tipo real va
+                      aparte, porque de él depende cómo se liquida. */}
+                  <Select value={esOtrosi ? 'OTROSI' : tipo} onValueChange={(v) => { if (v === 'OTROSI') setEsOtrosi(true); else { setEsOtrosi(false); setTipo(v as TipoLaboral) } }}>
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {TIPOS_LABORAL.map((t) => <SelectItem key={t.v} value={t.v}>{t.l}</SelectItem>)}
+                      <SelectItem value="OTROSI">Otrosí (contrato vigente sin documento)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                {esOtrosi && (
+                  <div className="space-y-1.5">
+                    <Label>El contrato vigente es <span className="text-destructive">*</span></Label>
+                    <Select value={tipo} onValueChange={(v) => setTipo(v as TipoLaboral)}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {TIPOS_LABORAL.map((t) => <SelectItem key={t.v} value={t.v}>{t.l}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <Label>Salario base</Label>
                   <Input type="number" step="1" className={SIN_FLECHAS} value={salario} onChange={(e) => setSalario(e.target.value)} placeholder="0" />
@@ -207,7 +227,7 @@ export function SubirContratoExistente({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Fecha de inicio</Label>
+                <Label>{clase === 'LABORAL' && esOtrosi ? 'Fecha de inicio del contrato vigente' : 'Fecha de inicio'}</Label>
                 <Input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
               </div>
               <div className="space-y-1.5">
@@ -217,7 +237,7 @@ export function SubirContratoExistente({
             </div>
 
             <div className="space-y-1.5">
-              <Label>Contrato escaneado</Label>
+              <Label>{clase === 'LABORAL' && esOtrosi ? 'Otrosí escaneado' : 'Contrato escaneado'}</Label>
               <input
                 type="file" accept={ACEPTA_EVIDENCIA}
                 onChange={(e) => setPdf(e.target.files?.[0] ?? null)}

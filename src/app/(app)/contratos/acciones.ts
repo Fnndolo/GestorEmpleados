@@ -363,7 +363,7 @@ async function cerrarAltaContrato(contratoId: string, colaboradorId: string, tip
 export const subirContratoExistente = accion(
   { modulo: 'contratos', accion: 'CREAR', schema: subirContratoLaboralSchema },
   async (d, usuario) => {
-    const { contrato, numero } = await registrarContratoSubido(d, usuario, { origenPdf: 'SUBIDO' })
+    const { contrato, numero } = await registrarContratoSubido(d, usuario, { origenPdf: 'SUBIDO', esOtrosi: d.esOtrosi === true })
 
     await guardarAutorizacionSubida({
       autorizacionBase64: d.autorizacionBase64, autorizacionRef: d.autorizacionRef,

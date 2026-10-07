@@ -57,6 +57,13 @@ export const subirContratoLaboralSchema = contratoSchema
     // Autorización de tratamiento de datos (Ley 1581) firmada en físico: opcional,
     // porque no todo contrato antiguo la tiene digitalizada.
     ...autorizacionAdjuntaCampos,
+    /**
+     * El archivo es un OTROSÍ y no el contrato: la persona ya trabaja con un
+     * contrato vigente cuyo documento no se encontró. Se registra el contrato con
+     * sus datos (fecha de inicio original) y el otrosí queda como su documento,
+     * ya firmado en físico o para firmar en la app.
+     */
+    esOtrosi: z.boolean().optional(),
   })
   .refine(...exigirPdf('Adjunta el PDF del contrato'))
 export type SubirContratoLaboralInput = z.infer<typeof subirContratoLaboralSchema>
@@ -247,12 +254,6 @@ export type SubirContratoOpsParaFirmaInput = z.infer<typeof subirContratoOpsPara
  * cada firma en el PDF y qué hacer con la autorización de datos.
  */
 export const subirContratoLaboralParaFirmaSchema = subirContratoLaboralSchema.extend({
-  /**
-   * El PDF es un OTROSÍ y no el contrato: la persona ya trabaja con un contrato
-   * vigente cuyo documento no se encontró. Se registra el contrato con sus datos
-   * (fecha de inicio original) y el otrosí es lo que se firma.
-   */
-  esOtrosi: z.boolean().optional(),
   posicionEmpleado: posicionFirmaSchema,
   // Puede faltar cuando el PDF ya viene firmado por el empleador.
   posicionEmpleador: posicionFirmaSchema.optional(),
