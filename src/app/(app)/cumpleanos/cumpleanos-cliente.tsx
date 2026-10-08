@@ -20,6 +20,7 @@ import { formatFechaCorta, parseFechaISO } from '@/lib/fechas'
 import { fechaBreve } from '@/lib/notificaciones/texto'
 import { asignarEncargadoCumpleanos, cancelarCelebracionCumpleanos, revisarFacturasCumpleanos } from './acciones'
 import { urlFoto } from '@/lib/foto'
+import { asignarEncargadoSchema } from '@/lib/validaciones/cumpleanos'
 
 export type CelebracionItem = {
   id: string
@@ -209,11 +210,23 @@ function AsignarDialogo({ fila, onClose }: { fila: FilaCumpleanos; onClose: () =
   const [nota, setNota] = useState(fila.celebracion?.nota ?? '')
 
   function guardar() {
-    if (!encargadoId) { toast.error('Elige al encargado.'); return }
+    const entrada = asignarEncargadoSchema.safeParse({ colaboradorId: fila.colaborador.id, anio: fila.anio, encargadoId, nota })
+    if (!entrada.success) { toast.error(entrada.error.issues[0].message); return }
     empezar(async () => {
-      const res = await asignarEncargadoCumpleanos({ colaboradorId: fila.colaborador.id, anio: fila.anio, encargadoId, nota })
-      if (!res.ok) { toast.error(res.error); return }
-      toast.success('Encargado asignado. Ya recibió el aviso.')
+      try {
+        const res = await asignarEncargadoCumpleanos(entrada.data)
+        if (!res.ok) {
+          toast.error(Object.values(res.campos ?? {}).flat()[0] ?? res.error)
+          return
+        }
+      } catch {
+        // La petición puede fallar antes de llegar a la acción, o perderse la
+        // respuesta después de guardar. Conservar el diálogo y no dar por
+        // hecho que la asignación falló ni volver a enviarla automáticamente.
+        toast.error('No se pudo confirmar la asignación. Revisa la conexión y actualiza la lista antes de reintentar. Tus datos siguen en el formulario.')
+        return
+      }
+      toast.success('Encargado asignado.')
       onClose()
       router.refresh()
     })
@@ -236,7 +249,8 @@ function AsignarDialogo({ fila, onClose }: { fila: FilaCumpleanos; onClose: () =
           </div>
           <div className="space-y-1.5">
             <Label>Indicaciones (opcional)</Label>
-            <Textarea rows={3} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Qué comprar, presupuesto orientativo, dónde se celebra…" />
+            <Textarea rows={3} maxLength={500} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Qué comprar, presupuesto orientativo, dónde se celebra…" />
+            <p className="text-[11px] text-muted-foreground">Máximo 500 caracteres.</p>
           </div>
         </div>
         <DialogFooter>
