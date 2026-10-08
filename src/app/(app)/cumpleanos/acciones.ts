@@ -2,10 +2,13 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { randomUUID } from 'node:crypto'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { usuarioDeColaborador } from '@/server/notificaciones/avisar'
+import { borrarPdfTemporal, leerArchivoTemporal } from '@/server/archivos-temporales'
+import { eliminarDocumento, guardarDocumento } from '@/server/documentos'
 import { asignarEncargadoSchema, entregarFacturasSchema, revisarFacturasSchema } from '@/lib/validaciones/cumpleanos'
 import {
   cumpleanosEnAnio, avisarEncargadoAsignado, avisarFacturasEntregadas, avisarFacturasRevisadas,
@@ -49,20 +52,47 @@ export const asignarEncargadoCumpleanos = accion(
       throw new ErrorNegocio('El encargado ya entregó las facturas: revísalas antes de cambiar nada.')
     }
 
-    const c = existente
-      ? await dbAuditado.celebracionCumpleanos.update({
+    const celebracionId = existente?.id ?? randomUUID()
+    // El PDF de indicaciones se archiva aparte: nunca puede contar como una
+    // factura ni permitir que el encargado entregue sin comprobantes.
+    const anteriores = d.indicacionesPdfRef ? await prisma.documento.findMany({
+      where: { entidadTipo: 'IndicacionesCumpleanos', entidadId: celebracionId }, select: { id: true },
+    }) : []
+    let documentoNuevo: string | null = null
+    let c: { id: string }
+    try {
+      if (d.indicacionesPdfRef) {
+        const archivo = await leerArchivoTemporal(d.indicacionesPdfRef, usuario.id)
+        if (archivo.mimeType !== 'application/pdf') throw new ErrorNegocio('El documento de indicaciones debe ser un PDF.')
+        const doc = await guardarDocumento(usuario, {
+          entidadTipo: 'IndicacionesCumpleanos', entidadId: celebracionId,
+          nombre: archivo.nombre ?? 'Indicaciones del cumpleaños',
+        }, { nombre: 'indicaciones.pdf', mimeType: 'application/pdf', contenido: archivo.contenido })
+        documentoNuevo = doc.id
+      }
+      c = existente
+        ? await dbAuditado.celebracionCumpleanos.update({
           where: { id: existente.id },
           // Cambia el encargado: el recordatorio vuelve a tocarle al nuevo.
           data: { encargadoId: d.encargadoId, nota, asignadaPorId: usuario.id, ...(existente.encargadoId !== d.encargadoId ? { recordatorioEnviadoEn: null } : {}) },
         })
-      : await dbAuditado.celebracionCumpleanos.create({
-          data: { colaboradorId: d.colaboradorId, anio: d.anio, fecha, encargadoId: d.encargadoId, nota, asignadaPorId: usuario.id },
+        : await dbAuditado.celebracionCumpleanos.create({
+          data: { id: celebracionId, colaboradorId: d.colaboradorId, anio: d.anio, fecha, encargadoId: d.encargadoId, nota, asignadaPorId: usuario.id },
         })
+    } catch (e) {
+      if (documentoNuevo) await eliminarDocumento(documentoNuevo).catch(() => {})
+      throw e
+    }
+
+    // Reemplazar solo después de guardar: un fallo conserva el PDF anterior.
+    for (const doc of anteriores) await eliminarDocumento(doc.id).catch((e) => console.error('No se pudo retirar el PDF de indicaciones anterior:', e))
+    await borrarPdfTemporal(d.indicacionesPdfRef, usuario.id)
 
     if (!existente || existente.encargadoId !== d.encargadoId) {
       await avisarEncargadoAsignado({ encargadoId: d.encargadoId, homenajeadoId: d.colaboradorId, fecha, nota }).catch(() => {})
     }
     revalidatePath('/cumpleanos')
+    revalidatePath('/autoservicio')
     return { id: c.id }
   },
 )
@@ -76,7 +106,10 @@ export const cancelarCelebracionCumpleanos = accion(
     const facturas = await prisma.documento.count({ where: { entidadTipo: 'CelebracionCumpleanos', entidadId: d.id } })
     if (facturas > 0) throw new ErrorNegocio('El encargado ya subió archivos; no se puede cancelar.')
     await dbAuditado.celebracionCumpleanos.delete({ where: { id: d.id } })
+    const indicaciones = await prisma.documento.findMany({ where: { entidadTipo: 'IndicacionesCumpleanos', entidadId: d.id }, select: { id: true } })
+    for (const doc of indicaciones) await eliminarDocumento(doc.id).catch((e) => console.error('No se pudo retirar el PDF del encargo cancelado:', e))
     revalidatePath('/cumpleanos')
+    revalidatePath('/autoservicio')
     return { ok: true }
   },
 )

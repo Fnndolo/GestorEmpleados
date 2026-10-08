@@ -181,8 +181,8 @@ export default async function AutoservicioPage() {
     orderBy: { fecha: 'asc' },
   })
   const facturasCumple = celebraciones.length === 0 ? [] : await prisma.documento.findMany({
-    where: { entidadTipo: 'CelebracionCumpleanos', entidadId: { in: celebraciones.map((c) => c.id) } },
-    select: { id: true, entidadId: true, nombre: true, mimeType: true },
+    where: { entidadTipo: { in: ['CelebracionCumpleanos', 'IndicacionesCumpleanos'] }, entidadId: { in: celebraciones.map((c) => c.id) } },
+    select: { id: true, entidadId: true, entidadTipo: true, nombre: true, mimeType: true },
     orderBy: { creadoEn: 'asc' },
   })
   const cumpleanosACargo: CumpleanosACargoItem[] = celebraciones.map((c) => ({
@@ -192,9 +192,10 @@ export default async function AutoservicioPage() {
     esHoy: formatFechaISO(c.fecha) === formatFechaISO(hoyBogota()),
     estado: c.estado,
     nota: c.nota,
+    indicacionesPdf: facturasCumple.findLast((f) => f.entidadId === c.id && f.entidadTipo === 'IndicacionesCumpleanos') ?? null,
     motivoDevolucion: c.motivoDevolucion,
     valorReportado: c.valorReportado != null ? Number(c.valorReportado) : null,
-    facturas: facturasCumple.filter((f) => f.entidadId === c.id).map(({ id, nombre, mimeType }) => ({ id, nombre, mimeType })),
+    facturas: facturasCumple.filter((f) => f.entidadId === c.id && f.entidadTipo === 'CelebracionCumpleanos').map(({ id, nombre, mimeType }) => ({ id, nombre, mimeType })),
   }))
 
   // Novedades registradas directamente por la empresa (sin solicitud del colaborador):

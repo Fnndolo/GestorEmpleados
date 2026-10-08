@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { Client } from 'pg'
 import { test, expect } from '@playwright/test'
+import { PDFDocument } from 'pdf-lib'
 import { CUENTAS, entrarComo, sinScrollHorizontal } from './ayuda'
 
 /**
@@ -18,6 +19,8 @@ const DOC_YEISON = '10100007'
 const DOC_DIEGO = '10100006' // su jefe, que será el encargado
 /** La fecha que tenía Yeison antes de la prueba, para dejarla como estaba. */
 let fechaPrevia: string | null = null
+let pdfIndicaciones: Buffer
+let documentoIndicacionesId: string
 
 async function baseLocal(): Promise<Client> {
   const url = process.env.DATABASE_URL ?? ''
@@ -29,6 +32,9 @@ async function baseLocal(): Promise<Client> {
 
 test.describe('cumpleaños', () => {
   test.beforeAll(async () => {
+    const pdf = await PDFDocument.create()
+    pdf.addPage().drawText('Comprar una torta y decoracion para el cumpleanos.')
+    pdfIndicaciones = Buffer.from(await pdf.save())
     const db = await baseLocal()
     try {
       const previa = await db.query<{ f: string | null }>('SELECT fecha_nacimiento::text AS f FROM colaborador WHERE numero_documento = $1', [DOC_YEISON])
@@ -45,7 +51,7 @@ test.describe('cumpleaños', () => {
   test.afterAll(async () => {
     const db = await baseLocal()
     try {
-      await db.query(`DELETE FROM documento WHERE entidad_tipo = 'CelebracionCumpleanos' AND entidad_id IN (SELECT id FROM celebracion_cumpleanos WHERE colaborador_id = (SELECT id FROM colaborador WHERE numero_documento = $1))`, [DOC_YEISON])
+      await db.query(`DELETE FROM documento WHERE entidad_tipo IN ('CelebracionCumpleanos', 'IndicacionesCumpleanos') AND entidad_id IN (SELECT id FROM celebracion_cumpleanos WHERE colaborador_id = (SELECT id FROM colaborador WHERE numero_documento = $1))`, [DOC_YEISON])
       await db.query(`DELETE FROM celebracion_cumpleanos WHERE colaborador_id = (SELECT id FROM colaborador WHERE numero_documento = $1)`, [DOC_YEISON])
       await db.query(`UPDATE colaborador SET fecha_nacimiento = $2 WHERE numero_documento = $1`, [DOC_YEISON, fechaPrevia])
     } finally { await db.end() }
@@ -67,12 +73,36 @@ test.describe('cumpleaños', () => {
     await page.getByPlaceholder('Buscar por nombre o documento…').fill(DOC_DIEGO)
     await page.getByRole('option', { name: /Benavides/ }).first().click()
     await dialogo.getByPlaceholder(/Qué comprar/).fill('Torta y decoración')
+
+    // La selección y la vista previa son locales: no se sube nada hasta Asignar.
+    let subidas = 0
+    page.on('request', (r) => { if (r.url().includes('/api/archivos/pdf')) subidas++ })
+    const inputPdf = dialogo.getByLabel('Documento de indicaciones (PDF, opcional)')
+    await inputPdf.setInputFiles({ name: 'indicaciones-prueba.pdf', mimeType: 'application/pdf', buffer: pdfIndicaciones })
+    await dialogo.getByRole('button', { name: 'Previsualizar' }).click()
+    const visor = page.getByRole('dialog', { name: 'indicaciones-prueba.pdf', exact: true })
+    await expect(visor).toBeVisible()
+    await expect(visor.locator('iframe, canvas').first()).toBeVisible()
+    await visor.getByRole('button', { name: 'Close', exact: true }).click()
+    await dialogo.getByRole('button', { name: 'Quitar PDF' }).click()
+    await expect(dialogo.getByRole('button', { name: 'Previsualizar' })).toHaveCount(0)
+    await expect(inputPdf).toHaveValue('')
+    // El mismo archivo puede elegirse otra vez después de quitarlo.
+    await inputPdf.setInputFiles({ name: 'indicaciones-prueba.pdf', mimeType: 'application/pdf', buffer: pdfIndicaciones })
+    expect(subidas).toBe(0)
+    await sinScrollHorizontal(page)
     await dialogo.getByRole('button', { name: 'Asignar', exact: true }).click()
     await expect(dialogo).toBeHidden()
 
     // La fila cambia de estado y muestra al encargado.
     await expect(page.getByText('Encargado asignado').first()).toBeVisible()
     await expect(page.getByText(/Encargado:.*Diego Benavides/).first()).toBeVisible()
+    const db = await baseLocal()
+    try {
+      const docs = await db.query<{ id: string }>(`SELECT id FROM documento WHERE entidad_tipo = 'IndicacionesCumpleanos' AND entidad_id IN (SELECT id FROM celebracion_cumpleanos WHERE colaborador_id = (SELECT id FROM colaborador WHERE numero_documento = $1))`, [DOC_YEISON])
+      expect(docs.rows).toHaveLength(1)
+      documentoIndicacionesId = docs.rows[0].id
+    } finally { await db.end() }
 
     // El encargado lo ve en su autoservicio, con las indicaciones y la zona para las facturas.
     // Misma pestaña, otra persona: sin cerrar la sesión, /login redirige a la portada.
@@ -82,7 +112,15 @@ test.describe('cumpleaños', () => {
     await expect(page.getByRole('heading', { name: 'Cumpleaños a mi cargo' })).toBeVisible()
     await expect(page.getByText('Cumpleaños de Yeison Córdoba Palacios')).toBeVisible()
     await expect(page.getByText('Torta y decoración')).toBeVisible()
+    await expect(page.getByText('Documento de indicaciones', { exact: true })).toBeVisible()
+    await expect(page.getByText('indicaciones-prueba.pdf', { exact: true })).toBeVisible()
+    const documento = await page.request.get(`/api/documentos/${documentoIndicacionesId}`)
+    expect(documento.status()).toBe(200)
+    expect(documento.headers()['content-type']).toContain('application/pdf')
+    expect(Buffer.from(await documento.body()).subarray(0, 5).toString()).toBe('%PDF-')
     await expect(page.getByRole('button', { name: /Entregar facturas/ })).toBeVisible()
+    await page.getByRole('button', { name: /Entregar facturas/ }).click()
+    await expect(page.getByText('Adjunta al menos una factura.', { exact: true })).toBeVisible()
     await sinScrollHorizontal(page)
   })
 
@@ -92,5 +130,9 @@ test.describe('cumpleaños', () => {
     // Sin permiso de bienestar la página no se muestra: se queda fuera (redirección o error), nunca con la lista.
     await expect(page.getByRole('heading', { name: 'Cumpleaños' })).toHaveCount(0)
     await expect(page.getByText('Asignar encargado')).toHaveCount(0)
+    if (documentoIndicacionesId) {
+      expect((await page.request.get(`/api/documentos/${documentoIndicacionesId}`)).status()).toBe(403)
+      expect((await page.request.head(`/api/documentos/${documentoIndicacionesId}`)).status()).toBe(403)
+    }
   })
 })

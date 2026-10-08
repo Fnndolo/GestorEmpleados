@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Cake, UserPlus, UserPen, Eye, CircleCheck, Undo2, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Cake, UserPlus, UserPen, Eye, CircleCheck, Undo2, Trash2, FileText, X } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -21,12 +22,15 @@ import { fechaBreve } from '@/lib/notificaciones/texto'
 import { asignarEncargadoCumpleanos, cancelarCelebracionCumpleanos, revisarFacturasCumpleanos } from './acciones'
 import { urlFoto } from '@/lib/foto'
 import { asignarEncargadoSchema } from '@/lib/validaciones/cumpleanos'
+import { ACEPTA_FIRMA, MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal, tipoDeArchivo } from '@/lib/archivos'
+import { VisorPdf } from '@/components/documentos/visor-pdf'
 
 export type CelebracionItem = {
   id: string
   estado: 'ASIGNADA' | 'FACTURAS_ENTREGADAS' | 'CERRADA'
   encargado: { id: string; nombre: string }
   nota: string | null
+  indicacionesPdf: SoporteDoc | null
   valorReportado: number | null
   motivoDevolucion: string | null
   facturasEntregadasEn: string | null
@@ -208,13 +212,40 @@ function AsignarDialogo({ fila, onClose }: { fila: FilaCumpleanos; onClose: () =
   const [guardando, empezar] = useTransition()
   const [encargadoId, setEncargadoId] = useState(fila.celebracion?.encargado.id ?? '')
   const [nota, setNota] = useState(fila.celebracion?.nota ?? '')
+  const [pdf, setPdf] = useState<File | null>(null)
+  const inputPdf = useRef<HTMLInputElement>(null)
+
+  function elegirPdf(e: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = e.target.files?.[0]
+    if (!archivo) return
+    const error = tipoDeArchivo(archivo) !== 'application/pdf'
+      ? 'El documento de indicaciones debe ser un PDF.'
+      : archivo.size === 0 ? 'El PDF está vacío.'
+      : archivo.size > MAX_PDF_BYTES ? mensajePdfPesado(archivo.size) : null
+    if (error) { toast.error(error); e.target.value = ''; return }
+    setPdf(archivo)
+  }
+
+  function quitarPdf() {
+    setPdf(null)
+    if (inputPdf.current) inputPdf.current.value = ''
+  }
 
   function guardar() {
     const entrada = asignarEncargadoSchema.safeParse({ colaboradorId: fila.colaborador.id, anio: fila.anio, encargadoId, nota })
     if (!entrada.success) { toast.error(entrada.error.issues[0].message); return }
     empezar(async () => {
+      let indicacionesPdfRef: string | undefined
+      if (pdf) {
+        try {
+          indicacionesPdfRef = await subirPdfTemporal(pdf)
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'No se pudo subir el PDF. Tus datos siguen en el formulario.')
+          return
+        }
+      }
       try {
-        const res = await asignarEncargadoCumpleanos(entrada.data)
+        const res = await asignarEncargadoCumpleanos({ ...entrada.data, indicacionesPdfRef })
         if (!res.ok) {
           toast.error(Object.values(res.campos ?? {}).flat()[0] ?? res.error)
           return
@@ -233,15 +264,15 @@ function AsignarDialogo({ fila, onClose }: { fila: FilaCumpleanos; onClose: () =
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent onOpenAutoFocus={enfocarDialogo} className="sm:max-w-lg">
+    <Dialog open onOpenChange={(o) => !o && !guardando && onClose()}>
+      <DialogContent onOpenAutoFocus={enfocarDialogo} className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{fila.celebracion ? 'Cambiar encargado' : 'Asignar encargado'}</DialogTitle>
           <DialogDescription>
             Cumpleaños de {fila.colaborador.nombres} {fila.colaborador.apellidos}, el {formatFechaCorta(parseFechaISO(fila.fecha))}. El encargado organiza la celebración y después sube las facturas desde su autoservicio.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <fieldset disabled={guardando} className="space-y-4">
           <div className="space-y-1.5">
             <Label>Encargado</Label>
             <SelectorColaborador value={encargadoId} onChange={setEncargadoId} placeholder="Busca por nombre o documento…" />
@@ -252,9 +283,29 @@ function AsignarDialogo({ fila, onClose }: { fila: FilaCumpleanos; onClose: () =
             <Textarea rows={3} maxLength={500} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Qué comprar, presupuesto orientativo, dónde se celebra…" />
             <p className="text-[11px] text-muted-foreground">Máximo 500 caracteres.</p>
           </div>
-        </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="indicaciones-cumpleanos-pdf">Documento de indicaciones (PDF, opcional)</Label>
+            <Input ref={inputPdf} id="indicaciones-cumpleanos-pdf" type="file" accept={ACEPTA_FIRMA} onChange={elegirPdf} />
+            <p className="text-[11px] text-muted-foreground">Hasta 25 MB. Puedes revisarlo o quitarlo antes de enviar.</p>
+            {pdf ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border p-2">
+                <FileText className="size-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate text-xs" title={pdf.name}>{pdf.name}</span>
+                <VisorPdf archivo={pdf} titulo={pdf.name} mimeType="application/pdf" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                  <Eye className="size-4" /> Previsualizar
+                </VisorPdf>
+                <Button type="button" variant="ghost" size="sm" onClick={quitarPdf}><X className="size-4" /> Quitar PDF</Button>
+              </div>
+            ) : fila.celebracion?.indicacionesPdf ? (
+              <div>
+                <p className="text-[11px] text-muted-foreground">Documento enviado. Si seleccionas otro PDF, lo reemplazará al guardar.</p>
+                <SoportesLista documentos={[fila.celebracion.indicacionesPdf]} />
+              </div>
+            ) : null}
+          </div>
+        </fieldset>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button variant="ghost" onClick={onClose} disabled={guardando}>Cancelar</Button>
           <Button onClick={guardar} disabled={guardando}>{guardando ? <Spinner className="size-4" /> : <UserPlus className="size-4" />} {fila.celebracion ? 'Guardar cambio' : 'Asignar'}</Button>
         </DialogFooter>
       </DialogContent>
@@ -294,6 +345,7 @@ function RevisarDialogo({ fila, permisos, onClose }: { fila: FilaCumpleanos; per
             <div><p className="text-xs text-muted-foreground">Valor reportado</p><p className="font-medium tabular-nums">{c.valorReportado != null ? fmtCOP(c.valorReportado) : '—'}</p></div>
             <div><p className="text-xs text-muted-foreground">Entregadas</p><p className="font-medium">{c.facturasEntregadasEn ? formatFechaCorta(parseFechaISO(c.facturasEntregadasEn)) : '—'}</p></div>
             {c.nota && <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Indicaciones dadas</p><p>{c.nota}</p></div>}
+            {c.indicacionesPdf && <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Documento de indicaciones</p><SoportesLista documentos={[c.indicacionesPdf]} /></div>}
           </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Facturas ({c.facturas.length})</p>

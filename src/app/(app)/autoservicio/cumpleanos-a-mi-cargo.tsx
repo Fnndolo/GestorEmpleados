@@ -21,6 +21,7 @@ export type CumpleanosACargoItem = {
   esHoy: boolean
   estado: 'ASIGNADA' | 'FACTURAS_ENTREGADAS' | 'CERRADA'
   nota: string | null
+  indicacionesPdf: SoporteDoc | null
   motivoDevolucion: string | null
   valorReportado: number | null
   facturas: SoporteDoc[]
@@ -86,6 +87,13 @@ function Celebracion({ c }: { c: CumpleanosACargoItem }) {
         <p className="rounded-lg border border-rose-500/40 bg-rose-500/5 px-3 py-2 text-xs">
           <span className="font-medium">Talento Humano las devolvió:</span> {c.motivoDevolucion}
         </p>
+      )}
+
+      {c.indicacionesPdf && (
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Documento de indicaciones</p>
+          <SoportesLista documentos={[c.indicacionesPdf]} />
+        </div>
       )}
 
       {c.facturas.length > 0 && (

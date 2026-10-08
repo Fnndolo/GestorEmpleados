@@ -42,16 +42,17 @@ export default async function CumpleanosPage() {
     },
   })
   const facturas = await prisma.documento.findMany({
-    where: { entidadTipo: 'CelebracionCumpleanos', entidadId: { in: celebraciones.map((c) => c.id) } },
-    select: { id: true, entidadId: true, nombre: true, mimeType: true },
+    where: { entidadTipo: { in: ['CelebracionCumpleanos', 'IndicacionesCumpleanos'] }, entidadId: { in: celebraciones.map((c) => c.id) } },
+    select: { id: true, entidadId: true, entidadTipo: true, nombre: true, mimeType: true },
     orderBy: { creadoEn: 'asc' },
   })
-  const facturasDe = (id: string) => facturas.filter((f) => f.entidadId === id).map(({ id, nombre, mimeType }) => ({ id, nombre, mimeType }))
+  const facturasDe = (id: string) => facturas.filter((f) => f.entidadId === id && f.entidadTipo === 'CelebracionCumpleanos').map(({ id, nombre, mimeType }) => ({ id, nombre, mimeType }))
   const item = (c: (typeof celebraciones)[number]): CelebracionItem => ({
     id: c.id,
     estado: c.estado,
     encargado: { id: c.encargado.id, nombre: `${c.encargado.nombres} ${c.encargado.apellidos}` },
     nota: c.nota,
+    indicacionesPdf: facturas.findLast((f) => f.entidadId === c.id && f.entidadTipo === 'IndicacionesCumpleanos') ?? null,
     valorReportado: c.valorReportado != null ? Number(c.valorReportado) : null,
     motivoDevolucion: c.motivoDevolucion,
     facturasEntregadasEn: c.facturasEntregadasEn ? formatFechaISO(c.facturasEntregadasEn) : null,

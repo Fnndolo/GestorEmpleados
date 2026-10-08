@@ -5,6 +5,7 @@ export const asignarEncargadoSchema = z.object({
   anio: z.coerce.number().int().min(2000).max(2100),
   encargadoId: z.uuid('Elige al encargado'),
   nota: z.string().trim().max(500, 'Las indicaciones no pueden superar los 500 caracteres.').optional().or(z.literal('')),
+  indicacionesPdfRef: z.string().min(16).max(2000).optional(),
 })
 export type AsignarEncargadoInput = z.infer<typeof asignarEncargadoSchema>
 

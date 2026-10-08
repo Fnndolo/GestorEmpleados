@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { instalarSesionFalsa, actuarComo } from './sesion-falsa'
+import { PDFDocument } from 'pdf-lib'
 
 instalarSesionFalsa()
 
@@ -7,6 +8,8 @@ const { prisma } = await import('@/lib/db')
 const { asignarEncargadoCumpleanos, entregarFacturasCumpleanos, revisarFacturasCumpleanos, cancelarCelebracionCumpleanos } =
   await import('@/app/(app)/cumpleanos/acciones')
 const { cumpleanosEntre, cumpleanosEnAnio, recordarCumpleanosProximos } = await import('@/server/cumpleanos')
+const { guardarArchivoTemporal, borrarPdfTemporal } = await import('@/server/archivos-temporales')
+const { eliminarDocumento } = await import('@/server/documentos')
 import type { UsuarioSesion } from '@/lib/permisos/tipos'
 
 /**
@@ -36,6 +39,7 @@ let encargado: UsuarioSesion
 let otro: UsuarioSesion
 let homenajeadoId: string
 let fechaNacimiento: Date
+let pdfIndicaciones: Buffer
 /** La fecha de nacimiento que tenía el homenajeado antes (los seeds no la ponen): se restaura al final. */
 let fechaNacimientoOriginal: Date | null = null
 const creadas: string[] = []
@@ -69,6 +73,9 @@ async function asignar(extra: Record<string, unknown> = {}) {
 }
 
 beforeAll(async () => {
+  const pdf = await PDFDocument.create()
+  pdf.addPage().drawText('Indicaciones para la celebracion.')
+  pdfIndicaciones = Buffer.from(await pdf.save())
   const users = await prisma.user.findMany({ include: { rol: { include: { permisos: true } } } })
   const conBienestar = users.find((u) => u.rol?.permisos.some((p) => p.modulo === 'bienestar' && p.accion === 'CREAR'))
   if (!conBienestar) throw new Error('Ningún usuario tiene bienestar:CREAR — ¿corrió la migración bienestar_cumpleanos?')
@@ -98,6 +105,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.colaborador.update({ where: { id: homenajeadoId }, data: { fechaNacimiento: fechaNacimientoOriginal } })
+  const indicaciones = await prisma.documento.findMany({ where: { entidadTipo: 'IndicacionesCumpleanos', entidadId: { in: creadas } }, select: { id: true } })
+  for (const doc of indicaciones) await eliminarDocumento(doc.id)
   await prisma.documento.deleteMany({ where: { entidadTipo: 'CelebracionCumpleanos', entidadId: { in: creadas } } })
   await prisma.celebracionCumpleanos.deleteMany({ where: { id: { in: creadas } } })
   await prisma.notificacion.deleteMany({ where: { evento: { startsWith: 'cumpleanos_' }, titulo: { contains: 'PRUEBA' } } })
@@ -131,6 +140,43 @@ describe('Cumpleaños', () => {
   it('nadie organiza su propio cumpleaños', async () => {
     actuarComo(th)
     expect(errorDe(await asignar({ encargadoId: homenajeadoId }))).toContain('propio cumpleaños')
+  })
+
+  it('guarda el PDF de indicaciones separado de las facturas, lo conserva sin adjunto nuevo y permite reemplazarlo', async () => {
+    actuarComo(th)
+    const primero = await guardarArchivoTemporal(pdfIndicaciones, th.id, { mimeType: 'application/pdf', nombre: 'indicaciones.pdf' })
+    const { id } = datosDe(await asignar({ indicacionesPdfRef: primero.ref }))
+    const doc = await prisma.documento.findFirstOrThrow({ where: { entidadTipo: 'IndicacionesCumpleanos', entidadId: id } })
+    expect(doc.mimeType).toBe('application/pdf')
+    expect(doc.nombre).toBe('indicaciones.pdf')
+    expect(await prisma.documento.count({ where: { entidadTipo: 'CelebracionCumpleanos', entidadId: id } })).toBe(0)
+    actuarComo(encargado)
+    expect(errorDe(await entregarFacturasCumpleanos({ id }))).toContain('al menos una factura')
+
+    actuarComo(th)
+    datosDe(await asignar({ nota: 'Indicaciones actualizadas' }))
+    expect(await prisma.documento.findUnique({ where: { id: doc.id } })).toBeTruthy()
+
+    const segundo = await guardarArchivoTemporal(pdfIndicaciones, th.id, { mimeType: 'application/pdf', nombre: 'indicaciones-nuevas.pdf' })
+    datosDe(await asignar({ indicacionesPdfRef: segundo.ref }))
+    expect(await prisma.documento.findUnique({ where: { id: doc.id } })).toBeNull()
+    const vigentes = await prisma.documento.findMany({ where: { entidadTipo: 'IndicacionesCumpleanos', entidadId: id } })
+    expect(vigentes).toHaveLength(1)
+    expect(vigentes[0].nombre).toBe('indicaciones-nuevas.pdf')
+  })
+
+  it('rechaza archivos de otro usuario o que no sean PDF sin modificar la asignación ni el documento anterior', async () => {
+    actuarComo(th)
+    const c = await prisma.celebracionCumpleanos.findUniqueOrThrow({ where: { colaboradorId_anio: { colaboradorId: homenajeadoId, anio: ANIO } } })
+    const doc = await prisma.documento.findFirstOrThrow({ where: { entidadTipo: 'IndicacionesCumpleanos', entidadId: c.id } })
+    const ajeno = await guardarArchivoTemporal(pdfIndicaciones, otro.id, { mimeType: 'application/pdf' })
+    expect(errorDe(await asignar({ indicacionesPdfRef: ajeno.ref, nota: 'No debe guardarse' }))).toContain('otra persona')
+    const zip = await guardarArchivoTemporal(Buffer.from([0x50, 0x4b, 0x05, 0x06]), th.id, { mimeType: 'application/zip', modo: 'evidencia' })
+    expect(errorDe(await asignar({ indicacionesPdfRef: zip.ref, nota: 'Tampoco debe guardarse' }))).toContain('debe ser un PDF')
+    expect((await prisma.celebracionCumpleanos.findUniqueOrThrow({ where: { id: c.id } })).nota).toBe(c.nota)
+    expect(await prisma.documento.findUnique({ where: { id: doc.id } })).toBeTruthy()
+    await borrarPdfTemporal(ajeno.ref, otro.id)
+    await borrarPdfTemporal(zip.ref, th.id)
   })
 
   it('el encargado no puede entregar sin facturas, y un tercero no puede entregar lo ajeno', async () => {
@@ -184,9 +230,11 @@ describe('Cumpleaños', () => {
 
   it('cancelar solo antes de que haya facturas', async () => {
     actuarComo(th)
-    const { id } = datosDe(await asignar({ anio: ANIO - 1 }))
+    const adjunto = await guardarArchivoTemporal(pdfIndicaciones, th.id, { mimeType: 'application/pdf' })
+    const { id } = datosDe(await asignar({ anio: ANIO - 1, indicacionesPdfRef: adjunto.ref }))
     datosDe(await cancelarCelebracionCumpleanos({ id }))
     expect(await prisma.celebracionCumpleanos.findUnique({ where: { id } })).toBeNull()
+    expect(await prisma.documento.count({ where: { entidadTipo: 'IndicacionesCumpleanos', entidadId: id } })).toBe(0)
 
     const { id: id2 } = datosDe(await asignar({ anio: ANIO - 2 }))
     await facturaFalsa(id2)

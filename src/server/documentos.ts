@@ -36,6 +36,9 @@ export async function esDocumentoPropio(usuario: UsuarioSesion, doc: { entidadTi
   const propio = usuario.colaboradorId
   if (!propio) return false
   if (doc.entidadTipo === 'Colaborador') return doc.entidadId === propio
+  if (doc.entidadTipo === 'IndicacionesCumpleanos') {
+    return (await prisma.celebracionCumpleanos.findUnique({ where: { id: doc.entidadId }, select: { encargadoId: true } }))?.encargadoId === propio
+  }
   if (doc.entidadTipo === 'Solicitud') {
     return (await prisma.solicitud.findUnique({ where: { id: doc.entidadId }, select: { colaboradorId: true } }))?.colaboradorId === propio
   }
