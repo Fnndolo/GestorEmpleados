@@ -2,7 +2,6 @@
 
 import { urlApp } from '@/lib/app-url'
 import { passwordTemporal } from '@/server/password-temporal'
-import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
@@ -40,12 +39,16 @@ async function nombresRoles(rolIdsExtra: string[], rolPrincipalId: string): Prom
  */
 async function enviarClaveTemporal(userId: string, nombre: string, correo: string) {
   const tmp = passwordTemporal()
-  // `setUserPassword` pasa por adminMiddleware: sin las cabeceras de la petición
-  // no ve la sesión de quien llama y responde UNAUTHORIZED.
-  await auth.api.setUserPassword({
-    body: { userId, newPassword: tmp },
-    headers: await headers(),
-  })
+  // Directo con el adaptador interno (lo mismo que hace `setUserPassword`, sin su
+  // chequeo de rol): quién puede hacerlo lo decide el permiso «editar usuarios» de
+  // la plataforma, que ya revisó `accion()`. Better Auth solo reconoce como admin
+  // al rol PRINCIPAL Administrador; quien lo tenía como rol adicional quedaba
+  // rechazado (FORBIDDEN) aunque la plataforma le diera el permiso.
+  const ctx = await auth.$context
+  const hash = await ctx.password.hash(tmp)
+  const cuentas = await ctx.internalAdapter.findAccounts(userId)
+  if (cuentas.some((c) => c.providerId === 'credential')) await ctx.internalAdapter.updatePassword(userId, hash)
+  else await ctx.internalAdapter.createAccount({ userId, providerId: 'credential', accountId: userId, password: hash })
   await prisma.user.update({ where: { id: userId }, data: { debeCambiarPassword: true } })
   await enviarCorreo({
     para: correo,
@@ -63,8 +66,8 @@ async function enviarClaveTemporal(userId: string, nombre: string, correo: strin
  */
 async function cerrarSesiones(userId: string) {
   try {
-    // Igual que setUserPassword, este endpoint exige la sesión de quien llama.
-    await auth.api.revokeUserSessions({ body: { userId }, headers: await headers() })
+    // Igual que la contraseña: por el adaptador interno, con el permiso de la plataforma.
+    await (await auth.$context).internalAdapter.deleteUserSessions(userId)
   } catch (e) {
     console.error('No se pudieron cerrar las sesiones del usuario:', e)
   }

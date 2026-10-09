@@ -23,9 +23,18 @@ export function subirReanudable(
       onSuccess: () => resolve(),
       onError: (error) => {
         const status = error instanceof DetailedError ? error.originalResponse?.getStatus() : undefined
-        reject(new Error(status === 413
+        // Lo que respondió el almacenamiento, para que el aviso diga la causa real.
+        let detalle = ''
+        try {
+          const cuerpo = error instanceof DetailedError ? error.originalResponse?.getBody() ?? '' : ''
+          const json = cuerpo.trim().startsWith('{') ? JSON.parse(cuerpo) as { message?: string } : null
+          detalle = (json?.message ?? cuerpo).trim().slice(0, 160)
+        } catch { /* sin cuerpo legible */ }
+        const e = new Error(status === 413
           ? 'El almacenamiento rechazó el tamaño del archivo. Revisa el límite de archivos del proyecto y del depósito de documentos.'
-          : 'No se pudo completar la subida. Revisa la conexión e inténtalo de nuevo.'))
+          : `No se pudo completar la subida${status ? ` (${status}${detalle ? `: ${detalle}` : ''})` : ''}. Revisa la conexión e inténtalo de nuevo.`) as Error & { status?: number }
+        e.status = status
+        reject(e)
       },
     })
     subida.start()

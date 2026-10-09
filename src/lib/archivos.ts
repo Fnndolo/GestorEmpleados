@@ -123,8 +123,25 @@ export async function subirArchivoTemporal(
 
   if (plan?.modo === 'directo' && plan.reanudable && plan.ref) {
     const { subirReanudable } = await import('./subida-reanudable')
-    await subirReanudable(archivo, mimeType, plan.reanudable, progreso)
-    return plan.ref
+    try {
+      await subirReanudable(archivo, mimeType, plan.reanudable, progreso)
+      return plan.ref
+    } catch (e) {
+      // Si el navegador suspendió la red a mitad de la subida (equipo en reposo,
+      // pestaña en segundo plano), al volver el permiso firmado ya no sirve y el
+      // almacenamiento responde 400. Se pide un permiso nuevo y se intenta una vez
+      // más desde cero. El tamaño excesivo (413) no se arregla reintentando.
+      if ((e as { status?: number }).status === 413) throw e
+      const otra = await fetch('/api/archivos/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bytes: archivo.size, nombre: archivo.name, mimeType, modo }),
+      }).catch(() => null)
+      const plan2 = (await otra?.json().catch(() => null)) as { modo?: string; reanudable?: SubidaReanudable; ref?: string } | null
+      if (!otra?.ok || plan2?.modo !== 'directo' || !plan2.reanudable || !plan2.ref) throw e
+      await subirReanudable(archivo, mimeType, plan2.reanudable, progreso)
+      return plan2.ref
+    }
   }
   if (plan?.modo !== 'partes' || !plan.ref) throw new Error('No se pudo preparar la subida del archivo.')
 
