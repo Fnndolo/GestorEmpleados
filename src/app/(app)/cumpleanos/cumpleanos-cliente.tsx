@@ -286,7 +286,7 @@ function AsignarDialogo({ fila, onClose }: { fila: FilaCumpleanos; onClose: () =
           <div className="space-y-1.5">
             <Label htmlFor="indicaciones-cumpleanos-pdf">Documento de indicaciones (PDF, opcional)</Label>
             <Input ref={inputPdf} id="indicaciones-cumpleanos-pdf" type="file" accept={ACEPTA_FIRMA} onChange={elegirPdf} />
-            <p className="text-[11px] text-muted-foreground">Hasta 25 MB. Puedes revisarlo o quitarlo antes de enviar.</p>
+            <p className="text-[11px] text-muted-foreground">Puedes revisarlo o quitarlo antes de enviar.</p>
             {pdf ? (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border p-2">
                 <FileText className="size-4 shrink-0 text-muted-foreground" />

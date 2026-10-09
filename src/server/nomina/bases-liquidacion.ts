@@ -1,16 +1,21 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
-import { cargarParametros, cargarTiposHora } from './parametros'
+import { cargarTiposHora } from './parametros'
 import { horasMesJornada } from './horas'
 import { diasDeSalario } from './liquidacion-definitiva'
+import { ErrorNegocio } from '@/server/accion'
+import { referenciaLiquidacion, type ReferenciaLiquidacion } from './referencia-liquidacion'
 
 export { diasDeSalario }
 
 /**
- * Insumos variables de una liquidación definitiva: lo que no se lee del contrato
- * sino del histórico de nómina.
+ * Bases de una liquidación definitiva recuperadas del histórico de nómina.
  */
 export type BasesLiquidacion = {
+  salarioBase: number
+  origenSalario: 'NOMINA' | 'MANUAL'
+  origenAuxilio: 'NOMINA' | 'MANUAL'
+  referencia: ReferenciaLiquidacion
   auxilioTransporte: number
   /** Promedio mensual del variable en el último año (o el tiempo servido). */
   promedioVariableAnual: number
@@ -40,8 +45,25 @@ export type VariableMensual = { mes: string; valor: number }
  */
 export type AjustesBases = Partial<Pick<
   BasesLiquidacion,
-  'auxilioTransporte' | 'promedioVariableAnual' | 'promedioVariableSemestre' | 'otroConceptoSalarial' | 'diasSalarioPendiente'
->> & { variablePorMes?: VariableMensual[] }
+  'promedioVariableAnual' | 'promedioVariableSemestre' | 'otroConceptoSalarial' | 'diasSalarioPendiente'
+>> & { salarioBase?: number | null; auxilioTransporte?: number | null; variablePorMes?: VariableMensual[] }
+
+/** Permite registrar la terminación y completar sus valores antes de liquidar. */
+export class ErrorBasesLiquidacion extends ErrorNegocio {}
+
+const INCLUIR_NOMINA = {
+  periodo: { select: { nombre: true, fechaInicio: true, fechaFin: true, esAjuste: true, parametrosSnapshot: true } },
+  detalles: { select: { conceptoCodigo: true, tipo: true, valor: true, base: true } },
+} as const
+
+/** Nóminas registradas hasta el retiro; un borrador no es una referencia salarial. */
+function nominasAnteriores(colaboradorId: string, fechaRetiro: Date) {
+  return prisma.liquidacionNomina.findMany({
+    where: { colaboradorId, periodo: { fechaFin: { lte: fechaRetiro }, estado: { not: 'BORRADOR' } } },
+    include: INCLUIR_NOMINA,
+    orderBy: { periodo: { fechaFin: 'asc' } },
+  })
+}
 
 /** Un mes de la ventana de promedios, para pedirlo en pantalla. */
 export type MesDeVentana = {
@@ -51,6 +73,7 @@ export type MesDeVentana = {
   enSemestre: boolean
   /** Lo que el sistema ya sabe de ese mes por los desprendibles emitidos. */
   valorConocido: number
+  tieneNomina: boolean
 }
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
@@ -76,37 +99,24 @@ const dia = 86_400_000
  * calculan sobre MESES de vínculo, no sobre cuántos registros haya: una comisión
  * suelta cargada una vez no significa que se haya ganado eso todos los meses.
  *
- * Si la empresa venía liquidando en otro software, aquí no habrá histórico y
- * todo saldrá en cero; para eso están los ajustes manuales, que es como toda
- * migración de nómina resuelve el año en curso.
+ * Si la empresa venía liquidando en otro software, se requieren salario y
+ * auxilio manuales. Los conceptos variables faltantes se completan por mes.
  */
 export async function basesDesdeHistorial(
   colaboradorId: string,
-  contrato: { salarioBase: unknown; tieneAuxTransporte: boolean; tipoSalario: string },
   fechaIngreso: Date,
   fechaRetiro: Date,
   ajustes: AjustesBases = {},
 ): Promise<BasesLiquidacion> {
-  const parametros = await cargarParametros(fechaRetiro)
-
-  // ── Auxilio de transporte ──
-  // Solo salario ordinario y hasta 2 SMMLV (mismo criterio que el motor mensual).
-  const salarioBase = Number(contrato.salarioBase)
-  const elegibleAuxilio =
-    contrato.tieneAuxTransporte &&
-    contrato.tipoSalario === 'ORDINARIO' &&
-    salarioBase <= parametros.SMMLV * (parametros.AUX_TRANSPORTE_TOPE_SMMLV ?? 2)
-  const auxilioTransporte = elegibleAuxilio ? parametros.AUX_TRANSPORTE : 0
-
-  // ── Desprendibles ya emitidos, hasta la fecha de retiro ──
-  const liquidaciones = await prisma.liquidacionNomina.findMany({
-    where: { colaboradorId, periodo: { fechaFin: { lte: fechaRetiro } } },
-    include: {
-      periodo: { select: { fechaInicio: true, fechaFin: true } },
-      detalles: { select: { conceptoCodigo: true, tipo: true, valor: true } },
-    },
-    orderBy: { periodo: { fechaFin: 'asc' } },
-  })
+  // El contrato describe el vínculo, pero no reemplaza una nómina histórica.
+  const liquidaciones = await nominasAnteriores(colaboradorId, fechaRetiro)
+  const referencia = referenciaLiquidacion(liquidaciones, fechaRetiro)
+  const salarioBase = ajustes.salarioBase ?? referencia.salarioBase
+  const auxilioTransporte = ajustes.auxilioTransporte ?? referencia.auxilioTransporte
+  if (salarioBase == null || auxilioTransporte == null) {
+    const faltantes = [salarioBase == null ? 'salario base mensual' : null, auxilioTransporte == null ? 'auxilio de transporte mensual (0 si no corresponde)' : null].filter(Boolean)
+    throw new ErrorBasesLiquidacion(`Falta el ${faltantes.join(' y el ')}. Ingresa estos valores en «Rehacer el cálculo»: no hay una nómina de referencia del año del retiro que los establezca.`)
+  }
 
   // Conceptos configurables marcados como constitutivos: se suman igual que las
   // comisiones porque para la ley son lo mismo, aunque los haya creado el usuario.
@@ -133,7 +143,7 @@ export async function basesDesdeHistorial(
   const promedioVariableSemestre = promedioMensual(porMes, inicioSem, fechaRetiro)
 
   // ── Tramo final que ninguna nómina cubrió ──
-  const cubiertoHasta = liquidaciones.at(-1)?.periodo.fechaFin ?? null
+  const cubiertoHasta = liquidaciones.filter((l) => !l.periodo.esAjuste).at(-1)?.periodo.fechaFin ?? null
   const inicioTramo = cubiertoHasta
     ? new Date(cubiertoHasta.getTime() + dia)
     : new Date(Date.UTC(fechaRetiro.getUTCFullYear(), fechaRetiro.getUTCMonth(), 1))
@@ -146,6 +156,10 @@ export async function basesDesdeHistorial(
 
   return aplicarAjustes(
     {
+      salarioBase,
+      origenSalario: ajustes.salarioBase != null ? 'MANUAL' : 'NOMINA',
+      origenAuxilio: ajustes.auxilioTransporte != null ? 'MANUAL' : 'NOMINA',
+      referencia,
       auxilioTransporte,
       promedioVariableAnual,
       promedioVariableSemestre,
@@ -169,7 +183,6 @@ function aplicarAjustes(b: BasesLiquidacion, a: AjustesBases): BasesLiquidacion 
   const hayMeses = (a.variablePorMes?.length ?? 0) > 0
   return {
     ...b,
-    auxilioTransporte: a.auxilioTransporte ?? b.auxilioTransporte,
     promedioVariableAnual: (hayMeses ? undefined : a.promedioVariableAnual) ?? b.promedioVariableAnual,
     promedioVariableSemestre: (hayMeses ? undefined : a.promedioVariableSemestre) ?? b.promedioVariableSemestre,
     otroConceptoSalarial: a.otroConceptoSalarial ?? b.otroConceptoSalarial,
@@ -226,16 +239,10 @@ export async function mesesParaPromedios(
   colaboradorId: string,
   fechaIngreso: Date,
   fechaRetiro: Date,
-): Promise<{ meses: MesDeVentana[]; mesesAnual: number; mesesSemestre: number }> {
+): Promise<{ meses: MesDeVentana[]; mesesAnual: number; mesesSemestre: number; referencia: ReferenciaLiquidacion }> {
   const { inicioAnual, inicioSem } = ventanas(fechaIngreso, fechaRetiro)
 
-  const liquidaciones = await prisma.liquidacionNomina.findMany({
-    where: { colaboradorId, periodo: { fechaFin: { lte: fechaRetiro } } },
-    include: {
-      periodo: { select: { fechaFin: true } },
-      detalles: { select: { conceptoCodigo: true, tipo: true, valor: true } },
-    },
-  })
+  const liquidaciones = await nominasAnteriores(colaboradorId, fechaRetiro)
   const configurables = await prisma.conceptoNomina.findMany({
     where: { constitutivoSalario: true, tipoCalculo: { not: 'SISTEMA' } },
     select: { codigo: true },
@@ -261,12 +268,14 @@ export async function mesesParaPromedios(
       etiqueta: `${MESES[cursor.getUTCMonth()]} ${cursor.getUTCFullYear()}`,
       enSemestre: mesEnVentana(k, inicioSem, fechaRetiro),
       valorConocido: conocido.get(k) ?? 0,
+      tieneNomina: conocido.has(k),
     })
     cursor.setUTCMonth(cursor.getUTCMonth() + 1)
   }
 
   return {
     meses,
+    referencia: referenciaLiquidacion(liquidaciones, fechaRetiro),
     mesesAnual: diasDeSalario(inicioAnual, fechaRetiro) / 30,
     mesesSemestre: diasDeSalario(inicioSem, fechaRetiro) / 30,
   }

@@ -2,7 +2,8 @@ import 'server-only'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { ErrorNegocio } from '@/server/accion'
 import { archivosAntiguos, eliminarArchivo, leerArchivo, subirArchivoEn, tamanoArchivo, urlSubidaFirmada } from '@/server/storage'
-import { MAX_PDF_BYTES, mensajePdfPesado, mensajeTipoNoAdmitido, tiposDe, type ModoArchivo } from '@/lib/archivos'
+import { MAX_PDF_BYTES, PARTE_ARCHIVO_BYTES, mensajePdfPesado, mensajeTipoNoAdmitido, tiposDe, type ModoArchivo, type SubidaReanudable } from '@/lib/archivos'
+import { iniciarSubidaLocal, escribirParteLocal } from '@/server/subida-local'
 
 /**
  * Depósito temporal de archivos (el PDF de un contrato, o el comprimido con
@@ -145,23 +146,49 @@ export function guardarPdfTemporal(pdf: Buffer, usuarioId: string): Promise<{ re
  * acción. Es lo que permite subir un escaneo grande en producción, donde el
  * servidor no admite cuerpos de más de ~4,5 MB.
  *
- * Devuelve null si el almacenamiento no puede firmar la subida (driver local
- * en desarrollo, o un fallo de Supabase): quien llama cae a la subida normal.
+ * Devuelve null con el driver local: quien llama prepara la subida por partes.
  * Aquí no se ve el archivo, así que su contenido se comprueba al leerlo.
  */
 export async function prepararSubidaDirecta(
   usuarioId: string,
   bytes: number,
   opts: { mimeType?: string; nombre?: string; modo?: ModoArchivo } = {},
-): Promise<{ url: string; ref: string } | null> {
+): Promise<{ reanudable: SubidaReanudable; ref: string } | null> {
   const mimeType = canonico(opts.mimeType ?? 'application/pdf')
   exigirTipoAdmitido(opts.mimeType ?? 'application/pdf', opts.modo ?? 'firma')
-  if (bytes <= 0) throw new ErrorNegocio('El archivo está vacío.')
-  if (bytes > MAX_PDF_BYTES) throw new ErrorNegocio(mensajePdfPesado(bytes))
+  exigirTamano(bytes)
   const storagePath = rutaTemporal(usuarioId, mimeType)
-  const url = await urlSubidaFirmada(storagePath)
-  if (!url) return null
-  return { url, ref: refDe(storagePath, usuarioId, bytes, mimeType, opts.nombre) }
+  const reanudable = await urlSubidaFirmada(storagePath)
+  if (!reanudable) return null
+  return { reanudable, ref: refDe(storagePath, usuarioId, bytes, mimeType, opts.nombre) }
+}
+
+function exigirTamano(bytes: number) {
+  if (!Number.isSafeInteger(bytes) || bytes <= 0) throw new ErrorNegocio('El tamaño del archivo no es válido o está vacío.')
+  if (bytes > MAX_PDF_BYTES) throw new ErrorNegocio(mensajePdfPesado(bytes))
+}
+
+export async function prepararSubidaLocal(
+  usuarioId: string,
+  bytes: number,
+  opts: { mimeType?: string; nombre?: string; modo?: ModoArchivo } = {},
+): Promise<{ ref: string }> {
+  exigirTamano(bytes)
+  exigirTipoAdmitido(opts.mimeType ?? 'application/pdf', opts.modo ?? 'firma')
+  const mimeType = canonico(opts.mimeType ?? 'application/pdf')
+  const ruta = rutaTemporal(usuarioId, mimeType)
+  await iniciarSubidaLocal(ruta)
+  return { ref: refDe(ruta, usuarioId, bytes, mimeType, opts.nombre) }
+}
+
+export async function guardarParteTemporal(ref: string, usuarioId: string, offset: number, parte: Buffer): Promise<number> {
+  const { p, n, t } = abrirRef(ref, usuarioId)
+  exigirTamano(n)
+  if (!Number.isSafeInteger(offset) || offset < 0 || !parte.length || parte.length > PARTE_ARCHIVO_BYTES || offset + parte.length > n) {
+    throw new ErrorNegocio('La parte del archivo no tiene un tamaño válido.')
+  }
+  if (offset === 0) exigirArchivo(parte, canonico(t ?? 'application/pdf'))
+  return escribirParteLocal(p, offset, parte, n)
 }
 
 /** Lee el archivo de una referencia (solo su dueño), comprobando qué es. */
@@ -170,12 +197,13 @@ export async function leerArchivoTemporal(ref: string, usuarioId: string): Promi
   const mimeType = canonico(t ?? 'application/pdf')
 
   // El tamaño ANTES de traerlo a memoria: lo que se subió directo no pasó por
-  // el servidor, y bajar 50 MB para luego rechazarlos sería regalarle la
-  // memoria del servidor a quien mienta en el tamaño que anunció.
+  // el servidor. Se exige el tamaño exacto para no cargar archivos incompletos
+  // ni ocupar memoria con un archivo mayor al anunciado.
   const tamano = await tamanoArchivo(p)
-  if (tamano != null && (tamano > MAX_PDF_BYTES || (n && tamano > n))) {
+  if (tamano == null) throw new ErrorNegocio('El archivo adjunto ya no está disponible. Vuelve a adjuntarlo.')
+  if (tamano > MAX_PDF_BYTES || tamano !== n) {
     await eliminarArchivo(p).catch(() => {})
-    throw new ErrorNegocio(mensajePdfPesado(tamano))
+    throw new ErrorNegocio('El archivo recibido no coincide con el tamaño anunciado. Vuelve a adjuntarlo.')
   }
 
   let contenido: Buffer
@@ -188,6 +216,7 @@ export async function leerArchivoTemporal(ref: string, usuarioId: string): Promi
   // servir para nada y nadie más lo iba a borrar.
   try {
     exigirArchivo(contenido, mimeType)
+    if (contenido.byteLength !== n) throw new ErrorNegocio('El archivo recibido no coincide con el tamaño anunciado. Vuelve a adjuntarlo.')
   } catch (e) {
     await eliminarArchivo(p).catch(() => {})
     throw e

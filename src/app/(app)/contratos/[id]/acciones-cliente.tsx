@@ -4,7 +4,8 @@ import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { leerComoDataUri, MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
+import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
+import { usePdfLocal } from '@/lib/use-pdf-local'
 import { CalendarPlus, FilePen, CirclePause, CirclePlay, UserMinus, Paperclip, Trash2, Ellipsis } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { DialogSubir } from '@/components/documentos/gestor-documentos'
@@ -177,13 +178,14 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
   const [fechaFin, setFechaFin] = useState('')
   // El PDF del otrosí y dónde firma el trabajador dentro de él.
   const inputPdf = useRef<HTMLInputElement>(null)
-  // `pdf` es el data URI para la vista previa (local); `pdfRef` es la referencia
+  // `pdf` es la URL local para la vista previa; `pdfRef` es la referencia
   // con que el servidor lee el archivo del depósito temporal.
-  const [pdf, setPdf] = useState<string | null>(null)
+  const [pdf, setPdf] = usePdfLocal()
   const [pdfRef, setPdfRef] = useState<string | null>(null)
   const [nombrePdf, setNombrePdf] = useState('')
   const [paginas, setPaginas] = useState(1)
   const [analizando, setAnalizando] = useState(false)
+  const [progreso, setProgreso] = useState(0)
   const [detectado, setDetectado] = useState<boolean | null>(null)
   const [posiciones, setPosiciones] = useState<Record<'contratista' | 'contratante', Posicion>>({
     contratista: { ...FIRMA_POR_DEFECTO, pagina: 1 },
@@ -201,8 +203,10 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
   async function alElegirPdf(archivo: File) {
     if (archivo.type !== 'application/pdf') { toast.error('El archivo debe ser un PDF.'); return }
     if (archivo.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(archivo.size)); return }
-    const dataUri = await leerComoDataUri(archivo)
-    setPdf(dataUri)
+    setPdfRef(null)
+    setDetectado(null)
+    setProgreso(0)
+    setPdf(archivo)
     setNombrePdf(archivo.name)
 
     // El PDF se sube una vez al depósito temporal: la misma referencia sirve
@@ -210,7 +214,7 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
     setAnalizando(true)
     let ref: string
     try {
-      ref = await subirPdfTemporal(archivo)
+      ref = await subirPdfTemporal(archivo, setProgreso)
     } catch (e) {
       setAnalizando(false); setPdf(null)
       toast.error(e instanceof Error ? e.message : 'No se pudo subir el PDF.')
@@ -222,7 +226,7 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
     // propone nada y se marca a mano sobre el documento.
     const res = await analizarPdfOtrosi({ pdfRef: ref })
     setAnalizando(false)
-    if (!res.ok) { toast.error(res.error ?? 'No se pudo leer el PDF.'); return }
+    if (!res.ok) { setPdfRef(null); setPdf(null); toast.error(res.error ?? 'No se pudo leer el PDF.'); return }
     const d = res.datos as { paginas: number; trabajador: Posicion | null }
     setPaginas(d.paginas)
     // Sin detección se cae a la ÚLTIMA página: es donde va el bloque de firmas.
@@ -326,7 +330,7 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
               <span className="truncate">{nombrePdf || 'Seleccionar el PDF (ya firmado por la empresa)'}</span>
             </Button>
             {analizando && (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner className="size-4" /> Leyendo el PDF para proponer dónde va la firma…</p>
+              <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner className="size-4" /> {progreso < 100 ? `Subiendo el PDF… ${progreso}%` : 'Leyendo el PDF para proponer dónde va la firma…'}</p>
             )}
           </div>
           {pdf && !analizando && (
@@ -350,7 +354,7 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={guardar} disabled={g || tipos.length === 0 || !pdf || analizando || duracionIncompleta}>
+          <Button onClick={guardar} disabled={g || tipos.length === 0 || !pdf || !pdfRef || analizando || duracionIncompleta}>
             {g && <Spinner />}Guardar y enviar a firma
           </Button>
         </DialogFooter>

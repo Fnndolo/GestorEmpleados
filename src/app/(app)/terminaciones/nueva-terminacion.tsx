@@ -83,7 +83,13 @@ export function NuevaTerminacion({ colaboradorInicial, renuncia }: {
       renunciaId: renuncia?.id,
     })
     setG(false)
-    if (res.ok) { toast.success('Terminación registrada y liquidación calculada.'); setAbierto(false); router.push(`/terminaciones/${(res.datos as { id: string }).id}`) }
+    if (res.ok) {
+      toast.success(res.datos.liquidacionPendiente
+        ? 'Terminación registrada. Completa el salario y el auxilio para calcular la liquidación.'
+        : 'Terminación registrada.')
+      setAbierto(false)
+      router.push(`/terminaciones/${res.datos.id}`)
+    }
     else toast.error(res.error)
   }
 
@@ -94,7 +100,7 @@ export function NuevaTerminacion({ colaboradorInicial, renuncia }: {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Registrar terminación</DialogTitle>
-            <DialogDescription>Se calculará la liquidación definitiva y se generará el paz y salvo.</DialogDescription>
+            <DialogDescription>Se generará el paz y salvo. La liquidación usará las nóminas anteriores; si faltan, podrás completar sus valores manualmente.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {renuncia ? (

@@ -548,7 +548,7 @@ export function FormContrato({
               <input type="file" accept={ACEPTA_EVIDENCIA} onChange={(e) => setPdf(e.target.files?.[0] ?? null)} className={INPUT_ARCHIVO} />
               {pdf
                 ? <ArchivoElegido archivo={pdf} />
-                : <p className="text-xs text-muted-foreground">PDF, o un ZIP/RAR si el escaneo viene en varios archivos. Hasta 25 MB.</p>}
+                : <p className="text-xs text-muted-foreground">PDF, o un ZIP/RAR si el escaneo viene en varios archivos.</p>}
             </div>
             <div className="space-y-1.5">
               <Label>Autorización de datos (opcional)</Label>

@@ -82,7 +82,7 @@ export function liquidar(e: EntradaLiquidacion): ResultadoLiquidacion {
   let auxTransporte = new Decimal(0)
   if (e.tieneAuxTransporte && e.tipoSalario === 'ORDINARIO' && salarioBase.lessThanOrEqualTo(SMMLV.times(p.AUX_TRANSPORTE_TOPE_SMMLV ?? 2))) {
     auxTransporte = new Decimal(p.AUX_TRANSPORTE).dividedBy(30).times(e.diasTrabajados)
-    agregar(lineas, dev, 'AUX_TRANSPORTE', 'Auxilio de transporte', 'DEVENGADO', peso(auxTransporte))
+    agregar(lineas, dev, 'AUX_TRANSPORTE', 'Auxilio de transporte', 'DEVENGADO', peso(auxTransporte), { cantidad: e.diasTrabajados, base: p.AUX_TRANSPORTE })
   }
 
   // Auxilio de conectividad (valor manual, no constitutivo: no entra al IBC ni a prestaciones)

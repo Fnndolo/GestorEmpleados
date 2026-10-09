@@ -16,7 +16,8 @@ import { SelectorColaborador } from '@/components/colaboradores/selector-colabor
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { SelectorFirmasPdf, ETIQUETAS_LABORAL, type Posicion } from '@/components/contratos/selector-firmas-pdf'
 import { GenerarAutorizacion } from '@/components/contratos/generar-autorizacion'
-import { leerComoDataUri, MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
+import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
+import { usePdfLocal } from '@/lib/use-pdf-local'
 import { fmtCOP } from '@/lib/moneda'
 import { duracionContrato } from '@/lib/fechas'
 import { avisoVinculoAjustado, avisoReactivacion, type AjusteVinculo, type Reactivacion } from '@/lib/vinculo-contrato'
@@ -58,9 +59,9 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
   const [guardando, empezar] = useTransition()
   const [analizando, setAnalizando] = useState(false)
 
-  // `pdf` es el data URI para la vista previa (local); `pdfRef` es la referencia
+  // `pdf` es la URL local para la vista previa; `pdfRef` es la referencia
   // con que el servidor lee el archivo del depósito temporal.
-  const [pdf, setPdf] = useState<string | null>(null)
+  const [pdf, setPdf] = usePdfLocal()
   const [pdfRef, setPdfRef] = useState<string | null>(null)
   const [archivoPdf, setArchivoPdf] = useState<File | null>(null)
   // Cambia con cada PDF elegido: remonta el selector para que vuelva a la página propuesta.
@@ -105,8 +106,8 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
   async function alElegirPdf(archivo: File) {
     if (archivo.type !== 'application/pdf') { toast.error('El archivo debe ser un PDF.'); return }
     if (archivo.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(archivo.size)); return }
-    const dataUri = await leerComoDataUri(archivo)
-    setPdf(dataUri)
+    setPdfRef(null)
+    setPdf(archivo)
     setArchivoPdf(archivo)
 
     // El PDF se sube una vez al depósito temporal: la misma referencia sirve
@@ -126,7 +127,7 @@ export function ContratoLaboralSubido({ catalogos }: Props) {
     // nada que proponer y se marca a mano sobre el documento.
     const res = await analizarPdfContratoLaboral({ pdfRef: ref })
     setAnalizando(false)
-    if (!res.ok) { toast.error(res.error ?? 'No se pudo leer el PDF.'); return }
+    if (!res.ok) { setPdfRef(null); setPdf(null); toast.error(res.error ?? 'No se pudo leer el PDF.'); return }
     const d = res.datos
     setPaginas(d.paginas)
     // Sin detección se cae a la ÚLTIMA página: es donde va el bloque de firmas.

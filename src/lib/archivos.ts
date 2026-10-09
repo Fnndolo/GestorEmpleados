@@ -15,12 +15,16 @@
  * El archivo viaja del navegador DIRECTO al almacenamiento con una URL
  * firmada. No es un capricho: en producción el servidor no admite cuerpos de
  * más de ~4,5 MB, así que un escaneo grande nunca llegaría si pasara por él.
- * Cuando no hay subida directa (desarrollo, o un fallo al firmarla) se cae a
- * mandárselo al servidor, que es lo que se hacía antes.
+ * En local se envían partes pequeñas al servidor. En Supabase se usa TUS,
+ * con reintentos sin volver a enviar todo el documento.
  */
 
-/** Tope de un archivo subido por el depósito temporal. */
-export const MAX_PDF_BYTES = 25 * 1024 * 1024
+/** Capacidad del campo Documento.tamanoBytes (PostgreSQL int4). */
+export const MAX_PDF_BYTES = 2 ** 31 - 1
+/** Cada petición al servidor queda por debajo del límite de la plataforma. */
+export const PARTE_ARCHIVO_BYTES = 3 * 1024 * 1024
+
+export type SubidaReanudable = { endpoint: string; token: string; bucket: string; objectName: string }
 
 /**
  * Qué se puede subir, según para qué es el archivo.
@@ -73,7 +77,7 @@ export function esComprimido(mimeType: string): boolean {
 }
 
 export function mensajePdfPesado(bytes: number): string {
-  return `El archivo pesa ${(bytes / 1024 / 1024).toFixed(1)} MB y el máximo son 25 MB. Escanéalo en escala de grises a 150–200 dpi y vuelve a intentarlo.`
+  return `El archivo pesa ${(bytes / 1024 / 1024).toFixed(1)} MB y supera la capacidad de registro de documentos (2 GB).`
 }
 
 export function mensajeTipoNoAdmitido(modo: ModoArchivo): string {
@@ -96,7 +100,12 @@ export function leerComoDataUri(archivo: Blob): Promise<string> {
  * Action recibe como `pdfRef`. Valida tipo y peso antes de mandar nada; el
  * servidor vuelve a validar al leerlo. Lanza con un mensaje listo para mostrar.
  */
-export async function subirArchivoTemporal(archivo: File, modo: ModoArchivo = 'firma'): Promise<string> {
+export async function subirArchivoTemporal(
+  archivo: File,
+  modo: ModoArchivo = 'firma',
+  progreso?: (porcentaje: number) => void,
+): Promise<string> {
+  if (!archivo.size) throw new Error('El archivo está vacío.')
   if (archivo.size > MAX_PDF_BYTES) throw new Error(mensajePdfPesado(archivo.size))
   const mimeType = tipoDeArchivo(archivo)
   if (!tiposDe(modo).includes(mimeType)) throw new Error(mensajeTipoNoAdmitido(modo))
@@ -107,40 +116,48 @@ export async function subirArchivoTemporal(archivo: File, modo: ModoArchivo = 'f
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ bytes: archivo.size, nombre: archivo.name, mimeType, modo }),
   })
-  const plan = (await previo.json().catch(() => null)) as { modo?: string; url?: string; ref?: string; error?: string } | null
+  const plan = (await previo.json().catch(() => null)) as {
+    modo?: string; reanudable?: SubidaReanudable; ref?: string; error?: string
+  } | null
   if (!previo.ok) throw new Error(plan?.error ?? 'No se pudo subir el archivo. Revisa la conexión e inténtalo de nuevo.')
 
-  if (plan?.modo === 'directo' && plan.url && plan.ref) {
-    // Mismo PUT que hace el SDK de Supabase con un cuerpo binario: la URL ya
-    // lleva el permiso firmado, así que solo va el tipo de contenido.
-    const subida = await fetch(plan.url, {
-      method: 'PUT',
-      headers: { 'Content-Type': mimeType },
-      body: archivo,
-    }).catch(() => null)
-    if (subida?.ok) return plan.ref
-    // Si la subida directa falla, se intenta por el servidor: con un archivo
-    // pequeño funciona igual, y con uno grande el mensaje lo dirá.
-    console.error('Subida directa fallida:', subida?.status, await subida?.text().catch(() => ''))
+  if (plan?.modo === 'directo' && plan.reanudable && plan.ref) {
+    const { subirReanudable } = await import('./subida-reanudable')
+    await subirReanudable(archivo, mimeType, plan.reanudable, progreso)
+    return plan.ref
   }
+  if (plan?.modo !== 'partes' || !plan.ref) throw new Error('No se pudo preparar la subida del archivo.')
 
-  const fd = new FormData()
-  fd.append('archivo', archivo)
-  fd.append('modo', modo)
-  const res = await fetch('/api/archivos/pdf', { method: 'POST', body: fd })
-  const datos = (await res.json().catch(() => null)) as { ref?: string; error?: string } | null
-  if (!res.ok || !datos?.ref) {
-    throw new Error(
-      datos?.error ??
-        (res.status === 413
-          ? `El archivo pesa ${(archivo.size / 1024 / 1024).toFixed(1)} MB y no se pudo subir. Escanéalo más liviano (escala de grises, 150–200 dpi) e inténtalo de nuevo.`
-          : 'No se pudo subir el archivo. Revisa la conexión e inténtalo de nuevo.'),
-    )
+  let offset = 0
+  while (offset < archivo.size) {
+    const parte = archivo.slice(offset, offset + PARTE_ARCHIVO_BYTES)
+    let siguiente: number | undefined
+    // Si se perdió la respuesta, el servidor devuelve el desplazamiento ya
+    // guardado. Nunca concatena otra vez una parte repetida.
+    for (let intento = 0; intento < 3; intento++) {
+      const res = await fetch('/api/archivos/pdf', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/octet-stream', 'X-Archivo-Ref': plan.ref, 'X-Archivo-Offset': String(offset) },
+        body: parte,
+      }).catch(() => null)
+      const datos = await res?.json().catch(() => null) as { bytes?: number; error?: string } | null | undefined
+      const bytes = datos?.bytes
+      if (res?.ok && typeof bytes === 'number' && Number.isSafeInteger(bytes) && bytes > offset && bytes <= archivo.size) {
+        siguiente = bytes
+        break
+      }
+      if (res && res.status < 500 && res.status !== 409) throw new Error(datos?.error ?? 'No se pudo subir el archivo.')
+      if (intento === 2) throw new Error(datos?.error ?? 'No se pudo subir el archivo. Revisa la conexión e inténtalo de nuevo.')
+      await new Promise((resolve) => setTimeout(resolve, 500 * (intento + 1)))
+    }
+    if (siguiente == null) throw new Error('No se pudo completar la subida del archivo.')
+    offset = siguiente
+    progreso?.(Math.round(offset / archivo.size * 100))
   }
-  return datos.ref
+  return plan.ref
 }
 
 /** Atajo para los documentos que la app tiene que abrir y firmar: solo PDF. */
-export function subirPdfTemporal(archivo: File): Promise<string> {
-  return subirArchivoTemporal(archivo, 'firma')
+export function subirPdfTemporal(archivo: File, progreso?: (porcentaje: number) => void): Promise<string> {
+  return subirArchivoTemporal(archivo, 'firma', progreso)
 }

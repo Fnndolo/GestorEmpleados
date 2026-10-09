@@ -2,6 +2,7 @@ import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile, readFile, unlink } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
+import type { SubidaReanudable } from '@/lib/archivos'
 
 /**
  * Almacenamiento de documentos con driver intercambiable:
@@ -103,23 +104,20 @@ export async function eliminarArchivo(storagePath: string): Promise<void> {
  * escaneo de 10 MB nunca llegaría. Con esta URL el archivo va del navegador a
  * Supabase y el servidor solo recibe la ruta.
  *
- * Devuelve null con el driver local (en desarrollo no hay límite que esquivar)
- * o si Supabase no la pudo emitir: quien llama cae a la subida normal.
+ * Devuelve null solo con el driver local. Un fallo de Supabase no debe enviar
+ * archivos grandes al servidor como respaldo.
  */
-export async function urlSubidaFirmada(storagePath: string): Promise<string | null> {
+export async function urlSubidaFirmada(storagePath: string): Promise<SubidaReanudable | null> {
   if (DRIVER !== 'supabase') return null
-  try {
-    const supabase = clienteSupabase()
-    const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(storagePath)
-    if (error || !data?.signedUrl) {
-      console.error('No se pudo firmar la subida directa:', error?.message)
-      return null
-    }
-    return data.signedUrl
-  } catch (e) {
-    console.error('No se pudo firmar la subida directa:', e)
-    return null
+  const supabase = clienteSupabase()
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(storagePath)
+  if (error || !data?.token) throw new Error('No se pudo autorizar la subida al almacenamiento.')
+  const url = new URL(process.env.SUPABASE_URL!)
+  if (url.hostname.endsWith('.supabase.co') && !url.hostname.endsWith('.storage.supabase.co')) {
+    url.hostname = url.hostname.replace('.supabase.co', '.storage.supabase.co')
   }
+  url.pathname = '/storage/v1/upload/resumable'
+  return { endpoint: url.toString(), token: data.token, bucket: BUCKET, objectName: storagePath }
 }
 
 /**

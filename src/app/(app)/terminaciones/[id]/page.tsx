@@ -78,15 +78,20 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   const tieneContrato = t.colaborador._count.contratos > 0
   const ventana = puedeEditar && (liq ? !liq.enviadoFirmaEn : llevaLiquidacion && tieneContrato)
     ? await mesesParaPromedios(t.colaborador.id, t.colaborador.fechaIngreso, t.fechaRetiro)
-    : { meses: [], mesesAnual: 0, mesesSemestre: 0 }
+    : { meses: [], mesesAnual: 0, mesesSemestre: 0, referencia: null }
   const variableGuardado = Object.fromEntries((detalle?.ajustes?.variablePorMes ?? []).map((m) => [m.mes, m.valor]))
   const bases = {
-    auxilioTransporte: detalle?.bases?.auxilioTransporte ?? 0,
+    salarioBase: detalle?.bases?.salarioBase ?? (liq ? Number(liq.salarioBase) : ventana.referencia?.salarioBase ?? null),
+    auxilioTransporte: detalle?.bases?.auxilioTransporte ?? ventana.referencia?.auxilioTransporte ?? null,
     promedioVariableAnual: detalle?.bases?.promedioVariableAnual ?? 0,
     promedioVariableSemestre: detalle?.bases?.promedioVariableSemestre ?? 0,
     otroConceptoSalarial: detalle?.bases?.otroConceptoSalarial ?? 0,
     diasSalarioPendiente: detalle?.bases?.diasSalarioPendiente ?? 0,
     periodosConsiderados: detalle?.bases?.periodosConsiderados ?? 0,
+  }
+  const ajustesMonetarios = {
+    salarioBase: detalle?.ajustes?.salarioBase ?? null,
+    auxilioTransporte: detalle?.ajustes?.auxilioTransporte ?? null,
   }
 
   // Soportes de la terminación: lo que se haga por fuera (examen de egreso, etc.).
@@ -260,11 +265,11 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
         <p className="font-medium">Todavía no tiene liquidación definitiva.</p>
         {tieneContrato ? (
           <>
-            <p className="text-muted-foreground">Calcúlala con «Rehacer el cálculo»: revisa la fecha de retiro y las bases antes de guardar.</p>
+            <p className="text-muted-foreground">Calcúlala con «Rehacer el cálculo»: revisa la fecha de retiro y completa el salario y el auxilio mensual si no hay nóminas del año del retiro.</p>
             {!cerrada && puedeEditar && (
               <AccionesLiquidacion
                 terminacionId={t.id} colaborador={nombre} fechaRetiro={formatFechaISO(t.fechaRetiro)}
-                bases={bases} ventana={ventana} variableGuardado={variableGuardado} puedeEditar puedeEliminar={false}
+                bases={bases} ventana={ventana} variableGuardado={variableGuardado} ajustesMonetarios={ajustesMonetarios} puedeEditar puedeEliminar={false}
               />
             )}
           </>
@@ -286,6 +291,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
             bases={bases}
             ventana={ventana}
             variableGuardado={variableGuardado}
+            ajustesMonetarios={ajustesMonetarios}
             puedeEditar
             puedeEliminar={false}
           />
@@ -350,8 +356,9 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
                 colaborador={nombre}
                 fechaRetiro={formatFechaISO(t.fechaRetiro)}
                 bases={bases}
-                ventana={{ meses: [], mesesAnual: 0, mesesSemestre: 0 }}
+                ventana={{ meses: [], mesesAnual: 0, mesesSemestre: 0, referencia: null }}
                 variableGuardado={{}}
+                ajustesMonetarios={ajustesMonetarios}
                 puedeEditar={false}
                 puedeEliminar
               />

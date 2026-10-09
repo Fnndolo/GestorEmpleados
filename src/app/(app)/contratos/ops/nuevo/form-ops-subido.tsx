@@ -15,7 +15,8 @@ import { SelectorColaborador } from '@/components/colaboradores/selector-colabor
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { SelectorFirmasPdf, type Posicion } from '@/components/contratos/selector-firmas-pdf'
 import { GenerarAutorizacion } from '@/components/contratos/generar-autorizacion'
-import { leerComoDataUri, MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
+import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
+import { usePdfLocal } from '@/lib/use-pdf-local'
 import { analizarPdfContratoOps, subirContratoOpsParaFirma } from '../../ops-acciones'
 
 /**
@@ -47,9 +48,9 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
   const [guardando, empezar] = useTransition()
   const [analizando, setAnalizando] = useState(false)
 
-  // `pdf` es el data URI para la vista previa (local); `pdfRef` es la referencia
+  // `pdf` es la URL local para la vista previa; `pdfRef` es la referencia
   // con que el servidor lee el archivo del depósito temporal.
-  const [pdf, setPdf] = useState<string | null>(null)
+  const [pdf, setPdf] = usePdfLocal()
   const [pdfRef, setPdfRef] = useState<string | null>(null)
   // El mismo archivo, sin codificar: el visor lo muestra desde el navegador.
   const [archivoPdf, setArchivoPdf] = useState<File | null>(null)
@@ -79,8 +80,8 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
   async function alElegirPdf(archivo: File) {
     if (archivo.type !== 'application/pdf') { toast.error('El archivo debe ser un PDF.'); return }
     if (archivo.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(archivo.size)); return }
-    const dataUri = await leerComoDataUri(archivo)
-    setPdf(dataUri)
+    setPdfRef(null)
+    setPdf(archivo)
     setArchivoPdf(archivo)
     setNombrePdf(archivo.name)
 
@@ -101,7 +102,7 @@ export function ContratoOpsSubido({ sedes, cargos }: Props) {
     // nada que proponer y se marca a mano sobre el documento.
     const res = await analizarPdfContratoOps({ pdfRef: ref })
     setAnalizando(false)
-    if (!res.ok) { toast.error(res.error ?? 'No se pudo leer el PDF.'); return }
+    if (!res.ok) { setPdfRef(null); setPdf(null); toast.error(res.error ?? 'No se pudo leer el PDF.'); return }
     const d = res.datos as { paginas: number; contratista: Posicion | null; contratante: Posicion | null }
     setPaginas(d.paginas)
     // Sin deteccion, se cae a la ULTIMA pagina: es donde va el bloque de firmas.

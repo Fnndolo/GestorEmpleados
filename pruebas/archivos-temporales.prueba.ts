@@ -44,10 +44,8 @@ describe('depósito temporal de PDF', () => {
   it('rechaza lo que no es PDF, lo vacío y lo que se pasa del tope', async () => {
     await expect(guardarPdfTemporal(Buffer.from('hola'), YO)).rejects.toThrow(/no es un PDF/)
     await expect(guardarPdfTemporal(Buffer.alloc(0), YO)).rejects.toThrow(/vacío/)
-    const pesado = Buffer.concat([PDF, Buffer.alloc(MAX_PDF_BYTES)])
-    await expect(guardarPdfTemporal(pesado, YO)).rejects.toThrow(/máximo son 25 MB/)
     // El mismo tope antes de firmar una subida directa, donde el archivo no se ve.
-    await expect(prepararSubidaDirecta(YO, MAX_PDF_BYTES + 1)).rejects.toThrow(/máximo son 25 MB/)
+    await expect(prepararSubidaDirecta(YO, MAX_PDF_BYTES + 1)).rejects.toThrow(/capacidad de registro/)
     await expect(prepararSubidaDirecta(YO, 0)).rejects.toThrow(/vacío/)
   })
 
@@ -61,7 +59,7 @@ describe('depósito temporal de PDF', () => {
     const { ref } = await guardarPdfTemporal(PDF, YO)
     const { p } = JSON.parse(Buffer.from(ref.split('.')[0], 'base64url').toString())
     const { subirArchivoEn } = await import('@/server/storage')
-    await subirArchivoEn(p, Buffer.from('esto no es un pdf'), 'application/pdf')
+    await subirArchivoEn(p, Buffer.alloc(PDF.length, 'x'), 'application/pdf')
     await expect(leerPdfTemporal(ref, YO)).rejects.toThrow(/no es un PDF/)
     await borrarPdfTemporal(ref)
   })
@@ -133,7 +131,7 @@ describe('depósito: límites y limpieza', () => {
     // Alguien anuncia poco y sube mucho: se cambia el archivo por uno enorme.
     const { subirArchivoEn, leerArchivo } = await import('@/server/storage')
     await subirArchivoEn(p, Buffer.concat([PDF, Buffer.alloc(200)]), 'application/pdf')
-    await expect(leerArchivoTemporal(ref, YO)).rejects.toThrow(/máximo|pesa/)
+    await expect(leerArchivoTemporal(ref, YO)).rejects.toThrow(/tamaño anunciado/)
     // Y no se queda ocupando espacio.
     await expect(leerArchivo(p)).rejects.toThrow()
   })
@@ -152,7 +150,7 @@ describe('depósito: límites y limpieza', () => {
     const { ref } = await guardarPdfTemporal(PDF, YO)
     const { p } = JSON.parse(Buffer.from(ref.split('.')[0], 'base64url').toString())
     const { subirArchivoEn, leerArchivo } = await import('@/server/storage')
-    await subirArchivoEn(p, Buffer.from('ni pdf ni nada'), 'application/pdf')
+    await subirArchivoEn(p, Buffer.alloc(PDF.length, 'x'), 'application/pdf')
     await expect(leerArchivoTemporal(ref, YO)).rejects.toThrow(/no es un PDF/)
     await expect(leerArchivo(p)).rejects.toThrow()
   })

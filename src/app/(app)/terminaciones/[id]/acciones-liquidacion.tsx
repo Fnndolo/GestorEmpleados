@@ -25,7 +25,8 @@ import { recalcularLiquidacion, anularTerminacion } from '../acciones'
  * el paz y salvo, y corregir eso es una nota contable.
  */
 export type BasesUsadas = {
-  auxilioTransporte: number
+  salarioBase: number | null
+  auxilioTransporte: number | null
   promedioVariableAnual: number
   promedioVariableSemestre: number
   otroConceptoSalarial: number
@@ -38,6 +39,7 @@ export type MesVentana = {
   etiqueta: string
   enSemestre: boolean
   valorConocido: number
+  tieneNomina: boolean
 }
 
 export type Ventana = {
@@ -45,12 +47,13 @@ export type Ventana = {
   /** Divisores de cada promedio: los MESES que abarca cada ventana. */
   mesesAnual: number
   mesesSemestre: number
+  referencia: { salarioBase: number | null; auxilioTransporte: number | null; periodoNombre: string | null } | null
 }
 
 /** Campos de ajuste: vacío significa "usa lo que calculó el sistema". */
-type Ajustes = Partial<Record<'auxilioTransporte' | 'otroConceptoSalarial' | 'diasSalarioPendiente', string>>
+type Ajustes = Partial<Record<'salarioBase' | 'auxilioTransporte' | 'otroConceptoSalarial' | 'diasSalarioPendiente', string>>
 
-export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, bases, ventana, variableGuardado, puedeEditar, puedeEliminar }: {
+export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, bases, ventana, variableGuardado, ajustesMonetarios, puedeEditar, puedeEliminar }: {
   terminacionId: string
   colaborador: string
   /** yyyy-mm-dd, para poder corregirla al recalcular. */
@@ -61,6 +64,7 @@ export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, b
   ventana: Ventana
   /** Lo que ya se digitó antes, por mes, para no volver a escribirlo. */
   variableGuardado: Record<string, number>
+  ajustesMonetarios: { salarioBase: number | null; auxilioTransporte: number | null }
   puedeEditar: boolean
   puedeEliminar: boolean
 }) {
@@ -68,7 +72,10 @@ export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, b
   const [dialogo, setDialogo] = useState<'recalcular' | 'anular' | null>(null)
   const [fecha, setFecha] = useState(fechaRetiro)
   const [motivo, setMotivo] = useState('')
-  const [ajustes, setAjustes] = useState<Ajustes>({})
+  const [ajustes, setAjustes] = useState<Ajustes>(() => ({
+    salarioBase: ajustesMonetarios.salarioBase == null ? '' : String(ajustesMonetarios.salarioBase),
+    auxilioTransporte: ajustesMonetarios.auxilioTransporte == null ? '' : String(ajustesMonetarios.auxilioTransporte),
+  }))
   const [variable, setVariable] = useState<Record<string, string>>(() =>
     Object.fromEntries(Object.entries(variableGuardado).map(([k, v]) => [k, String(v)])),
   )
@@ -76,6 +83,7 @@ export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, b
 
   const periodosConsiderados = bases.periodosConsiderados
   const sinHistorial = periodosConsiderados === 0
+  const sinReferencia = ventana.referencia?.salarioBase == null || ventana.referencia?.auxilioTransporte == null
 
   const setAjuste = (campo: keyof Ajustes, valor: string) => setAjustes((a) => ({ ...a, [campo]: valor }))
 
@@ -93,16 +101,18 @@ export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, b
     // sistema". Por eso se omite en lugar de mandarse, y solo viajan los que
     // alguien digitó de verdad.
     const variablePorMes = Object.entries(variable)
+      .filter(([, v]) => v.trim() !== '')
       .map(([mes, v]) => ({ mes, valor: Number(v) }))
       .filter((m) => v_valido(m.valor) && ventana.meses.some((x) => x.mes === m.mes))
 
     const res = await recalcularLiquidacion({
       id: terminacionId,
       fechaRetiro: fecha,
-      ...numero('auxilioTransporte', ajustes.auxilioTransporte),
+      salarioBase: ajustes.salarioBase?.trim() ? Number(ajustes.salarioBase) : null,
+      auxilioTransporte: ajustes.auxilioTransporte?.trim() ? Number(ajustes.auxilioTransporte) : null,
       ...numero('otroConceptoSalarial', ajustes.otroConceptoSalarial),
       ...numero('diasSalarioPendiente', ajustes.diasSalarioPendiente),
-      ...(variablePorMes.length > 0 ? { variablePorMes } : {}),
+      variablePorMes,
     })
     setG(false)
     if (res.ok) {
@@ -145,8 +155,8 @@ export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, b
           <DialogHeader>
             <DialogTitle>Rehacer el cálculo</DialogTitle>
             <DialogDescription>
-              Se vuelven a calcular cesantías, prima, vacaciones e indemnización con los datos que
-              hay hoy: el salario del contrato, los préstamos pendientes y el saldo de vacaciones.
+              Se mantienen las reglas de cálculo. El salario y el auxilio se recuperan de las nóminas
+              anteriores al retiro; si faltan, ingresa sus valores mensuales.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
@@ -160,17 +170,36 @@ export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, b
           {/* Bases del año en curso. Se derivan de los desprendibles emitidos por
               el sistema; cuando la empresa venía liquidando en otro software no
               hay de dónde sacarlas y toca digitarlas del corte de la migración. */}
-          <details className="rounded-lg border" open={sinHistorial}>
+          <details className="rounded-lg border" open={sinHistorial || sinReferencia}>
             <summary className="cursor-pointer px-3 py-2.5 text-sm font-medium">
-              Bases del año en curso
+              Bases de la liquidación
               {sinHistorial && <span className="ml-2 font-normal text-amber-600 dark:text-amber-400">· sin nóminas previas</span>}
             </summary>
             <div className="space-y-3 border-t p-3">
               <p className="text-xs text-muted-foreground">
                 {sinHistorial
-                  ? 'No hay desprendibles anteriores en el sistema, así que los promedios salen en cero. Digítalos del último cierre del software con que se venía liquidando.'
-                  : `Calculadas con ${periodosConsiderados} ${periodosConsiderados === 1 ? 'desprendible emitido' : 'desprendibles emitidos'}. Solo digita algo si necesitas corregirlas.`}
+                  ? 'No hay nóminas anteriores. Ingresa el salario base mensual, el auxilio mensual (0 si no corresponde) y los valores variables que tengas del histórico.'
+                  : `Los conceptos variables se recuperan de ${periodosConsiderados} ${periodosConsiderados === 1 ? 'nómina anterior' : 'nóminas anteriores'}. Completa los meses sin nómina si hubo pagos.`}
               </p>
+              <p className="text-xs text-muted-foreground">
+                {ventana.referencia?.periodoNombre
+                  ? `Referencia de salario y auxilio: ${ventana.referencia.periodoNombre}. Deja los campos vacíos para usar esos valores; al digitarlos se guarda un ajuste manual.`
+                  : 'No hay nómina de referencia del año del retiro. El salario y el auxilio deben ingresarse manualmente.'}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <CampoBase
+                  id="salario-base" label="Salario base mensual"
+                  ayuda="Salario mensual completo, no el pago de una quincena"
+                  valor={ajustes.salarioBase} onChange={(v) => setAjuste('salarioBase', v)}
+                  sugerido={ventana.referencia?.salarioBase ?? null}
+                />
+                <CampoBase
+                  id="aux-tte" label="Auxilio de transporte mensual"
+                  ayuda="Valor mensual completo; ingresa 0 si no corresponde"
+                  valor={ajustes.auxilioTransporte} onChange={(v) => setAjuste('auxilioTransporte', v)}
+                  sugerido={ventana.referencia?.auxilioTransporte ?? null}
+                />
+              </div>
               {/* Se pide el pago mes a mes, que es el dato que el contador tiene
                   en su registro. Pedirle el promedio sería pedirle que haga la
                   división, y ahí es donde entran los errores. */}
@@ -181,13 +210,14 @@ export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, b
                     <div key={m.mes} className="flex items-center gap-2">
                       <label htmlFor={`mes-${m.mes}`} className="w-20 shrink-0 text-xs text-muted-foreground">
                         {m.etiqueta}
+                        {!m.tieneNomina && <span className="block text-amber-600 dark:text-amber-400">Sin nómina</span>}
                       </label>
                       <Input
                         id={`mes-${m.mes}`}
                         type="number" min="0" inputMode="decimal" className="h-8"
                         value={variable[m.mes] ?? ''}
                         onChange={(e) => setVariable((v) => ({ ...v, [m.mes]: e.target.value }))}
-                        placeholder={m.valorConocido > 0 ? fmtCOP(m.valorConocido) : '0'}
+                        placeholder={m.tieneNomina ? fmtCOP(m.valorConocido) : 'Completar'}
                       />
                     </div>
                   ))}
@@ -212,12 +242,6 @@ export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, b
                   ayuda="Comisiones y horas del último tramo, sin pagar"
                   valor={ajustes.otroConceptoSalarial} onChange={(v) => setAjuste('otroConceptoSalarial', v)}
                   sugerido={bases.otroConceptoSalarial}
-                />
-                <CampoBase
-                  id="aux-tte" label="Auxilio de transporte"
-                  ayuda="Valor mensual; 0 si no le corresponde"
-                  valor={ajustes.auxilioTransporte} onChange={(v) => setAjuste('auxilioTransporte', v)}
-                  sugerido={bases.auxilioTransporte}
                 />
                 <CampoBase
                   id="dias-sal" label="Días de salario pendientes"
@@ -280,7 +304,7 @@ function CampoBase({ id, label, ayuda, valor, onChange, sugerido, moneda = true 
   ayuda: string
   valor: string | undefined
   onChange: (v: string) => void
-  sugerido: number
+  sugerido: number | null
   moneda?: boolean
 }) {
   return (
@@ -293,7 +317,7 @@ function CampoBase({ id, label, ayuda, valor, onChange, sugerido, moneda = true 
         inputMode="decimal"
         value={valor ?? ''}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={moneda ? fmtCOP(sugerido) : String(sugerido)}
+        placeholder={sugerido == null ? 'Ingresa el valor mensual' : moneda ? fmtCOP(sugerido) : String(sugerido)}
       />
       <p className="text-[11px] leading-tight text-muted-foreground">{ayuda}</p>
     </div>

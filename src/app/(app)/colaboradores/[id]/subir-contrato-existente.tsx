@@ -83,7 +83,7 @@ export function SubirContratoExistente({
 
   async function guardar() {
     if (!pdf) { toast.error('Adjunta el contrato escaneado.'); return }
-    // Cada archivo se sube aparte al depósito temporal (hasta 25 MB cada uno);
+    // Cada archivo se sube por partes al depósito temporal;
     // se avisa aquí para no fallar tras la espera.
     for (const archivo of [pdf, autorizacion]) {
       if (archivo && archivo.size > MAX_PDF_BYTES) { toast.error(mensajePdfPesado(archivo.size)); return }
@@ -245,7 +245,7 @@ export function SubirContratoExistente({
               />
               {pdf
                 ? <p className="text-xs text-muted-foreground">{pdf.name} ({(pdf.size / 1024).toFixed(0)} KB)</p>
-                : <p className="text-xs text-muted-foreground">PDF, o un ZIP/RAR si el escaneo viene en varios archivos. Hasta 25 MB.</p>}
+                : <p className="text-xs text-muted-foreground">PDF, o un ZIP/RAR si el escaneo viene en varios archivos.</p>}
             </div>
 
             <div className="space-y-1.5">

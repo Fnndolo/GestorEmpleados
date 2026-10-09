@@ -21,8 +21,12 @@ export type DetalleLiquidacion = {
   basePrima?: number
   baseVacaciones?: number
   baseSeguridadSocial?: number
-  ajustes?: { variablePorMes?: { mes: string; valor: number }[] }
+  ajustes?: { salarioBase?: number | null; auxilioTransporte?: number | null; variablePorMes?: { mes: string; valor: number }[] }
   bases?: {
+    salarioBase?: number
+    origenSalario?: 'NOMINA' | 'MANUAL'
+    origenAuxilio?: 'NOMINA' | 'MANUAL'
+    referencia?: { periodoNombre: string | null; fechaReferencia: string | null }
     auxilioTransporte?: number
     promedioVariableAnual?: number
     promedioVariableSemestre?: number

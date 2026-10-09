@@ -8,7 +8,7 @@ import { accion, ErrorNegocio } from '@/server/accion'
 import { parseFechaISO, formatFechaISO } from '@/lib/fechas'
 import { cargarParametros } from '@/server/nomina/parametros'
 import { liquidacionDefinitiva } from '@/server/nomina/liquidacion-definitiva'
-import { basesDesdeHistorial, type AjustesBases } from '@/server/nomina/bases-liquidacion'
+import { basesDesdeHistorial, ErrorBasesLiquidacion, type AjustesBases } from '@/server/nomina/bases-liquidacion'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { devolverAccesoNormal } from '@/server/rol-consulta'
 import { enviarDocumentoAFirma, retirarEnvioDocumento, registrarPagoLiquidacion, idDocumentoTerminacion } from '@/server/terminacion-documentos'
@@ -61,7 +61,14 @@ export const crearTerminacion = accion(
 
     // Cálculo de la liquidación definitiva (borrador para revisión del área contable)
     let liquidacionData: Awaited<ReturnType<typeof calcularLiq>> | null = null
-    if (contrato) liquidacionData = await calcularLiq(d.colaboradorId, contrato, fechaRetiro, d.tipo)
+    if (contrato) {
+      try {
+        liquidacionData = await calcularLiq(d.colaboradorId, contrato, fechaRetiro, d.tipo)
+      } catch (e) {
+        // La terminación puede avanzar; el cálculo espera los valores manuales.
+        if (!(e instanceof ErrorBasesLiquidacion)) throw e
+      }
+    }
     const liq = liquidacionData?.resultado ?? null
 
     const terminacion = await dbAuditado.terminacion.create({
@@ -75,8 +82,8 @@ export const crearTerminacion = accion(
     })
 
     if (liquidacionData && contrato) {
-      await prisma.liquidacionDefinitiva.create({
-        data: { terminacionId: terminacion.id, ...datosLiquidacion(liquidacionData, contrato.salarioBase) },
+      await dbAuditado.liquidacionDefinitiva.create({
+        data: { terminacionId: terminacion.id, ...datosLiquidacion(liquidacionData) },
       })
     }
 
@@ -99,16 +106,13 @@ export const crearTerminacion = accion(
     if (ultimoDiaPasado(fechaRetiro)) await aplicarRetiro(terminacion.id, usuario.id)
 
     revalidatePath('/terminaciones')
-    return { id: terminacion.id }
+    return { id: terminacion.id, liquidacionPendiente: !!contrato && !liquidacionData }
   },
 )
 
 type ContratoLiq = {
-  salarioBase: unknown
   tipo: string
   fechaFin: Date | null
-  tieneAuxTransporte: boolean
-  tipoSalario: string
 }
 
 async function calcularLiq(
@@ -124,7 +128,7 @@ async function calcularLiq(
   const saldoVac = await saldoVacaciones(colaboradorId, fechaRetiro)
   const saldoPrestamo = await prisma.prestamo.aggregate({ where: { colaboradorId, estado: 'ACTIVO' }, _sum: { saldo: true } })
 
-  const bases = await basesDesdeHistorial(colaboradorId, contrato, colab.fechaIngreso, fechaRetiro, ajustes)
+  const bases = await basesDesdeHistorial(colaboradorId, colab.fechaIngreso, fechaRetiro, ajustes)
 
   // Saldo negativo = tomó vacaciones anticipadas y se retira antes de causarlas.
   // Solo se descuenta si el colaborador lo autorizó por escrito al solicitarlas
@@ -138,7 +142,7 @@ async function calcularLiq(
   }
 
   const resultado = liquidacionDefinitiva({
-    salarioBase: Number(contrato.salarioBase),
+    salarioBase: bases.salarioBase,
     auxilioTransporte: bases.auxilioTransporte,
     promedioVariableAnual: bases.promedioVariableAnual,
     promedioVariableSemestre: bases.promedioVariableSemestre,
@@ -170,11 +174,11 @@ async function calcularLiq(
  * último tramo —salario, auxilio y variable— van juntas en `otros`, y el desglose
  * completo queda en `detalle` para que la pantalla lo muestre línea por línea.
  */
-function datosLiquidacion(calculo: Awaited<ReturnType<typeof calcularLiq>>, salarioBase: unknown) {
+function datosLiquidacion(calculo: Awaited<ReturnType<typeof calcularLiq>>) {
   const r = calculo.resultado
   return {
     diasLiquidados: r.diasLiquidados,
-    salarioBase: salarioBase as number,
+    salarioBase: calculo.bases.salarioBase,
     cesantias: r.cesantias,
     interesesCesantias: r.interesesCesantias,
     prima: r.prima,
@@ -196,9 +200,10 @@ function ajustesGuardados(detalle: unknown): AjustesBases {
 
 /** Descarta los campos que el formulario mandó vacíos: esos no son un ajuste. */
 function limpiarAjustes(d: Record<string, unknown>): AjustesBases {
-  const campos = ['auxilioTransporte', 'otroConceptoSalarial', 'diasSalarioPendiente'] as const
+  const campos = ['salarioBase', 'auxilioTransporte', 'otroConceptoSalarial', 'diasSalarioPendiente'] as const
   const salida: AjustesBases = {}
   for (const c of campos) if (typeof d[c] === 'number') salida[c] = d[c] as number
+  for (const c of ['salarioBase', 'auxilioTransporte'] as const) if (d[c] === null) salida[c] = null
   if (Array.isArray(d.variablePorMes)) salida.variablePorMes = d.variablePorMes as AjustesBases['variablePorMes']
   return salida
 }
@@ -399,7 +404,8 @@ export const recalcularLiquidacion = accion(
     schema: z.object({
       id: z.uuid(),
       fechaRetiro: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-      auxilioTransporte: AJUSTE,
+      salarioBase: z.number().positive().nullable().optional(),
+      auxilioTransporte: z.number().min(0).nullable().optional(),
       otroConceptoSalarial: AJUSTE,
       diasSalarioPendiente: AJUSTE,
       // Lo pagado de variable en cada mes. De aquí salen los dos promedios, sin
@@ -445,7 +451,7 @@ export const recalcularLiquidacion = accion(
       data: { fechaRetiro, indemnizacion: calculo.resultado.indemnizacion, estado: 'LIQUIDADA' },
     })
 
-    const datos = datosLiquidacion(calculo, contrato.salarioBase)
+    const datos = datosLiquidacion(calculo)
     if (previa) {
       await dbAuditado.liquidacionDefinitiva.update({ where: { id: previa.id }, data: datos })
     } else {
