@@ -45,6 +45,11 @@ next-env.d.ts
 src/generated/
 uploads/
 
+# PDF y documentos personales guardados junto al proyecto
+*.pdf
+/*.docx
+/*.doc
+
 
 .env
 .vercel
