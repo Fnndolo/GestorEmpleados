@@ -116,7 +116,9 @@ export async function urlSubidaFirmada(storagePath: string): Promise<SubidaReanu
   if (url.hostname.endsWith('.supabase.co') && !url.hostname.endsWith('.storage.supabase.co')) {
     url.hostname = url.hostname.replace('.supabase.co', '.storage.supabase.co')
   }
-  url.pathname = '/storage/v1/upload/resumable'
+  // Con permiso firmado (x-signature) la ruta es /sign; la otra exige sesión de Supabase
+  // y responde «Invalid Compact JWS».
+  url.pathname = '/storage/v1/upload/resumable/sign'
   return { endpoint: url.toString(), token: data.token, bucket: BUCKET, objectName: storagePath }
 }
 

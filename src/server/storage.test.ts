@@ -12,7 +12,7 @@ it('prepara TUS para una ruta concreta sin exponer la clave de servicio', async 
   vi.stubGlobal('fetch', mock)
   const { urlSubidaFirmada } = await import('./storage')
   expect(await urlSubidaFirmada('temporal/u/x.pdf')).toEqual({
-    endpoint: 'https://prueba.storage.supabase.co/storage/v1/upload/resumable',
+    endpoint: 'https://prueba.storage.supabase.co/storage/v1/upload/resumable/sign',
     token: 'permiso-de-subida', bucket: 'documentos', objectName: 'temporal/u/x.pdf',
   })
   expect(mock).toHaveBeenCalledTimes(1)
