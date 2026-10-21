@@ -37,7 +37,8 @@ export function AvisosIcono() {
 
   useEffect(() => {
     const primera = setTimeout(cargar, 0)
-    const id = setInterval(cargar, 60_000)
+    // Los avisos de la plataforma cambian poco: cada 2 minutos y solo con la pestaña a la vista.
+    const id = setInterval(() => { if (document.visibilityState === 'visible') cargar() }, 120_000)
     const onFocus = () => cargar()
     window.addEventListener('focus', onFocus)
     // Marcar un aviso como leído en cualquier pantalla actualiza el contador al instante.

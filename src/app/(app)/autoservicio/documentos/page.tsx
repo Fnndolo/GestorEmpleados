@@ -28,6 +28,8 @@ export default async function MisDocumentosPage() {
     prisma.documento.findMany({
       where: {
         entidadTipo: 'Colaborador', entidadId: usuario.colaboradorId,
+        // Lo que Talento Humano subió marcado para no mostrarse aquí.
+        ocultoAutoservicio: false,
         // El desprendible de una nómina sin aprobar todavía no es suyo para ver.
         NOT: { id: { in: await desprendiblesSinAprobar(usuario.colaboradorId) } },
       },

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Search, CircleCheck, ClockPlus, Paperclip, TreePalm, Stethoscope, File, Clock, CreditCard, Check, X, FileCheck, type LucideIcon } from 'lucide-react'
+import { Plus, Search, CircleCheck, ClockPlus, Paperclip, TreePalm, Stethoscope, File, Clock, CreditCard, Check, X, FileCheck, Ban, type LucideIcon } from 'lucide-react'
 import { Pill, type PillTone, type ChipColor } from '@/components/ui-kit'
 import { ETIQUETA_COMPROBANTE, type SituacionComprobante } from '@/lib/comprobante-permiso'
 import { ListaAcordeon } from '@/components/ui-kit/lista-acordeon'
@@ -28,6 +28,7 @@ import {
   registrarVacaciones, registrarLicencia, registrarPermiso,
   registrarBonificacion, marcarBonificacionPagada,
   verificarComprobantePermiso, cambiarExigenciaComprobante,
+  anularPermiso, anularLicencia,
 } from './acciones'
 import { ListaIncapacidades, DialogIncapacidad, type IncapacidadItem } from './incapacidades'
 
@@ -67,7 +68,7 @@ type ComprobanteNov = {
 type Datos = {
   vacaciones: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; fechaInicio: string; fechaFin: string; dias: number; estado: string; desdeAutoservicio: boolean; soporteDocId: string | null }[]
   incapacidades: IncapacidadItem[]
-  licencias: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; tipo: string; fechaInicio: string; fechaFin: string; dias: number; remunerada: boolean }[]
+  licencias: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; tipo: string; fechaInicio: string; fechaFin: string; dias: number; remunerada: boolean; desdeAutoservicio: boolean }[]
   permisos: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; fecha: string; diaCompleto: boolean; horas: number | null; motivo: string; desdeAutoservicio: boolean; soporteDocId: string | null; comprobante: ComprobanteNov }[]
   bonificaciones: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; concepto: string; valor: number; constitutivoSalario: boolean; estadoPago: string; fechaPago: string | null }[]
   horasExtra: { id: string; colaborador: string; colaboradorId: string; fotoUrl: string | null; fecha: string; horaInicio: string; horaFin: string; horas: number; motivo: string; posterior: boolean; soporteDocId: string | null }[]
@@ -175,25 +176,8 @@ export function NovedadesCliente({ tab, busqueda = '', datos, puedeCrear, puedeE
         />
       )}
       {tab === 'incapacidades' && <ListaIncapacidades items={datos.incapacidades} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />}
-      {tab === 'licencias' && (
-        <Lista
-          chip={CHIP_NOV.licencias}
-          items={datos.licencias.map((x) => ({
-            id: x.id,
-            titulo: x.colaborador,
-            avatar: { colaboradorId: x.colaboradorId, fotoUrl: x.fotoUrl, nombre: x.colaborador },
-            sub: `${TIPO_LIC[x.tipo]} · ${x.dias} días · ${x.remunerada ? 'Remunerada' : 'No remunerada'}`,
-            campos: [
-              { label: 'Tipo', valor: TIPO_LIC[x.tipo] ?? x.tipo },
-              { label: 'Desde', valor: formatFechaCorta(new Date(x.fechaInicio)) },
-              { label: 'Hasta', valor: formatFechaCorta(new Date(x.fechaFin)) },
-              { label: 'Días', valor: String(x.dias) },
-              { label: 'Remunerada', valor: x.remunerada ? 'Sí' : 'No' },
-            ],
-          }))}
-        />
-      )}
-      {tab === 'permisos' && <ListaPermisos items={datos.permisos} puedeEditar={puedeEditar} />}
+      {tab === 'licencias' && <ListaLicencias items={datos.licencias} puedeEliminar={puedeEliminar} />}
+      {tab === 'permisos' && <ListaPermisos items={datos.permisos} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />}
       {tab === 'bonificaciones' && <ListaBonificaciones items={datos.bonificaciones} puedeEditar={puedeEditar} />}
       {tab === 'horas-extra' && (
         <Lista
@@ -265,8 +249,95 @@ function ListaBonificaciones({ items, puedeEditar }: { items: Datos['bonificacio
   )
 }
 
-function ListaPermisos({ items, puedeEditar }: { items: Datos['permisos']; puedeEditar: boolean }) {
+function ListaLicencias({ items, puedeEliminar }: { items: Datos['licencias']; puedeEliminar: boolean }) {
+  const [anulando, setAnulando] = useState<Datos['licencias'][number] | null>(null)
   return (
+    <>
+      <Lista
+        chip={CHIP_NOV.licencias}
+        items={items.map((x) => ({
+          id: x.id,
+          titulo: x.colaborador,
+          avatar: { colaboradorId: x.colaboradorId, fotoUrl: x.fotoUrl, nombre: x.colaborador },
+          sub: `${TIPO_LIC[x.tipo]} · ${x.dias} días · ${x.remunerada ? 'Remunerada' : 'No remunerada'}`,
+          campos: [
+            { label: 'Tipo', valor: TIPO_LIC[x.tipo] ?? x.tipo },
+            { label: 'Desde', valor: formatFechaCorta(new Date(x.fechaInicio)) },
+            { label: 'Hasta', valor: formatFechaCorta(new Date(x.fechaFin)) },
+            { label: 'Días', valor: String(x.dias) },
+            { label: 'Remunerada', valor: x.remunerada ? 'Sí' : 'No' },
+            { label: 'Origen', valor: x.desdeAutoservicio ? 'Autoservicio' : 'Registro de RRHH' },
+          ],
+          extra: puedeEliminar && <BotonAnular onClick={() => setAnulando(x)} />,
+        }))}
+      />
+      {anulando && (
+        <DialogAnular
+          titulo="Anular licencia"
+          detalle={`${anulando.colaborador} · ${TIPO_LIC[anulando.tipo] ?? anulando.tipo} · ${formatFechaCorta(new Date(anulando.fechaInicio))} a ${formatFechaCorta(new Date(anulando.fechaFin))}`}
+          desdeAutoservicio={anulando.desdeAutoservicio}
+          anular={(motivo) => anularLicencia({ id: anulando.id, motivo })}
+          onClose={() => setAnulando(null)}
+        />
+      )}
+    </>
+  )
+}
+
+function BotonAnular({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="mt-2 flex justify-end">
+      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={onClick}>
+        <Ban className="size-4" /> Anular
+      </Button>
+    </div>
+  )
+}
+
+/**
+ * Anular un permiso o una licencia ya registrados, con el motivo: queda en
+ * auditoría, la solicitud de origen pasa a anulada y al colaborador se le avisa.
+ */
+function DialogAnular({ titulo, detalle, desdeAutoservicio, anular, onClose }: {
+  titulo: string; detalle: string; desdeAutoservicio: boolean
+  anular: (motivo: string) => Promise<{ ok: boolean; error?: string }>
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const [motivo, setMotivo] = useState('')
+  const [g, setG] = useState(false)
+
+  async function confirmar() {
+    setG(true)
+    const res = await anular(motivo)
+    setG(false)
+    if (res.ok) { toast.success('Anulado. Se le avisó al colaborador.'); onClose(); router.refresh() } else toast.error(res.error ?? 'No se pudo anular.')
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !g && onClose()}>
+      <DialogContent aria-describedby={undefined}>
+        <DialogHeader><DialogTitle>{titulo}</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {detalle}{desdeAutoservicio ? ' · la solicitud del colaborador queda anulada' : ''}
+        </p>
+        <div className="space-y-1.5">
+          <Label htmlFor="motivo-anulacion">Motivo <span className="text-destructive">*</span></Label>
+          <Textarea id="motivo-anulacion" rows={2} placeholder="¿Por qué se anula?" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={g}>Volver</Button>
+          <Button variant="destructive" onClick={confirmar} disabled={g || motivo.trim().length < 5}>{g ? <Spinner /> : <Ban className="size-4" />} Anular</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ListaPermisos({ items, puedeEditar, puedeEliminar }: { items: Datos['permisos']; puedeEditar: boolean; puedeEliminar: boolean }) {
+  const [anulando, setAnulando] = useState<Datos['permisos'][number] | null>(null)
+  return (
+    <>
     <Lista
       chip={CHIP_NOV.permisos}
       items={items.map((x) => {
@@ -295,10 +366,25 @@ function ListaPermisos({ items, puedeEditar }: { items: Datos['permisos']; puede
               )}
             </div>
           ),
-          extra: <ComprobantePermiso permisoId={x.id} c={x.comprobante} puedeEditar={puedeEditar} />,
+          extra: (
+            <>
+              <ComprobantePermiso permisoId={x.id} c={x.comprobante} puedeEditar={puedeEditar} />
+              {puedeEliminar && <BotonAnular onClick={() => setAnulando(x)} />}
+            </>
+          ),
         }
       })}
     />
+    {anulando && (
+      <DialogAnular
+        titulo="Anular permiso"
+        detalle={`${anulando.colaborador} · ${formatFechaCorta(new Date(anulando.fecha))} · ${anulando.diaCompleto ? 'Día completo' : `${anulando.horas ?? 0} horas`}`}
+        desdeAutoservicio={anulando.desdeAutoservicio}
+        anular={(motivo) => anularPermiso({ id: anulando.id, motivo })}
+        onClose={() => setAnulando(null)}
+      />
+    )}
+    </>
   )
 }
 

@@ -21,13 +21,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const doc = await prisma.documento.findUnique({ where: { id } })
   if (!doc) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
 
-  const esGeneral = doc.nivelAcceso === 'GENERAL' && !['AcuerdoEvaluacion', 'IndicacionesCumpleanos'].includes(doc.entidadTipo)
+  const esGeneral = doc.nivelAcceso === 'GENERAL' && !doc.ocultoAutoservicio && !['AcuerdoEvaluacion', 'IndicacionesCumpleanos'].includes(doc.entidadTipo)
   const usuario = esGeneral ? null : await obtenerSesion()
   if (!esGeneral) {
     if (!usuario) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     // El colaborador siempre puede acceder a sus propios documentos (habeas data): desprendibles,
     // certificaciones, etc. Para el resto se valida el nivel de acceso del documento.
     const esPropio = await esDocumentoPropio(usuario, doc)
+    // Subido por Talento Humano sin mostrarlo en el autoservicio: el colaborador
+    // lo pide y se le entrega (Ley 1581), pero no lo abre desde la app.
+    if (doc.ocultoAutoservicio && esPropio && !tienePermiso(usuario, 'colaboradores', 'EDITAR')) {
+      return NextResponse.json({ error: 'Este documento lo entrega Talento Humano a solicitud.' }, { status: 403 })
+    }
     if (doc.entidadTipo === 'IndicacionesCumpleanos' && !esPropio && !tienePermiso(usuario, 'bienestar', 'VER')) {
       return NextResponse.json({ error: 'Sin permiso para este documento' }, { status: 403 })
     }
@@ -98,15 +103,20 @@ export async function HEAD(_req: NextRequest, { params }: { params: Promise<{ id
 
   const doc = await prisma.documento.findUnique({
     where: { id },
-    select: { mimeType: true, tamanoBytes: true, nivelAcceso: true, entidadTipo: true, entidadId: true },
+    select: { mimeType: true, tamanoBytes: true, nivelAcceso: true, entidadTipo: true, entidadId: true, ocultoAutoservicio: true },
   })
   if (!doc) return new NextResponse(null, { status: 404 })
 
-  const esGeneral = doc.nivelAcceso === 'GENERAL' && !['AcuerdoEvaluacion', 'IndicacionesCumpleanos'].includes(doc.entidadTipo)
+  const esGeneral = doc.nivelAcceso === 'GENERAL' && !doc.ocultoAutoservicio && !['AcuerdoEvaluacion', 'IndicacionesCumpleanos'].includes(doc.entidadTipo)
   if (!esGeneral) {
     const usuario = await obtenerSesion()
     if (!usuario) return new NextResponse(null, { status: 401 })
     const esPropio = await esDocumentoPropio(usuario, doc)
+    // Subido por Talento Humano sin mostrarlo en el autoservicio: el colaborador
+    // lo pide y se le entrega (Ley 1581), pero no lo abre desde la app.
+    if (doc.ocultoAutoservicio && esPropio && !tienePermiso(usuario, 'colaboradores', 'EDITAR')) {
+      return NextResponse.json({ error: 'Este documento lo entrega Talento Humano a solicitud.' }, { status: 403 })
+    }
     if (doc.entidadTipo === 'IndicacionesCumpleanos' && !esPropio && !tienePermiso(usuario, 'bienestar', 'VER')) {
       return new NextResponse(null, { status: 403 })
     }

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   CalendarRange, Clock, IdCard, FileText, FolderUp, FileBadge, CalendarClock, HeartPulse,
-  PenLine, Receipt, GraduationCap, Package, Scale, ShieldAlert, Lock, Inbox, Timer, ClockPlus, DoorOpen, ClipboardCheck,
+  PenLine, Receipt, GraduationCap, Package, Scale, ShieldAlert, Lock, Inbox, Timer, ClockPlus, DoorOpen, ClipboardCheck, HandCoins,
 } from 'lucide-react'
 import { CarruselMovil, Casilla, CasillaCompacta, CarruselEscritorio } from '@/components/shell/carrusel-movil'
 import { aplicaTramite, esOps, type Tramite } from '@/lib/tramites-vinculo'
@@ -72,7 +72,7 @@ function Seccion({
 
 
 export function PanelTramites({
-  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, mostrarSaldoVacaciones = false, bloqueoPermiso = null, documentosFaltantes, dotacionPorFirmar, horasExtraPorFirmar, retiroPorFirmar = 0, entregasPorVerificar = 0, esResponsableArea = false, hrefsNuevos = [], soloConsulta = false,
+  activo, tipoVinculo, fichaFaltantes, contratosPorFirmar, disciplinariosAbiertos, puedeAprobar, saldoVacaciones, mostrarSaldoVacaciones = false, bloqueoPermiso = null, documentosFaltantes, dotacionPorFirmar, horasExtraPorFirmar, descuentos = { total: 0, porFirmar: 0 }, retiroPorFirmar = 0, entregasPorVerificar = 0, esResponsableArea = false, hrefsNuevos = [], soloConsulta = false,
 }: {
   /** Usuario en «Solo consulta» (Usuarios): ve sus canales, pero no pide nada. */
   soloConsulta?: boolean
@@ -94,6 +94,8 @@ export function PanelTramites({
   dotacionPorFirmar: number
   /** Órdenes de pago de horas extra (se pagan aparte de la nómina) esperando su firma. */
   horasExtraPorFirmar: number
+  /** Descuentos de nómina que tiene, y cuántos acuerdos de pago debe firmar. */
+  descuentos?: { total: number; porFirmar: number }
   /** Documentos de su retiro (carta, acta, liquidación) esperando su firma. */
   retiroPorFirmar?: number
   /** Áreas del paz y salvo a su cargo pendientes de verificar (de otros que se retiran). */
@@ -188,8 +190,15 @@ export function PanelTramites({
     horasExtraPorFirmar > 0 && {
       clave: 'horas-extra', icono: Timer,
       titulo: 'Mis horas extra', corto: 'Horas extra',
-      aviso: plural(horasExtraPorFirmar, 'por firmar'),
+      aviso: `${horasExtraPorFirmar} por firmar`,
       href: '/autoservicio/horas-extra',
+    },
+    // Solo si tiene descuentos de nómina: ahí ve el acuerdo y lo firma.
+    descuentos.total > 0 && {
+      clave: 'descuentos', icono: HandCoins,
+      titulo: 'Mis descuentos', corto: 'Descuentos',
+      aviso: descuentos.porFirmar > 0 ? `${descuentos.porFirmar} por firmar` : null,
+      href: '/autoservicio/descuentos',
     },
     aplica('capacitaciones') && {
       clave: 'capacitaciones', icono: GraduationCap,

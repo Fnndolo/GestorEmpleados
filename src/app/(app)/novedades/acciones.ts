@@ -129,6 +129,63 @@ export const eliminarIncapacidad = accion(
   },
 )
 
+const anulacionSchema = z.object({ id: z.uuid(), motivo: z.string().trim().min(5, 'Explica por qué se anula.').max(300) })
+
+/**
+ * Lo común de anular una novedad que vino de autoservicio: la solicitud queda
+ * anulada con el motivo (el colaborador lo ve en su actividad) y se le avisa,
+ * porque contaba con ese día libre.
+ */
+async function avisarAnulacion(opts: { colaboradorId: string; solicitudId: string | null; motivo: string; que: string }) {
+  if (opts.solicitudId) {
+    await dbAuditado.solicitud.update({
+      where: { id: opts.solicitudId },
+      data: { estado: 'CANCELADA', resultado: `Anulada por Talento Humano: ${opts.motivo}` },
+    })
+  }
+  const uid = await usuarioDeColaborador(opts.colaboradorId)
+  if (uid) {
+    await avisar(uid, {
+      evento: 'solicitud_resuelta',
+      titulo: `Talento Humano anuló tu ${opts.que}`,
+      mensaje: `Motivo: ${opts.motivo}`,
+      enlace: '/autoservicio',
+    }).catch(() => {})
+  }
+  revalidatePath('/novedades')
+  revalidatePath('/autoservicio')
+}
+
+/**
+ * Anular un permiso ya registrado (aprobado por error, o que la persona al final
+ * no tomó), con el motivo: queda en auditoría. No se puede si una nómina
+ * cerrada ya lo tuvo en cuenta (un no remunerado ya se descontó).
+ */
+export const anularPermiso = accion(
+  { modulo: 'novedades', accion: 'ELIMINAR', schema: anulacionSchema },
+  async (d, usuario) => {
+    const p = await prisma.permiso.findUniqueOrThrow({ where: { id: d.id } })
+    await exigirColaboradorEnAlcance(usuario, p.colaboradorId, 'novedades', 'ELIMINAR')
+    await exigirNoLiquidadaEnNominaCerrada({ colaboradorId: p.colaboradorId, fechaInicio: p.fecha, fechaFin: p.fecha }, 'Este permiso')
+    const comprobantes = await prisma.documento.findMany({ where: { entidadTipo: 'Permiso', entidadId: p.id }, select: { id: true } })
+    await dbAuditado.permiso.delete({ where: { id: p.id } })
+    for (const doc of comprobantes) await eliminarDocumento(doc.id).catch(() => {})
+    await avisarAnulacion({ colaboradorId: p.colaboradorId, solicitudId: p.solicitudId, motivo: d.motivo, que: `permiso del ${fechaBreve(p.fecha)}` })
+  },
+)
+
+/** Anular una licencia ya registrada, con el mismo criterio que un permiso. */
+export const anularLicencia = accion(
+  { modulo: 'novedades', accion: 'ELIMINAR', schema: anulacionSchema },
+  async (d, usuario) => {
+    const l = await prisma.licencia.findUniqueOrThrow({ where: { id: d.id } })
+    await exigirColaboradorEnAlcance(usuario, l.colaboradorId, 'novedades', 'ELIMINAR')
+    await exigirNoLiquidadaEnNominaCerrada(l, 'Esta licencia')
+    await dbAuditado.licencia.delete({ where: { id: l.id } })
+    await avisarAnulacion({ colaboradorId: l.colaboradorId, solicitudId: l.solicitudId, motivo: d.motivo, que: `licencia (${rangoBreve(l.fechaInicio, l.fechaFin)})` })
+  },
+)
+
 export const registrarLicencia = accion(
   { modulo: 'novedades', accion: 'CREAR', schema: licenciaSchema },
   async (d, usuario) => {

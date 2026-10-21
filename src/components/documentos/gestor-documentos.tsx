@@ -10,6 +10,7 @@ import {
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
@@ -51,7 +52,7 @@ type ItemSemaforo = {
 }
 
 export function GestorDocumentos({
-  entidadTipo, entidadId, sedeId, documentos, tiposDocumento, semaforo, puedeEditar, puedeBorrar = puedeEditar,
+  entidadTipo, entidadId, sedeId, documentos, tiposDocumento, semaforo, puedeEditar, puedeBorrar = puedeEditar, puedeOcultar = false,
 }: {
   entidadTipo: string; entidadId: string; sedeId: string | null
   documentos: Doc[]; tiposDocumento: TipoDoc[]; semaforo: ItemSemaforo[]
@@ -59,6 +60,8 @@ export function GestorDocumentos({
   puedeEditar: boolean
   /** Puede borrarlos. Por defecto va con `puedeEditar`; el propio colaborador sube a su ficha pero no borra desde aquí. */
   puedeBorrar?: boolean
+  /** Quien sube es Talento Humano: puede subirlo sin mostrarlo en el autoservicio del colaborador. */
+  puedeOcultar?: boolean
 }) {
   const router = useRouter()
   const [subiendo, setSubiendo] = useState(false)
@@ -220,6 +223,7 @@ export function GestorDocumentos({
 
       {dialogo && (
         <DialogSubir
+          puedeOcultar={puedeOcultar}
           entidadTipo={entidadTipo}
           entidadId={entidadId}
           sedeId={sedeId}
@@ -264,13 +268,16 @@ function IconoEstado({ estado }: { estado: ItemSemaforo['estado'] }) {
 }
 
 export function DialogSubir({
-  entidadTipo, entidadId, sedeId, tipoInicial, subiendo, setSubiendo, onClose, onSubido,
+  entidadTipo, entidadId, sedeId, tipoInicial, subiendo, setSubiendo, onClose, onSubido, puedeOcultar = false,
 }: {
   entidadTipo: string; entidadId: string; sedeId: string | null
   /** Tipo ya elegido cuando se abre desde la fila del semáforo. */
   tipoInicial?: TipoDoc | null
   subiendo: boolean; setSubiendo: (b: boolean) => void; onClose: () => void; onSubido: () => void
+  /** Mostrar la pregunta «¿El colaborador puede verlo?» (si no, no aparece en su autoservicio). */
+  puedeOcultar?: boolean
 }) {
+  const [visible, setVisible] = useState(true)
   const inputRef = useRef<HTMLInputElement>(null)
   const [archivo, setArchivo] = useState<File | null>(null)
   const [nombre, setNombre] = useState(tipoInicial?.nombre ?? '')
@@ -302,6 +309,7 @@ export function DialogSubir({
       if (tipoDocumentoId) fd.append('tipoDocumentoId', tipoDocumentoId)
       if (fechaVencimiento) fd.append('fechaVencimiento', fechaVencimiento)
       if (sedeId) fd.append('sedeId', sedeId)
+      if (!visible) fd.append('ocultoAutoservicio', '1')
 
       const resp = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
       const json = await resp.json()
@@ -340,6 +348,12 @@ export function DialogSubir({
             <Label>Nombre del documento</Label>
             <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Carta de recomendación" />
           </div>
+          {puedeOcultar && (
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={visible} onCheckedChange={(v) => setVisible(v === true)} />
+              ¿El colaborador puede verlo?
+            </label>
+          )}
           {tipoSel?.requiereVencimiento && (
             <div className="space-y-1.5">
               <Label>Fecha de vencimiento</Label>

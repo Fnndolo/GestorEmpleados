@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta, formatFechaLarga, formatFechaISO, hoyBogota, parseFechaISO } from '@/lib/fechas'
 import { defLicencia } from '@/lib/licencias'
+import { ESTADOS_CANCELABLES } from '@/lib/solicitudes-texto'
 import { situacionComprobante } from '@/lib/comprobante-permiso'
 import { comprobanteVencidoDe } from '@/server/comprobante-permiso'
 import { fechaBreve } from '@/lib/notificaciones/texto'
@@ -130,7 +131,7 @@ export default async function AutoservicioPage() {
     )
   }
 
-  const [colab, saldo, solicitudes, disciplinariosAbiertos, opsPorFirmar, ultimoPago, otrosisPorFirmar, horasExtraPorFirmar] = await Promise.all([
+  const [colab, saldo, solicitudes, disciplinariosAbiertos, opsPorFirmar, ultimoPago, otrosisPorFirmar, horasExtraPorFirmar, descuentosTotal, descuentosPorFirmar] = await Promise.all([
     prisma.colaborador.findUniqueOrThrow({ where: { id: usuario.colaboradorId }, select: { nombres: true, tipoVinculo: true, estado: true, vacacionesHistorialCompletoEn: true, fechaNacimiento: true, direccion: true, emergenciaNombre: true, epsId: true, afpId: true, bancoId: true, numeroCuenta: true } }),
     saldoVacaciones(usuario.colaboradorId),
     prisma.solicitud.findMany({
@@ -155,6 +156,11 @@ export default async function AutoservicioPage() {
     // Órdenes de pago de horas extra (aparte de la nómina) esperando su firma.
     prisma.pagoHorasExtra.count({
       where: { colaboradorId: usuario.colaboradorId, estado: 'ENVIADA_A_FIRMA' },
+    }),
+    // Descuentos de nómina, y los acuerdos de pago que debe firmar.
+    prisma.prestamo.count({ where: { colaboradorId: usuario.colaboradorId } }),
+    prisma.prestamo.count({
+      where: { colaboradorId: usuario.colaboradorId, requiereFirma: true, acuerdoDocId: { not: null }, firmaEmpleadoFecha: null },
     }),
   ])
   // Documentos por firmar: contratos OPS y otrosíes (la tarjeta los muestra juntos).
@@ -297,6 +303,7 @@ export default async function AutoservicioPage() {
           : null,
         comprobante: s.tipo === 'PERMISO' && permisoPorSolicitud.has(s.id) ? comprobanteDe(permisoPorSolicitud.get(s.id)!) : null,
         soportes: soportesPorSolicitud.get(s.id) ?? [],
+        cancelable: ESTADOS_CANCELABLES.includes(s.estado),
         // Un permiso se puede corregir mientras siga en aprobación y nadie lo haya decidido.
         edicion: s.tipo === 'PERMISO' && s.estado === 'EN_APROBACION' && s.pasos.every((p) => p.estado === 'PENDIENTE')
           ? {
@@ -490,6 +497,7 @@ export default async function AutoservicioPage() {
         bloqueoPermiso={debeComprobante ? { fecha: fechaBreve(debeComprobante.fecha), vence: fechaBreve(debeComprobante.vence) } : null}
         documentosFaltantes={documentosFaltantes}
         horasExtraPorFirmar={horasExtraPorFirmar}
+        descuentos={{ total: descuentosTotal, porFirmar: descuentosPorFirmar }}
         retiroPorFirmar={retiroPorFirmar}
         entregasPorVerificar={entregasPorVerificar}
         esResponsableArea={areasACargo > 0}

@@ -38,7 +38,11 @@ export async function validarFechasIncapacidad(opts: { colaboradorId: string; in
  * ¿Ya se pagó en una nómina cerrada? Entonces no se cambia ni se borra: la
  * nómina de ese periodo ya la liquidó y corregirla es un ajuste contable.
  */
-export async function exigirNoLiquidadaEnNominaCerrada(inc: { colaboradorId: string; fechaInicio: Date; fechaFin: Date }): Promise<void> {
+export async function exigirNoLiquidadaEnNominaCerrada(
+  inc: { colaboradorId: string; fechaInicio: Date; fechaFin: Date },
+  /** Cómo se nombra en el mensaje: también la usan permisos y licencias. */
+  que = 'Esta incapacidad',
+): Promise<void> {
   const liquidada = await prisma.liquidacionNomina.findFirst({
     where: {
       colaboradorId: inc.colaboradorId,
@@ -47,7 +51,7 @@ export async function exigirNoLiquidadaEnNominaCerrada(inc: { colaboradorId: str
     select: { periodo: { select: { nombre: true } } },
   })
   if (liquidada) {
-    throw new ErrorNegocio(`Esta incapacidad ya se pagó en la nómina cerrada "${liquidada.periodo.nombre}": no se puede cambiar ni borrar.`)
+    throw new ErrorNegocio(`${que} ya se pagó en la nómina cerrada "${liquidada.periodo.nombre}": no se puede cambiar ni anular.`)
   }
 }
 

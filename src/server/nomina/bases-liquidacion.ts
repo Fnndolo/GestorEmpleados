@@ -71,9 +71,11 @@ export type MesDeVentana = {
   etiqueta: string
   /** Si además cuenta para el promedio del semestre (base de la prima). */
   enSemestre: boolean
-  /** Lo que el sistema ya sabe de ese mes por los desprendibles emitidos. */
+  /** Lo que el sistema ya sabe de ese mes: desprendibles emitidos más novedades sin pagar. */
   valorConocido: number
   tieneNomina: boolean
+  /** Parte de `valorConocido` que sale de Novedades (comisiones, horas extra…) sin nómina que las pagara. */
+  desdeNovedades: number
 }
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
@@ -135,10 +137,15 @@ export async function basesDesdeHistorial(
       .reduce((t, d) => t + Number(d.valor), 0)
     porMes.set(claveMes(l.periodo.fechaFin), (porMes.get(claveMes(l.periodo.fechaFin)) ?? 0) + valor)
   }
+  // Lo registrado en Novedades que ninguna nómina pagó también se devengó: va
+  // al mes en que se causó. No se cruza con lo anterior porque lo pagado lleva
+  // la marca del periodo y ya está en el desprendible.
+  const { inicioAnual, inicioSem } = ventanas(fechaIngreso, fechaRetiro)
+  const deNovedades = await variableDeNovedadesPorMes(colaboradorId, inicioAnual, fechaRetiro, salarioBase)
+  for (const [mes, valor] of deNovedades) porMes.set(mes, (porMes.get(mes) ?? 0) + valor)
   for (const m of ajustes.variablePorMes ?? []) porMes.set(m.mes, m.valor)
 
   // ── Ventanas de promedio ──
-  const { inicioAnual, inicioSem } = ventanas(fechaIngreso, fechaRetiro)
   const promedioVariableAnual = promedioMensual(porMes, inicioAnual, fechaRetiro)
   const promedioVariableSemestre = promedioMensual(porMes, inicioSem, fechaRetiro)
 
@@ -239,10 +246,13 @@ export async function mesesParaPromedios(
   colaboradorId: string,
   fechaIngreso: Date,
   fechaRetiro: Date,
+  /** Salario fijado a mano en la liquidación; si no, el de la nómina de referencia. */
+  salarioManual?: number | null,
 ): Promise<{ meses: MesDeVentana[]; mesesAnual: number; mesesSemestre: number; referencia: ReferenciaLiquidacion }> {
   const { inicioAnual, inicioSem } = ventanas(fechaIngreso, fechaRetiro)
 
   const liquidaciones = await nominasAnteriores(colaboradorId, fechaRetiro)
+  const referencia = referenciaLiquidacion(liquidaciones, fechaRetiro)
   const configurables = await prisma.conceptoNomina.findMany({
     where: { constitutivoSalario: true, tipoCalculo: { not: 'SISTEMA' } },
     select: { codigo: true },
@@ -257,6 +267,9 @@ export async function mesesParaPromedios(
       .reduce((t, d) => t + Number(d.valor), 0)
     conocido.set(k, (conocido.get(k) ?? 0) + valor)
   }
+  const nomina = new Set(conocido.keys())
+  const deNovedades = await variableDeNovedadesPorMes(colaboradorId, inicioAnual, fechaRetiro, salarioManual ?? referencia.salarioBase)
+  for (const [k, valor] of deNovedades) conocido.set(k, (conocido.get(k) ?? 0) + valor)
 
   const meses: MesDeVentana[] = []
   const cursor = new Date(Date.UTC(inicioAnual.getUTCFullYear(), inicioAnual.getUTCMonth(), 1))
@@ -268,17 +281,67 @@ export async function mesesParaPromedios(
       etiqueta: `${MESES[cursor.getUTCMonth()]} ${cursor.getUTCFullYear()}`,
       enSemestre: mesEnVentana(k, inicioSem, fechaRetiro),
       valorConocido: conocido.get(k) ?? 0,
-      tieneNomina: conocido.has(k),
+      tieneNomina: nomina.has(k),
+      desdeNovedades: deNovedades.get(k) ?? 0,
     })
     cursor.setUTCMonth(cursor.getUTCMonth() + 1)
   }
 
   return {
     meses,
-    referencia: referenciaLiquidacion(liquidaciones, fechaRetiro),
+    referencia,
     mesesAnual: diasDeSalario(inicioAnual, fechaRetiro) / 30,
     mesesSemestre: diasDeSalario(inicioSem, fechaRetiro) / 30,
   }
+}
+
+/**
+ * Salario variable registrado en Novedades que ninguna nómina pagó, sumado por
+ * el mes en que se causó: comisiones, horas extra y conceptos constitutivos.
+ *
+ * Es lo que permite promediar los meses en que la persona estuvo por fuera de la
+ * nómina del sistema —sin contrato cargado, o antes de empezar a liquidar
+ * aquí—, que sin esto quedaban en cero en la base de cesantías y prima. Las
+ * horas extra se valoran con el salario de la liquidación, la jornada y los
+ * recargos vigentes en la fecha de cada una. Sin salario conocido no hay con
+ * qué valorarlas y se dejan por fuera (el mes se puede digitar a mano).
+ *
+ * Las bonificaciones no entran: no tienen fecha de causación con qué ubicarlas
+ * en un mes.
+ */
+async function variableDeNovedadesPorMes(
+  colaboradorId: string,
+  desde: Date,
+  hasta: Date,
+  salarioMensual: number | null,
+): Promise<Map<string, number>> {
+  const inicio = new Date(Date.UTC(desde.getUTCFullYear(), desde.getUTCMonth(), 1))
+  const where = { colaboradorId, periodoId: null, fecha: { gte: inicio, lte: hasta } }
+  const [comisiones, horas, conceptos] = await Promise.all([
+    prisma.comision.findMany({ where, select: { fecha: true, valor: true } }),
+    salarioMensual ? prisma.novedadHoras.findMany({ where, select: { fecha: true, tipoHora: true, horas: true } }) : [],
+    prisma.novedadConcepto.findMany({
+      where: { ...where, concepto: { activo: true, tipo: 'DEVENGADO', constitutivoSalario: true } },
+      select: { fecha: true, valor: true },
+    }),
+  ])
+
+  const porMes = new Map<string, number>()
+  const sumar = (fecha: Date, valor: number) => porMes.set(claveMes(fecha), (porMes.get(claveMes(fecha)) ?? 0) + valor)
+  for (const c of [...comisiones, ...conceptos]) sumar(c.fecha, Number(c.valor))
+
+  // Los recargos y la jornada cambian con el tiempo (Ley 2101): se cargan una
+  // vez por mes y se valora cada hora con los de su fecha.
+  const tiposPorMes = new Map<string, Record<string, number>>()
+  for (const h of horas) {
+    const k = claveMes(h.fecha)
+    if (!tiposPorMes.has(k)) tiposPorMes.set(k, await cargarTiposHora(h.fecha))
+    const valorHora = salarioMensual! / horasMesJornada(h.fecha)
+    sumar(h.fecha, valorHora * (tiposPorMes.get(k)![h.tipoHora] ?? 0) * Number(h.horas))
+  }
+
+  for (const [k, v] of porMes) porMes.set(k, Math.round(v))
+  return porMes
 }
 
 /**

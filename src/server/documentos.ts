@@ -60,6 +60,8 @@ type DatosSubida = {
   descripcion?: string | null
   fechaVencimiento?: string | null
   sedeId?: string | null
+  /** No mostrarlo en el autoservicio del colaborador (solo lo marca Talento Humano). */
+  ocultoAutoservicio?: boolean
 }
 
 export async function guardarDocumento(
@@ -101,6 +103,7 @@ export async function guardarDocumento(
       nivelAcceso,
       sedeId: datos.sedeId || null,
       subidoPorId: usuario.id,
+      ocultoAutoservicio: datos.ocultoAutoservicio === true,
     },
   })
 

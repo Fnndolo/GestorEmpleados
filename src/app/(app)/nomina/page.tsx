@@ -43,7 +43,7 @@ export default async function NominaPage() {
               <Link href="/nomina/ops" aria-label="Pagos OPS" title="Pagos OPS"><Receipt className="size-4" /> <span className="hidden sm:inline">Pagos OPS</span></Link>
             </Button>
             <Button size="sm" asChild>
-              <Link href="/nomina/prestamos" aria-label="Préstamos" title="Préstamos"><HandCoins className="size-4" /> <span className="hidden sm:inline">Préstamos</span></Link>
+              <Link href="/nomina/prestamos" aria-label="Descuentos" title="Descuentos"><HandCoins className="size-4" /> <span className="hidden sm:inline">Descuentos</span></Link>
             </Button>
             {puedeCrear && <CrearPeriodo />}
           </div>

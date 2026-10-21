@@ -96,7 +96,8 @@ export default async function FichaColaboradorPage({ params, searchParams }: { p
 
   const [documentos, requeridos, tiposDocumento] = await Promise.all([
     prisma.documento.findMany({
-      where: { entidadTipo: 'Colaborador', entidadId: id },
+      // En su propia ficha el colaborador no ve lo que Talento Humano subió oculto.
+      where: { entidadTipo: 'Colaborador', entidadId: id, ...(usuario.colaboradorId === id && !puedeEditar ? { ocultoAutoservicio: false } : {}) },
       include: { tipoDocumento: true },
       orderBy: { creadoEn: 'desc' },
     }),
@@ -609,6 +610,7 @@ export default async function FichaColaboradorPage({ params, searchParams }: { p
             su hoja de vida. Los documentos del contrato están en la pestaña Contrato.
           </p>
           <GestorDocumentos
+            puedeOcultar={puedeEditar && usuario.colaboradorId !== c.id}
             entidadTipo="Colaborador"
             entidadId={c.id}
             sedeId={c.sedeId}

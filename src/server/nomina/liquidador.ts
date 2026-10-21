@@ -266,8 +266,14 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
     // Cuotas de TODOS los préstamos activos (no solo uno); cada cuota se limita al saldo.
     // Se registra el abono (CuotaPrestamo), se descuenta del saldo y el préstamo pasa
     // a PAGADO cuando queda en cero. El recálculo revierte estos abonos arriba.
+    // Solo desde el mes en que empieza el descuento, y si su acuerdo debe
+    // firmarse, solo después de firmado: sin autorización escrita del
+    // trabajador no se le puede descontar (CST art. 149).
     const prestamos = await prisma.prestamo.findMany({
-      where: { colaboradorId, estado: 'ACTIVO' },
+      where: {
+        colaboradorId, estado: 'ACTIVO', fechaInicio: { lte: periodo.fechaFin },
+        OR: [{ requiereFirma: false }, { firmaEmpleadoFecha: { not: null } }],
+      },
       include: { _count: { select: { cuotas: true } } },
     })
     let cuotaPrestamo = 0

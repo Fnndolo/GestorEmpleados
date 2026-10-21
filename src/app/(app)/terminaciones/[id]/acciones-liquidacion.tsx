@@ -40,6 +40,8 @@ export type MesVentana = {
   enSemestre: boolean
   valorConocido: number
   tieneNomina: boolean
+  /** Parte del valor que sale de Novedades sin nómina que la pagara. */
+  desdeNovedades: number
 }
 
 export type Ventana = {
@@ -179,7 +181,7 @@ export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, b
               <p className="text-xs text-muted-foreground">
                 {sinHistorial
                   ? 'No hay nóminas anteriores. Ingresa el salario base mensual, el auxilio mensual (0 si no corresponde) y los valores variables que tengas del histórico.'
-                  : `Los conceptos variables se recuperan de ${periodosConsiderados} ${periodosConsiderados === 1 ? 'nómina anterior' : 'nóminas anteriores'}. Completa los meses sin nómina si hubo pagos.`}
+                  : `Los conceptos variables se recuperan de ${periodosConsiderados} ${periodosConsiderados === 1 ? 'nómina anterior' : 'nóminas anteriores'}. Los meses sin nómina toman lo registrado en Novedades; corrígelos si hubo otros pagos.`}
               </p>
               <p className="text-xs text-muted-foreground">
                 {ventana.referencia?.periodoNombre
@@ -210,14 +212,16 @@ export function AccionesLiquidacion({ terminacionId, colaborador, fechaRetiro, b
                     <div key={m.mes} className="flex items-center gap-2">
                       <label htmlFor={`mes-${m.mes}`} className="w-20 shrink-0 text-xs text-muted-foreground">
                         {m.etiqueta}
-                        {!m.tieneNomina && <span className="block text-amber-600 dark:text-amber-400">Sin nómina</span>}
+                        {!m.tieneNomina && (m.desdeNovedades > 0
+                          ? <span className="block text-sky-700 dark:text-sky-400">Novedades</span>
+                          : <span className="block text-amber-600 dark:text-amber-400">Sin nómina</span>)}
                       </label>
                       <Input
                         id={`mes-${m.mes}`}
                         type="number" min="0" inputMode="decimal" className="h-8"
                         value={variable[m.mes] ?? ''}
                         onChange={(e) => setVariable((v) => ({ ...v, [m.mes]: e.target.value }))}
-                        placeholder={m.tieneNomina ? fmtCOP(m.valorConocido) : 'Completar'}
+                        placeholder={m.tieneNomina || m.desdeNovedades > 0 ? fmtCOP(m.valorConocido) : 'Completar'}
                       />
                     </div>
                   ))}

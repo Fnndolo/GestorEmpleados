@@ -77,7 +77,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   const llevaLiquidacion = t.colaborador.tipoVinculo !== 'OPS'
   const tieneContrato = t.colaborador._count.contratos > 0
   const ventana = puedeEditar && (liq ? !liq.enviadoFirmaEn : llevaLiquidacion && tieneContrato)
-    ? await mesesParaPromedios(t.colaborador.id, t.colaborador.fechaIngreso, t.fechaRetiro)
+    ? await mesesParaPromedios(t.colaborador.id, t.colaborador.fechaIngreso, t.fechaRetiro, detalle?.ajustes?.salarioBase)
     : { meses: [], mesesAnual: 0, mesesSemestre: 0, referencia: null }
   const variableGuardado = Object.fromEntries((detalle?.ajustes?.variablePorMes ?? []).map((m) => [m.mes, m.valor]))
   const bases = {

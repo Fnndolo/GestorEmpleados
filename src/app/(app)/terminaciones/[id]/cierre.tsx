@@ -6,10 +6,17 @@ import { toast } from 'sonner'
 import { CircleCheck, Circle, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 import { cerrarTerminacion } from '../acciones'
 
-/** Paso "Cierre": lo que exige la empresa, con su marca, y el botón que se habilita al tenerlo todo. */
+/**
+ * Paso "Cierre": lo que conviene tener hecho, con su marca. Por ahora nada de
+ * eso es obligatorio: si falta algo se puede cerrar igual, confirmándolo.
+ */
 export function CierreTerminacion({ terminacionId, requisitos, cerrada, puedeAprobar }: {
   terminacionId: string
   requisitos: { texto: string; ok: boolean }[]
@@ -18,12 +25,14 @@ export function CierreTerminacion({ terminacionId, requisitos, cerrada, puedeApr
 }) {
   const router = useRouter()
   const [g, setG] = useState(false)
-  const listo = requisitos.every((r) => r.ok)
+  const [confirmar, setConfirmar] = useState(false)
+  const pendientes = requisitos.filter((r) => !r.ok)
 
   async function cerrar() {
     setG(true)
     const res = await cerrarTerminacion({ id: terminacionId })
     setG(false)
+    setConfirmar(false)
     if (res.ok) { toast.success('Terminación cerrada.'); router.refresh() } else toast.error(res.error)
   }
 
@@ -40,10 +49,32 @@ export function CierreTerminacion({ terminacionId, requisitos, cerrada, puedeApr
       {cerrada ? (
         <p className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-400"><Lock className="size-4" /> Terminación cerrada.</p>
       ) : puedeAprobar && (
-        <Button onClick={cerrar} disabled={!listo || g} className="w-full sm:w-auto">
+        <Button onClick={() => (pendientes.length ? setConfirmar(true) : cerrar())} disabled={g} className="w-full sm:w-auto">
           {g ? <Spinner /> : <Lock className="size-4" />} Cerrar terminación
         </Button>
       )}
+      <AlertDialog open={confirmar} onOpenChange={(o) => { if (!g) setConfirmar(o) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Cerrar con pasos pendientes?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>Todavía falta:</p>
+                <ul className="list-disc space-y-0.5 pl-5">
+                  {pendientes.map((r) => <li key={r.texto}>{r.texto}</li>)}
+                </ul>
+                <p>Una vez cerrada, la terminación ya no se puede editar.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={g}>Volver</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); void cerrar() }} disabled={g}>
+              {g ? <Spinner /> : <Lock className="size-4" />} Cerrar igual
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

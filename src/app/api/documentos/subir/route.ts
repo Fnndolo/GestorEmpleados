@@ -99,6 +99,8 @@ export async function POST(req: NextRequest) {
             descripcion: (form.get('descripcion') as string) || null,
             fechaVencimiento: (form.get('fechaVencimiento') as string) || null,
             sedeId: (form.get('sedeId') as string) || null,
+            // Solo Talento Humano lo oculta: lo que aporta el propio colaborador es suyo y lo ve.
+            ocultoAutoservicio: !esAporteDelColaborador && form.get('ocultoAutoservicio') === '1',
           },
           { nombre: archivo.name, mimeType: archivo.type || 'application/octet-stream', contenido },
         ),

@@ -14,6 +14,7 @@ import { generarCertificacion, previaCertificacion } from '@/server/certificacio
 import { avisar, avisarPorRol } from '@/server/notificaciones/avisar'
 import { miFichaSchema } from '@/lib/validaciones/colaborador'
 import { TIPOS_LICENCIA, defLicencia, esDerecho } from '@/lib/licencias'
+import { ESTADOS_CANCELABLES } from '@/lib/solicitudes-texto'
 import { evaluarSolicitudVacaciones } from '@/server/vacaciones-reglas'
 import { calcularLimitesHorasExtra, fechaMinimaHorasExtra } from '@/server/horas-extra-autorizacion'
 import { horasEntreHoras, DIAS_HABILES_POSTERIOR, SOPORTE_HORAS_EXTRA_OBLIGATORIO } from '@/lib/horas-extra-solicitud'
@@ -332,7 +333,7 @@ export const crearSolicitud = accion(
   },
 )
 
-async function avisarAprobadoresDelPaso(solicitudId: string, orden: number, modo: 'nueva' | 'cambio' = 'nueva') {
+async function avisarAprobadoresDelPaso(solicitudId: string, orden: number, modo: 'nueva' | 'cambio' | 'cancelada' = 'nueva') {
   const paso = await prisma.pasoAprobacion.findFirst({ where: { solicitudId, orden } })
   if (!paso) return
   const solicitud = await prisma.solicitud.findUniqueOrThrow({
@@ -345,7 +346,14 @@ async function avisarAprobadoresDelPaso(solicitudId: string, orden: number, modo
   const datosSol = solicitud.datos as Record<string, string>
   const esDerechoLic = solicitud.tipo === 'LICENCIA' && !!datosSol.licenciaTipo && esDerecho(datosSol.licenciaTipo)
   const detalle = resumenSolicitud(solicitud.tipo, datosSol)
-  const opts = solicitud.tipo === 'INCAPACIDAD'
+  const opts = modo === 'cancelada'
+    ? {
+        titulo: `${quien} canceló su solicitud de ${etiquetaTipo(solicitud.tipo)}`,
+        mensaje: `${detalle} · Ya no hay nada que resolver.`,
+        enlace: '/autoservicio/aprobaciones', evento: 'solicitud_creada',
+        colaboradorId: solicitud.colaboradorId,
+      }
+    : solicitud.tipo === 'INCAPACIDAD'
     ? {
         titulo: modo === 'cambio' ? `${quien} corrigió el soporte de su incapacidad` : `${quien} reportó una incapacidad`,
         mensaje: `${detalle} · Valida el soporte y regístrala.`,
@@ -943,14 +951,26 @@ export const editarMiPermiso = accion(
   },
 )
 
+/**
+ * El colaborador retira una solicitud que nadie ha resuelto. Los pasos que
+ * esperaban decisión quedan omitidos (salen de la bandeja de aprobaciones) y a
+ * quien la tenía por resolver se le avisa, para que no la busque.
+ */
 export const cancelarSolicitud = accion(
   { modulo: 'autoservicio', accion: 'CREAR', schema: z.object({ id: z.uuid() }) },
   async ({ id }, usuario) => {
-    const s = await prisma.solicitud.findUniqueOrThrow({ where: { id } })
+    const s = await prisma.solicitud.findUniqueOrThrow({ where: { id }, include: { pasos: { orderBy: { orden: 'asc' } } } })
     if (s.colaboradorId !== usuario.colaboradorId) throw new ErrorNegocio('No puedes cancelar esta solicitud.')
-    if (s.estado === 'APROBADA' || s.estado === 'RECHAZADA') throw new ErrorNegocio('La solicitud ya fue resuelta.')
-    await dbAuditado.solicitud.update({ where: { id }, data: { estado: 'CANCELADA' } })
+    if (!ESTADOS_CANCELABLES.includes(s.estado)) {
+      throw new ErrorNegocio(s.estado === 'CANCELADA' ? 'La solicitud ya estaba cancelada.' : 'La solicitud ya fue resuelta: pide a Talento Humano que la anule.')
+    }
+    const pendiente = s.pasos.find((p) => p.estado === 'PENDIENTE')
+    await dbAuditado.solicitud.update({ where: { id }, data: { estado: 'CANCELADA', resultado: 'Cancelada por el colaborador' } })
+    await dbAuditado.pasoAprobacion.updateMany({ where: { solicitudId: id, estado: 'PENDIENTE' }, data: { estado: 'OMITIDO' } })
+    if (pendiente) await avisarAprobadoresDelPaso(id, pendiente.orden, 'cancelada').catch(() => {})
     revalidatePath('/autoservicio')
+    revalidatePath('/autoservicio/aprobaciones')
+    return { ok: true }
   },
 )
 

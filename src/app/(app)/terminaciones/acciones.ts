@@ -349,17 +349,11 @@ export const subirSeguridadSocial = accion(
 export const cerrarTerminacion = accion(
   { modulo: 'terminaciones', accion: 'APROBAR', schema: z.object({ id: z.uuid() }) },
   async ({ id }) => {
-    const t = await prisma.terminacion.findUniqueOrThrow({ where: { id }, include: { liquidacion: true, cartas: true, colaborador: { select: { tipoVinculo: true } } } })
-    // Pasos obligatorios (decisión de empresa): la carta firmada y la liquidación
-    // firmada y pagada. El paz y salvo es opcional: hay retiros con plazos tan
-    // cortos que no alcanza, y el pago no puede quedar sujeto a él (art. 65 CST).
-    const carta = t.cartas.find((c) => c.tipo === (CARTA_PRINCIPAL[t.tipo] ?? 'CARTA_TERMINACION'))
-    if (!carta?.firmadoEn) throw new ErrorNegocio('Falta la carta de la terminación firmada por el trabajador.')
-    // Sin liquidación no se cierra: antes, a quien no tenía contrato registrado
-    // no se le calculaba nada y la terminación se cerraba sin pagarle (art. 65 CST).
-    if (!t.liquidacion && t.colaborador.tipoVinculo !== 'OPS') throw new ErrorNegocio('Falta la liquidación definitiva: calcúlala en el paso «Liquidación» antes de cerrar.')
-    if (t.liquidacion && !t.liquidacion.firmadoEn) throw new ErrorNegocio('Falta que el trabajador firme el recibido de la liquidación.')
-    if (t.liquidacion && !t.liquidacion.pagadoEn) throw new ErrorNegocio('Falta registrar el pago de la liquidación con su comprobante.')
+    const t = await prisma.terminacion.findUniqueOrThrow({ where: { id } })
+    // Por decisión de la empresa (por ahora), la carta firmada y la liquidación
+    // calculada, firmada y pagada NO bloquean el cierre: hay retiros que se
+    // resuelven por fuera de la app. La pantalla los muestra como pendientes y
+    // pide confirmar antes de cerrar con alguno sin hacer.
     // No cerrar mientras el colaborador tenga liquidaciones en un periodo de
     // nómina abierto: podría recalcularse y cambiar lo que se le debe.
     const nominaAbierta = await prisma.liquidacionNomina.findFirst({

@@ -781,6 +781,10 @@ model Documento {
   // Nulo solo en las evidencias de la línea ética: el canal es confidencial y
   // no se guarda quién las aportó.
   subidoPorId      String?              @map("subido_por_id") @db.Uuid
+  // Talento Humano lo subió sin mostrarlo en el autoservicio del colaborador
+  // (certificados de afiliación, soportes internos). Si lo pide, se le entrega
+  // (Ley 1581): no se borra ni se niega, solo no se lista en su autoservicio.
+  ocultoAutoservicio Boolean           @default(false) @map("oculto_autoservicio")
   creadoEn         DateTime             @default(now()) @map("creado_en")
 
   @@index([entidadTipo, entidadId])
@@ -1468,6 +1472,9 @@ model EvidenciaFirmaContrato {
   cartaTerminacion        CartaTerminacion?      @relation(fields: [cartaTerminacionId], references: [id], onDelete: Cascade)
   renunciaId              String?                @map("renuncia_id") @db.Uuid
   renuncia                Renuncia?              @relation(fields: [renunciaId], references: [id], onDelete: Cascade)
+  // O del acuerdo de pago de un descuento de nómina.
+  prestamoId              String?                @map("prestamo_id") @db.Uuid
+  prestamo                Prestamo?              @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
   rol                     RolFirmaContrato
   userId                  String?                @map("user_id") @db.Uuid
   userEmail               String?                @map("user_email")
@@ -1494,6 +1501,7 @@ enum PropositoCodigoFirma {
   FIRMA_EMPRESA_TERMINACION
   FIRMA_CARTA_TERMINACION
   FIRMA_RENUNCIA
+  FIRMA_ACUERDO_DESCUENTO
 
   @@map("proposito_codigo_firma")
 }
@@ -2239,10 +2247,24 @@ model Prestamo {
   saldo         Decimal        @db.Decimal(14, 2)
   fechaInicio   DateTime       @map("fecha_inicio") @db.Date
   estado        EstadoPrestamo @default(ACTIVO)
+  // Asunto del descuento (en pantalla: «Descuentos»; préstamos, daños, anticipos…).
   descripcion   String?
   creadoEn      DateTime       @default(now()) @map("creado_en")
 
-  cuotas CuotaPrestamo[]
+  // Acuerdo de pago que respalda el descuento. Un descuento de nómina exige la
+  // autorización escrita del trabajador (CST art. 149): o se sube ya firmado en
+  // papel, o se sube para que lo firme en su autoservicio. Mientras deba firmarse
+  // y no lo haya hecho, la nómina NO descuenta.
+  acuerdoDocId        String?   @map("acuerdo_doc_id") @db.Uuid
+  requiereFirma       Boolean   @default(false) @map("requiere_firma")
+  // Dónde se dibuja la firma del colaborador en el PDF subido ({ pagina, x, y, ancho, alto }, puntos PDF).
+  posicionFirma       Json?     @map("posicion_firma")
+  acuerdoFirmadoDocId String?   @map("acuerdo_firmado_doc_id") @db.Uuid
+  firmaEmpleadoFecha  DateTime? @map("firma_empleado_fecha")
+  firmaEmpleadoPath   String?   @map("firma_empleado_path")
+
+  cuotas          CuotaPrestamo[]
+  evidenciasFirma EvidenciaFirmaContrato[]
 
   @@index([colaboradorId, estado])
   @@map("prestamo")

@@ -165,7 +165,10 @@ export function Campana({ verVencimientos = false }: { verVencimientos?: boolean
 
   useEffect(() => {
     const primera = setTimeout(cargar, 0)
-    const id = setInterval(cargar, 30_000)
+    // Con la pestaña oculta no se consulta: cada consulta es una función del
+    // servidor y una lectura de la base. Al volver se ponen al día (onFocus), y lo
+    // urgente igual llega al instante por push.
+    const id = setInterval(() => { if (document.visibilityState === 'visible') cargar() }, 60_000)
     const onFocus = () => cargar()
     window.addEventListener('focus', onFocus)
 

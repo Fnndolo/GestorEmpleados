@@ -15,6 +15,9 @@ export const ESTADO_SOLICITUD: Record<string, string> = {
   APROBADA: 'Aprobada', RECHAZADA: 'Rechazada', CANCELADA: 'Cancelada',
 }
 
+/** Estados en que el colaborador todavía puede retirar su solicitud: nadie la ha resuelto. */
+export const ESTADOS_CANCELABLES: readonly string[] = ['PENDIENTE', 'EN_APROBACION', 'EN_NEGOCIACION', 'DEVUELTA']
+
 /** Tono de la píldora por estado: verde bien, ámbar en curso, rosa mal, neutro cerrado. */
 export const TONO_SOLICITUD: Record<string, 'ok' | 'info' | 'warn' | 'bad' | 'muted' | 'accent'> = {
   APROBADA: 'ok', EN_APROBACION: 'warn', PENDIENTE: 'warn', DEVUELTA: 'warn', EN_NEGOCIACION: 'accent', RECHAZADA: 'bad', CANCELADA: 'muted',

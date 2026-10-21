@@ -259,17 +259,20 @@ export function SelectorFirmasPdf({
         })}
       </div>
 
-      {/* Si una firma quedó en otra página, hay que poder llegar a ella. */}
-      <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-        {partes.map((parte) => (
-          <button
-            key={parte}
-            type="button"
-            className="underline-offset-2 hover:underline"
-            onClick={() => setPagina(valor[parte].pagina)}
-          >
-            {etiquetas[parte]}: página {valor[parte].pagina}
-          </button>
+      {/* Si una firma quedó en otra página, hay que poder llegar a ella, o
+          traerla a la que se está viendo: solo se arrastra dentro de una hoja. */}
+      <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+        {partes.map((parte) => valor[parte].pagina === pagina ? (
+          <span key={parte}>{etiquetas[parte]}: página {pagina}</span>
+        ) : (
+          <span key={parte} className="inline-flex flex-wrap items-center gap-2">
+            <button type="button" className="underline-offset-2 hover:underline" onClick={() => setPagina(valor[parte].pagina)}>
+              {etiquetas[parte]}: página {valor[parte].pagina}
+            </button>
+            <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => onChange({ ...valor, [parte]: acotar({ ...valor[parte], pagina }) })}>
+              Firmar en esta página
+            </Button>
+          </span>
         ))}
       </div>
     </div>

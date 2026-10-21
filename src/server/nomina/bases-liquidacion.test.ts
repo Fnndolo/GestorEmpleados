@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const consultas = vi.hoisted(() => ({
   nominas: vi.fn(), conceptos: vi.fn(), comisiones: vi.fn(), bonos: vi.fn(), horas: vi.fn(), novedades: vi.fn(),
+  comisionesSueltas: vi.fn(), tiposHora: vi.fn(),
 }))
 vi.mock('@/lib/db', () => ({ prisma: {
   liquidacionNomina: { findMany: consultas.nominas }, conceptoNomina: { findMany: consultas.conceptos },
-  comision: { aggregate: consultas.comisiones }, bonificacion: { aggregate: consultas.bonos },
+  comision: { aggregate: consultas.comisiones, findMany: consultas.comisionesSueltas },
+  tipoHora: { findMany: consultas.tiposHora }, bonificacion: { aggregate: consultas.bonos },
   novedadHoras: { findMany: consultas.horas }, novedadConcepto: { findMany: consultas.novedades },
 } }))
 vi.mock('@/server/accion', () => ({ ErrorNegocio: class ErrorNegocio extends Error {} }))
@@ -30,6 +32,8 @@ beforeEach(() => {
   consultas.bonos.mockResolvedValue({ _sum: { valor: 0 } })
   consultas.horas.mockResolvedValue([])
   consultas.novedades.mockResolvedValue([])
+  consultas.comisionesSueltas.mockResolvedValue([])
+  consultas.tiposHora.mockResolvedValue([])
 })
 
 describe('bases históricas y manuales', () => {
@@ -82,5 +86,28 @@ describe('bases históricas y manuales', () => {
     expect(Math.abs(r.total - 4_731_845)).toBeLessThanOrEqual(2)
     expect(r.baseCesantias).toBe(2_234_930)
     expect(r.basePrima).toBe(2_879_400)
+  })
+
+  it('los meses sin nómina toman las comisiones y horas extra registradas en Novedades', async () => {
+    consultas.nominas.mockResolvedValue([{ ...nomina, detalles: [...nomina.detalles, { conceptoCodigo: 'COMISION', tipo: 'DEVENGADO', valor: 300_000, base: null }] }])
+    // Solo lo que ninguna nómina pagó (periodoId null): lo de junio ya va en su desprendible.
+    consultas.comisionesSueltas.mockResolvedValue([{ fecha: D(2026, 3, 10), valor: 200_000 }])
+    consultas.horas.mockResolvedValue([{ fecha: D(2026, 4, 5), tipoHora: 'HED', horas: 10 }])
+    consultas.tiposHora.mockResolvedValue([{ codigo: 'HED', factor: 1.25, vigenteDesde: D(2025, 1, 1) }])
+    const ajustes = { salarioBase: 2_200_000, auxilioTransporte: 0 }
+    const valorHoras = Math.round((2_200_000 / 220) * 1.25 * 10)
+
+    const b = await basesDesdeHistorial('persona', ingreso, retiro, ajustes)
+    expect(b.promedioVariableAnual).toBe(Math.round((300_000 + 200_000 + valorHoras) / (196 / 30)))
+    expect(consultas.comisionesSueltas).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ periodoId: null }) }))
+
+    const ventana = await mesesParaPromedios('persona', ingreso, retiro, ajustes.salarioBase)
+    expect(ventana.meses.find((m) => m.mes === '2026-03')).toMatchObject({ tieneNomina: false, valorConocido: 200_000, desdeNovedades: 200_000 })
+    expect(ventana.meses.find((m) => m.mes === '2026-04')).toMatchObject({ tieneNomina: false, valorConocido: valorHoras })
+    expect(ventana.meses.find((m) => m.mes === '2026-06')).toMatchObject({ tieneNomina: true, valorConocido: 300_000, desdeNovedades: 0 })
+
+    // Un mes digitado a mano manda sobre lo de Novedades.
+    const manual = await basesDesdeHistorial('persona', ingreso, retiro, { ...ajustes, variablePorMes: [{ mes: '2026-03', valor: 0 }] })
+    expect(manual.promedioVariableAnual).toBe(Math.round((300_000 + valorHoras) / (196 / 30)))
   })
 })

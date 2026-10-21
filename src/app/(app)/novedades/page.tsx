@@ -130,7 +130,7 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
               desdeAutoservicio: !!x.solicitudId, soporteDocId: puedeVerSalud ? doc : null, conSoporte: !!doc,
             }
           }),
-          licencias: licencias.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true), tipo: x.tipo, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: x.dias, remunerada: x.remunerada })),
+          licencias: licencias.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true), tipo: x.tipo, fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: x.dias, remunerada: x.remunerada, desdeAutoservicio: !!x.solicitudId })),
           permisos: permisos.map((x) => ({
             id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true),
             fecha: formatFechaISO(x.fecha), diaCompleto: x.diaCompleto, horas: x.horas ? Number(x.horas) : null, motivo: x.motivo,

@@ -9,6 +9,14 @@ import { accion, ErrorNegocio } from '@/server/accion'
 import { liquidarPeriodo, revertirEfectosPeriodo } from '@/server/nomina/liquidador'
 import { generarDesprendibles } from '@/server/nomina/desprendibles'
 import { generarPazSalvoPrestamo } from '@/server/prestamos'
+import { guardarAcuerdo } from '@/server/descuentos-acuerdo'
+import { contarPaginas } from '@/server/pdf/firma-en-pdf'
+
+/** Dónde firma el colaborador en el PDF subido (puntos PDF, página en base 1). */
+const posicionFirmaSchema = z.object({
+  pagina: z.number().int().min(1), x: z.number(), y: z.number(), ancho: z.number().positive(), alto: z.number().positive(),
+})
+import { obtenerPdfAdjunto, borrarPdfTemporal } from '@/server/archivos-temporales'
 import { parseFechaISO } from '@/lib/fechas'
 import { registrarPagoCuentaCobro } from '@/server/cuentas-cobro'
 import { registrarPagoNomina } from '@/server/nomina/pagos'
@@ -152,6 +160,11 @@ export const generarPdfDesprendibles = accion(
   },
 )
 
+/**
+ * Registrar un descuento de nómina (préstamo, anticipo, daño…). `mesInicio` es
+ * el mes en que empieza a descontarse; el acuerdo de pago es opcional y, si
+ * se adjunta, puede ir ya firmado o para que el colaborador lo firme.
+ */
 export const registrarPrestamo = accion(
   {
     modulo: 'nomina',
@@ -160,11 +173,14 @@ export const registrarPrestamo = accion(
       colaboradorId: z.uuid(),
       valorTotal: z.coerce.number().min(1),
       numeroCuotas: z.coerce.number().int().min(1).max(60),
-      fechaInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      descripcion: z.string().max(300).optional(),
+      mesInicio: z.string().regex(/^\d{4}-\d{2}$/, 'Elige el mes en que empieza el descuento.'),
+      descripcion: z.string().trim().min(3, 'Escribe el asunto del descuento.').max(300),
+      acuerdoRef: z.string().min(16).max(2000).nullish(),
+      requiereFirma: z.boolean().optional(),
+      posicionFirma: posicionFirmaSchema.nullish(),
     }),
   },
-  async (d) => {
+  async (d, usuario) => {
     // Un préstamo se recupera descontándolo de la nómina: exige colaborador
     // activo con contrato laboral vigente. A un retirado no se le presta
     // (no habría de dónde descontar; su saldo pendiente va a la liquidación).
@@ -177,15 +193,57 @@ export const registrarPrestamo = accion(
     const prestamo = await dbAuditado.prestamo.create({
       data: {
         colaboradorId: d.colaboradorId, valorTotal: d.valorTotal, numeroCuotas: d.numeroCuotas,
-        valorCuota, saldo: d.valorTotal, fechaInicio: parseFechaISO(d.fechaInicio)!,
+        valorCuota, saldo: d.valorTotal, fechaInicio: parseFechaISO(`${d.mesInicio}-01`)!,
         estado: 'ACTIVO', descripcion: d.descripcion,
       },
     })
     await prisma.cuotaPrestamo.createMany({
       data: Array.from({ length: d.numeroCuotas }, (_, i) => ({ prestamoId: prestamo.id, numero: i + 1, valor: valorCuota })),
     })
+    if (d.acuerdoRef) {
+      const pdf = await obtenerPdfAdjunto({ pdfRef: d.acuerdoRef }, usuario.id, 'El acuerdo de pago está vacío.')
+      await guardarAcuerdo({ prestamoId: prestamo.id, colaboradorId: d.colaboradorId, pdf, asunto: d.descripcion, requiereFirma: d.requiereFirma === true, posicionFirma: d.posicionFirma ?? null, usuarioId: usuario.id })
+      await borrarPdfTemporal(d.acuerdoRef, usuario.id)
+    }
     revalidatePath('/nomina/prestamos')
     return { id: prestamo.id }
+  },
+)
+
+/**
+ * Cuántas páginas tiene el acuerdo recién subido. A propósito NO se busca la
+ * línea de firma en el texto: los acuerdos no tienen un formato fijo (y la
+ * palabra bajo la línea puede cambiar), así que el recuadro aparece siempre en
+ * la última página y quien lo sube lo arrastra a su sitio. Con la plantilla del
+ * acuerdo, la posición quedará fija.
+ */
+export const analizarAcuerdoDescuento = accion(
+  { modulo: 'nomina', accion: 'CREAR', schema: z.object({ acuerdoRef: z.string().min(16).max(2000) }) },
+  async (d, usuario) => {
+    const pdf = await obtenerPdfAdjunto({ pdfRef: d.acuerdoRef }, usuario.id, 'El acuerdo de pago está vacío.')
+    return { paginas: await contarPaginas(pdf), posicion: null }
+  },
+)
+
+/**
+ * Adjuntar (o reemplazar) el acuerdo de pago de un descuento ya registrado,
+ * mientras el colaborador no lo haya firmado.
+ */
+export const adjuntarAcuerdoDescuento = accion(
+  {
+    modulo: 'nomina',
+    accion: 'EDITAR',
+    schema: z.object({ prestamoId: z.uuid(), acuerdoRef: z.string().min(16).max(2000), requiereFirma: z.boolean(), posicionFirma: posicionFirmaSchema.nullish() }),
+  },
+  async (d, usuario) => {
+    const p = await prisma.prestamo.findUniqueOrThrow({ where: { id: d.prestamoId } })
+    if (p.firmaEmpleadoFecha) throw new ErrorNegocio('El colaborador ya firmó el acuerdo: no se puede reemplazar.')
+    const pdf = await obtenerPdfAdjunto({ pdfRef: d.acuerdoRef }, usuario.id, 'El acuerdo de pago está vacío.')
+    await guardarAcuerdo({ prestamoId: p.id, colaboradorId: p.colaboradorId, pdf, asunto: p.descripcion ?? 'Descuento', requiereFirma: d.requiereFirma, posicionFirma: d.posicionFirma ?? null, usuarioId: usuario.id })
+    await borrarPdfTemporal(d.acuerdoRef, usuario.id)
+    revalidatePath('/nomina/prestamos')
+    revalidatePath(`/nomina/prestamos/${p.id}`)
+    return { ok: true }
   },
 )
 

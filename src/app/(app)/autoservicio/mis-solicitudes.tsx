@@ -4,16 +4,20 @@ import { reducirImagen } from '@/lib/reducir-imagen'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ChevronDown, Eye, CalendarRange, Clock, ClockPlus, HeartPulse, FileBadge, FileCheck, TriangleAlert, Check, X, CircleDashed, CalendarClock, Paperclip, FileUp, Pencil } from 'lucide-react'
+import { ChevronDown, Eye, CalendarRange, Clock, ClockPlus, HeartPulse, FileBadge, FileCheck, TriangleAlert, Check, X, CircleDashed, CalendarClock, Paperclip, FileUp, Pencil, Ban } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 import { Pill, type PillTone } from '@/components/ui-kit'
 import type { SituacionComprobante } from '@/lib/comprobante-permiso'
-import { responderContrapropuesta, corregirMiSoporte, entregarComprobantePermiso } from './acciones'
+import { responderContrapropuesta, corregirMiSoporte, entregarComprobantePermiso, cancelarSolicitud } from './acciones'
 import { NuevaSolicitud, type EdicionPermiso } from './nueva-solicitud'
 
 /** El estado se lee de un vistazo por color, no solo por texto. */
@@ -68,6 +72,8 @@ export type SolicitudItem = {
   origen?: string | null
   /** Datos para corregir el permiso; null cuando ya no se puede (alguien decidió o no es permiso). */
   edicion?: EdicionPermiso | null
+  /** Nadie la ha resuelto todavía: el colaborador la puede retirar. */
+  cancelable?: boolean
   /** Soportes que se adjuntaron a la solicitud (cita, incapacidad, licencia…). */
   soportes?: { id: string; nombre: string; esImagen: boolean }[]
   /** De la última semana o todavía abierta: se ve sin pulsar "Ver más". */
@@ -183,6 +189,17 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
   }
 
   const [editando, setEditando] = useState<EdicionPermiso | null>(null)
+  // Solicitud que se está por cancelar (con su nombre, para la confirmación).
+  const [cancelando, setCancelando] = useState<SolicitudItem | null>(null)
+  const [enCancelacion, setEnCancelacion] = useState(false)
+
+  async function cancelar() {
+    if (!cancelando) return
+    setEnCancelacion(true)
+    const res = await cancelarSolicitud({ id: cancelando.id })
+    setEnCancelacion(false)
+    if (res.ok) { toast.success('Solicitud cancelada.'); setCancelando(null); router.refresh() } else toast.error(res.error)
+  }
   // Lo viejo se pliega: la lista muestra la semana y lo abierto; "Ver más" trae el resto.
   const [verTodo, setVerTodo] = useState(false)
   const visibles = verTodo ? solicitudes : solicitudes.filter((s) => s.reciente !== false)
@@ -254,12 +271,20 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
 
             {expandida && (
               <div className="space-y-3 border-t border-dashed bg-muted/20 px-4 py-3 animate-in fade-in slide-in-from-top-1 duration-150">
-                {/* Mientras nadie decida, el permiso se corrige aquí mismo. */}
-                {s.edicion && (
-                  <div className="flex justify-end">
-                    <Button size="sm" onClick={() => setEditando(s.edicion!)}>
-                      <Pencil className="size-4" /> Editar permiso
-                    </Button>
+                {/* Mientras nadie decida, el permiso se corrige aquí mismo, y
+                    cualquier solicitud sin resolver se puede retirar. */}
+                {(s.edicion || s.cancelable) && (
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {s.cancelable && (
+                      <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setCancelando(s)}>
+                        <Ban className="size-4" /> Cancelar solicitud
+                      </Button>
+                    )}
+                    {s.edicion && (
+                      <Button size="sm" onClick={() => setEditando(s.edicion!)}>
+                        <Pencil className="size-4" /> Editar permiso
+                      </Button>
+                    )}
                   </div>
                 )}
                 {s.campos.length > 0 && (
@@ -538,6 +563,26 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
         </button>
       )}
       {editando && <NuevaSolicitud tipoInicial="PERMISO" edicion={editando} onClose={() => setEditando(null)} />}
+      <AlertDialog open={!!cancelando} onOpenChange={(o) => { if (!o && !enCancelacion) setCancelando(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Cancelar tu solicitud de {cancelando?.etiqueta.toLowerCase()}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Sale de la bandeja de quien la iba a aprobar y se le avisa. Si la vuelves a necesitar, tendrás que pedirla de nuevo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={enCancelacion}>Volver</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); cancelar() }}
+              disabled={enCancelacion}
+              variant="destructive"
+            >
+              {enCancelacion ? <Spinner /> : <Ban className="size-4" />} Cancelar solicitud
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </CardContent></Card>
   )
 }

@@ -9,15 +9,18 @@ import { Pill } from '@/components/ui-kit'
 import { Progress } from '@/components/ui/progress'
 import { Check, Clock, Eye } from 'lucide-react'
 import { fmtCOP } from '@/lib/moneda'
-import { formatFechaCorta } from '@/lib/fechas'
+import { formatFechaCorta, formatFechaLarga } from '@/lib/fechas'
 import { PazSalvoBoton } from './paz-salvo-boton'
+import { AcuerdoDescuento } from './acuerdo-descuento'
+import { mesLargo } from '@/lib/descuentos'
 
-export const metadata = { title: 'Detalle de préstamo · Smart Gadgets RH' }
+export const metadata = { title: 'Detalle de descuento · Smart Gadgets RH' }
 
 export default async function PrestamoDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const usuario = await requerirPermiso('nomina', 'VER')
   const puedeExportar = tienePermiso(usuario, 'nomina', 'EXPORTAR')
+  const puedeEditar = tienePermiso(usuario, 'nomina', 'EDITAR')
 
   const prestamo = await prisma.prestamo.findUnique({
     where: { id },
@@ -39,8 +42,8 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
     <div className="max-w-3xl">
       <Encabezado
         volver
-        titulo={`Préstamo · ${prestamo.colaborador.nombres} ${prestamo.colaborador.apellidos}`}
-        descripcion={prestamo.descripcion ?? 'Detalle de cuotas y saldo.'}
+        titulo={`Descuento · ${prestamo.colaborador.nombres} ${prestamo.colaborador.apellidos}`}
+        descripcion={`${prestamo.descripcion ?? 'Descuento de nómina'} · desde ${mesLargo(prestamo.fechaInicio)}`}
       />
 
       <Card className="mb-4"><CardContent className="py-5 space-y-4">
@@ -60,6 +63,15 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
           </div>
           <Progress value={pct} />
         </div>
+        <AcuerdoDescuento
+          prestamoId={prestamo.id}
+          asunto={prestamo.descripcion ?? 'Descuento'}
+          acuerdoDocId={prestamo.acuerdoDocId}
+          firmadoDocId={prestamo.acuerdoFirmadoDocId}
+          requiereFirma={prestamo.requiereFirma}
+          fechaFirma={prestamo.firmaEmpleadoFecha ? formatFechaLarga(prestamo.firmaEmpleadoFecha) : null}
+          puedeEditar={puedeEditar}
+        />
         {prestamo.estado === 'PAGADO' && (
           <div className="flex items-center gap-2 pt-1">
             {pazSalvo ? (
