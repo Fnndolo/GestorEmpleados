@@ -2276,6 +2276,10 @@ model CuotaPrestamo {
   prestamo   Prestamo  @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
   numero     Int
   valor      Decimal   @db.Decimal(14, 2)
+  // Lo que se acordó con la persona para esta cuota (más, menos o 0 = ese mes no
+  // se descuenta). Null = la cuota del plan. Es aparte de `valor` (lo pagado) para
+  // que recalcular la nómina no borre el acuerdo.
+  valorAcordado Decimal? @map("valor_acordado") @db.Decimal(14, 2)
   pagada     Boolean   @default(false)
   periodoId  String?   @map("periodo_id") @db.Uuid
   fechaPago  DateTime? @map("fecha_pago") @db.Date

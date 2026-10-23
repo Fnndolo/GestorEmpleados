@@ -198,7 +198,12 @@ export const registrarPrestamo = accion(
       },
     })
     await prisma.cuotaPrestamo.createMany({
-      data: Array.from({ length: d.numeroCuotas }, (_, i) => ({ prestamoId: prestamo.id, numero: i + 1, valor: valorCuota })),
+      // La última cuota absorbe el redondeo: 1.000.000 en 3 son 333.333 + 333.333
+      // + 333.334, no tres de 333.333 que dejarían un peso suelto en el saldo.
+      data: Array.from({ length: d.numeroCuotas }, (_, i) => ({
+        prestamoId: prestamo.id, numero: i + 1,
+        valor: i === d.numeroCuotas - 1 ? d.valorTotal - valorCuota * (d.numeroCuotas - 1) : valorCuota,
+      })),
     })
     if (d.acuerdoRef) {
       const pdf = await obtenerPdfAdjunto({ pdfRef: d.acuerdoRef }, usuario.id, 'El acuerdo de pago está vacío.')
@@ -222,6 +227,42 @@ export const analizarAcuerdoDescuento = accion(
   async (d, usuario) => {
     const pdf = await obtenerPdfAdjunto({ pdfRef: d.acuerdoRef }, usuario.id, 'El acuerdo de pago está vacío.')
     return { paginas: await contarPaginas(pdf), posicion: null }
+  },
+)
+
+/**
+ * Ajustar lo que se descuenta en una cuota que todavía no se ha pagado: se
+ * habla con la persona antes de la nómina y puede pagar más, menos o nada ese
+ * mes (0). Lo que no se pague queda en el saldo y la nómina agrega las cuotas
+ * que hagan falta al final. Sin `cuotaId` se ajusta la próxima cuota de un
+ * descuento que ya agotó su plan pero aún tiene saldo.
+ */
+export const ajustarCuotaDescuento = accion(
+  {
+    modulo: 'nomina',
+    accion: 'EDITAR',
+    schema: z.object({
+      prestamoId: z.uuid(),
+      cuotaId: z.uuid().nullish(),
+      valor: z.coerce.number().min(0, 'El valor no puede ser negativo.'),
+    }),
+  },
+  async (d) => {
+    const p = await prisma.prestamo.findUniqueOrThrow({ where: { id: d.prestamoId }, include: { _count: { select: { cuotas: true } } } })
+    if (p.estado !== 'ACTIVO') throw new ErrorNegocio('Este descuento ya está pagado.')
+    if (d.valor > Number(p.saldo)) throw new ErrorNegocio(`No puede ser mayor que el saldo (${fmtCOP(Number(p.saldo))}).`)
+    if (d.cuotaId) {
+      const c = await prisma.cuotaPrestamo.findUniqueOrThrow({ where: { id: d.cuotaId } })
+      if (c.prestamoId !== p.id) throw new ErrorNegocio('La cuota no es de este descuento.')
+      if (c.pagada) throw new ErrorNegocio('Esa cuota ya se descontó en una nómina.')
+      await dbAuditado.cuotaPrestamo.update({ where: { id: c.id }, data: { valorAcordado: d.valor } })
+    } else {
+      await dbAuditado.cuotaPrestamo.create({
+        data: { prestamoId: p.id, numero: p._count.cuotas + 1, valor: p.valorCuota, valorAcordado: d.valor },
+      })
+    }
+    revalidatePath(`/nomina/prestamos/${p.id}`)
+    return { ok: true }
   },
 )
 

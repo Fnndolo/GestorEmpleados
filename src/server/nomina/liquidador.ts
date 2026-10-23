@@ -39,7 +39,9 @@ export async function revertirEfectosPeriodo(periodoId: string): Promise<void> {
       where: { id: c.prestamoId },
       data: { saldo: { increment: c.valor }, estado: 'ACTIVO' },
     })
-    if (c.numero <= c.prestamo.numeroCuotas) {
+    // Una cuota con valor acordado se conserva aunque sea de las agregadas: el
+    // acuerdo con la persona sigue valiendo para el nuevo cálculo.
+    if (c.numero <= c.prestamo.numeroCuotas || c.valorAcordado != null) {
       await prisma.cuotaPrestamo.update({
         where: { id: c.id },
         data: { pagada: false, periodoId: null, fechaPago: null, valor: c.prestamo.valorCuota },
@@ -278,16 +280,24 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
     })
     let cuotaPrestamo = 0
     for (const p of prestamos) {
-      const abono = Math.min(Number(p.valorCuota), Number(p.saldo))
-      if (abono <= 0) continue
-      cuotaPrestamo += abono
-      const nuevoSaldo = Math.round((Number(p.saldo) - abono) * 100) / 100
       // Se paga la siguiente cuota del plan (las crea el registro del préstamo:
       // 1, 2, 3…). Solo un préstamo viejo sin plan recibe una cuota nueva.
       const siguiente = await prisma.cuotaPrestamo.findFirst({
         where: { prestamoId: p.id, pagada: false },
         orderBy: { numero: 'asc' },
       })
+      // Lo acordado con la persona para esta cuota manda sobre el plan: puede
+      // ser más, menos, o 0 (ese mes no se descuenta: la cuota queda en cero y
+      // el saldo sigue igual, con una cuota más al final).
+      const acordado = siguiente?.valorAcordado != null ? Number(siguiente.valorAcordado) : null
+      let abono = Math.min(acordado ?? Number(p.valorCuota), Number(p.saldo))
+      // Residuo del redondeo de la cuota (menos de un peso por cuota del plan):
+      // se descuenta ya, en vez de dejar una cuota extra de $1 al final.
+      const residuo = Number(p.saldo) - abono
+      if (acordado == null && residuo > 0 && residuo < p.numeroCuotas) abono = Number(p.saldo)
+      if (abono <= 0 && acordado !== 0) continue
+      cuotaPrestamo += abono
+      const nuevoSaldo = Math.round((Number(p.saldo) - abono) * 100) / 100
       if (siguiente) {
         await prisma.cuotaPrestamo.update({
           where: { id: siguiente.id },

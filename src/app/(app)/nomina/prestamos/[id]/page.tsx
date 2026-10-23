@@ -7,11 +7,12 @@ import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Card, CardContent } from '@/components/ui/card'
 import { Pill } from '@/components/ui-kit'
 import { Progress } from '@/components/ui/progress'
-import { Check, Clock, Eye } from 'lucide-react'
+import { Eye } from 'lucide-react'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta, formatFechaLarga } from '@/lib/fechas'
 import { PazSalvoBoton } from './paz-salvo-boton'
 import { AcuerdoDescuento } from './acuerdo-descuento'
+import { CuotasDescuento } from './cuotas-descuento'
 import { mesLargo } from '@/lib/descuentos'
 
 export const metadata = { title: 'Detalle de descuento · Smart Gadgets RH' }
@@ -85,22 +86,19 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
         )}
       </CardContent></Card>
 
-      <Card><CardContent className="p-0 divide-y">
-        {prestamo.cuotas.map((c) => (
-          <div key={c.id} className="flex items-center gap-3 p-3">
-            <div className={`flex size-8 shrink-0 items-center justify-center rounded-full ${c.pagada ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
-              {c.pagada ? <Check className="size-4" /> : <Clock className="size-4" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">Cuota {c.numero}</p>
-              <p className="text-xs text-muted-foreground">
-                {c.pagada ? `Pagada${c.fechaPago ? ` · ${formatFechaCorta(c.fechaPago)}` : ''}` : 'Pendiente'}
-              </p>
-            </div>
-            <p className="text-sm tabular-nums">{fmtCOP(Number(c.valor))}</p>
-          </div>
-        ))}
-      </CardContent></Card>
+      <CuotasDescuento
+        prestamoId={prestamo.id}
+        saldo={Number(prestamo.saldo)}
+        puedeAjustar={puedeEditar && prestamo.estado === 'ACTIVO'}
+        cuotas={prestamo.cuotas.map((c) => ({
+          id: c.id,
+          numero: c.numero,
+          valor: c.pagada ? Number(c.valor) : Number(c.valorAcordado ?? c.valor),
+          pagada: c.pagada,
+          fechaPago: c.fechaPago ? formatFechaCorta(c.fechaPago) : null,
+          ajustada: c.valorAcordado != null && Number(c.valorAcordado) !== Number(prestamo.valorCuota),
+        }))}
+      />
     </div>
   )
 }
