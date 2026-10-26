@@ -305,12 +305,14 @@ filas.length === 0 ? (
                         {f.estado === 'APROBADA' && puedePagar && (
                           <PagarCuenta cuentaId={f.id} numero={f.numero} nombre={f.nombre} valor={fmtCOP(f.valor)} hoy={hoy} />
                         )}
-                        {f.estado === 'PAGADA' && (f.comprobanteId || puedePagar) && (
-                          <div className="flex items-center gap-1">
-                            {f.comprobanteId && (
+                        {f.estado === 'PAGADA' && (
+                          <div className="flex flex-wrap items-center gap-1">
+                            {f.comprobanteId ? (
                               <VisorPdf documentoId={f.comprobanteId} titulo={`Comprobante de pago · ${f.numero}`} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
                                 <FileCheck2 className="size-3.5" /> Comprobante
                               </VisorPdf>
+                            ) : (
+                              <Pill tone="warn">Sin comprobante</Pill>
                             )}
                             {puedePagar && (
                               <PagarCuenta cuentaId={f.id} numero={f.numero} nombre={f.nombre} valor={fmtCOP(f.valor)} hoy={hoy} pagada conComprobante={!!f.comprobanteId} fechaPago={f.fechaPagoISO} />

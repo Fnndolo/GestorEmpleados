@@ -12,8 +12,33 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TIPOS_CLASIFICABLES, type TipoClasificable } from '@/lib/linea-etica'
-import { iniciarInvestigacionDenuncia, resolverDenuncia, archivarDenuncia, vincularResolucionDenuncia, clasificarDenuncia } from '../../acciones'
-import { ZonaArchivos, subirArchivoEntidad } from '../../_ui'
+import { iniciarInvestigacionDenuncia, resolverDenuncia, archivarDenuncia, vincularResolucionDenuncia, clasificarDenuncia, eliminarDenuncia } from '../../acciones'
+import { ZonaArchivos, subirArchivoEntidad, DialogAnular, BotonAnular } from '../../_ui'
+
+/**
+ * Eliminar un reporte que entró por error (prueba, duplicado), con el motivo.
+ * Una denuncia resuelta no se elimina: el botón se ve y explica por qué.
+ */
+export function BotonEliminarDenuncia({ id, codigo, estado }: { id: string; codigo: string; estado: string }) {
+  const router = useRouter()
+  const [abierto, setAbierto] = useState(false)
+  const bloqueo = estado === 'RESUELTA' ? 'La denuncia ya está resuelta: su resolución es expediente del Comité de Convivencia y no se elimina.' : null
+  return (
+    <>
+      <BotonAnular soloIcono verbo="Eliminar" bloqueado={bloqueo} onClick={() => setAbierto(true)} />
+      {abierto && (
+        <DialogAnular
+          verbo="Eliminar"
+          titulo="Eliminar reporte de la línea ética"
+          detalle={`Reporte ${codigo} · se borran también sus evidencias y el acuerdo, si los hay.`}
+          anular={(motivo) => eliminarDenuncia({ id, motivo })}
+          onClose={() => setAbierto(false)}
+          onDone={() => router.push('/juridica?tab=denuncias')}
+        />
+      )}
+    </>
+  )
+}
 
 export function AccionesDenuncia({ id, estado, tipo }: { id: string; estado: string; tipo: string }) {
   const router = useRouter()

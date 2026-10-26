@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Cake, UserPlus, UserPen, Eye, CircleCheck, Undo2, Trash2, FileText, X } from 'lucide-react'
+import { Cake, UserPlus, Pencil, Eye, CircleCheck, Undo2, Trash2, FileText, X } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -19,7 +19,7 @@ import { colorAvatar, iniciales } from '@/lib/etiquetas'
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta, parseFechaISO } from '@/lib/fechas'
 import { fechaBreve } from '@/lib/notificaciones/texto'
-import { asignarEncargadoCumpleanos, cancelarCelebracionCumpleanos, revisarFacturasCumpleanos } from './acciones'
+import { asignarEncargadoCumpleanos, cambiarEncargadoCumpleanos, cancelarCelebracionCumpleanos, revisarFacturasCumpleanos } from './acciones'
 import { urlFoto } from '@/lib/foto'
 import { asignarEncargadoSchema } from '@/lib/validaciones/cumpleanos'
 import { ACEPTA_FIRMA, MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal, tipoDeArchivo } from '@/lib/archivos'
@@ -137,19 +137,11 @@ function Lista({ filas, hoy, permisos, onAsignar, onRevisar }: {
   onAsignar: (f: FilaCumpleanos) => void
   onRevisar: (f: FilaCumpleanos) => void
 }) {
-  const router = useRouter()
-  const [cancelando, setCancelando] = useState<string | null>(null)
-
-  async function cancelar(f: FilaCumpleanos) {
-    if (!f.celebracion) return
-    if (!confirm(`¿Quitar el encargo del cumpleaños de ${f.colaborador.nombres}?`)) return
-    setCancelando(f.clave)
-    const res = await cancelarCelebracionCumpleanos({ id: f.celebracion.id })
-    setCancelando(null)
-    if (res.ok) { toast.success('Encargo cancelado.'); router.refresh() } else toast.error(res.error)
-  }
+  const [cancelando, setCancelando] = useState<FilaCumpleanos | null>(null)
 
   return (
+    <>
+    {cancelando?.celebracion && <CancelarDialogo fila={cancelando} onClose={() => setCancelando(null)} />}
     <Card className="py-0"><CardContent className="divide-y p-0">
       {filas.map((f) => {
         const c = f.celebracion
@@ -183,27 +175,68 @@ function Lista({ filas, hoy, permisos, onAsignar, onRevisar }: {
                   <UserPlus className="size-4" /> <span className="hidden sm:inline">Asignar encargado</span>
                 </Button>
               )}
-              {c?.estado === 'ASIGNADA' && permisos.crear && (
-                <Button size="sm" variant="outline" onClick={() => onAsignar(f)} aria-label="Cambiar encargado" title="Cambiar encargado">
-                  <UserPen className="size-4" /> <span className="hidden sm:inline">Cambiar</span>
-                </Button>
-              )}
-              {c?.estado === 'ASIGNADA' && permisos.eliminar && (
-                <Button size="sm" variant="ghost" onClick={() => cancelar(f)} disabled={cancelando === f.clave} aria-label="Cancelar el encargo">
-                  {cancelando === f.clave ? <Spinner className="size-4" /> : <Trash2 className="size-4" />}
-                </Button>
-              )}
               {c?.estado === 'FACTURAS_ENTREGADAS' && (
                 <Button size="sm" onClick={() => onRevisar(f)} aria-label="Revisar facturas" title="Revisar facturas"><Eye className="size-4" /> <span className="hidden sm:inline">Revisar facturas</span></Button>
               )}
               {c?.estado === 'CERRADA' && (
                 <Button size="sm" variant="outline" onClick={() => onRevisar(f)} aria-label="Ver facturas" title="Ver facturas"><Eye className="size-4" /> <span className="hidden sm:inline">Ver facturas</span></Button>
               )}
+              {/* Corregir el encargo (encargado, indicaciones) o cancelarlo con
+                  motivo, mientras la celebración no esté cerrada. */}
+              {c && c.estado !== 'CERRADA' && permisos.editar && (
+                <Button size="icon" variant="ghost" onClick={() => onAsignar(f)} aria-label="Editar encargo" title="Editar encargo">
+                  <Pencil className="size-4" />
+                </Button>
+              )}
+              {c && c.estado !== 'CERRADA' && permisos.eliminar && (
+                <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setCancelando(f)} aria-label="Cancelar el encargo" title="Cancelar el encargo">
+                  <Trash2 className="size-4" />
+                </Button>
+              )}
             </div>
           </div>
         )
       })}
     </CardContent></Card>
+    </>
+  )
+}
+
+/**
+ * Cancelar un encargo con el motivo (queda en auditoría). Si ya hay facturas,
+ * se conservan en el expediente del homenajeado; al encargado se le avisa.
+ */
+function CancelarDialogo({ fila, onClose }: { fila: FilaCumpleanos; onClose: () => void }) {
+  const router = useRouter()
+  const [motivo, setMotivo] = useState('')
+  const [g, setG] = useState(false)
+  const c = fila.celebracion!
+
+  async function confirmar() {
+    setG(true)
+    const res = await cancelarCelebracionCumpleanos({ id: c.id, motivo })
+    setG(false)
+    if (res.ok) { toast.success('Anulado. Se le avisó al encargado.'); onClose(); router.refresh() } else toast.error(res.error)
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !g && onClose()}>
+      <DialogContent onOpenAutoFocus={enfocarDialogo} aria-describedby={undefined}>
+        <DialogHeader><DialogTitle>Cancelar el encargo</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Cumpleaños de {fila.colaborador.nombres} {fila.colaborador.apellidos} ({formatFechaCorta(parseFechaISO(fila.fecha))}) · a cargo de {c.encargado.nombre}
+          {c.facturas.length > 0 ? ` · ${c.facturas.length} factura(s) ya subida(s): se conservan en el expediente de ${fila.colaborador.nombres}` : ''}
+        </p>
+        <div className="space-y-1.5">
+          <Label htmlFor="motivo-cancelar-cumpleanos">Motivo <span className="text-destructive">*</span></Label>
+          <Textarea id="motivo-cancelar-cumpleanos" rows={2} placeholder="¿Por qué se cancela?" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={g}>Volver</Button>
+          <Button variant="destructive" onClick={confirmar} disabled={g || motivo.trim().length < 5}>{g ? <Spinner className="size-4" /> : <Trash2 className="size-4" />} Cancelar encargo</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -234,6 +267,7 @@ function AsignarDialogo({ fila, onClose }: { fila: FilaCumpleanos; onClose: () =
   function guardar() {
     const entrada = asignarEncargadoSchema.safeParse({ colaboradorId: fila.colaborador.id, anio: fila.anio, encargadoId, nota })
     if (!entrada.success) { toast.error(entrada.error.issues[0].message); return }
+    const celebracion = fila.celebracion
     empezar(async () => {
       let indicacionesPdfRef: string | undefined
       if (pdf) {
@@ -245,7 +279,11 @@ function AsignarDialogo({ fila, onClose }: { fila: FilaCumpleanos; onClose: () =
         }
       }
       try {
-        const res = await asignarEncargadoCumpleanos({ ...entrada.data, indicacionesPdfRef })
+        // Con celebración ya creada se corrige el encargo (cambia el encargado o
+        // las indicaciones); sin ella, se crea.
+        const res = celebracion
+          ? await cambiarEncargadoCumpleanos({ id: celebracion.id, encargadoId: entrada.data.encargadoId, nota: entrada.data.nota, indicacionesPdfRef })
+          : await asignarEncargadoCumpleanos({ ...entrada.data, indicacionesPdfRef })
         if (!res.ok) {
           toast.error(Object.values(res.campos ?? {}).flat()[0] ?? res.error)
           return
@@ -257,7 +295,7 @@ function AsignarDialogo({ fila, onClose }: { fila: FilaCumpleanos; onClose: () =
         toast.error('No se pudo confirmar la asignación. Revisa la conexión y actualiza la lista antes de reintentar. Tus datos siguen en el formulario.')
         return
       }
-      toast.success('Encargado asignado.')
+      toast.success(celebracion ? 'Encargo actualizado.' : 'Encargado asignado.')
       onClose()
       router.refresh()
     })
@@ -267,24 +305,24 @@ function AsignarDialogo({ fila, onClose }: { fila: FilaCumpleanos; onClose: () =
     <Dialog open onOpenChange={(o) => !o && !guardando && onClose()}>
       <DialogContent onOpenAutoFocus={enfocarDialogo} className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{fila.celebracion ? 'Cambiar encargado' : 'Asignar encargado'}</DialogTitle>
+          <DialogTitle>{fila.celebracion ? 'Editar encargo' : 'Asignar encargado'}</DialogTitle>
           <DialogDescription>
             Cumpleaños de {fila.colaborador.nombres} {fila.colaborador.apellidos}, el {formatFechaCorta(parseFechaISO(fila.fecha))}. El encargado organiza la celebración y después sube las facturas desde su autoservicio.
           </DialogDescription>
         </DialogHeader>
         <fieldset disabled={guardando} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Encargado</Label>
+            <Label>Encargado <span className="text-destructive">*</span></Label>
             <SelectorColaborador value={encargadoId} onChange={setEncargadoId} placeholder="Busca por nombre o documento…" />
             <p className="text-[11px] text-muted-foreground">Necesita usuario de acceso: sube las facturas desde su autoservicio.</p>
           </div>
           <div className="space-y-1.5">
-            <Label>Indicaciones (opcional)</Label>
+            <Label>Indicaciones</Label>
             <Textarea rows={3} maxLength={500} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Qué comprar, presupuesto orientativo, dónde se celebra…" />
             <p className="text-[11px] text-muted-foreground">Máximo 500 caracteres.</p>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="indicaciones-cumpleanos-pdf">Documento de indicaciones (PDF, opcional)</Label>
+            <Label htmlFor="indicaciones-cumpleanos-pdf">Documento de indicaciones (PDF)</Label>
             <Input ref={inputPdf} id="indicaciones-cumpleanos-pdf" type="file" accept={ACEPTA_FIRMA} onChange={elegirPdf} />
             <p className="text-[11px] text-muted-foreground">Puedes revisarlo o quitarlo antes de enviar.</p>
             {pdf ? (
@@ -306,7 +344,7 @@ function AsignarDialogo({ fila, onClose }: { fila: FilaCumpleanos; onClose: () =
         </fieldset>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={guardando}>Cancelar</Button>
-          <Button onClick={guardar} disabled={guardando}>{guardando ? <Spinner className="size-4" /> : <UserPlus className="size-4" />} {fila.celebracion ? 'Guardar cambio' : 'Asignar'}</Button>
+          <Button onClick={guardar} disabled={guardando}>{guardando ? <Spinner className="size-4" /> : fila.celebracion ? <Pencil className="size-4" /> : <UserPlus className="size-4" />} {fila.celebracion ? 'Guardar' : 'Asignar'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -349,7 +387,9 @@ function RevisarDialogo({ fila, permisos, onClose }: { fila: FilaCumpleanos; per
           </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Facturas ({c.facturas.length})</p>
-            {c.facturas.length === 0 ? <p className="mt-1 text-xs text-muted-foreground">Sin archivos.</p> : <SoportesLista documentos={c.facturas} />}
+            {c.facturas.length === 0
+              ? <p className="mt-1 text-xs text-muted-foreground">{porRevisar ? 'El encargado entregó sin facturas; el motivo llegó en el aviso. Acéptalo o devuélvelo pidiéndolas.' : 'Sin archivos.'}</p>
+              : <SoportesLista documentos={c.facturas} />}
           </div>
           {porRevisar && (
             <div className="space-y-1.5">

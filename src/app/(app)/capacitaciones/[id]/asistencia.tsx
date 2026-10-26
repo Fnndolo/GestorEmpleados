@@ -3,14 +3,14 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Check, ListChecks, Megaphone, PenLine, Search } from 'lucide-react'
+import { Check, ListChecks, Megaphone, PenLine, Search, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { guardarAsistencias, convocarCapacitacion, registrarEvaluacionAsistente } from '../acciones'
+import { guardarAsistencias, convocarCapacitacion, registrarEvaluacionAsistente, quitarAsistente } from '../acciones'
 
 type Asistente = { id: string; colaboradorId: string; colaborador: string; evaluacion: number | null }
 type Colaborador = { id: string; nombre: string; sede: string }
@@ -24,6 +24,7 @@ export function Asistencia({ capacitacionId, asistentes, colaboradores, puedeEdi
   const router = useRouter()
   const [modo, setModo] = useState<'lista' | 'convocar' | null>(null)
   const [notaDe, setNotaDe] = useState<Asistente | null>(null)
+  const [quitando, setQuitando] = useState<Asistente | null>(null)
 
   return (
     <div className="space-y-3">
@@ -50,14 +51,23 @@ export function Asistencia({ capacitacionId, asistentes, colaboradores, puedeEdi
               <p className="min-w-0 flex-1 truncate text-sm">{a.colaborador}</p>
               {a.evaluacion != null && <span className="text-sm tabular-nums text-muted-foreground">Nota: {a.evaluacion}</span>}
               {puedeEditar && (
-                <Button size="sm" variant="ghost" onClick={() => setNotaDe(a)}>
-                  <PenLine className="size-4" /> {a.evaluacion != null ? 'Editar nota' : 'Calificar'}
+                <Button size="sm" variant="ghost" onClick={() => setNotaDe(a)} aria-label={a.evaluacion != null ? 'Editar nota' : 'Calificar'} title={a.evaluacion != null ? 'Editar nota' : 'Calificar'}>
+                  <PenLine className="size-4" /> <span className="hidden sm:inline">{a.evaluacion != null ? 'Editar nota' : 'Calificar'}</span>
+                </Button>
+              )}
+              {/* Quitar de la lista a quien se marcó por error, tenga o no nota
+                  («Tomar lista» conserva a los que ya tienen nota). */}
+              {puedeEditar && (
+                <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setQuitando(a)} aria-label="Quitar de la lista" title="Quitar de la lista">
+                  <Trash2 className="size-4" />
                 </Button>
               )}
             </div>
           ))}
         </CardContent></Card>
       )}
+
+      {quitando && <DialogQuitar asistente={quitando} onClose={() => setQuitando(null)} onDone={() => { setQuitando(null); router.refresh() }} />}
 
       {modo && (
         <DialogChecklist
@@ -166,6 +176,35 @@ function DialogChecklist({ modo, capacitacionId, colaboradores, preMarcados, onC
             {g ? <Spinner /> : modo === 'lista' ? <ListChecks className="size-4" /> : <Megaphone className="size-4" />}
             {modo === 'lista' ? 'Guardar lista' : 'Enviar convocatoria'}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Confirmación antes de quitar a un asistente: si tenía nota, se pierde. */
+function DialogQuitar({ asistente, onClose, onDone }: { asistente: Asistente; onClose: () => void; onDone: () => void }) {
+  const [g, setG] = useState(false)
+
+  async function quitar() {
+    setG(true)
+    const res = await quitarAsistente({ asistenciaId: asistente.id })
+    setG(false)
+    if (res.ok) { toast.success('Asistente quitado.'); onDone() } else toast.error(res.error)
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !g && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Quitar a {asistente.colaborador}</DialogTitle>
+          <DialogDescription>
+            Deja de contar como asistente de esta capacitación.{asistente.evaluacion != null ? ` Su nota (${asistente.evaluacion}) se pierde.` : ''}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={g}>Volver</Button>
+          <Button variant="destructive" onClick={quitar} disabled={g}>{g ? <Spinner /> : <Trash2 className="size-4" />} Quitar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

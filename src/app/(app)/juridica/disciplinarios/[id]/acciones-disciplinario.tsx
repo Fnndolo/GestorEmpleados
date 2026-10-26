@@ -3,15 +3,71 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Gavel, Lock, CalendarX, ArrowUpRight } from 'lucide-react'
+import { Gavel, Lock, CalendarX, ArrowUpRight, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { registrarDecisionDisciplinario, cerrarDisciplinario, vincularActaDisciplinario, registrarVencimientoDescargos, escalarAProcesoDisciplinario } from '../../acciones'
-import { subirArchivoEntidad, ZonaArchivos } from '../../_ui'
+import { cn } from '@/lib/utils'
+import { registrarDecisionDisciplinario, cerrarDisciplinario, vincularActaDisciplinario, registrarVencimientoDescargos, escalarAProcesoDisciplinario, anularProcesoDisciplinario } from '../../acciones'
+import { subirArchivoEntidad, ZonaArchivos, DialogAnular, BotonAnular } from '../../_ui'
+import { DialogDisciplinario, type ProcesoInicial } from '../../juridica-cliente'
+
+/**
+ * Editar y anular el expediente desde el encabezado. Editar solo mientras esté
+ * abierto; anular siempre, salvo que ya sustente una terminación con justa
+ * causa. Un bloqueo no esconde el botón: al tocarlo dice por qué.
+ */
+export function ExpedienteAcciones({ proceso, colaborador, cerrado, ligadoATerminacion, puedeEditar, puedeEliminar }: {
+  proceso: ProcesoInicial
+  colaborador: string
+  cerrado: boolean
+  /** Hay una Terminacion con justa causa que lo cita como sustento. */
+  ligadoATerminacion: boolean
+  puedeEditar: boolean
+  puedeEliminar: boolean
+}) {
+  const router = useRouter()
+  const [editar, setEditar] = useState(false)
+  const [anular, setAnular] = useState(false)
+  const esLlamado = proceso.clase === 'LLAMADO_ATENCION'
+  const que = esLlamado ? 'llamado de atención' : 'proceso disciplinario'
+  const bloqueoEditar = cerrado ? 'El expediente ya está cerrado: no se modifica. Si se registró por error, anúlalo.' : null
+  const bloqueoAnular = ligadoATerminacion
+    ? cerrado
+      ? 'Está cerrado con decisión y sustenta una terminación con justa causa: anula primero la terminación.'
+      : 'Está ligado a una terminación: anula primero la terminación.'
+    : null
+
+  if (!puedeEditar && !puedeEliminar) return null
+  return (
+    <>
+      {puedeEditar && (
+        <Button
+          size="icon" variant="ghost" aria-label="Editar" title={bloqueoEditar ?? 'Editar'}
+          className={cn(bloqueoEditar && 'opacity-60')}
+          onClick={() => (bloqueoEditar ? toast.error(bloqueoEditar, { duration: 8000 }) : setEditar(true))}
+        >
+          <Pencil className="size-4" />
+        </Button>
+      )}
+      {puedeEliminar && <BotonAnular soloIcono bloqueado={bloqueoAnular} onClick={() => setAnular(true)} />}
+      {editar && <DialogDisciplinario inicial={proceso} onClose={() => setEditar(false)} />}
+      {anular && (
+        <DialogAnular
+          titulo={`Anular ${que}`}
+          detalle={`${colaborador} · "${proceso.asunto}" · se borran sus etapas, soportes y acta; al colaborador se le avisa y deja de aparecer en su historial.`}
+          exito="Anulado. Se le avisó al colaborador."
+          anular={(motivo) => anularProcesoDisciplinario({ id: proceso.id, motivo })}
+          onClose={() => setAnular(false)}
+          onDone={() => router.push('/juridica?tab=disciplinarios')}
+        />
+      )}
+    </>
+  )
+}
 
 export function AccionesDisciplinario({ procesoId, etapa, clase, plazoVencido, fechaLimite }: {
   procesoId: string

@@ -32,6 +32,7 @@ import { SubirContratoExistente } from './subir-contrato-existente'
 import { FotoUploader } from './foto-uploader'
 import { EducacionLista } from './educacion-lista'
 import { BotonCertificacion } from './boton-certificacion'
+import { EliminarColaborador } from './eliminar-colaborador'
 import { BotonDisciplinario } from './boton-disciplinario'
 import { RegistrarDisfrute } from './registrar-disfrute'
 import { HistorialVacaciones } from './historial-vacaciones'
@@ -62,6 +63,7 @@ export default async function FichaColaboradorPage({ params, searchParams }: { p
   const { id } = await params
   const usuario = await requerirPermiso('colaboradores', 'VER')
   const puedeEditar = tienePermiso(usuario, 'colaboradores', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'colaboradores', 'ELIMINAR')
   // Registrar vacaciones ya tomadas es una novedad, como programarlas.
   const puedeNovedades = tienePermiso(usuario, 'novedades', 'CREAR')
   const verSalud = tienePermiso(usuario, 'colaboradores_salud', 'VER')
@@ -113,7 +115,7 @@ export default async function FichaColaboradorPage({ params, searchParams }: { p
   const mostrarPagos = tienePermiso(usuario, 'nomina', 'VER') || esPropia
   // Horario: quien gestiona horarios, o la propia persona (solo lo ve). Al OPS no se le fija horario.
   const mostrarHorario = !esOps(c.tipoVinculo) && (tienePermiso(usuario, 'horarios', 'VER') || esPropia)
-  const [contratos, contratosOps, eduDocs, liquidaciones, variacionesSalariales, auxTransporte] = await Promise.all([
+  const [contratos, contratosOps, eduDocs, liquidaciones, variacionesSalariales, auxTransporte, certificaciones] = await Promise.all([
     prisma.contrato.findMany({ where: { colaboradorId: id }, include: { cargo: true, sede: true }, orderBy: { fechaInicio: 'desc' } }),
     prisma.contratoOps.findMany({ where: { colaboradorId: id }, include: { sede: true }, orderBy: { fechaInicio: 'desc' } }),
     prisma.documento.findMany({ where: { entidadTipo: 'EducacionColaborador', entidadId: { in: c.educacion.map((e) => e.id) } }, select: { id: true, entidadId: true } }),
@@ -127,6 +129,10 @@ export default async function FichaColaboradorPage({ params, searchParams }: { p
     prisma.variacionSalarial.findMany({ where: { colaboradorId: id }, orderBy: { fechaVigencia: 'desc' } }),
     // Valor legal vigente del auxilio de transporte, para mostrarlo al subir un contrato.
     valorParametroVigente('AUX_TRANSPORTE'),
+    // Certificaciones emitidas: se ven y se anulan desde el botón Certificación.
+    puedeEditar
+      ? prisma.certificacionLaboral.findMany({ where: { colaboradorId: id }, orderBy: { creadoEn: 'desc' }, take: 30, select: { id: true, tipo: true, dirigidaA: true, creadoEn: true, documentoId: true } })
+      : Promise.resolve([]),
   ])
 
   // Pestaña Contrato: la misma tarjeta que el colaborador ve en su autoservicio,
@@ -316,12 +322,18 @@ export default async function FichaColaboradorPage({ params, searchParams }: { p
             {puedeDisciplinar && <BotonDisciplinario colaboradorId={id} nombre={`${c.nombres} ${c.apellidos}`} esOps={esOps(c.tipoVinculo)} />}
             {puedeEditar && (
               <>
-                <BotonCertificacion colaboradorId={id} />
+                <BotonCertificacion
+                  colaboradorId={id}
+                  puedeEliminar={puedeEliminar}
+                  certificaciones={certificaciones.map((ct) => ({ id: ct.id, tipo: ct.tipo, dirigidaA: ct.dirigidaA, fecha: formatFechaCorta(ct.creadoEn), documentoId: ct.documentoId }))}
+                />
                 <Button asChild size="sm">
                   <Link href={`/colaboradores/${id}/editar`}><Pencil className="size-4" /> <span className="hidden sm:inline">Editar</span></Link>
                 </Button>
               </>
             )}
+            {/* Solo para fichas creadas por error: el servidor lo bloquea si hay historia y dice qué tiene. */}
+            {puedeEliminar && <EliminarColaborador colaboradorId={id} nombre={`${c.nombres} ${c.apellidos}`} />}
             {/* En su propia ficha, sin permiso de editar, el lápiz lleva a
                 Mi información: es donde cada persona actualiza sus datos. */}
             {!puedeEditar && esPropia && (

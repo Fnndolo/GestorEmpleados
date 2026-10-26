@@ -15,7 +15,8 @@ import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { guardarObligacion, cambiarActivaObligacion } from '../acciones'
+import { guardarObligacion, cambiarActivaObligacion, eliminarObligacion } from '../acciones'
+import { DialogAnular, BotonAnular } from '@/app/(app)/juridica/_ui'
 
 export type ObligacionItem = {
   id: string; nombre: string; categoria: string; periodicidad: string
@@ -46,9 +47,12 @@ function reglaTexto(o: ObligacionItem): string {
   return `${p} · día ${o.diaBase ?? 1}`
 }
 
-export function ObligacionesCliente({ obligaciones, roles, puedeGestionar }: { obligaciones: ObligacionItem[]; roles: string[]; puedeGestionar: boolean }) {
+export function ObligacionesCliente({ obligaciones, roles, puedeGestionar, puedeEliminar = false }: {
+  obligaciones: ObligacionItem[]; roles: string[]; puedeGestionar: boolean; puedeEliminar?: boolean
+}) {
   const router = useRouter()
   const [editando, setEditando] = useState<ObligacionItem | 'nueva' | null>(null)
+  const [eliminando, setEliminando] = useState<ObligacionItem | null>(null)
   const [cambiando, setCambiando] = useState<string | null>(null)
 
   async function toggleActiva(o: ObligacionItem) {
@@ -88,6 +92,7 @@ export function ObligacionesCliente({ obligaciones, roles, puedeGestionar }: { o
                 <Switch checked={o.activa} disabled={cambiando === o.id} onCheckedChange={() => toggleActiva(o)} aria-label="Activa" />
               </>
             )}
+            {puedeEliminar && <BotonAnular soloIcono verbo="Eliminar" onClick={() => setEliminando(o)} />}
           </div>
         ))}
         {obligaciones.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">No hay obligaciones en el catálogo.</p>}
@@ -98,6 +103,15 @@ export function ObligacionesCliente({ obligaciones, roles, puedeGestionar }: { o
           inicial={editando === 'nueva' ? null : editando}
           roles={roles}
           onClose={() => setEditando(null)}
+        />
+      )}
+      {eliminando && (
+        <DialogAnular
+          verbo="Eliminar"
+          titulo="Eliminar obligación"
+          detalle={`${eliminando.nombre} · ${CATEGORIA[eliminando.categoria] ?? eliminando.categoria} · se borran sus ${eliminando.ocurrencias} fecha(s), alertas y soportes. Si solo quieres que no genere fechas nuevas, desactívala.`}
+          anular={(motivo) => eliminarObligacion({ id: eliminando.id, motivo })}
+          onClose={() => setEliminando(null)}
         />
       )}
     </div>

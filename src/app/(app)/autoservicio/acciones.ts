@@ -333,7 +333,7 @@ export const crearSolicitud = accion(
   },
 )
 
-async function avisarAprobadoresDelPaso(solicitudId: string, orden: number, modo: 'nueva' | 'cambio' | 'cancelada' = 'nueva') {
+async function avisarAprobadoresDelPaso(solicitudId: string, orden: number, modo: 'nueva' | 'cambio' | 'cancelada' | 'soporte' = 'nueva') {
   const paso = await prisma.pasoAprobacion.findFirst({ where: { solicitudId, orden } })
   if (!paso) return
   const solicitud = await prisma.solicitud.findUniqueOrThrow({
@@ -351,6 +351,14 @@ async function avisarAprobadoresDelPaso(solicitudId: string, orden: number, modo
         titulo: `${quien} canceló su solicitud de ${etiquetaTipo(solicitud.tipo)}`,
         mensaje: `${detalle} · Ya no hay nada que resolver.`,
         enlace: '/autoservicio/aprobaciones', evento: 'solicitud_creada',
+        colaboradorId: solicitud.colaboradorId,
+      }
+    : modo === 'soporte'
+    ? {
+        // La radicó sin soporte y lo adjuntó después: la solicitud ya estaba en la bandeja.
+        titulo: `${quien} adjuntó el soporte de su ${etiquetaTipo(solicitud.tipo)}`,
+        mensaje: `${detalle} · Ya puedes validarlo.`,
+        enlace: '/autoservicio/aprobaciones', llamadoAccion: 'Validar el soporte', evento: 'solicitud_creada',
         colaboradorId: solicitud.colaboradorId,
       }
     : solicitud.tipo === 'INCAPACIDAD'
@@ -451,10 +459,9 @@ export const resolverPaso = accion(
           : 'Una licencia de ley no se niega por decisión. Si el soporte no acredita el hecho, explica por escrito qué falta.',
       )
     }
-    if (esIncapacidad && d.aprobar) {
-      const soportes = await prisma.documento.count({ where: { entidadTipo: 'Solicitud', entidadId: paso.solicitudId } })
-      if (soportes === 0) throw new ErrorNegocio('Esta incapacidad no tiene soporte: devuélvela para que lo adjunte.')
-    }
+    // Sin soporte NO se bloquea la aprobación: la bandeja lo marca "Sin soporte",
+    // quien aprueba confirma la advertencia y el colaborador puede adjuntarlo
+    // después desde su autoservicio mientras la solicitud siga abierta.
 
     // Si propone otras fechas, actualizar la solicitud y avisar al solicitante del cambio
     let notaCambioFechas = ''
@@ -975,9 +982,12 @@ export const cancelarSolicitud = accion(
 )
 
 /**
- * Corrección de soporte de una licencia DEVUELTA: el colaborador adjunta el nuevo
+ * Soporte adjuntado después de crear la solicitud. El colaborador ya subió el
  * archivo (vía /api/documentos/subir, antes de llamar aquí) y la MISMA solicitud
- * vuelve al paso de validación pendiente — no se crea un expediente nuevo.
+ * sigue — no se crea un expediente nuevo:
+ *  - DEVUELTA (soporte no validado): vuelve al paso de validación pendiente.
+ *  - EN_APROBACION / PENDIENTE sin soporte: se deja rastro y se avisa a quien
+ *    la tiene en bandeja; el estado no cambia.
  */
 export const corregirMiSoporte = accion(
   { modulo: 'autoservicio', accion: 'CREAR', schema: z.object({ solicitudId: z.uuid() }) },
@@ -987,18 +997,27 @@ export const corregirMiSoporte = accion(
       include: { pasos: { orderBy: { orden: 'asc' } } },
     })
     if (s.colaboradorId !== usuario.colaboradorId) throw new ErrorNegocio('Esta solicitud no es tuya.')
-    if (s.estado !== 'DEVUELTA') throw new ErrorNegocio('Esta solicitud no está devuelta para corrección.')
+    const abierta = s.estado === 'EN_APROBACION' || s.estado === 'PENDIENTE'
+    if (s.estado !== 'DEVUELTA' && !abierta) throw new ErrorNegocio('Esta solicitud ya está resuelta: no se le puede adjuntar soporte.')
+    const soportes = await prisma.documento.count({ where: { entidadTipo: 'Solicitud', entidadId: s.id } })
+    if (soportes === 0) throw new ErrorNegocio('Primero sube el archivo del soporte.')
 
     const datos = { ...(s.datos as Record<string, unknown>) }
-    // Rastro para el validador: la solicitud vuelve con soporte corregido.
-    datos.soporteCorregidoEn = new Date().toISOString()
-    await dbAuditado.solicitud.update({
-      where: { id: s.id },
-      data: { estado: 'EN_APROBACION', resultado: null, datos: datos as object },
-    })
+    if (s.estado === 'DEVUELTA') {
+      // Rastro para el validador: la solicitud vuelve con soporte corregido.
+      datos.soporteCorregidoEn = new Date().toISOString()
+      await dbAuditado.solicitud.update({
+        where: { id: s.id },
+        data: { estado: 'EN_APROBACION', resultado: null, datos: datos as object },
+      })
+    } else {
+      // Rastro de que el soporte llegó después de radicada ("Soporte adjuntado" en la bandeja).
+      datos.soporteAdjuntadoEn = new Date().toISOString()
+      await dbAuditado.solicitud.update({ where: { id: s.id }, data: { datos: datos as object } })
+    }
 
     const paso = s.pasos.find((p) => p.estado === 'PENDIENTE')
-    if (paso) await avisarAprobadoresDelPaso(s.id, paso.orden, 'cambio')
+    if (paso) await avisarAprobadoresDelPaso(s.id, paso.orden, s.estado === 'DEVUELTA' ? 'cambio' : 'soporte')
     revalidatePath('/autoservicio')
     revalidatePath('/autoservicio/aprobaciones')
     return { ok: true }

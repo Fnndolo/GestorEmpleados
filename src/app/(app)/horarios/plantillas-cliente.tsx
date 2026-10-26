@@ -3,7 +3,7 @@
 import { useId, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Clock, Pencil, Trash2 } from 'lucide-react'
+import { Clock, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,25 +16,24 @@ import { Pill } from '@/components/ui-kit'
 import { EditorDias } from '@/components/horarios/editor-dias'
 import { horasSemana, jornadaMaximaSemanal, resumenHorario, textoHoras, type DiasHorario } from '@/lib/horarios'
 import { cn } from '@/lib/utils'
+import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
+import { DialogMotivo } from '@/app/(app)/configuracion/dialog-motivo'
 import { activarHorario, eliminarHorario, guardarHorario } from './acciones'
 
-type Plantilla = { id: string; nombre: string; descripcion: string | null; activo: boolean; dias: DiasHorario; personas: number; usado: boolean }
+type Plantilla = { id: string; nombre: string; descripcion: string | null; activo: boolean; dias: DiasHorario; personas: number; vigentes: number }
 
 /** Las plantillas de horario: crear, editar (y aplicar a quienes la tienen), desactivar o borrar. */
-export function PlantillasCliente({ plantillas, puedeEditar, hoy, abrirNueva = false }: { plantillas: Plantilla[]; puedeEditar: boolean; hoy: string; abrirNueva?: boolean }) {
+export function PlantillasCliente({ plantillas, puedeEditar, puedeEliminar = false, hoy, abrirNueva = false }: { plantillas: Plantilla[]; puedeEditar: boolean; puedeEliminar?: boolean; hoy: string; abrirNueva?: boolean }) {
   const router = useRouter()
   // El + del encabezado llega como ?nuevo=1: abre el editor vacío.
   const [editando, setEditando] = useState<Plantilla | 'nueva' | null>(abrirNueva ? 'nueva' : null)
+  const [borrando, setBorrando] = useState<Plantilla | null>(null)
   const cerrar = () => { setEditando(null); if (abrirNueva) router.replace('/horarios?ver=plantillas', { scroll: false }) }
   const maxima = jornadaMaximaSemanal(new Date())
 
   async function activar(p: Plantilla, activo: boolean) {
     const res = await activarHorario({ id: p.id, activo })
     if (res.ok) { toast.success(activo ? 'Horario activado.' : 'Horario desactivado: ya no se puede asignar.'); router.refresh() } else toast.error(res.error)
-  }
-  async function borrar(p: Plantilla) {
-    const res = await eliminarHorario({ id: p.id })
-    if (res.ok) { toast.success('Horario eliminado.'); router.refresh() } else toast.error(res.error)
   }
 
   return (
@@ -63,17 +62,20 @@ export function PlantillasCliente({ plantillas, puedeEditar, hoy, abrirNueva = f
                   {textoHoras(horas)}/sem
                 </span>
                 <span className="w-24 text-right text-xs text-muted-foreground max-sm:hidden">{p.personas} persona{p.personas === 1 ? '' : 's'}</span>
-                {puedeEditar && (
+                {(puedeEditar || puedeEliminar) && (
                   <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-                    <Switch checked={p.activo} onCheckedChange={(v) => activar(p, v)} aria-label={p.activo ? 'Desactivar' : 'Activar'} title={p.activo ? 'Desactivar' : 'Activar'} />
-                    <Button size="icon" variant="ghost" onClick={() => setEditando(p)} aria-label={`Editar ${p.nombre}`} title="Editar"><Pencil className="size-4" /></Button>
-                    {!p.usado ? (
-                      <Button size="icon" variant="ghost" onClick={() => borrar(p)} aria-label={`Eliminar ${p.nombre}`} title="Eliminar: nadie lo ha tenido"><Trash2 className="size-4 text-destructive" /></Button>
-                    ) : (
-                      // Deshabilitado pero visible: el título explica por qué y qué hacer en cambio.
-                      <span title="Ya se le asignó a alguien y es parte de su historial: desactívalo en vez de borrarlo.">
-                        <Button size="icon" variant="ghost" disabled aria-label={`${p.nombre} no se puede eliminar: ya se asignó`}><Trash2 className="size-4" /></Button>
-                      </span>
+                    {puedeEditar && (
+                      <>
+                        <Switch checked={p.activo} onCheckedChange={(v) => activar(p, v)} aria-label={p.activo ? 'Desactivar' : 'Activar'} title={p.activo ? 'Desactivar' : 'Activar'} />
+                        <Button size="icon" variant="ghost" onClick={() => setEditando(p)} aria-label={`Editar ${p.nombre}`} title="Editar"><Pencil className="size-4" /></Button>
+                      </>
+                    )}
+                    {puedeEliminar && (
+                      // Visible pero inerte si alguien lo tiene: el tooltip dice por qué y qué hacer en cambio.
+                      <BotonEliminar
+                        onEliminar={() => setBorrando(p)} etiqueta={`Eliminar ${p.nombre}`}
+                        motivoBloqueo={p.vigentes > 0 ? `${p.vigentes} persona${p.vigentes === 1 ? ' lo tiene' : 's lo tienen'} vigente o programado: desactívalo en vez de borrarlo.` : null}
+                      />
                     )}
                   </div>
                 )}
@@ -81,6 +83,21 @@ export function PlantillasCliente({ plantillas, puedeEditar, hoy, abrirNueva = f
             )
           })}
         </CardContent></Card>
+      )}
+
+      {borrando && (
+        <DialogMotivo
+          titulo="Eliminar horario"
+          resumen={`${borrando.nombre} · ${resumenHorario(borrando.dias)}. Quien lo tuvo antes conserva su copia de los días.`}
+          placeholder="¿Por qué se elimina?"
+          onClose={() => setBorrando(null)}
+          onConfirmar={async (motivo) => {
+            const res = await eliminarHorario({ id: borrando.id, motivo })
+            if (res.ok) { toast.success('Horario eliminado.'); router.refresh(); return true }
+            toast.error(res.error, { duration: 8000 })
+            return false
+          }}
+        />
       )}
 
       {editando && (

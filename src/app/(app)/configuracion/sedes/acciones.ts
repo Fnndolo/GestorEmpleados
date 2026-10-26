@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { dbAuditado } from '@/lib/auditoria'
+import { dbAuditado, auditar } from '@/lib/auditoria'
 import { prisma } from '@/lib/db'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { ciudadSchema, sedeSchema } from '@/lib/validaciones/catalogos'
@@ -100,5 +100,35 @@ export const alternarSede = accion(
     // Las sedes alimentan los selectores de la ficha, contratos y el cambiador
     // de sede del shell: sin esto, una recién creada no aparece hasta recargar.
     revalidatePath('/', 'layout')
+  },
+)
+
+/**
+ * Borra una sede creada por error, con el motivo (queda en auditoría). Solo si
+ * nadie la usa: con colaboradores, contratos, usuarios o cronogramas el camino
+ * es desactivarla, para no perder el histórico.
+ */
+export const eliminarSede = accion(
+  { modulo: 'configuracion', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: z.string().trim().min(5, 'Explica por qué se elimina.').max(300) }) },
+  async ({ id, motivo }) => {
+    const sede = await prisma.sede.findUniqueOrThrow({
+      where: { id },
+      include: { _count: { select: { colaboradores: true, contratos: true, contratosOps: true, usuarios: true, cronogramasDominicales: true, turnosDominicales: true, activos: true } } },
+    })
+    if (sede.esPrincipal) throw new ErrorNegocio('Es la sede principal: marca otra como principal antes de eliminarla.')
+    const c = sede._count
+    const usos = [
+      c.colaboradores > 0 ? `${c.colaboradores} colaborador(es)` : null,
+      c.contratos + c.contratosOps > 0 ? `${c.contratos + c.contratosOps} contrato(s)` : null,
+      c.usuarios > 0 ? `${c.usuarios} usuario(s) asignado(s)` : null,
+      c.cronogramasDominicales + c.turnosDominicales > 0 ? `${c.cronogramasDominicales} cronograma(s) dominical(es)` : null,
+      c.activos > 0 ? `${c.activos} activo(s)` : null,
+    ].filter(Boolean)
+    if (usos.length) throw new ErrorNegocio(`No se puede eliminar: la sede tiene ${usos.join(', ')}. Desactívala en su lugar.`)
+    await dbAuditado.sede.delete({ where: { id } })
+    await auditar('ELIMINAR', 'Sede', { registroId: id, descripcion: `Anulado: ${motivo}` })
+    revalidatePath('/configuracion/sedes')
+    revalidatePath('/', 'layout')
+    return { ok: true }
   },
 )

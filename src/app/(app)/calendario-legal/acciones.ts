@@ -3,11 +3,12 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
-import { dbAuditado } from '@/lib/auditoria'
-import { accion } from '@/server/accion'
+import { dbAuditado, auditar } from '@/lib/auditoria'
+import { accion, ErrorNegocio } from '@/server/accion'
 import { generarOcurrencias } from '@/server/calendario/generador'
-import { resolverVencimiento } from '@/server/vencimientos/servicio'
-import { hoyBogota } from '@/lib/fechas'
+import { resolverVencimiento, cancelarVencimiento, publicarVencimiento } from '@/server/vencimientos/servicio'
+import { eliminarDocumento } from '@/server/documentos'
+import { hoyBogota, formatFechaISO } from '@/lib/fechas'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
 
@@ -94,6 +95,58 @@ export const completarOcurrencia = accion(
     })
     await resolverVencimiento('OcurrenciaObligacion', id, 'OBLIGACION_LEGAL')
     revalidatePath('/calendario-legal')
+  },
+)
+
+/**
+ * Deshace un "cumplida" marcado por error: la fecha vuelve a pendiente, se
+ * borra el soporte si lo había y la alerta de vencimiento vuelve a correr.
+ */
+export const revertirOcurrencia = accion(
+  { modulo: 'calendario_legal', accion: 'EDITAR', schema: z.object({ id: z.uuid() }) },
+  async ({ id }) => {
+    const oc = await prisma.ocurrenciaObligacion.findUniqueOrThrow({ where: { id }, include: { obligacion: true } })
+    if (oc.estado !== 'CUMPLIDA') throw new ErrorNegocio('Esta fecha no está marcada como cumplida.')
+    await dbAuditado.ocurrenciaObligacion.update({
+      where: { id },
+      data: { estado: 'PENDIENTE', fechaCumplido: null, observaciones: null, evidenciaDocId: null },
+    })
+    if (oc.evidenciaDocId) await eliminarDocumento(oc.evidenciaDocId).catch(() => {})
+    // Misma publicación que hace el generador, para que vuelva a alertar.
+    const sede = oc.sedeId ? await prisma.sede.findUnique({ where: { id: oc.sedeId }, select: { nombre: true } }) : null
+    await publicarVencimiento({
+      origen: 'OBLIGACION_LEGAL',
+      entidadTipo: 'OcurrenciaObligacion',
+      entidadId: id,
+      titulo: `${oc.obligacion.nombre}${sede?.nombre ? ` — ${sede.nombre}` : ''}`,
+      detalle: oc.obligacion.fuenteLegal,
+      fechaVencimientoISO: formatFechaISO(oc.fechaLimite),
+      sedeId: oc.sedeId,
+      responsables: oc.obligacion.responsableRol ? [{ rol: oc.obligacion.responsableRol }] : undefined,
+    })
+    revalidatePath('/calendario-legal')
+    return { ok: true }
+  },
+)
+
+/**
+ * Elimina una obligación del catálogo (creada por error o que ya no aplica),
+ * con el motivo en auditoría. Se van con ella todas sus fechas —cumplidas y
+ * pendientes—, sus alertas y los soportes de cumplimiento. Si solo se quiere
+ * dejar de generar fechas nuevas, lo correcto es desactivarla.
+ */
+export const eliminarObligacion = accion(
+  { modulo: 'calendario_legal', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: z.string().trim().min(5, 'Explica por qué se elimina.').max(300) }) },
+  async (d) => {
+    const o = await prisma.obligacionLegal.findUniqueOrThrow({ where: { id: d.id }, include: { ocurrencias: { select: { id: true, evidenciaDocId: true } } } })
+    await auditar('ELIMINAR', 'ObligacionLegal', { registroId: d.id, descripcion: `Anulado: ${d.motivo} · "${o.nombre}" (${o.categoria}, ${o.ocurrencias.length} fecha(s))` })
+    for (const oc of o.ocurrencias) await cancelarVencimiento('OcurrenciaObligacion', oc.id, 'OBLIGACION_LEGAL')
+    // Las ocurrencias caen en cascada (onDelete: Cascade).
+    await dbAuditado.obligacionLegal.delete({ where: { id: d.id } })
+    for (const oc of o.ocurrencias) if (oc.evidenciaDocId) await eliminarDocumento(oc.evidenciaDocId).catch(() => {})
+    revalidatePath('/calendario-legal')
+    revalidatePath('/calendario-legal/obligaciones')
+    return { ok: true }
   },
 )
 

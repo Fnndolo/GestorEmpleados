@@ -42,7 +42,7 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
       })
     : 0
 
-  const [vacaciones, incapacidades, licencias, permisos, bonificaciones, horasExtra] = await Promise.all([
+  const [vacaciones, incapacidades, licencias, permisos, bonificaciones, horasExtra, sedes, areas] = await Promise.all([
     prisma.vacaciones.findMany({ where: filtroSede, include: incCol, orderBy: { creadoEn: 'desc' }, take: 100 }),
     prisma.incapacidad.findMany({ where: filtroSede, include: incCol, orderBy: { creadoEn: 'desc' }, take: 100 }),
     prisma.licencia.findMany({ where: filtroSede, include: incCol, orderBy: { creadoEn: 'desc' }, take: 100 }),
@@ -50,6 +50,9 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
     prisma.bonificacion.findMany({ where: filtroSede, include: incCol, orderBy: { creadoEn: 'desc' }, take: 100 }),
     // Horas extra autorizadas desde autoservicio (la autorización, no el pago).
     prisma.autorizacionHorasExtra.findMany({ where: filtroSede, include: incCol, orderBy: { fecha: 'desc' }, take: 100 }),
+    // Para las vacaciones colectivas (toda la empresa, una sede o un área).
+    prisma.sede.findMany({ where: { activa: true }, select: { id: true, nombre: true }, orderBy: { nombre: 'asc' } }),
+    prisma.area.findMany({ select: { id: true, nombre: true }, orderBy: { nombre: 'asc' } }),
   ])
 
   // Soportes adjuntos por el empleado en la solicitud de autoservicio que originó la novedad
@@ -119,8 +122,16 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
         puedeEliminar={puedeEliminar}
+        catalogos={{ sedes, areas }}
         datos={{
-          vacaciones: vacaciones.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true), fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: Number(x.diasHabiles), estado: x.estado, desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId) })),
+          vacaciones: vacaciones.map((x) => ({
+            id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true),
+            fechaInicio: formatFechaISO(x.fechaInicio), fechaFin: formatFechaISO(x.fechaFin), dias: Number(x.diasHabiles), estado: x.estado,
+            observaciones: x.observaciones, desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId),
+            // Interrumpidas (RIT art. 36): la constancia queda en las observaciones y es lo que permite reanudarlas.
+            interrumpidas: x.observaciones?.includes('RIT art. 36') === true && !x.observaciones.startsWith('Reanudación'),
+            pagadasAnticipado: !!x.pagoAnticipadoPeriodoId,
+          })),
           incapacidades: incapacidades.map((x) => {
             const doc = soporteIncapacidad.get(x.id) ?? soporte(x.solicitudId)
             return {
@@ -134,6 +145,7 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
           permisos: permisos.map((x) => ({
             id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true),
             fecha: formatFechaISO(x.fecha), diaCompleto: x.diaCompleto, horas: x.horas ? Number(x.horas) : null, motivo: x.motivo,
+            horaInicio: x.horaInicio, horaFin: x.horaFin, remunerado: x.remunerado,
             desdeAutoservicio: !!x.solicitudId, soporteDocId: soporte(x.solicitudId),
             comprobante: {
               situacion: situacionComprobante(x.comprobanteEstado, x.comprobanteVence, hoy),
@@ -148,7 +160,11 @@ export default async function NovedadesPage({ searchParams }: { searchParams: Pr
             fecha: formatFechaISO(x.fecha), horaInicio: x.horaInicio, horaFin: x.horaFin, horas: Number(x.horas),
             motivo: x.motivo, posterior: x.posterior, soporteDocId: soporte(x.solicitudId),
           })),
-          bonificaciones: bonificaciones.map((x) => ({ id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true), concepto: x.concepto, valor: Number(x.valor), constitutivoSalario: x.constitutivoSalario, estadoPago: x.estadoPago, fechaPago: x.fechaPago ? formatFechaISO(x.fechaPago) : null })),
+          bonificaciones: bonificaciones.map((x) => ({
+            id: x.id, colaborador: nombre(x.colaborador), colaboradorId: x.colaborador.id, fotoUrl: urlFoto(x.colaborador.id, x.colaborador.fotoPath, true),
+            concepto: x.concepto, valor: Number(x.valor), constitutivoSalario: x.constitutivoSalario, estadoPago: x.estadoPago,
+            fechaPago: x.fechaPago ? formatFechaISO(x.fechaPago) : null, observaciones: x.observaciones, pagadaPorNomina: !!x.periodoId,
+          })),
         }}
       />
     </div>

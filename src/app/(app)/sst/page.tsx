@@ -12,6 +12,7 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
   const { tab = 'tablero' } = await searchParams
   const puedeCrear = tienePermiso(usuario, 'sst', 'CREAR')
   const puedeEditar = tienePermiso(usuario, 'sst', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'sst', 'ELIMINAR')
   const anio = hoyBogota().getUTCFullYear()
   const hoy = hoyBogota()
   const en30 = new Date(hoy); en30.setUTCDate(en30.getUTCDate() + 30)
@@ -55,7 +56,7 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
     }),
     prisma.examenMedico.findMany({ where: fColab, include: { colaborador: { select: { id: true, nombres: true, apellidos: true, fotoPath: true } }, seguimientos: { orderBy: { fecha: 'desc' } } }, orderBy: { fecha: 'desc' }, take: 80 }),
     prisma.accidenteTrabajo.findMany({ where: fSede, include: { colaborador: { select: { id: true, nombres: true, apellidos: true, fotoPath: true } } }, orderBy: { fecha: 'desc' }, take: 80 }),
-    prisma.elementoEpp.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
+    prisma.elementoEpp.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' }, include: { _count: { select: { entregas: true } } } }),
     prisma.entregaEpp.findMany({ where: fColab, include: { elementoEpp: true, colaborador: { select: { id: true, nombres: true, apellidos: true, fotoPath: true } } }, orderBy: { fechaEntrega: 'desc' }, take: 60 }),
     prisma.peligroIpevr.findMany({ where: fSede, orderBy: { creadoEn: 'desc' }, take: 80 }),
     prisma.profesiograma.findMany({ orderBy: { actualizadoEn: 'desc' } }),
@@ -75,6 +76,8 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
   ])
 
   const verSalud = tienePermiso(usuario, 'colaboradores_salud', 'VER')
+  const editaSalud = tienePermiso(usuario, 'colaboradores_salud', 'EDITAR')
+  const eliminaSalud = tienePermiso(usuario, 'colaboradores_salud', 'ELIMINAR')
 
   const docsAccidentes = accidentes.length
     ? await prisma.documento.findMany({
@@ -171,11 +174,14 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
         tab={tab}
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
+        puedeEliminar={puedeEliminar}
         verSalud={verSalud}
+        editaSalud={editaSalud}
+        eliminaSalud={eliminaSalud}
         headcount={headcount}
         comites={comites.map((c) => ({
-          id: c.id, tipo: c.tipo, vigenciaHasta: formatFechaISO(c.vigenciaHasta),
-          miembros: c.miembros.map((m) => ({ id: m.id, colaborador: `${m.colaborador.nombres} ${m.colaborador.apellidos}`, rol: m.rol, porEmpleador: m.porEmpleador })),
+          id: c.id, tipo: c.tipo, fechaConformacion: formatFechaISO(c.fechaConformacion), vigenciaHasta: formatFechaISO(c.vigenciaHasta),
+          miembros: c.miembros.map((m) => ({ id: m.id, colaboradorId: m.colaboradorId, colaborador: `${m.colaborador.nombres} ${m.colaborador.apellidos}`, rol: m.rol, porEmpleador: m.porEmpleador })),
           reuniones: c.reuniones.map((r) => ({ id: r.id, fecha: formatFechaISO(r.fecha), temas: r.temas, compromisos: r.compromisos, actaDocId: r.actaDocId })),
         }))}
         examenes={examenes.map((e) => ({
@@ -199,13 +205,13 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
           estado: a.estado, furat: a.furatReportado, investigacion: a.investigacion, esIncidente: a.esIncidente,
           documentos: docsAccidentes.filter((d) => d.entidadId === a.id).map((d) => ({ id: d.id, nombre: d.nombre })),
         }))}
-        epps={epps.map((e) => ({ id: e.id, nombre: e.nombre }))}
-        entregasEpp={entregasEpp.map((e) => ({ id: e.id, colaboradorId: e.colaboradorId, colaborador: `${e.colaborador.nombres} ${e.colaborador.apellidos}`, fotoPath: e.colaborador.fotoPath, elemento: e.elementoEpp.nombre, cantidad: e.cantidad, fecha: formatFechaISO(e.fechaEntrega), firmado: Boolean(e.firmadoEn), soporteDocId: e.soporteDocId }))}
+        epps={epps.map((e) => ({ id: e.id, nombre: e.nombre, vidaUtilMeses: e.vidaUtilMeses, entregas: e._count.entregas }))}
+        entregasEpp={entregasEpp.map((e) => ({ id: e.id, elementoEppId: e.elementoEppId, reposicion: e.reposicion, colaboradorId: e.colaboradorId, colaborador: `${e.colaborador.nombres} ${e.colaborador.apellidos}`, fotoPath: e.colaborador.fotoPath, elemento: e.elementoEpp.nombre, cantidad: e.cantidad, fecha: formatFechaISO(e.fechaEntrega), firmado: Boolean(e.firmadoEn), soporteDocId: e.soporteDocId }))}
         peligros={peligros.map((p) => ({
           id: p.id, proceso: p.proceso, peligro: p.peligro, riesgo: p.riesgo, nivel: p.nivel, controles: p.controles,
           rutinaria: p.rutinaria, controlFuente: p.controlFuente, controlMedio: p.controlMedio, controlIndividuo: p.controlIndividuo,
           responsable: p.responsable, fechaRevision: p.fechaRevision ? formatFechaISO(p.fechaRevision) : null,
-          sede: p.sedeId ? (sedeNombre.get(p.sedeId) ?? null) : null,
+          sedeId: p.sedeId, sede: p.sedeId ? (sedeNombre.get(p.sedeId) ?? null) : null,
         }))}
         autoeval={autoeval ? {
           id: autoeval.id, anio: autoeval.anio, puntaje: Number(autoeval.puntaje), nivelEstandar: autoeval.nivelEstandar,
@@ -224,21 +230,21 @@ export default async function SstPage({ searchParams }: { searchParams: Promise<
         }))}
         planesEmergencia={planesEmergencia.map((p) => ({
           id: p.id, version: p.version, vigenciaDesde: formatFechaISO(p.vigenciaDesde), vigenciaHasta: formatFechaISO(p.vigenciaHasta),
-          vencido: p.vigenciaHasta < hoy, documentoId: p.documentoId, sede: p.sedeId ? (sedeNombre.get(p.sedeId) ?? null) : null,
+          vencido: p.vigenciaHasta < hoy, documentoId: p.documentoId, sedeId: p.sedeId, sede: p.sedeId ? (sedeNombre.get(p.sedeId) ?? null) : null,
         }))}
         brigadistas={brigadistas.map((b) => ({
-          id: b.id, colaborador: `${b.colaborador.nombres} ${b.colaborador.apellidos}`, rol: b.rol,
+          id: b.id, colaboradorId: b.colaboradorId, colaborador: `${b.colaborador.nombres} ${b.colaborador.apellidos}`, rol: b.rol,
           fotoUrl: urlFoto(b.colaboradorId, b.colaborador.fotoPath, true),
-          sede: b.sedeId ? (sedeNombre.get(b.sedeId) ?? null) : null,
+          sedeId: b.sedeId, sede: b.sedeId ? (sedeNombre.get(b.sedeId) ?? null) : null,
         }))}
         simulacros={simulacros.map((s) => ({
           id: s.id, fecha: formatFechaISO(s.fecha), tipo: s.tipo, participantes: s.participantes, observaciones: s.observaciones,
-          documentoId: s.documentoId, sede: s.sedeId ? (sedeNombre.get(s.sedeId) ?? null) : null,
+          documentoId: s.documentoId, sedeId: s.sedeId, sede: s.sedeId ? (sedeNombre.get(s.sedeId) ?? null) : null,
         }))}
         inspecciones={inspecciones.map((i) => ({
           id: i.id, fecha: formatFechaISO(i.fecha), tipo: i.tipo, area: i.area, hallazgos: i.hallazgos, responsable: i.responsable,
           estado: i.estado, fechaCierre: i.fechaCierre ? formatFechaISO(i.fechaCierre) : null, documentoId: i.documentoId,
-          sede: i.sedeId ? (sedeNombre.get(i.sedeId) ?? null) : null,
+          sedeId: i.sedeId, sede: i.sedeId ? (sedeNombre.get(i.sedeId) ?? null) : null,
         }))}
         semaforo={semaforo}
         novedadesArl={novedadesArl.map((n) => ({

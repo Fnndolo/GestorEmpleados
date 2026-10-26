@@ -6,13 +6,13 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   ChevronLeft, ChevronRight, X, CalendarDays, RefreshCw, CircleCheck, TriangleAlert,
-  Landmark, Receipt, Briefcase, FileLock, Store, HardHat, FileText, Settings2,
+  Landmark, Receipt, Briefcase, FileLock, Store, HardHat, FileText, Settings2, Undo2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
-import { completarOcurrencia, generarCalendario } from './acciones'
+import { completarOcurrencia, revertirOcurrencia, generarCalendario } from './acciones'
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 const DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
@@ -232,6 +232,14 @@ function MesExpandido({
     if (res.ok) { toast.success('Obligación marcada como cumplida.'); router.refresh() } else toast.error(res.error)
   }
 
+  // Un "cumplida" marcado por error: vuelve a pendiente y la alerta corre de nuevo.
+  async function deshacer(id: string) {
+    setCompletando(id)
+    const res = await revertirOcurrencia({ id })
+    setCompletando(null)
+    if (res.ok) { toast.success('Vuelve a estar pendiente. La alerta corre de nuevo.'); router.refresh() } else toast.error(res.error)
+  }
+
   const porDia = new Map<number, ItemLegal[]>()
   for (const it of items) {
     const arr = porDia.get(it.dia) ?? []
@@ -340,6 +348,11 @@ function MesExpandido({
                 {puedeEditar && !o.cumplida && (
                   <Button size="sm" variant="ghost" onClick={() => completar(o.id)} disabled={completando === o.id}>
                     {completando === o.id ? <Spinner /> : <CircleCheck className="size-4" />} Cumplida
+                  </Button>
+                )}
+                {puedeEditar && o.cumplida && (
+                  <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => deshacer(o.id)} disabled={completando === o.id} aria-label="Deshacer cumplida" title="Volver a pendiente">
+                    {completando === o.id ? <Spinner /> : <Undo2 className="size-4" />} <span className="hidden sm:inline">Deshacer</span>
                   </Button>
                 )}
               </div>

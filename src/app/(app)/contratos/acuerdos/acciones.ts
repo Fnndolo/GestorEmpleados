@@ -520,3 +520,25 @@ export const convertirEnColaborador = accion(
 export async function hoyISO(): Promise<string> {
   return hoyBogota().toISOString().slice(0, 10)
 }
+
+/**
+ * Deshacer la decisión de una evaluación (se aprobó o rechazó la que no era):
+ * vuelve a EN_EVALUACION con el motivo en auditoría. Solo mientras no haya
+ * nacido una ficha de colaborador de ella; con ficha, la decisión ya produjo
+ * efectos y se corrige desde la ficha. Al aspirante no se le escribe: la
+ * decisión nueva le llegará por correo cuando se tome.
+ */
+export const revertirDecisionAcuerdo = accion(
+  { modulo: 'contratos', accion: 'APROBAR', schema: z.object({ id: z.uuid(), motivo: z.string().trim().min(5, 'Explica por qué se revierte.').max(300) }) },
+  async (d) => {
+    const a = await prisma.acuerdoEvaluacion.findUniqueOrThrow({ where: { id: d.id } })
+    if (a.estado === 'EN_EVALUACION') throw new ErrorNegocio('Esta evaluación todavía no tiene decisión.')
+    if (a.colaboradorId) {
+      throw new ErrorNegocio('No se puede revertir: de esta evaluación ya nació una ficha de colaborador. Si la vinculación no sigue, regístralo desde la ficha.')
+    }
+    await dbAuditado.acuerdoEvaluacion.update({ where: { id: a.id }, data: { estado: 'EN_EVALUACION', decididoEn: null } })
+    await auditar('EDITAR', 'AcuerdoEvaluacion', { registroId: a.id, descripcion: `Decisión de la evaluación ${a.numero} revertida: ${d.motivo}` })
+    revalidatePath(RUTA)
+    return { ok: true }
+  },
+)

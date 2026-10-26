@@ -9,10 +9,11 @@ export default async function CargosPage() {
   const usuario = await requerirPermiso('configuracion', 'VER')
   const puedeCrear = tienePermiso(usuario, 'configuracion', 'CREAR')
   const puedeEditar = tienePermiso(usuario, 'configuracion', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'configuracion', 'ELIMINAR')
 
   const [cargos, areas, roles] = await Promise.all([
     prisma.cargo.findMany({
-      include: { area: { select: { nombre: true } }, _count: { select: { colaboradores: true, contratos: true } } },
+      include: { area: { select: { nombre: true } }, _count: { select: { colaboradores: true, contratos: true, contratosOps: true, acuerdosEvaluacion: true } } },
       orderBy: [{ area: { nombre: 'asc' } }, { nombre: 'asc' }],
     }),
     prisma.area.findMany({ orderBy: { nombre: 'asc' }, select: { id: true, nombre: true } }),
@@ -24,6 +25,7 @@ export default async function CargosPage() {
       <CargosCliente
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
+        puedeEliminar={puedeEliminar}
         areas={areas}
         roles={roles}
         cargos={cargos.map((c) => ({
@@ -33,6 +35,7 @@ export default async function CargosPage() {
           claseRiesgoDefecto: c.claseRiesgoDefecto ?? '',
           rolDefectoId: c.rolDefectoId ?? '', requiereTarjetaProfesional: c.requiereTarjetaProfesional,
           activo: c.activo, asignados: c._count.colaboradores + c._count.contratos,
+          usos: { colaboradores: c._count.colaboradores, contratos: c._count.contratos + c._count.contratosOps, acuerdos: c._count.acuerdosEvaluacion },
         }))}
       />
     </div>

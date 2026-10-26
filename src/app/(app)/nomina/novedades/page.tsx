@@ -1,4 +1,4 @@
-import { requerirPermiso } from '@/server/sesion'
+import { requerirPermiso, tienePermiso } from '@/server/sesion'
 import { esAdministrador } from '@/lib/permisos/tipos'
 import { prisma } from '@/lib/db'
 import { Encabezado } from '@/components/shell/encabezado'
@@ -23,19 +23,25 @@ const LIMITE = 200
 export default async function NovedadesNominaPage({ searchParams }: { searchParams: Promise<{ grupo?: string }> }) {
   const { grupo } = await searchParams
   const usuario = await requerirPermiso('nomina', 'CREAR')
+  const puedeEditar = tienePermiso(usuario, 'nomina', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'nomina', 'ELIMINAR')
   const conexion = await conexionAsistencia('horas')
   // Hay clave pero compartir horas está apagado: se dice eso, no «conecta AsistencIA».
   const horasApagadas = !conexion && Boolean(await conexionAsistencia())
 
   const nomColab = { colaborador: { select: { nombres: true, apellidos: true } } }
-  const conPeriodo = { periodo: { select: { nombre: true } } }
+  const conPeriodo = { periodo: { select: { nombre: true, estado: true } } }
 
-  const [comisiones, novedadesConcepto, conceptos, contratos] = await Promise.all([
+  const [comisiones, novedadesConcepto, novedadesHoras, conceptos, contratos] = await Promise.all([
     prisma.comision.findMany({
       include: { ...nomColab, ...conPeriodo }, orderBy: [{ fecha: 'desc' }, { creadoEn: 'desc' }], take: LIMITE,
     }),
     prisma.novedadConcepto.findMany({
       include: { ...nomColab, ...conPeriodo, concepto: true }, orderBy: [{ fecha: 'desc' }, { creadoEn: 'desc' }], take: LIMITE,
+    }),
+    // Horas extra y recargos ya registrados (a mano o traídos de AsistencIA).
+    prisma.novedadHoras.findMany({
+      include: { ...nomColab, ...conPeriodo }, orderBy: [{ fecha: 'desc' }, { creadoEn: 'desc' }], take: LIMITE,
     }),
     // Solo los que se aplican a mano: los de cálculo SISTEMA los liquida el motor.
     prisma.conceptoNomina.findMany({ where: { activo: true, tipoCalculo: { not: 'SISTEMA' } }, orderBy: { nombre: 'asc' } }),
@@ -48,6 +54,8 @@ export default async function NovedadesNominaPage({ searchParams }: { searchPara
 
   const nombre = (c: { colaborador: { nombres: string; apellidos: string } }) =>
     `${c.colaborador.nombres} ${c.colaborador.apellidos}`
+  // Lo que ya pagó un periodo cerrado no se cambia ni se borra: el botón lo dice.
+  const cerrado = (p: { estado: string } | null) => !!p && (p.estado === 'CERRADA' || p.estado === 'PAGADA')
 
   return (
     <div className="max-w-6xl">
@@ -64,15 +72,23 @@ export default async function NovedadesNominaPage({ searchParams }: { searchPara
           valorFijo: c.valorFijo != null ? Number(c.valorFijo) : null,
         }))}
         comisiones={comisiones.map((c) => ({
-          id: c.id, colaborador: nombre(c), fecha: formatFechaISO(c.fecha), tipo: c.tipo,
+          id: c.id, colaborador: nombre(c), colaboradorId: c.colaboradorId, fecha: formatFechaISO(c.fecha), tipo: c.tipo,
           baseCalculo: Number(c.baseCalculo), valor: Number(c.valor),
-          descripcion: c.descripcion, pagadaEn: c.periodo?.nombre ?? null,
+          descripcion: c.descripcion, pagadaEn: c.periodo?.nombre ?? null, periodoCerrado: cerrado(c.periodo),
         }))}
         conceptosNovedades={novedadesConcepto.map((n) => ({
-          id: n.id, colaborador: nombre(n), fecha: formatFechaISO(n.fecha),
-          concepto: n.concepto.nombre, tipo: n.concepto.tipo, valor: Number(n.valor),
-          pagadaEn: n.periodo?.nombre ?? null,
+          id: n.id, colaborador: nombre(n), colaboradorId: n.colaboradorId, fecha: formatFechaISO(n.fecha),
+          conceptoId: n.conceptoId, concepto: n.concepto.nombre, tipo: n.concepto.tipo, valor: Number(n.valor),
+          observaciones: n.observaciones, pagadaEn: n.periodo?.nombre ?? null, periodoCerrado: cerrado(n.periodo),
         }))}
+        horas={novedadesHoras.map((h) => ({
+          id: h.id, colaborador: nombre(h), colaboradorId: h.colaboradorId, fecha: formatFechaISO(h.fecha),
+          horaInicio: h.horaInicio, horaFin: h.horaFin, tipoHora: h.tipoHora, horas: Number(h.horas),
+          observaciones: h.observaciones, deAsistencia: !!h.referenciaExterna,
+          pagadaEn: h.periodo?.nombre ?? null, periodoCerrado: cerrado(h.periodo),
+        }))}
+        puedeEditar={puedeEditar}
+        puedeEliminar={puedeEliminar}
         asistencia={{ conectada: Boolean(conexion), apagada: horasApagadas, url: conexion ? `${conexion.url}/admin?tab=equipo` : null }}
         esAdmin={esAdministrador(usuario)}
         // Horas extra primero: es lo que más se consulta aquí.

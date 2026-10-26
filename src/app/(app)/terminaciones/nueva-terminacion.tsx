@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus } from 'lucide-react'
+import { Plus, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,7 +12,23 @@ import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
-import { crearTerminacion, listarProcesosCerrados } from './acciones'
+import { crearTerminacion, editarTerminacion, listarProcesosCerrados } from './acciones'
+
+/** Lo que se precarga al editar el registro de una terminación. */
+export type TerminacionInicial = {
+  id: string
+  tipo: string
+  /** yyyy-mm-dd */
+  fechaRetiro: string
+  preavisoDias: number | null
+  motivo: string | null
+  procesoDisciplinarioId: string | null
+  /** Viene de una renuncia presentada en la app: el tipo no se cambia. */
+  desdeRenuncia: boolean
+  cerrada: boolean
+}
+
+const Obl = () => <span className="text-destructive"> *</span>
 
 const TIPOS = [
   { v: 'RENUNCIA_VOLUNTARIA', l: 'Renuncia voluntaria' },
@@ -31,22 +47,26 @@ const TIPOS = [
  *   elegida, para no obligar a buscarla de nuevo en la lista.
  * @param renuncia - llega de una renuncia presentada en la app (`?renuncia=`):
  *   el diálogo abre con la persona, el último día y el motivo que escribió.
+ * @param inicial - el mismo diálogo, precargado, para corregir el registro de
+ *   una terminación ya creada (tipo, fecha de retiro, preaviso, motivo). El
+ *   botón pasa a ser un lápiz y `colaboradorInicial` debe traer a la persona.
  */
-export function NuevaTerminacion({ colaboradorInicial, renuncia }: {
+export function NuevaTerminacion({ colaboradorInicial, renuncia, inicial }: {
   colaboradorInicial?: string
   renuncia?: { id: string; colaboradorId: string; nombre: string; fechaRetiro: string; motivo: string } | null
+  inicial?: TerminacionInicial
 }) {
   const router = useRouter()
-  const [abierto, setAbierto] = useState(Boolean(colaboradorInicial || renuncia))
+  const [abierto, setAbierto] = useState(!inicial && Boolean(colaboradorInicial || renuncia))
   const [colaboradorId, setColaboradorId] = useState(renuncia?.colaboradorId ?? colaboradorInicial ?? '')
-  const [tipo, setTipo] = useState('RENUNCIA_VOLUNTARIA')
-  const [fechaRetiro, setFechaRetiro] = useState(renuncia?.fechaRetiro ?? new Date().toISOString().slice(0, 10))
-  const [preavisoDias, setPreavisoDias] = useState('')
-  const [motivo, setMotivo] = useState(renuncia?.motivo ?? '')
+  const [tipo, setTipo] = useState(inicial?.tipo ?? 'RENUNCIA_VOLUNTARIA')
+  const [fechaRetiro, setFechaRetiro] = useState(inicial?.fechaRetiro ?? renuncia?.fechaRetiro ?? new Date().toISOString().slice(0, 10))
+  const [preavisoDias, setPreavisoDias] = useState(inicial?.preavisoDias != null ? String(inicial.preavisoDias) : '')
+  const [motivo, setMotivo] = useState(inicial?.motivo ?? renuncia?.motivo ?? '')
   const [g, setG] = useState(false)
   // Justa causa: proceso disciplinario cerrado que la sustenta (debido proceso)
   const [procesos, setProcesos] = useState<{ id: string; asunto: string; fecha: string; decision: string | null }[] | null>(null)
-  const [procesoId, setProcesoId] = useState('')
+  const [procesoId, setProcesoId] = useState(inicial?.procesoDisciplinarioId ?? '')
 
   async function cargarProcesos(colabId: string) {
     setProcesos(null); setProcesoId('')
@@ -75,7 +95,24 @@ export function NuevaTerminacion({ colaboradorInicial, renuncia }: {
       toast.error('Selecciona el proceso disciplinario cerrado que sustenta la justa causa (debido proceso).')
       return
     }
+    if (!fechaRetiro) { toast.error('Indica la fecha de retiro.'); return }
     setG(true)
+    if (inicial) {
+      const res = await editarTerminacion({
+        id: inicial.id, tipo: tipo as 'RENUNCIA_VOLUNTARIA', fechaRetiro,
+        preavisoDias: preavisoDias ? Number(preavisoDias) : undefined, motivo,
+        procesoDisciplinarioId: tipo === 'CON_JUSTA_CAUSA' ? procesoId : undefined,
+      })
+      setG(false)
+      if (res.ok) {
+        if (res.datos.rehacerLiquidacion) {
+          toast.warning('Terminación actualizada. Cambió la fecha de retiro o el tipo: rehaz el cálculo de la liquidación en el paso «Liquidación».', { duration: 10000 })
+        } else toast.success('Terminación actualizada.')
+        setAbierto(false)
+        router.refresh()
+      } else toast.error(res.error, { duration: 8000 })
+      return
+    }
     const res = await crearTerminacion({
       colaboradorId, tipo: tipo as 'RENUNCIA_VOLUNTARIA', fechaRetiro,
       preavisoDias: preavisoDias ? Number(preavisoDias) : undefined, motivo,
@@ -93,29 +130,46 @@ export function NuevaTerminacion({ colaboradorInicial, renuncia }: {
     else toast.error(res.error)
   }
 
+  const bloqueoEdicion = inicial?.cerrada ? 'La terminación ya está cerrada: no se modifica. Si hay un error, corrígelo por nota contable.' : null
+
   return (
     <>
-      <Button size="sm" onClick={() => setAbierto(true)}><Plus className="size-4" /> Registrar terminación</Button>
+      {inicial ? (
+        <Button
+          size="icon" variant="outline" aria-label="Editar terminación" title={bloqueoEdicion ?? 'Editar terminación'}
+          className={bloqueoEdicion ? 'opacity-60' : undefined}
+          onClick={() => (bloqueoEdicion ? toast.error(bloqueoEdicion, { duration: 8000 }) : setAbierto(true))}
+        >
+          <Pencil className="size-4" />
+        </Button>
+      ) : (
+        <Button size="sm" onClick={() => setAbierto(true)}><Plus className="size-4" /> Registrar terminación</Button>
+      )}
       <Dialog open={abierto} onOpenChange={setAbierto}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Registrar terminación</DialogTitle>
-            <DialogDescription>Se generará el paz y salvo. La liquidación usará las nóminas anteriores; si faltan, podrás completar sus valores manualmente.</DialogDescription>
+            <DialogTitle>{inicial ? 'Editar terminación' : 'Registrar terminación'}</DialogTitle>
+            <DialogDescription>
+              {inicial
+                ? 'Corrige el registro. Si cambias la fecha de retiro o el tipo, después rehaz el cálculo de la liquidación: sus cifras no se actualizan solas.'
+                : 'Se generará el paz y salvo. La liquidación usará las nóminas anteriores; si faltan, podrás completar sus valores manualmente.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {renuncia ? (
               <p className="rounded-lg border bg-muted/50 p-3 text-sm">
                 <span className="font-medium">{renuncia.nombre}</span> presentó su renuncia en la app. Al registrarla, su carta firmada queda en la terminación.
               </p>
-            ) : (
-              <div className="space-y-1.5"><Label>Colaborador</Label><SelectorColaborador value={colaboradorId} onChange={(id) => { setColaboradorId(id); cargarProcesos(id) }} /></div>
+            ) : !inicial && (
+              <div className="space-y-1.5"><Label>Colaborador<Obl /></Label><SelectorColaborador value={colaboradorId} onChange={(id) => { setColaboradorId(id); cargarProcesos(id) }} /></div>
             )}
             <div className={renuncia ? 'hidden' : 'space-y-1.5'}>
-              <Label>Tipo de terminación</Label>
-              <Select value={tipo} onValueChange={setTipo}>
+              <Label>Tipo de terminación<Obl /></Label>
+              <Select value={tipo} onValueChange={setTipo} disabled={inicial?.desdeRenuncia}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>{TIPOS.map((t) => <SelectItem key={t.v} value={t.v}>{t.l}</SelectItem>)}</SelectContent>
               </Select>
+              {inicial?.desdeRenuncia && <p className="text-xs text-muted-foreground">Viene de una renuncia presentada en la app: el tipo no se cambia.</p>}
             </div>
 
             {tipo === 'CON_JUSTA_CAUSA' && (
@@ -142,14 +196,14 @@ export function NuevaTerminacion({ colaboradorInicial, renuncia }: {
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label>Fecha de retiro</Label><Input type="date" value={fechaRetiro} onChange={(e) => setFechaRetiro(e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Preaviso (días)</Label><Input type="number" value={preavisoDias} onChange={(e) => setPreavisoDias(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Fecha de retiro<Obl /></Label><Input type="date" value={fechaRetiro} onChange={(e) => setFechaRetiro(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Preaviso (días)</Label><Input type="number" min={0} value={preavisoDias} onChange={(e) => setPreavisoDias(e.target.value)} /></div>
             </div>
             <div className="space-y-1.5"><Label>Motivo / observaciones</Label><Textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} /></div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAbierto(false)}>Cancelar</Button>
-            <Button onClick={crear} disabled={g}>{g && <Spinner />}Registrar</Button>
+            <Button onClick={crear} disabled={g}>{g && <Spinner />}{inicial ? 'Guardar cambios' : 'Registrar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

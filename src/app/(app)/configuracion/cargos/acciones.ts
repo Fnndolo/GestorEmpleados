@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { Prisma } from '@/generated/prisma/client'
-import { dbAuditado } from '@/lib/auditoria'
-import { accion } from '@/server/accion'
+import { prisma } from '@/lib/db'
+import { dbAuditado, auditar } from '@/lib/auditoria'
+import { accion, ErrorNegocio } from '@/server/accion'
 import { cargoSchema, type CargoInput } from '@/lib/validaciones/catalogos'
 
 function datosCargo(d: CargoInput) {
@@ -53,6 +54,32 @@ export const alternarCargo = accion(
     revalidatePath('/configuracion/cargos')
     // Los cargos alimentan los selectores de la ficha del colaborador y del
     // contrato: sin esto, uno recién creado no aparece hasta recargar a mano.
+    revalidatePath('/', 'layout')
+    return { ok: true }
+  },
+)
+
+/**
+ * Borra un cargo creado por error, con el motivo (queda en auditoría). Solo si
+ * nadie lo tiene: con colaboradores o contratos el camino es desactivarlo.
+ */
+export const eliminarCargo = accion(
+  { modulo: 'configuracion', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: z.string().trim().min(5, 'Explica por qué se elimina.').max(300) }) },
+  async ({ id, motivo }) => {
+    const cargo = await prisma.cargo.findUniqueOrThrow({
+      where: { id },
+      include: { _count: { select: { colaboradores: true, contratos: true, contratosOps: true, acuerdosEvaluacion: true } } },
+    })
+    const c = cargo._count
+    const usos = [
+      c.colaboradores > 0 ? `${c.colaboradores} colaborador(es)` : null,
+      c.contratos + c.contratosOps > 0 ? `${c.contratos + c.contratosOps} contrato(s)` : null,
+      c.acuerdosEvaluacion > 0 ? `${c.acuerdosEvaluacion} acuerdo(s) de evaluación` : null,
+    ].filter(Boolean)
+    if (usos.length) throw new ErrorNegocio(`No se puede eliminar: el cargo tiene ${usos.join(', ')}. Desactívalo en su lugar.`)
+    await dbAuditado.cargo.delete({ where: { id } })
+    await auditar('ELIMINAR', 'Cargo', { registroId: id, descripcion: `Anulado: ${motivo}` })
+    revalidatePath('/configuracion/cargos')
     revalidatePath('/', 'layout')
     return { ok: true }
   },

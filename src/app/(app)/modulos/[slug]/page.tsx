@@ -22,6 +22,7 @@ export default async function ModuloPage({ params }: { params: Promise<{ slug: s
 
   // Permiso: módulos personalizados visibles para quien pueda ver configuración o el custom permiso
   const puedeEditar = tienePermiso(usuario, 'configuracion', 'EDITAR') || tienePermiso(usuario, `custom:${slug}`, 'CREAR')
+  const puedeEliminar = tienePermiso(usuario, 'configuracion', 'ELIMINAR') || tienePermiso(usuario, `custom:${slug}`, 'ELIMINAR')
 
   return (
     <div className="max-w-6xl">
@@ -32,6 +33,7 @@ export default async function ModuloPage({ params }: { params: Promise<{ slug: s
         campos={modulo.campos.map((c) => ({ clave: c.clave, etiqueta: c.etiqueta, tipo: c.tipo, requerido: c.requerido, opciones: c.opciones, mostrarEnTabla: c.mostrarEnTabla }))}
         registros={modulo.registros.map((r) => ({ id: r.id, datos: r.datos as Record<string, unknown> }))}
         puedeEditar={puedeEditar}
+        puedeEliminar={puedeEliminar}
       />
     </div>
   )

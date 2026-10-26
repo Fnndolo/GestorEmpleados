@@ -12,8 +12,18 @@ import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { borrarPdfTemporal, extensionDe, obtenerArchivoAdjunto, obtenerPdfAdjunto } from '@/server/archivos-temporales'
 import { esComprimido } from '@/lib/archivos'
-import { contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema, subirContratoLaboralSchema, subirContratoLaboralParaFirmaSchema, corregirPosicionFirmaLaboralSchema, type SubirContratoLaboralInput } from '@/lib/validaciones/contrato'
+import {
+  contratoSchema, prorrogaSchema, otrosiSchema, suspensionSchema, subirContratoLaboralSchema, subirContratoLaboralParaFirmaSchema, corregirPosicionFirmaLaboralSchema,
+  anulacionContratoSchema, editarProrrogaSchema, editarOtrosiSchema, editarSuspensionSchema, editarVariacionSalarialSchema,
+  type SubirContratoLaboralInput, type OtrosiInput, type EditarOtrosiInput,
+} from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
+import { auditar } from '@/lib/auditoria'
+import { exigirNoLiquidadaEnNominaCerrada } from '@/server/incapacidades'
+import {
+  FECHA_LEJANA, menorFecha, mayorFechaOAbierta, fechaFinTrasAnularProrroga, sigueSuspendido, esVariacionMasReciente, numeroOtrosiDeMotivo,
+} from '@/server/contratos-modificaciones'
+import { fechaBreve } from '@/lib/notificaciones/texto'
 import { pdfAdjuntoCampos } from '@/lib/validaciones/pdf-adjunto'
 import { publicarVencimiento, resolverVencimiento, cancelarVencimiento } from '@/server/vencimientos/servicio'
 import { eliminarDocumento } from '@/server/documentos'
@@ -842,6 +852,65 @@ export const agregarProrroga = accion(
   },
 )
 
+type ContratoParaOtrosi = {
+  salarioBase: { toString(): string } | number
+  modalidadTrabajo: string
+  fechaInicio: Date
+  fechaFin: Date | null
+  cargo: { nombre: string } | null
+  sede: { nombre: string }
+}
+type CambiosOtrosi = Pick<OtrosiInput | EditarOtrosiInput, 'tiposCambio' | 'salarioNuevo' | 'cargoNuevoId' | 'sedeNuevaId' | 'modalidadNueva' | 'fechaInicioNueva' | 'fechaFinNueva'>
+
+/**
+ * Lo que un otrosí cambia en el contrato, a partir de lo marcado en pantalla:
+ * los valores de antes y de después (cargo y sede por nombre, para que el
+ * resumen se lea sin consultar nada) y los `update` del contrato y de la ficha.
+ * Lo comparten el alta y la corrección del otrosí.
+ */
+async function calcularCambiosOtrosi(contrato: ContratoParaOtrosi, d: CambiosOtrosi, cambiaDuracion: boolean) {
+  const antes: ValoresOtrosi = {}
+  const despues: ValoresOtrosi = {}
+  const updateContrato: Record<string, unknown> = {}
+  const updateColab: Record<string, unknown> = {}
+
+  if (d.tiposCambio.includes('SALARIO') && d.salarioNuevo != null) {
+    antes.salario = Number(contrato.salarioBase)
+    despues.salario = d.salarioNuevo
+    updateContrato.salarioBase = d.salarioNuevo
+  }
+  if (d.tiposCambio.includes('CARGO') && v(d.cargoNuevoId)) {
+    const cargo = await prisma.cargo.findUnique({ where: { id: d.cargoNuevoId! }, select: { nombre: true } })
+    if (contrato.cargo) antes.cargo = contrato.cargo.nombre
+    if (cargo) despues.cargo = cargo.nombre
+    updateContrato.cargoId = d.cargoNuevoId
+    updateColab.cargoId = d.cargoNuevoId
+  }
+  if (d.tiposCambio.includes('SEDE') && v(d.sedeNuevaId)) {
+    const sede = await prisma.sede.findUnique({ where: { id: d.sedeNuevaId! }, select: { nombre: true } })
+    antes.sede = contrato.sede.nombre
+    if (sede) despues.sede = sede.nombre
+    updateContrato.sedeId = d.sedeNuevaId
+    updateColab.sedeId = d.sedeNuevaId
+  }
+  if (d.tiposCambio.includes('MODALIDAD_TRABAJO') && v(d.modalidadNueva)) {
+    antes.modalidad = contrato.modalidadTrabajo
+    despues.modalidad = d.modalidadNueva as string
+    updateContrato.modalidadTrabajo = d.modalidadNueva
+    updateColab.modalidadTrabajo = d.modalidadNueva
+  }
+  if (cambiaDuracion) {
+    // El nuevo periodo pactado. La fecha de inicio del contrato no se toca: es
+    // histórica; lo que cambia es hasta cuándo va, y eso mueve las alertas.
+    antes.fechaInicio = formatFechaISO(contrato.fechaInicio)
+    if (contrato.fechaFin) antes.fechaFin = formatFechaISO(contrato.fechaFin)
+    despues.fechaInicio = d.fechaInicioNueva as string
+    despues.fechaFin = d.fechaFinNueva as string
+    updateContrato.fechaFin = parseFechaISO(d.fechaFinNueva)
+  }
+  return { antes, despues, updateContrato, updateColab }
+}
+
 export const agregarOtrosi = accion(
   { modulo: 'contratos', accion: 'EDITAR', schema: otrosiSchema },
   async (d, usuario) => {
@@ -871,54 +940,17 @@ export const agregarOtrosi = accion(
     const fechaOtrosi = cambiaDuracion
       ? parseFechaISO(d.fechaInicioNueva)!
       : (parseFechaISO(v(d.fecha)) ?? hoyBogota())
-    // Cargo y sede se guardan por nombre: el resumen se lee sin consultar nada.
-    const antes: ValoresOtrosi = {}
-    const despues: ValoresOtrosi = {}
-    const updateContrato: Record<string, unknown> = {}
-    const updateColab: Record<string, unknown> = {}
-
-    if (d.tiposCambio.includes('SALARIO') && d.salarioNuevo != null) {
-      antes.salario = Number(contrato.salarioBase)
-      despues.salario = d.salarioNuevo
-      updateContrato.salarioBase = d.salarioNuevo
+    const { antes, despues, updateContrato, updateColab } = await calcularCambiosOtrosi(contrato, d, cambiaDuracion)
+    if (despues.salario != null) {
       await prisma.variacionSalarial.create({
         data: {
           colaboradorId: contrato.colaboradorId,
           salarioAnterior: contrato.salarioBase,
-          salarioNuevo: d.salarioNuevo,
+          salarioNuevo: despues.salario,
           fechaVigencia: fechaOtrosi,
           motivo: `Otrosí ${numero}`,
         },
       })
-    }
-    if (d.tiposCambio.includes('CARGO') && v(d.cargoNuevoId)) {
-      const cargo = await prisma.cargo.findUnique({ where: { id: d.cargoNuevoId! }, select: { nombre: true } })
-      if (contrato.cargo) antes.cargo = contrato.cargo.nombre
-      if (cargo) despues.cargo = cargo.nombre
-      updateContrato.cargoId = d.cargoNuevoId
-      updateColab.cargoId = d.cargoNuevoId
-    }
-    if (d.tiposCambio.includes('SEDE') && v(d.sedeNuevaId)) {
-      const sede = await prisma.sede.findUnique({ where: { id: d.sedeNuevaId! }, select: { nombre: true } })
-      antes.sede = contrato.sede.nombre
-      if (sede) despues.sede = sede.nombre
-      updateContrato.sedeId = d.sedeNuevaId
-      updateColab.sedeId = d.sedeNuevaId
-    }
-    if (d.tiposCambio.includes('MODALIDAD_TRABAJO') && v(d.modalidadNueva)) {
-      antes.modalidad = contrato.modalidadTrabajo
-      despues.modalidad = d.modalidadNueva as string
-      updateContrato.modalidadTrabajo = d.modalidadNueva
-      updateColab.modalidadTrabajo = d.modalidadNueva
-    }
-    if (cambiaDuracion) {
-      // El nuevo periodo pactado. La fecha de inicio del contrato no se toca: es
-      // histórica; lo que cambia es hasta cuándo va, y eso mueve las alertas.
-      antes.fechaInicio = formatFechaISO(contrato.fechaInicio)
-      if (contrato.fechaFin) antes.fechaFin = formatFechaISO(contrato.fechaFin)
-      despues.fechaInicio = d.fechaInicioNueva as string
-      despues.fechaFin = d.fechaFinNueva as string
-      updateContrato.fechaFin = parseFechaISO(d.fechaFinNueva)
     }
 
     const otrosi = await dbAuditado.otrosiContrato.create({
@@ -1065,5 +1097,384 @@ export const reactivarContrato = accion(
   async ({ id }) => {
     await dbAuditado.contrato.update({ where: { id }, data: { estado: 'ACTIVO' } })
     revalidatePath(`/contratos/${id}`)
+  },
+)
+
+// ——— Corregir y anular las modificaciones del contrato ———
+
+/** Resumen "del 01/07/2026 al 31/12/2026" para avisos y auditoría. */
+function rango(ini: Date, fin: Date | null) {
+  return fin ? `del ${fechaBreve(ini)} al ${fechaBreve(fin)}` : `desde el ${fechaBreve(ini)}`
+}
+
+/**
+ * Deshace en el contrato y en la ficha lo que un otrosí había cambiado, con lo
+ * guardado en `valoresAnteriores`. Cargo y sede se guardaron por nombre, así que
+ * se buscan por nombre; si ya no existen, ese campo se deja como está.
+ */
+async function revertirValoresOtrosi(
+  contrato: { id: string; colaboradorId: string },
+  tipos: readonly string[],
+  antes: ValoresOtrosi,
+): Promise<void> {
+  const updateContrato: Record<string, unknown> = {}
+  const updateColab: Record<string, unknown> = {}
+  if (tipos.includes('SALARIO') && antes.salario != null) updateContrato.salarioBase = antes.salario
+  if (tipos.includes('CARGO') && antes.cargo !== undefined) {
+    const cargo = await prisma.cargo.findFirst({ where: { nombre: antes.cargo }, select: { id: true } })
+    if (cargo) { updateContrato.cargoId = cargo.id; updateColab.cargoId = cargo.id }
+  }
+  if (tipos.includes('SEDE') && antes.sede !== undefined) {
+    const sede = await prisma.sede.findFirst({ where: { nombre: antes.sede }, select: { id: true } })
+    if (sede) { updateContrato.sedeId = sede.id; updateColab.sedeId = sede.id }
+  }
+  if (tipos.includes('MODALIDAD_TRABAJO') && antes.modalidad) {
+    updateContrato.modalidadTrabajo = antes.modalidad
+    updateColab.modalidadTrabajo = antes.modalidad
+  }
+  if (tipos.includes('DURACION') && antes.fechaInicio !== undefined) {
+    // Si antes no había fecha de fin (indefinido), vuelve a quedar sin ella.
+    updateContrato.fechaFin = antes.fechaFin ? parseFechaISO(antes.fechaFin) : null
+  }
+  if (Object.keys(updateContrato).length) await dbAuditado.contrato.update({ where: { id: contrato.id }, data: updateContrato })
+  if (Object.keys(updateColab).length) await dbAuditado.colaborador.update({ where: { id: contrato.colaboradorId }, data: updateColab })
+}
+
+/** Avisa al trabajador de un cambio en algo que estaba por firmar o que ya contaba. */
+async function avisarCambioContrato(colaboradorId: string, titulo: string, mensaje: string) {
+  const uid = await usuarioDeColaborador(colaboradorId)
+  if (!uid) return
+  await avisar(uid, { evento: 'contrato_actualizado', titulo, mensaje, enlace: '/autoservicio/contratos', llamadoAccion: 'Ver mis contratos' }).catch(() => {})
+}
+
+/**
+ * Corregir las fechas de una prórroga. Si una nómina cerrada ya corrió sobre
+ * fechas posteriores a su inicio, contó con este periodo: no se toca. Cuando
+ * es la prórroga más reciente, el contrato se mueve con ella.
+ */
+export const editarProrroga = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: editarProrrogaSchema },
+  async (d) => {
+    const p = await prisma.prorrogaContrato.findUniqueOrThrow({
+      where: { id: d.id },
+      include: { contrato: { select: { id: true, colaboradorId: true, prorrogas: { select: { numero: true } } } } },
+    })
+    const inicio = parseFechaISO(d.fechaInicio)!, fin = parseFechaISO(d.fechaFin)!
+    if (fin < inicio) throw new ErrorNegocio('La fecha de fin debe ser igual o posterior a la de inicio.')
+    const cambiaFechas = p.fechaInicio.getTime() !== inicio.getTime() || p.fechaFin.getTime() !== fin.getTime()
+    if (cambiaFechas) {
+      await exigirNoLiquidadaEnNominaCerrada(
+        { colaboradorId: p.contrato.colaboradorId, fechaInicio: menorFecha(p.fechaInicio, inicio), fechaFin: FECHA_LEJANA },
+        `La prórroga ${p.numero}`,
+      )
+    }
+    await dbAuditado.prorrogaContrato.update({
+      where: { id: p.id },
+      data: { fechaInicio: inicio, fechaFin: fin, fechaFirma: parseFechaISO(v(d.fechaFirma)) },
+    })
+    const esUltima = p.numero === Math.max(...p.contrato.prorrogas.map((x) => x.numero))
+    if (esUltima && cambiaFechas) {
+      await dbAuditado.contrato.update({ where: { id: p.contrato.id }, data: { fechaFin: fin } })
+      await publicarVencimientosContrato(p.contrato.id)
+    }
+    revalidatePath(`/contratos/${p.contrato.id}`)
+    revalidatePath('/contratos')
+    return { ok: true }
+  },
+)
+
+/**
+ * Anular una prórroga registrada por error. Solo la más reciente: las anteriores
+ * ya quedaron absorbidas por las que siguieron. El contrato vuelve a la fecha de
+ * fin que tenía (ver `fechaFinTrasAnularProrroga`), y se borra su PDF.
+ */
+export const anularProrroga = accion(
+  { modulo: 'contratos', accion: 'ELIMINAR', schema: anulacionContratoSchema },
+  async (d) => {
+    const p = await prisma.prorrogaContrato.findUniqueOrThrow({
+      where: { id: d.id },
+      include: { contrato: { select: { id: true, numero: true, colaboradorId: true, prorrogas: { select: { numero: true, fechaFin: true }, orderBy: { numero: 'asc' } } } } },
+    })
+    const ultima = p.contrato.prorrogas[p.contrato.prorrogas.length - 1]
+    if (ultima.numero !== p.numero) {
+      throw new ErrorNegocio(`Solo se anula la prórroga más reciente (la ${ultima.numero}): las anteriores ya quedaron cubiertas por las que siguieron.`)
+    }
+    await exigirNoLiquidadaEnNominaCerrada(
+      { colaboradorId: p.contrato.colaboradorId, fechaInicio: p.fechaInicio, fechaFin: FECHA_LEJANA },
+      `La prórroga ${p.numero}`,
+    )
+    const previa = p.contrato.prorrogas.find((x) => x.numero === p.numero - 1) ?? null
+    const fechaFin = fechaFinTrasAnularProrroga(p, previa)
+
+    if (p.documentoId) await eliminarDocumento(p.documentoId).catch(() => {})
+    await dbAuditado.prorrogaContrato.delete({ where: { id: p.id } })
+    await auditar('ELIMINAR', 'ProrrogaContrato', { registroId: p.id, descripcion: `Anulado: ${d.motivo}` })
+    await dbAuditado.contrato.update({ where: { id: p.contrato.id }, data: { fechaFin } })
+    await publicarVencimientosContrato(p.contrato.id)
+
+    revalidatePath(`/contratos/${p.contrato.id}`)
+    revalidatePath('/contratos')
+    return { ok: true }
+  },
+)
+
+/**
+ * Corregir un otrosí que el trabajador todavía no firmó: fecha, descripción y lo
+ * pactado. Lo pactado solo se cambia en el otrosí más reciente (los anteriores
+ * ya fueron pisados por los que siguieron); el PDF no se cambia aquí: si está
+ * mal, se anula el otrosí y se registra de nuevo. El trabajador recibe aviso
+ * porque lo tenía pendiente de firma.
+ */
+export const editarOtrosi = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: editarOtrosiSchema },
+  async (d) => {
+    const o = await prisma.otrosiContrato.findUniqueOrThrow({
+      where: { id: d.id },
+      include: {
+        contrato: { include: { otrosis: { select: { numero: true } }, cargo: { select: { nombre: true } }, sede: { select: { nombre: true } } } },
+      },
+    })
+    if (o.firmaEmpleadoPath) throw new ErrorNegocio(`El otrosí ${o.numero} ya está firmado por el trabajador: no se puede cambiar ni anular.`)
+    const contrato = o.contrato
+    const esUltimo = o.numero === Math.max(...contrato.otrosis.map((x) => x.numero))
+
+    const cambiaDuracion = d.tiposCambio.includes('DURACION') && !!v(d.fechaInicioNueva) && !!v(d.fechaFinNueva)
+    const fechaNueva = cambiaDuracion ? parseFechaISO(d.fechaInicioNueva)! : (parseFechaISO(v(d.fecha)) ?? o.fecha)
+    const antesGuardado = (o.valoresAnteriores as ValoresOtrosi | null) ?? {}
+    const despuesGuardado = (o.valoresNuevos as ValoresOtrosi | null) ?? {}
+
+    // Lo pactado cambia si cambian los tipos o alguno de sus valores.
+    const previo = await calcularCambiosOtrosi(contrato, d, cambiaDuracion)
+    const estable = (x: ValoresOtrosi) => JSON.stringify(x, Object.keys(x).sort())
+    const tiposIguales = [...o.tiposCambio].sort().join() === [...d.tiposCambio].sort().join()
+    const cambiaPactado = !tiposIguales || estable(previo.despues) !== estable(despuesGuardado)
+    if (cambiaPactado && !esUltimo) {
+      throw new ErrorNegocio(`Solo el otrosí más reciente puede cambiar lo pactado; en el otrosí ${o.numero} solo se corrige la fecha y la descripción.`)
+    }
+    const cambiaFecha = fechaNueva.getTime() !== o.fecha.getTime()
+    if ((cambiaFecha || cambiaPactado) && (o.tiposCambio.includes('SALARIO') || d.tiposCambio.includes('SALARIO'))) {
+      await exigirNoLiquidadaEnNominaCerrada(
+        { colaboradorId: contrato.colaboradorId, fechaInicio: menorFecha(o.fecha, fechaNueva), fechaFin: FECHA_LEJANA },
+        `El otrosí ${o.numero}`,
+      )
+    }
+
+    let antes: ValoresOtrosi = antesGuardado
+    let despues: ValoresOtrosi = despuesGuardado
+    if (cambiaPactado) {
+      // Primero se deshace lo que el otrosí había puesto (vuelve al "antes"
+      // guardado) y luego se aplica lo nuevo sobre ese estado.
+      await revertirValoresOtrosi(contrato, o.tiposCambio, antesGuardado)
+      const base = await prisma.contrato.findUniqueOrThrow({
+        where: { id: contrato.id },
+        include: { cargo: { select: { nombre: true } }, sede: { select: { nombre: true } } },
+      })
+      const calc = await calcularCambiosOtrosi(base, d, cambiaDuracion)
+      antes = calc.antes
+      despues = calc.despues
+      if (Object.keys(calc.updateContrato).length) await dbAuditado.contrato.update({ where: { id: contrato.id }, data: calc.updateContrato })
+      if (Object.keys(calc.updateColab).length) await dbAuditado.colaborador.update({ where: { id: contrato.colaboradorId }, data: calc.updateColab })
+    }
+
+    // La variación salarial que dejó el otrosí sigue al otrosí.
+    const variacion = await prisma.variacionSalarial.findFirst({ where: { colaboradorId: contrato.colaboradorId, motivo: `Otrosí ${o.numero}` } })
+    if (despues.salario != null) {
+      const datos = { salarioAnterior: antes.salario ?? Number(contrato.salarioBase), salarioNuevo: despues.salario, fechaVigencia: fechaNueva }
+      if (variacion) await dbAuditado.variacionSalarial.update({ where: { id: variacion.id }, data: datos })
+      else await dbAuditado.variacionSalarial.create({ data: { colaboradorId: contrato.colaboradorId, motivo: `Otrosí ${o.numero}`, ...datos } })
+    } else if (variacion) {
+      await dbAuditado.variacionSalarial.delete({ where: { id: variacion.id } })
+    }
+
+    await dbAuditado.otrosiContrato.update({
+      where: { id: o.id },
+      data: {
+        fecha: fechaNueva,
+        descripcion: v(d.descripcion),
+        tiposCambio: d.tiposCambio,
+        valoresAnteriores: Object.keys(antes).length ? antes : undefined,
+        valoresNuevos: Object.keys(despues).length ? despues : undefined,
+      },
+    })
+    if (cambiaPactado && (o.tiposCambio.includes('DURACION') || d.tiposCambio.includes('DURACION'))) await publicarVencimientosContrato(contrato.id)
+
+    if (o.requiereFirma) {
+      await avisarCambioContrato(contrato.colaboradorId, `El otrosí ${o.numero} de tu contrato ${contrato.numero} cambió antes de tu firma`, resumenOtrosi(d.tiposCambio, despues) || 'Revisa la versión nueva en tu autoservicio.')
+    }
+    revalidatePath(`/contratos/${contrato.id}`)
+    revalidatePath(`/colaboradores/${contrato.colaboradorId}`)
+    revalidatePath('/autoservicio/contratos')
+    return { ok: true }
+  },
+)
+
+/**
+ * Anular un otrosí que el trabajador no ha firmado. Solo el más reciente, para
+ * que al deshacer sus valores el contrato quede como estaba. Se lleva sus PDF
+ * (subido y, si lo hubo, estampado) y la variación salarial que creó, y
+ * restaura el salario, cargo, sede, modalidad y fecha de fin anteriores.
+ */
+export const anularOtrosi = accion(
+  { modulo: 'contratos', accion: 'ELIMINAR', schema: anulacionContratoSchema },
+  async (d) => {
+    const o = await prisma.otrosiContrato.findUniqueOrThrow({
+      where: { id: d.id },
+      include: { contrato: { select: { id: true, numero: true, colaboradorId: true, otrosis: { select: { numero: true } } } } },
+    })
+    if (o.firmaEmpleadoPath) throw new ErrorNegocio(`El otrosí ${o.numero} ya está firmado por el trabajador: no se puede cambiar ni anular.`)
+    const ultimo = Math.max(...o.contrato.otrosis.map((x) => x.numero))
+    if (o.numero !== ultimo) {
+      throw new ErrorNegocio(`Solo se anula el otrosí más reciente (el ${ultimo}): los anteriores ya quedaron pisados por los que siguieron.`)
+    }
+    if (o.tiposCambio.includes('SALARIO')) {
+      await exigirNoLiquidadaEnNominaCerrada(
+        { colaboradorId: o.contrato.colaboradorId, fechaInicio: o.fecha, fechaFin: FECHA_LEJANA },
+        `El otrosí ${o.numero}`,
+      )
+    }
+
+    const antes = (o.valoresAnteriores as ValoresOtrosi | null) ?? {}
+    await revertirValoresOtrosi(o.contrato, o.tiposCambio, antes)
+    await dbAuditado.variacionSalarial.deleteMany({ where: { colaboradorId: o.contrato.colaboradorId, motivo: `Otrosí ${o.numero}` } })
+
+    const docs = await prisma.documento.findMany({ where: { entidadTipo: 'OtrosiContrato', entidadId: o.id }, select: { id: true } })
+    for (const doc of docs) await eliminarDocumento(doc.id).catch(() => {})
+    // Las evidencias de firma caen en cascada con el otrosí.
+    await dbAuditado.otrosiContrato.delete({ where: { id: o.id } })
+    await auditar('ELIMINAR', 'OtrosiContrato', { registroId: o.id, descripcion: `Anulado: ${d.motivo}` })
+    if (o.tiposCambio.includes('DURACION')) await publicarVencimientosContrato(o.contrato.id)
+
+    if (o.requiereFirma) {
+      await avisarCambioContrato(o.contrato.colaboradorId, `Se anuló el otrosí ${o.numero} de tu contrato ${o.contrato.numero}`, `Ya no tienes que firmarlo. Motivo: ${d.motivo}`)
+    }
+    revalidatePath(`/contratos/${o.contrato.id}`)
+    revalidatePath(`/colaboradores/${o.contrato.colaboradorId}`)
+    revalidatePath('/autoservicio/contratos')
+    return { ok: true }
+  },
+)
+
+/** Deja el estado del contrato acorde con las suspensiones que le quedan. */
+async function recalcularEstadoSuspension(contratoId: string) {
+  const c = await prisma.contrato.findUniqueOrThrow({ where: { id: contratoId }, select: { estado: true, suspensiones: { select: { fechaFin: true } } } })
+  if (c.estado !== 'ACTIVO' && c.estado !== 'SUSPENDIDO') return
+  const estado = sigueSuspendido(c.suspensiones, hoyBogota()) ? 'SUSPENDIDO' : 'ACTIVO'
+  if (estado !== c.estado) await dbAuditado.contrato.update({ where: { id: contratoId }, data: { estado } })
+}
+
+/**
+ * Corregir una suspensión (fechas, causa, descripción). Si una nómina cerrada ya
+ * descontó los días del periodo que cambia, no se toca.
+ */
+export const editarSuspension = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: editarSuspensionSchema },
+  async (d) => {
+    const s = await prisma.suspensionContrato.findUniqueOrThrow({ where: { id: d.id }, include: { contrato: { select: { id: true, colaboradorId: true } } } })
+    const inicio = parseFechaISO(d.fechaInicio)!, fin = parseFechaISO(v(d.fechaFin))
+    if (fin && fin < inicio) throw new ErrorNegocio('La fecha de fin debe ser igual o posterior a la de inicio.')
+    const cambiaFechas = s.fechaInicio.getTime() !== inicio.getTime() || (s.fechaFin?.getTime() ?? null) !== (fin?.getTime() ?? null)
+    if (cambiaFechas) {
+      await exigirNoLiquidadaEnNominaCerrada(
+        { colaboradorId: s.contrato.colaboradorId, fechaInicio: menorFecha(s.fechaInicio, inicio), fechaFin: mayorFechaOAbierta(s.fechaFin, fin) ?? FECHA_LEJANA },
+        'Esta suspensión',
+      )
+    }
+    await dbAuditado.suspensionContrato.update({
+      where: { id: s.id },
+      data: { fechaInicio: inicio, fechaFin: fin, causa: d.causa, descripcion: v(d.descripcion) },
+    })
+    await recalcularEstadoSuspension(s.contrato.id)
+    revalidatePath(`/contratos/${s.contrato.id}`)
+    revalidatePath('/contratos')
+    return { ok: true }
+  },
+)
+
+/** Anular una suspensión registrada por error; el contrato vuelve a ACTIVO si no le quedan suspensiones vigentes. */
+export const anularSuspension = accion(
+  { modulo: 'contratos', accion: 'ELIMINAR', schema: anulacionContratoSchema },
+  async (d) => {
+    const s = await prisma.suspensionContrato.findUniqueOrThrow({ where: { id: d.id }, include: { contrato: { select: { id: true, colaboradorId: true } } } })
+    await exigirNoLiquidadaEnNominaCerrada(
+      { colaboradorId: s.contrato.colaboradorId, fechaInicio: s.fechaInicio, fechaFin: s.fechaFin ?? FECHA_LEJANA },
+      'Esta suspensión',
+    )
+    await dbAuditado.suspensionContrato.delete({ where: { id: s.id } })
+    await auditar('ELIMINAR', 'SuspensionContrato', { registroId: s.id, descripcion: `Anulada (${rango(s.fechaInicio, s.fechaFin)}): ${d.motivo}` })
+    await recalcularEstadoSuspension(s.contrato.id)
+    revalidatePath(`/contratos/${s.contrato.id}`)
+    revalidatePath('/contratos')
+    return { ok: true }
+  },
+)
+
+/** El contrato laboral vigente del colaborador, que es el que lleva el salario. */
+async function contratoVigenteDe(colaboradorId: string) {
+  return prisma.contrato.findFirst({
+    where: { colaboradorId, estado: { in: ['ACTIVO', 'SUSPENDIDO'] } },
+    orderBy: { fechaInicio: 'desc' },
+    select: { id: true },
+  })
+}
+
+/**
+ * Corregir una variación salarial (valor, fecha, motivo). Si es la más reciente
+ * del colaborador, el salario del contrato vigente queda en el valor corregido.
+ * Las que nacieron de un otrosí se corrigen desde el otrosí, que es el documento.
+ */
+export const editarVariacionSalarial = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: editarVariacionSalarialSchema },
+  async (d) => {
+    const vs = await prisma.variacionSalarial.findUniqueOrThrow({ where: { id: d.id } })
+    const otrosi = numeroOtrosiDeMotivo(vs.motivo)
+    if (otrosi) throw new ErrorNegocio(`Esta variación nació del otrosí ${otrosi}: corrígela o anúlala desde el otrosí, en Modificaciones.`)
+    const fecha = parseFechaISO(d.fechaVigencia)!
+    const cambia = Number(vs.salarioNuevo) !== d.salarioNuevo || vs.fechaVigencia.getTime() !== fecha.getTime()
+    if (cambia) {
+      await exigirNoLiquidadaEnNominaCerrada(
+        { colaboradorId: vs.colaboradorId, fechaInicio: menorFecha(vs.fechaVigencia, fecha), fechaFin: FECHA_LEJANA },
+        'Esta variación salarial',
+      )
+    }
+    await dbAuditado.variacionSalarial.update({
+      where: { id: vs.id },
+      data: { salarioNuevo: d.salarioNuevo, fechaVigencia: fecha, motivo: v(d.motivo) },
+    })
+    const todas = await prisma.variacionSalarial.findMany({ where: { colaboradorId: vs.colaboradorId }, select: { id: true, fechaVigencia: true, creadoEn: true } })
+    if (cambia && esVariacionMasReciente(vs.id, todas)) {
+      const c = await contratoVigenteDe(vs.colaboradorId)
+      if (c) await dbAuditado.contrato.update({ where: { id: c.id }, data: { salarioBase: d.salarioNuevo } })
+    }
+    revalidatePath(`/colaboradores/${vs.colaboradorId}`)
+    revalidatePath('/contratos')
+    return { ok: true }
+  },
+)
+
+/**
+ * Eliminar una variación salarial registrada por error. Si era la más reciente,
+ * el contrato vigente vuelve al salario anterior de esa variación.
+ */
+export const eliminarVariacionSalarial = accion(
+  { modulo: 'contratos', accion: 'ELIMINAR', schema: anulacionContratoSchema },
+  async (d) => {
+    const vs = await prisma.variacionSalarial.findUniqueOrThrow({ where: { id: d.id } })
+    const otrosi = numeroOtrosiDeMotivo(vs.motivo)
+    if (otrosi) throw new ErrorNegocio(`Esta variación nació del otrosí ${otrosi}: anula el otrosí desde Modificaciones y la variación se va con él.`)
+    await exigirNoLiquidadaEnNominaCerrada(
+      { colaboradorId: vs.colaboradorId, fechaInicio: vs.fechaVigencia, fechaFin: FECHA_LEJANA },
+      'Esta variación salarial',
+    )
+    const todas = await prisma.variacionSalarial.findMany({ where: { colaboradorId: vs.colaboradorId }, select: { id: true, fechaVigencia: true, creadoEn: true } })
+    const eraLaVigente = esVariacionMasReciente(vs.id, todas)
+    await dbAuditado.variacionSalarial.delete({ where: { id: vs.id } })
+    await auditar('ELIMINAR', 'VariacionSalarial', { registroId: vs.id, descripcion: `Anulado: ${d.motivo}` })
+    if (eraLaVigente) {
+      const c = await contratoVigenteDe(vs.colaboradorId)
+      if (c) await dbAuditado.contrato.update({ where: { id: c.id }, data: { salarioBase: vs.salarioAnterior } })
+    }
+    revalidatePath(`/colaboradores/${vs.colaboradorId}`)
+    revalidatePath('/contratos')
+    return { ok: true }
   },
 )

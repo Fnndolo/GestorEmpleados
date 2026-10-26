@@ -12,7 +12,11 @@ export default async function SedesPage() {
 
   const [sedes, ciudades] = await Promise.all([
     prisma.sede.findMany({
-      include: { ciudad: true },
+      include: {
+        ciudad: true,
+        // Lo que estorba para borrarla: la papelera lo explica sin tener que hacer clic.
+        _count: { select: { colaboradores: true, contratos: true, contratosOps: true, usuarios: true, cronogramasDominicales: true, turnosDominicales: true, activos: true } },
+      },
       orderBy: [{ esPrincipal: 'desc' }, { nombre: 'asc' }],
     }),
     prisma.ciudad.findMany({
@@ -33,6 +37,13 @@ export default async function SedesPage() {
           telefono: s.telefono,
           esPrincipal: s.esPrincipal,
           activa: s.activa,
+          usos: {
+            colaboradores: s._count.colaboradores,
+            contratos: s._count.contratos + s._count.contratosOps,
+            usuarios: s._count.usuarios,
+            cronogramas: s._count.cronogramasDominicales + s._count.turnosDominicales,
+            activos: s._count.activos,
+          },
         }))}
         ciudades={ciudades.map((c) => ({
           id: c.id,

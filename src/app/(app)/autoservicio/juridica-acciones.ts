@@ -117,6 +117,47 @@ export const consultarMiDenuncia = accion(
 )
 
 /**
+ * Evidencias agregadas DESPUÉS de enviar el reporte. Los archivos ya se subieron
+ * por /api/linea-etica/soporte (el mismo camino que al crear: la prueba de que son
+ * de este reporte es el código, que solo conoce quien lo envió). Aquí se valida el
+ * código igual que en la consulta, se refresca la fecha del caso y se le avisa a
+ * Jurídica. Con `prisma` (sin auditar) por la misma razón que la consulta: no
+ * dejar rastro de quién aporta a un canal confidencial.
+ */
+export const adjuntarEvidenciaDenuncia = accion(
+  {
+    modulo: 'autoservicio',
+    accion: 'CREAR',
+    schema: z.object({ codigo: z.string().trim().min(4).max(20), cantidad: z.number().int().min(1).max(50) }),
+  },
+  async (d, usuario) => {
+    verificarLimiteConsulta(usuario.id)
+    const denuncia = await prisma.denunciaAcoso.findUnique({
+      where: { codigo: d.codigo.toUpperCase() },
+      select: { id: true, codigo: true, estado: true, asunto: true },
+    })
+    if (!denuncia) throw new ErrorNegocio('No se encontró una denuncia con ese código. Verifica que esté bien escrito.')
+    if (denuncia.estado === 'RESUELTA' || denuncia.estado === 'ARCHIVADA') {
+      throw new ErrorNegocio('Este reporte ya está cerrado: no se le pueden agregar evidencias.')
+    }
+    const evidencias = await prisma.documento.count({ where: { entidadTipo: 'DenunciaAcoso', entidadId: denuncia.id } })
+    if (evidencias === 0) throw new ErrorNegocio('Primero sube los archivos de la evidencia.')
+
+    await prisma.denunciaAcoso.update({ where: { id: denuncia.id }, data: { actualizadoEn: new Date() } })
+    await avisarPorRol(['Jurídica', 'Administrador', 'Subgerencia'], {
+      evento: 'denuncia_acoso',
+      titulo: 'Línea ética: nuevas evidencias en un reporte',
+      mensaje: `${denuncia.asunto ?? 'Reporte'} · Código ${denuncia.codigo} · ${d.cantidad === 1 ? '1 archivo nuevo' : `${d.cantidad} archivos nuevos`} · Confidencial.`,
+      enlace: '/juridica?tab=denuncias',
+      llamadoAccion: 'Revisar la línea ética',
+    })
+
+    revalidatePath('/juridica')
+    return { ok: true }
+  },
+)
+
+/**
  * Habeas data (Ley 1581): el colaborador radica su propia consulta/reclamo sobre
  * el tratamiento de sus datos personales. Aquí SÍ se identifica (ejerce derechos
  * propios) y queda vinculado para que pueda ver el estado y el plazo legal.

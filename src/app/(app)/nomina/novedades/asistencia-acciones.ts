@@ -221,12 +221,16 @@ export const marcarPagoPagado = accion(
   },
 )
 
-/** Corrige un pago marcado por error: vuelve a firmada y retira el comprobante. */
+/**
+ * Corrige un pago marcado por error: la orden vuelve a FIRMADA (el estado
+ * anterior lógico: la firma del colaborador no se deshace) y se retira el
+ * comprobante. El motivo queda en auditoría.
+ */
 export const marcarPagoPendiente = accion(
-  { modulo: 'nomina', accion: 'EDITAR', schema: pagoIdSchema },
+  { modulo: 'nomina', accion: 'EDITAR', schema: pagoIdSchema.extend({ motivo: z.string().trim().min(5, 'Explica por qué se deshace.').max(300) }) },
   async (d) => {
     await marcarPagoHorasExtraPendiente(d.pagoId)
-    await auditar('EDITAR', 'PagoHorasExtra', { registroId: d.pagoId, descripcion: 'Pago de horas extra corregido (vuelto a firmada)' })
+    await auditar('EDITAR', 'PagoHorasExtra', { registroId: d.pagoId, descripcion: `Pago de horas extra deshecho (vuelve a firmada): ${d.motivo}` })
     revalidatePath('/nomina/novedades')
   },
 )

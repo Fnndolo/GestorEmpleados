@@ -4,8 +4,9 @@ import { revalidatePath } from 'next/cache'
 import { esOps } from '@/lib/tramites-vinculo'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
-import { dbAuditado } from '@/lib/auditoria'
+import { dbAuditado, auditar } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
+import { horasEntreHoras } from '@/lib/horas-extra-solicitud'
 import { alcanceDe } from '@/server/sesion'
 import { exigirColaboradorEnAlcance } from '@/server/consultas/colaboradores'
 import {
@@ -240,6 +241,46 @@ export const registrarPermiso = accion(
 )
 
 /**
+ * Corregir un permiso ya registrado (fecha, modalidad, horas, motivo, si es
+ * remunerado). No se toca si una nómina cerrada ya lo tuvo en cuenta, ni se
+ * mueve a una fecha que una nómina cerrada ya liquidó.
+ */
+export const editarPermiso = accion(
+  {
+    modulo: 'novedades',
+    accion: 'EDITAR',
+    schema: permisoSchema.omit({ colaboradorId: true, exigirComprobante: true }).extend({
+      id: z.uuid(),
+      horaInicio: z.string().regex(/^\d{2}:\d{2}$/).optional().or(z.literal('')),
+      horaFin: z.string().regex(/^\d{2}:\d{2}$/).optional().or(z.literal('')),
+    }),
+  },
+  async (d, usuario) => {
+    const p = await prisma.permiso.findUniqueOrThrow({ where: { id: d.id } })
+    await exigirColaboradorEnAlcance(usuario, p.colaboradorId, 'novedades', 'EDITAR')
+    const fecha = parseFechaISO(d.fecha)!
+    await exigirNoLiquidadaEnNominaCerrada({ colaboradorId: p.colaboradorId, fechaInicio: p.fecha, fechaFin: p.fecha }, 'Este permiso')
+    if (fecha.getTime() !== p.fecha.getTime()) {
+      await exigirNoLiquidadaEnNominaCerrada({ colaboradorId: p.colaboradorId, fechaInicio: fecha, fechaFin: fecha }, 'La nueva fecha del permiso')
+    }
+    const porHoras = !d.diaCompleto && !!d.horaInicio && !!d.horaFin
+    const horas = d.diaCompleto ? null : porHoras ? horasEntreHoras(d.horaInicio!, d.horaFin!) : d.horas ?? null
+    if (!d.diaCompleto && (!horas || horas <= 0)) throw new ErrorNegocio('Indica las horas del permiso (o el rango de hora inicio y fin).')
+    await dbAuditado.permiso.update({
+      where: { id: p.id },
+      data: {
+        fecha, diaCompleto: d.diaCompleto, horas,
+        horaInicio: porHoras ? d.horaInicio : null, horaFin: porHoras ? d.horaFin : null,
+        motivo: d.motivo, remunerado: d.remunerado,
+      },
+    })
+    revalidatePath('/novedades')
+    revalidatePath('/autoservicio')
+    return { ok: true }
+  },
+)
+
+/**
  * Talento Humano revisa el comprobante de asistencia que subió el colaborador:
  * lo acepta (VERIFICADO) o lo devuelve con motivo (vuelve a PENDIENTE con la
  * misma fecha límite; si ya venció, el cron sigue avisando).
@@ -339,6 +380,93 @@ export const registrarVacaciones = accion(
     }
     revalidatePath('/novedades')
     return { dias }
+  },
+)
+
+/**
+ * Unas vacaciones que una nómina cerrada ya tuvo en cuenta (las pagó por
+ * adelantado, o cubrió sus días) no se cambian ni se anulan: es un ajuste.
+ */
+async function exigirVacacionesSinNominaCerrada(vac: { id: string; colaboradorId: string; fechaInicio: Date; fechaFin: Date; pagoAnticipadoPeriodoId: string | null }): Promise<void> {
+  if (vac.pagoAnticipadoPeriodoId) {
+    const periodo = await prisma.periodoNomina.findUnique({ where: { id: vac.pagoAnticipadoPeriodoId }, select: { nombre: true, estado: true } })
+    if (periodo && (periodo.estado === 'CERRADA' || periodo.estado === 'PAGADA')) {
+      throw new ErrorNegocio(`Estas vacaciones ya se pagaron por adelantado en la nómina cerrada "${periodo.nombre}": no se pueden cambiar ni anular.`)
+    }
+  }
+  await exigirNoLiquidadaEnNominaCerrada(vac, 'Estas vacaciones')
+}
+
+/**
+ * Corregir las fechas u observaciones de unas vacaciones solicitadas o
+ * aprobadas (los días hábiles se recalculan). Las que ya se están disfrutando
+ * se corrigen con "Interrumpir"; las disfrutadas o canceladas no se mueven.
+ */
+export const editarVacaciones = accion(
+  { modulo: 'novedades', accion: 'EDITAR', schema: vacacionesSchema.omit({ colaboradorId: true }).extend({ id: z.uuid() }) },
+  async (d, usuario) => {
+    const vac = await prisma.vacaciones.findUniqueOrThrow({ where: { id: d.id } })
+    await exigirColaboradorEnAlcance(usuario, vac.colaboradorId, 'novedades', 'EDITAR')
+    if (vac.estado !== 'SOLICITADA' && vac.estado !== 'APROBADA') {
+      throw new ErrorNegocio('Solo se corrigen vacaciones solicitadas o aprobadas que aún no empezaron. Las que están en disfrute se interrumpen; las disfrutadas no se cambian.')
+    }
+    const inicio = parseFechaISO(d.fechaInicio)!, fin = parseFechaISO(d.fechaFin)!
+    if (fin < inicio) throw new ErrorNegocio('La fecha de fin no puede ser anterior a la de inicio.')
+    const cambianFechas = inicio.getTime() !== vac.fechaInicio.getTime() || fin.getTime() !== vac.fechaFin.getTime()
+    if (cambianFechas) {
+      await exigirVacacionesSinNominaCerrada(vac)
+      await exigirNoLiquidadaEnNominaCerrada({ colaboradorId: vac.colaboradorId, fechaInicio: inicio, fechaFin: fin }, 'El nuevo rango de vacaciones')
+      const cruce = await prisma.vacaciones.findFirst({
+        where: {
+          id: { not: vac.id }, colaboradorId: vac.colaboradorId,
+          estado: { in: ['SOLICITADA', 'APROBADA', 'EN_DISFRUTE', 'DISFRUTADA'] },
+          fechaInicio: { lte: fin }, fechaFin: { gte: inicio },
+        },
+      })
+      if (cruce) throw new ErrorNegocio('Ya hay otras vacaciones registradas que se cruzan con esas fechas.')
+    }
+    const dias = cambianFechas ? await diasHabilesRango(d.fechaInicio, d.fechaFin) : Number(vac.diasHabiles)
+    if (dias === 0) throw new ErrorNegocio('El rango elegido no contiene días hábiles.')
+    await dbAuditado.vacaciones.update({
+      where: { id: vac.id },
+      data: { fechaInicio: inicio, fechaFin: fin, diasHabiles: dias, observaciones: v(d.observaciones) },
+    })
+    if (cambianFechas) {
+      const uid = await usuarioDeColaborador(vac.colaboradorId)
+      if (uid) {
+        await avisar(uid, {
+          evento: 'vacaciones_programadas',
+          titulo: `Talento Humano corrigió las fechas de tus vacaciones: ${rangoBreve(d.fechaInicio, d.fechaFin)}`,
+          mensaje: `${diasTexto(dias, true)}. Antes: ${rangoBreve(vac.fechaInicio, vac.fechaFin)}.`,
+          enlace: '/autoservicio', llamadoAccion: 'Ver mis vacaciones',
+        }).catch(() => {})
+      }
+    }
+    revalidatePath('/novedades')
+    revalidatePath('/autoservicio')
+    return { dias }
+  },
+)
+
+/**
+ * Anular unas vacaciones registradas por error (solicitadas o aprobadas), con
+ * el motivo: el registro se borra, los días vuelven al saldo, la solicitud de
+ * origen queda anulada y al colaborador se le avisa.
+ */
+export const anularVacaciones = accion(
+  { modulo: 'novedades', accion: 'ELIMINAR', schema: anulacionSchema },
+  async (d, usuario) => {
+    const vac = await prisma.vacaciones.findUniqueOrThrow({ where: { id: d.id } })
+    await exigirColaboradorEnAlcance(usuario, vac.colaboradorId, 'novedades', 'ELIMINAR')
+    if (vac.estado !== 'SOLICITADA' && vac.estado !== 'APROBADA') {
+      throw new ErrorNegocio('Solo se anulan vacaciones solicitadas o aprobadas que aún no empezaron. Las que están en disfrute se interrumpen (RIT art. 36).')
+    }
+    await exigirVacacionesSinNominaCerrada(vac)
+    await dbAuditado.vacaciones.delete({ where: { id: vac.id } })
+    await auditar('ELIMINAR', 'Vacaciones', { registroId: vac.id, descripcion: `Anulado: ${d.motivo}` })
+    await avisarAnulacion({ colaboradorId: vac.colaboradorId, solicitudId: vac.solicitudId, motivo: d.motivo, que: `vacaciones (${rangoBreve(vac.fechaInicio, vac.fechaFin)})` })
+    revalidatePath(`/colaboradores/${vac.colaboradorId}`)
+    return { ok: true }
   },
 )
 
@@ -664,5 +792,121 @@ export const marcarBonificacionPagada = accion(
       data: { estadoPago: 'PAGADO', fechaPago: hoyBogota() },
     })
     revalidatePath('/novedades')
+  },
+)
+
+/**
+ * ¿La pagó un periodo de nómina ya cerrado? Entonces no se toca: salió en un
+ * desprendible. Si se marcó pagada a mano (sin periodo), sí se puede corregir.
+ */
+async function exigirBonificacionFueraDeNominaCerrada(bono: { periodoId: string | null }, que: string): Promise<void> {
+  if (!bono.periodoId) return
+  const periodo = await prisma.periodoNomina.findUnique({ where: { id: bono.periodoId }, select: { nombre: true, estado: true } })
+  if (periodo && (periodo.estado === 'CERRADA' || periodo.estado === 'PAGADA')) {
+    throw new ErrorNegocio(`${que} ya se pagó en la nómina cerrada "${periodo.nombre}": no se puede cambiar ni anular. Corrígela con un periodo de ajuste.`)
+  }
+}
+
+/** Corregir una bonificación que todavía no se ha pagado. */
+export const editarBonificacion = accion(
+  { modulo: 'novedades', accion: 'EDITAR', schema: bonificacionSchema.omit({ colaboradorId: true }).extend({ id: z.uuid() }) },
+  async (d, usuario) => {
+    const bono = await prisma.bonificacion.findUniqueOrThrow({ where: { id: d.id } })
+    await exigirColaboradorEnAlcance(usuario, bono.colaboradorId, 'novedades', 'EDITAR')
+    if (bono.estadoPago !== 'PENDIENTE') {
+      throw new ErrorNegocio('Esta bonificación ya está pagada: devuélvela a pendiente primero (si la nómina que la pagó no está cerrada).')
+    }
+    await dbAuditado.bonificacion.update({
+      where: { id: bono.id },
+      data: { concepto: d.concepto, valor: d.valor, constitutivoSalario: d.constitutivoSalario, observaciones: v(d.observaciones) },
+    })
+    revalidatePath('/novedades')
+    return { ok: true }
+  },
+)
+
+/**
+ * Borrar una bonificación registrada por error, con el motivo (queda en
+ * auditoría). Una que ya pagó una nómina cerrada no se borra.
+ */
+export const eliminarBonificacion = accion(
+  { modulo: 'novedades', accion: 'ELIMINAR', schema: anulacionSchema },
+  async (d, usuario) => {
+    const bono = await prisma.bonificacion.findUniqueOrThrow({ where: { id: d.id } })
+    await exigirColaboradorEnAlcance(usuario, bono.colaboradorId, 'novedades', 'ELIMINAR')
+    if (bono.estadoPago === 'PAGADO') await exigirBonificacionFueraDeNominaCerrada(bono, 'Esta bonificación')
+    await dbAuditado.bonificacion.delete({ where: { id: bono.id } })
+    await auditar('ELIMINAR', 'Bonificacion', { registroId: bono.id, descripcion: `Anulado: ${d.motivo}` })
+    revalidatePath('/novedades')
+    return { ok: true }
+  },
+)
+
+/**
+ * Devolver a pendiente una bonificación marcada como pagada por error. Si la
+ * pagó un periodo de nómina todavía abierto, se suelta de él (al recalcular
+ * la vuelve a tomar); si ese periodo ya está cerrado, no se toca.
+ */
+export const devolverBonificacionAPendiente = accion(
+  { modulo: 'novedades', accion: 'EDITAR', schema: z.object({ id: z.uuid() }) },
+  async ({ id }, usuario) => {
+    const bono = await prisma.bonificacion.findUniqueOrThrow({ where: { id } })
+    await exigirColaboradorEnAlcance(usuario, bono.colaboradorId, 'novedades', 'EDITAR')
+    if (bono.estadoPago !== 'PAGADO') throw new ErrorNegocio('Esta bonificación ya está pendiente.')
+    await exigirBonificacionFueraDeNominaCerrada(bono, 'Esta bonificación')
+    await dbAuditado.bonificacion.update({ where: { id }, data: { estadoPago: 'PENDIENTE', periodoId: null, fechaPago: null } })
+    revalidatePath('/novedades')
+    return { ok: true }
+  },
+)
+
+const horaSchema = z.string().regex(/^\d{2}:\d{2}$/, 'Hora inválida')
+
+/**
+ * Corregir una autorización de horas extra (la que vino de autoservicio o se
+ * registró al aprobar): fecha, horario y motivo. Las horas salen del rango,
+ * como al aprobar la solicitud. El pago no sale de aquí (viene de las
+ * marcaciones), así que no hay nómina que bloquee.
+ */
+export const editarAutorizacionHorasExtra = accion(
+  {
+    modulo: 'novedades',
+    accion: 'EDITAR',
+    schema: z.object({
+      id: z.uuid(),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida'),
+      horaInicio: horaSchema,
+      horaFin: horaSchema,
+      motivo: z.string().trim().min(3).max(300),
+    }),
+  },
+  async (d, usuario) => {
+    const a = await prisma.autorizacionHorasExtra.findUniqueOrThrow({ where: { id: d.id } })
+    await exigirColaboradorEnAlcance(usuario, a.colaboradorId, 'novedades', 'EDITAR')
+    const horas = horasEntreHoras(d.horaInicio, d.horaFin)
+    if (horas <= 0) throw new ErrorNegocio('La hora de fin debe ser posterior a la de inicio.')
+    await dbAuditado.autorizacionHorasExtra.update({
+      where: { id: a.id },
+      data: { fecha: parseFechaISO(d.fecha)!, horaInicio: d.horaInicio, horaFin: d.horaFin, horas, motivo: d.motivo },
+    })
+    revalidatePath('/novedades')
+    revalidatePath('/autoservicio')
+    return { horas }
+  },
+)
+
+/**
+ * Anular una autorización de horas extra, con el motivo: la solicitud de origen
+ * queda anulada y al colaborador se le avisa (contaba con quedarse).
+ */
+export const eliminarAutorizacionHorasExtra = accion(
+  { modulo: 'novedades', accion: 'ELIMINAR', schema: anulacionSchema },
+  async (d, usuario) => {
+    const a = await prisma.autorizacionHorasExtra.findUniqueOrThrow({ where: { id: d.id } })
+    await exigirColaboradorEnAlcance(usuario, a.colaboradorId, 'novedades', 'ELIMINAR')
+    await dbAuditado.autorizacionHorasExtra.delete({ where: { id: a.id } })
+    await auditar('ELIMINAR', 'AutorizacionHorasExtra', { registroId: a.id, descripcion: `Anulado: ${d.motivo}` })
+    await avisarAnulacion({ colaboradorId: a.colaboradorId, solicitudId: a.solicitudId, motivo: d.motivo, que: `autorización de horas extra del ${fechaBreve(a.fecha)} (${a.horaInicio}–${a.horaFin})` })
+    return { ok: true }
   },
 )

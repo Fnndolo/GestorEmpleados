@@ -1,8 +1,9 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
-import { dbAuditado } from '@/lib/auditoria'
+import { dbAuditado, auditar } from '@/lib/auditoria'
 import { ErrorNegocio } from '@/server/accion'
 import { subirArchivo } from '@/server/storage'
+import { eliminarDocumento } from '@/server/documentos'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { renderCambioHorario } from '@/server/pdf/cambio-horario'
 import {
@@ -312,4 +313,76 @@ export async function importarDeAsistencia(usuarioId: string, soloColaboradorId?
     r.personasActualizadas++
   }
   return r
+}
+
+/**
+ * Una asignación que una nómina CERRADA o PAGADA ya tuvo en cuenta (las horas
+ * extra se calculan contra el horario) no se mueve ni se anula: desde la fecha
+ * más temprana que toque hasta el infinito.
+ */
+async function exigirSinNominaCerradaDesde(colaboradorId: string, desde: Date, que: string): Promise<void> {
+  const liquidada = await prisma.liquidacionNomina.findFirst({
+    where: { colaboradorId, periodo: { estado: { in: ['CERRADA', 'PAGADA'] }, fechaFin: { gte: desde } } },
+    select: { periodo: { select: { nombre: true } } },
+  })
+  if (liquidada) throw new ErrorNegocio(`${que} ya lo tuvo en cuenta la nómina cerrada «${liquidada.periodo.nombre}»: no se puede cambiar ni anular. Asigna otro horario desde una fecha posterior.`)
+}
+
+/**
+ * Corrige la fecha desde la que rige una asignación (vigente o pasada) y su
+ * motivo. La anterior se cierra el día antes de la fecha nueva; la fecha tiene
+ * que caer entre la anterior y la siguiente para no dejar huecos ni traslapes.
+ */
+export async function editarAsignacion(opts: { asignacionId: string; desde: Date; motivo: string | null }): Promise<void> {
+  const a = await prisma.asignacionHorario.findUniqueOrThrow({ where: { id: opts.asignacionId } })
+  const primera = a.desde < opts.desde ? a.desde : opts.desde
+  await exigirSinNominaCerradaDesde(a.colaboradorId, primera, `El horario desde el ${fechaBreve(a.desde)}`)
+  const [previa, siguiente] = await Promise.all([
+    prisma.asignacionHorario.findFirst({ where: { colaboradorId: a.colaboradorId, desde: { lt: a.desde } }, orderBy: { desde: 'desc' } }),
+    prisma.asignacionHorario.findFirst({ where: { colaboradorId: a.colaboradorId, desde: { gt: a.desde } }, orderBy: { desde: 'asc' } }),
+  ])
+  if (previa && opts.desde <= previa.desde) throw new ErrorNegocio(`Debe empezar después del horario anterior (${fechaBreve(previa.desde)}).`)
+  if (siguiente && opts.desde >= siguiente.desde) throw new ErrorNegocio(`Debe empezar antes del horario siguiente (${fechaBreve(siguiente.desde)}).`)
+  if (a.hasta && opts.desde > a.hasta) throw new ErrorNegocio(`No puede empezar después de su fin (${fechaBreve(a.hasta)}).`)
+
+  await dbAuditado.asignacionHorario.update({ where: { id: a.id }, data: { desde: opts.desde, motivo: opts.motivo } })
+  if (previa && a.desde.getTime() !== opts.desde.getTime()) {
+    await dbAuditado.asignacionHorario.update({ where: { id: previa.id }, data: { hasta: new Date(opts.desde.getTime() - unDia) } })
+  }
+  // Si pasó de futura a vigente (o al revés) AsistencIA tiene que enterarse: el cron lo manda cuando rija.
+  if (!a.hasta && a.desde.getTime() !== opts.desde.getTime()) {
+    await prisma.asignacionHorario.update({ where: { id: a.id }, data: { sincronizadoEn: null, errorSincronizacion: null } })
+    if (opts.desde <= hoyBogota()) await sincronizar(a.id)
+    else if (previa) await sincronizar(previa.id)
+  }
+}
+
+/**
+ * Anula una asignación (vigente o pasada) con el motivo: la anterior vuelve a
+ * cubrir ese tramo (y queda vigente si la anulada era la última). La
+ * comunicación que se le envió se retira de sus documentos y se le avisa.
+ */
+export async function anularAsignacion(opts: { asignacionId: string; motivo: string }): Promise<void> {
+  const a = await prisma.asignacionHorario.findUniqueOrThrow({ where: { id: opts.asignacionId } })
+  await exigirSinNominaCerradaDesde(a.colaboradorId, a.desde, `El horario desde el ${fechaBreve(a.desde)}`)
+  const previa = await prisma.asignacionHorario.findFirst({ where: { colaboradorId: a.colaboradorId, desde: { lt: a.desde } }, orderBy: { desde: 'desc' } })
+
+  await dbAuditado.asignacionHorario.delete({ where: { id: a.id } })
+  await auditar('ELIMINAR', 'AsignacionHorario', { registroId: a.id, descripcion: `Anulado: ${opts.motivo}` })
+  if (previa) await dbAuditado.asignacionHorario.update({ where: { id: previa.id }, data: { hasta: a.hasta } })
+  if (a.documentoId) await eliminarDocumento(a.documentoId).catch(() => {})
+
+  // Si la anulada regía hoy, el horario de hoy cambió: AsistencIA debe tener el que vuelve.
+  if (previa && a.desde <= hoyBogota() && (!a.hasta || a.hasta >= hoyBogota())) {
+    await prisma.asignacionHorario.update({ where: { id: previa.id }, data: { sincronizadoEn: null } })
+    await sincronizar(previa.id)
+  }
+  const uid = await usuarioDeColaborador(a.colaboradorId)
+  if (uid) {
+    await avisar(uid, {
+      titulo: 'Se anuló un cambio de horario',
+      mensaje: `El horario que tenías desde el ${fechaBreve(a.desde)} quedó sin efecto. Motivo: ${opts.motivo}`,
+      enlace: '/autoservicio', evento: 'horario_cambiado', colaboradorId: a.colaboradorId,
+    }).catch(() => {})
+  }
 }

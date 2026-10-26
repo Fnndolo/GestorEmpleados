@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CalendarPlus, Save } from 'lucide-react'
+import { CalendarPlus, ChevronRight, Pencil, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,10 +13,15 @@ import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Ayuda } from '@/components/ui-kit/ayuda'
+import { BotonAgregar } from '@/components/ui-kit/boton-agregar'
+import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
+import { cn } from '@/lib/utils'
 import {
   registrarVigenciaParametro, registrarVigenciaTipoHora, actualizarInterruptoresNomina,
+  crearTipoHora, editarVigenciaTipoHora, eliminarVigenciaTipoHora,
 } from './acciones'
 import { FilaParametro } from './fila-parametro'
+import { DialogMotivo } from '../dialog-motivo'
 import { fmtValor } from './formato'
 
 export type VigenciaItem = {
@@ -32,7 +37,14 @@ export type ParametroItem = {
   /** Todas sus vigencias, de la más reciente a la más antigua. */
   historial: VigenciaItem[]
 }
-export type TipoHoraItem = { codigo: string; nombre: string; factor: number; desde: string }
+export type VigenciaHoraItem = { id: string; factor: number; desde: string; hasta: string | null }
+export type TipoHoraItem = {
+  codigo: string; nombre: string; factor: number; desde: string
+  /** Lo lee el motor de nómina: no puede quedarse sin vigencias. */
+  delMotor: boolean
+  /** Todas sus vigencias, de la más reciente a la más antigua. */
+  historial: VigenciaHoraItem[]
+}
 
 
 export function ParametrosForm({ puedeEditar, parametros, tiposHora, aplicaRetefuente, empresaExonerada }: {
@@ -45,6 +57,10 @@ export function ParametrosForm({ puedeEditar, parametros, tiposHora, aplicaRetef
   const router = useRouter()
   const [editando, setEditando] = useState<ParametroItem | null>(null)
   const [editandoHora, setEditandoHora] = useState<TipoHoraItem | null>(null)
+  const [nuevoTipo, setNuevoTipo] = useState(false)
+  const [corrigiendoHora, setCorrigiendoHora] = useState<{ tipo: TipoHoraItem; v: VigenciaHoraItem } | null>(null)
+  const [borrandoHora, setBorrandoHora] = useState<{ tipo: TipoHoraItem; v: VigenciaHoraItem } | null>(null)
+  const [abiertos, setAbiertos] = useState<Record<string, boolean>>({})
 
   async function guardarInterruptores(retefuente: boolean, exonerada: boolean) {
     const res = await actualizarInterruptoresNomina({ aplicaRetefuente: retefuente, empresaExonerada: exonerada })
@@ -107,34 +123,192 @@ export function ParametrosForm({ puedeEditar, parametros, tiposHora, aplicaRetef
             texto="Factores sobre la hora ordinaria. Así se aplican los cambios de ley sin programación: p. ej. el recargo dominical sube a 100% el 1-jul-2027 (Ley 2466) — regístralo aquí con esa fecha y la nómina lo usará automáticamente."
             etiqueta="Sobre las horas extra y recargos"
           />
+          {puedeEditar && <BotonAgregar etiqueta="Nuevo tipo de hora" className="ml-auto" onClick={() => setNuevoTipo(true)} />}
         </h2>
         <Card className="py-0"><CardContent className="divide-y p-0">
-          {tiposHora.map((t) => (
-            <div key={t.codigo} className="flex items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
-              <div className="min-w-0 flex-1">
-                <p className="flex min-w-0 items-center text-sm font-medium">
-                  <span className="truncate">{t.codigo} · {t.nombre}</span>
-                  <span className="ml-auto shrink-0 pl-2 font-bold tabular-nums">{Math.round(t.factor * 100)}%</span>
-                </p>
-                <p className="truncate text-xs text-muted-foreground">desde {t.desde}</p>
+          {tiposHora.length === 0 && (
+            <p className="px-4 py-8 text-center text-sm text-muted-foreground">No hay tipos de hora: sin ellos las horas extra no se liquidan.</p>
+          )}
+          {tiposHora.map((t) => {
+            const abierto = !!abiertos[t.codigo]
+            return (
+              <div key={t.codigo} className="px-3 py-2.5 sm:px-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  {/* Al desplegar, cada vigencia con su lápiz y su papelera. */}
+                  <button type="button" onClick={() => setAbiertos((a) => ({ ...a, [t.codigo]: !abierto }))} className="min-w-0 flex-1 text-left" aria-expanded={abierto}>
+                    <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+                      <ChevronRight className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', abierto && 'rotate-90')} />
+                      <span className="truncate">{t.codigo} · {t.nombre}</span>
+                      <span className="ml-auto shrink-0 pl-2 font-bold tabular-nums">{Math.round(t.factor * 100)}%</span>
+                    </span>
+                    <span className="block truncate pl-5 text-xs text-muted-foreground">
+                      desde {t.desde}{t.historial.length > 1 ? ` · ${t.historial.length} vigencias` : ''}
+                    </span>
+                  </button>
+                  {puedeEditar && (
+                    <Button
+                      size="sm" variant="outline" className="max-sm:size-8 max-sm:px-0"
+                      onClick={() => setEditandoHora(t)}
+                      aria-label={`Nueva vigencia de ${t.codigo}`} title="Nueva vigencia"
+                    >
+                      <CalendarPlus className="size-4" /> <span className="max-sm:sr-only">Nueva vigencia</span>
+                    </Button>
+                  )}
+                </div>
+                {abierto && (
+                  <ul className="mt-2 space-y-1.5 border-l pl-5">
+                    {t.historial.map((v) => (
+                      <li key={v.id} className="flex items-center gap-1 text-xs">
+                        <p className="min-w-0 flex-1 truncate tabular-nums">
+                          <span className="font-medium">{Math.round(v.factor * 100)}%</span>
+                          <span className="text-muted-foreground"> · {v.desde} → {v.hasta ?? 'vigente'}</span>
+                        </p>
+                        {puedeEditar && (
+                          <>
+                            <Button size="icon" variant="ghost" className="size-7 shrink-0" onClick={() => setCorrigiendoHora({ tipo: t, v })} aria-label={`Corregir la vigencia desde ${v.desde}`} title="Corregir esta vigencia">
+                              <Pencil className="size-3.5" />
+                            </Button>
+                            <BotonEliminar
+                              onEliminar={() => setBorrandoHora({ tipo: t, v })}
+                              etiqueta={`Eliminar la vigencia desde ${v.desde}`}
+                              motivoBloqueo={t.delMotor && t.historial.length === 1
+                                ? `${t.codigo} lo usa el motor de nómina: no puede quedarse sin ninguna vigencia. Registra el factor correcto y luego borra el equivocado.`
+                                : null}
+                            />
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              {puedeEditar && (
-                <Button
-                  size="sm" variant="outline" className="max-sm:size-8 max-sm:px-0"
-                  onClick={() => setEditandoHora(t)}
-                  aria-label={`Nueva vigencia de ${t.codigo}`} title="Nueva vigencia"
-                >
-                  <CalendarPlus className="size-4" /> <span className="max-sm:sr-only">Nueva vigencia</span>
-                </Button>
-              )}
-            </div>
-          ))}
+            )
+          })}
         </CardContent></Card>
       </section>
 
       {editando && <DialogVigenciaParametro parametro={editando} onClose={() => setEditando(null)} onDone={() => { setEditando(null); router.refresh() }} />}
       {editandoHora && <DialogVigenciaHora tipo={editandoHora} onClose={() => setEditandoHora(null)} onDone={() => { setEditandoHora(null); router.refresh() }} />}
+      {nuevoTipo && <DialogNuevoTipoHora onClose={() => setNuevoTipo(false)} onDone={() => { setNuevoTipo(false); router.refresh() }} />}
+      {corrigiendoHora && (
+        <DialogCorregirVigenciaHora
+          tipo={corrigiendoHora.tipo} vigencia={corrigiendoHora.v}
+          onClose={() => setCorrigiendoHora(null)} onDone={() => { setCorrigiendoHora(null); router.refresh() }}
+        />
+      )}
+      {borrandoHora && (
+        <DialogMotivo
+          titulo={`Eliminar vigencia de ${borrandoHora.tipo.codigo}`}
+          resumen={`${Math.round(borrandoHora.v.factor * 100)}% · ${borrandoHora.v.desde} → ${borrandoHora.v.hasta ?? 'vigente'}. Si era la última, vuelve a regir la anterior.`}
+          placeholder="¿Por qué se elimina?"
+          onClose={() => setBorrandoHora(null)}
+          onConfirmar={async (motivo) => {
+            const res = await eliminarVigenciaTipoHora({ id: borrandoHora.v.id, motivo })
+            if (res.ok) { toast.success('Vigencia eliminada.'); router.refresh(); return true }
+            toast.error(res.error, { duration: 8000 })
+            return false
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+/** Un tipo de hora que no existía: un recargo propio o uno de ley que falte. */
+function DialogNuevoTipoHora({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [codigo, setCodigo] = useState('')
+  const [nombre, setNombre] = useState('')
+  const [factor, setFactor] = useState('')
+  const [desde, setDesde] = useState('')
+  const [g, setG] = useState(false)
+
+  async function guardar() {
+    setG(true)
+    const res = await crearTipoHora({ codigo: codigo.trim().toUpperCase(), nombre, factor: Number(factor) / 100, vigenteDesde: desde })
+    setG(false)
+    if (res.ok) { toast.success(`Tipo de hora ${codigo.toUpperCase()} creado.`); onDone() }
+    else toast.error(res.error, { duration: 8000 })
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !g && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nuevo tipo de hora</DialogTitle>
+          <DialogDescription>Si el código ya existe, registra una nueva vigencia.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="gap-1.5">
+                Código <span className="text-destructive">*</span>
+                <Ayuda texto="En MAYÚSCULAS. El motor de nómina lee HED, HEN, RN, RD, RND, HEDD y HEND por este código exacto; uno inventado queda como referencia." etiqueta="Sobre el código" />
+              </Label>
+              <Input value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} placeholder="HED" autoFocus />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Factor (%) <span className="text-destructive">*</span></Label>
+              <Input type="number" step="1" value={factor} onChange={(e) => setFactor(e.target.value)} placeholder="25" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Nombre <span className="text-destructive">*</span></Label>
+            <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Hora extra diurna" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Rige desde <span className="text-destructive">*</span></Label>
+            <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button>
+          <Button onClick={guardar} disabled={g || codigo.trim().length < 2 || nombre.trim().length < 3 || factor === '' || !desde}>{g ? <Spinner /> : <Save className="size-4" />} Crear</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Corrige la fila mal digitada: factor y desde cuándo rige (si ninguna nómina cerrada la usó). */
+function DialogCorregirVigenciaHora({ tipo, vigencia, onClose, onDone }: { tipo: TipoHoraItem; vigencia: VigenciaHoraItem; onClose: () => void; onDone: () => void }) {
+  const [factor, setFactor] = useState(String(Math.round(vigencia.factor * 100)))
+  const [desde, setDesde] = useState(vigencia.desde)
+  const [g, setG] = useState(false)
+
+  async function guardar() {
+    setG(true)
+    const res = await editarVigenciaTipoHora({ id: vigencia.id, factor: Number(factor) / 100, vigenteDesde: desde })
+    setG(false)
+    if (res.ok) { toast.success('Vigencia corregida.'); onDone() }
+    else toast.error(res.error, { duration: 8000 })
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !g && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Corregir vigencia — {tipo.codigo}</DialogTitle>
+          <DialogDescription>{vigencia.desde} → {vigencia.hasta ?? 'vigente'}. Para un cambio de ley usa «Nueva vigencia»: esto corrige lo que quedó mal digitado.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Factor (%) <span className="text-destructive">*</span></Label>
+            <Input type="number" step="1" value={factor} onChange={(e) => setFactor(e.target.value)} autoFocus />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="gap-1.5">
+              Rige desde <span className="text-destructive">*</span>
+              <Ayuda texto="Si la mueves, la vigencia anterior se cierra el día antes para que no quede hueco." etiqueta="Qué pasa al mover la fecha" />
+            </Label>
+            <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button>
+          <Button onClick={guardar} disabled={g || factor === '' || !desde}>{g ? <Spinner /> : <Save className="size-4" />} Guardar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

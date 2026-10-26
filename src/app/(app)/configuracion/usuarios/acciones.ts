@@ -3,6 +3,7 @@
 import { urlApp } from '@/lib/app-url'
 import { passwordTemporal } from '@/server/password-temporal'
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { auth } from '@/lib/auth'
@@ -223,5 +224,35 @@ export const reenviarAcceso = accion(
       descripcion: `Reenvío de acceso a ${usuario.email} (contraseña temporal)`,
     })
     revalidatePath('/configuracion/usuarios')
+  },
+)
+
+/**
+ * Borra una cuenta creada por error, con el motivo (queda en auditoría). Solo
+ * una cuenta sin huella: si ya hizo algo (auditoría, avisos), tiene sesión
+ * abierta o es el usuario de un colaborador, el camino es desactivarla, para
+ * que el rastro de lo que hizo siga teniendo dueño.
+ */
+export const eliminarUsuario = accion(
+  { modulo: 'usuarios', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: z.string().trim().min(5, 'Explica por qué se elimina.').max(300) }) },
+  async ({ id, motivo }, usuario) => {
+    if (id === usuario.id) throw new ErrorNegocio('No puedes eliminar tu propia cuenta.')
+    const u = await prisma.user.findUniqueOrThrow({
+      where: { id },
+      select: { email: true, name: true, colaborador: { select: { id: true } }, _count: { select: { avisosCreados: true, sessions: { where: { expiresAt: { gt: new Date() } } } } } },
+    })
+    const actividad = await prisma.auditLog.count({ where: { userId: id } })
+    const estorbos = [
+      u.colaborador ? 'es el usuario de un colaborador' : null,
+      actividad > 0 ? `tiene ${actividad} registro(s) de actividad` : null,
+      u._count.sessions > 0 ? `tiene ${u._count.sessions} sesión(es) abierta(s)` : null,
+      u._count.avisosCreados > 0 ? `publicó ${u._count.avisosCreados} aviso(s)` : null,
+    ].filter(Boolean)
+    if (estorbos.length) throw new ErrorNegocio(`No se puede eliminar: ${estorbos.join(', ')}. Desactívalo en su lugar (estado Inactivo o Bloqueado).`)
+    // Sesiones, cuentas de acceso, sedes, roles extra y lecturas de avisos se van en cascada.
+    await dbAuditado.user.delete({ where: { id } })
+    await auditar('ELIMINAR', 'User', { registroId: id, descripcion: `Usuario eliminado: ${u.email}. Anulado: ${motivo}` })
+    revalidatePath('/configuracion/usuarios')
+    return { ok: true }
   },
 )

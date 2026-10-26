@@ -361,14 +361,17 @@ export async function firmarDocumentoTrabajador(opts: {
 }
 
 /**
- * Registra el pago de la liquidación con su comprobante (transferencia o
- * consignación). Exige el recibido firmado: aquí no se paga sin eso.
+ * Registra el pago de la liquidación (transferencia o consignación). Exige el
+ * recibido firmado: aquí no se paga sin eso. El comprobante es un soporte: se
+ * adjunta en el momento o después con `adjuntarComprobanteLiquidacion`. Volver a
+ * registrarlo actualiza la fecha y, si viene archivo, reemplaza el comprobante;
+ * sin archivo, el que había se conserva. Al trabajador se le avisa solo la
+ * primera vez (cuando el pago pasa a registrado).
  */
 export async function registrarPagoLiquidacion(opts: {
   terminacionId: string
   fechaPago: Date
-  comprobanteDataUri: string
-  nombreArchivo: string
+  comprobanteDataUri?: string | null
   usuarioId: string
 }): Promise<void> {
   const liq = await prisma.liquidacionDefinitiva.findUnique({ where: { terminacionId: opts.terminacionId }, include: { terminacion: true } })
@@ -376,21 +379,46 @@ export async function registrarPagoLiquidacion(opts: {
   if (liq.terminacion.estado === 'CERRADA') throw new ErrorNegocio('La terminación ya está cerrada.')
   if (!liq.firmadoEn) throw new ErrorNegocio('Primero el trabajador debe firmar el recibido de la liquidación.')
 
-  const archivo = leerArchivoSubido(opts.comprobanteDataUri)
-  const { documentoId } = await guardarDocumentoColaborador({
-    colaboradorId: liq.terminacion.colaboradorId, carpeta: 'liquidacion', archivo: `comprobante-pago-${liq.id}.${archivo.ext}`,
-    nombre: 'Comprobante de pago de la liquidación', contenido: archivo.contenido, mime: archivo.mime, usuarioId: opts.usuarioId,
-  })
-  await dbAuditado.liquidacionDefinitiva.update({ where: { id: liq.id }, data: { pagadoEn: opts.fechaPago, comprobanteDocId: documentoId } })
-  if (liq.comprobanteDocId && liq.comprobanteDocId !== documentoId) await eliminarDocumento(liq.comprobanteDocId).catch(() => {})
+  const comprobanteDocId = opts.comprobanteDataUri
+    ? await guardarComprobanteLiquidacion(liq.id, liq.terminacion.colaboradorId, opts.comprobanteDataUri, opts.usuarioId)
+    : liq.comprobanteDocId
+  await dbAuditado.liquidacionDefinitiva.update({ where: { id: liq.id }, data: { pagadoEn: opts.fechaPago, comprobanteDocId } })
+  if (liq.comprobanteDocId && liq.comprobanteDocId !== comprobanteDocId) await eliminarDocumento(liq.comprobanteDocId).catch(() => {})
 
+  if (liq.pagadoEn) return
   const uid = await usuarioDeColaborador(liq.terminacion.colaboradorId)
   if (uid) {
     await avisar(uid, {
       evento: 'liquidacion_pagada',
       titulo: 'Se registró el pago de tu liquidación',
-      mensaje: `${fmtCOP(Number(liq.total))} · pagada el ${formatFechaLarga(opts.fechaPago)}. El comprobante está en tu autoservicio.`,
+      mensaje: `${fmtCOP(Number(liq.total))} · pagada el ${formatFechaLarga(opts.fechaPago)}.${comprobanteDocId ? ' El comprobante está en tu autoservicio.' : ''}`,
       enlace: '/autoservicio/retiro',
     }).catch(() => {})
   }
+}
+
+/** Sube el comprobante del pago de la liquidación como documento del colaborador. */
+async function guardarComprobanteLiquidacion(liquidacionId: string, colaboradorId: string, dataUri: string, usuarioId: string): Promise<string> {
+  const archivo = leerArchivoSubido(dataUri)
+  const { documentoId } = await guardarDocumentoColaborador({
+    colaboradorId, carpeta: 'liquidacion', archivo: `comprobante-pago-${liquidacionId}.${archivo.ext}`,
+    nombre: 'Comprobante de pago de la liquidación', contenido: archivo.contenido, mime: archivo.mime, usuarioId,
+  })
+  return documentoId
+}
+
+/**
+ * Adjunta (o reemplaza) el comprobante de un pago de liquidación ya
+ * registrado, sin tocar la fecha: para cuando se marcó el pago sin tener el
+ * archivo a la mano, o se subió el equivocado.
+ */
+export async function adjuntarComprobanteLiquidacion(opts: { terminacionId: string; comprobanteDataUri: string; usuarioId: string }): Promise<void> {
+  const liq = await prisma.liquidacionDefinitiva.findUnique({ where: { terminacionId: opts.terminacionId }, include: { terminacion: { select: { estado: true, colaboradorId: true } } } })
+  if (!liq) throw new ErrorNegocio('Esta terminación no tiene liquidación.')
+  if (liq.terminacion.estado === 'CERRADA') throw new ErrorNegocio('La terminación ya está cerrada.')
+  if (!liq.pagadoEn) throw new ErrorNegocio('Primero registra el pago; el comprobante se adjunta sobre un pago registrado.')
+
+  const documentoId = await guardarComprobanteLiquidacion(liq.id, liq.terminacion.colaboradorId, opts.comprobanteDataUri, opts.usuarioId)
+  await dbAuditado.liquidacionDefinitiva.update({ where: { id: liq.id }, data: { comprobanteDocId: documentoId } })
+  if (liq.comprobanteDocId && liq.comprobanteDocId !== documentoId) await eliminarDocumento(liq.comprobanteDocId).catch(() => {})
 }

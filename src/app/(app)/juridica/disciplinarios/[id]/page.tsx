@@ -8,9 +8,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
-import { formatFechaLarga, hoyBogota } from '@/lib/fechas'
+import { formatFechaLarga, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import type { SoporteDoc } from '../../_ui'
-import { AccionesDisciplinario } from './acciones-disciplinario'
+import { AccionesDisciplinario, ExpedienteAcciones } from './acciones-disciplinario'
 import { RutaProceso } from '@/components/juridica/ruta-proceso'
 import { rutaDisciplinaria } from '@/lib/ruta-disciplinaria'
 
@@ -22,10 +22,15 @@ export default async function DisciplinarioPage({ params }: { params: Promise<{ 
   const { id } = await params
   const usuario = await requerirPermiso('juridica', 'VER')
   const puedeEditar = tienePermiso(usuario, 'juridica', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'juridica', 'ELIMINAR')
 
   const p = await prisma.procesoDisciplinario.findUnique({
     where: { id },
-    include: { colaborador: { select: { id: true, nombres: true, apellidos: true } }, etapas: { orderBy: { fecha: 'asc' } } },
+    include: {
+      colaborador: { select: { id: true, nombres: true, apellidos: true } },
+      etapas: { orderBy: { fecha: 'asc' } },
+      _count: { select: { terminaciones: true } },
+    },
   })
   if (!p) notFound()
 
@@ -50,11 +55,19 @@ export default async function DisciplinarioPage({ params }: { params: Promise<{ 
         titulo={p.asunto}
         descripcion={`${p.colaborador.nombres} ${p.colaborador.apellidos} · abierto ${formatFechaLarga(p.fechaApertura)}`}
         acciones={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <Badge variant={p.clase === 'LLAMADO_ATENCION' ? 'outline' : 'secondary'}>
               {p.clase === 'LLAMADO_ATENCION' ? 'Llamado de atención' : 'Proceso disciplinario'}
             </Badge>
             <Badge variant={p.cerrado ? 'secondary' : 'default'}>{ETAPA[p.etapa]}</Badge>
+            <ExpedienteAcciones
+              proceso={{ id: p.id, clase: p.clase, asunto: p.asunto, descripcion: p.descripcion, fechaApertura: formatFechaISO(p.fechaApertura) }}
+              colaborador={`${p.colaborador.nombres} ${p.colaborador.apellidos}`}
+              cerrado={p.cerrado}
+              ligadoATerminacion={p._count.terminaciones > 0}
+              puedeEditar={puedeEditar}
+              puedeEliminar={puedeEliminar}
+            />
           </div>
         }
         // /juridica/disciplinarios no es página: sin memoria, la flecha vuelve a la pestaña de disciplinarios.

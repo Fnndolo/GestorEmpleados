@@ -53,8 +53,10 @@ export async function generarOrdenExamenEgreso(terminacionId: string, usuarioId:
 
 /**
  * Registra el examen de egreso: si se hizo, queda como examen de EGRESO en SST
- * (con el certificado, nivel médico por ser dato de salud, Ley 1581); si no
- * asistió en el plazo, queda la constancia.
+ * (el certificado es un soporte: se adjunta en el momento o después con
+ * `adjuntarCertificadoExamenEgreso`, con nivel médico por ser dato de salud,
+ * Ley 1581); si no asistió en el plazo, queda la constancia. Volver a
+ * registrarlo corrige el examen que ya estaba vinculado en vez de crear otro.
  */
 export async function registrarExamenEgreso(opts: {
   terminacionId: string
@@ -70,19 +72,38 @@ export async function registrarExamenEgreso(opts: {
     await dbAuditado.terminacion.update({ where: { id: t.id }, data: { examenNoAsistio: true, examenMedicoId: null, examenRegistradoEn: new Date() } })
     return
   }
-  if (!opts.certificadoDataUri) throw new ErrorNegocio('Adjunta el certificado del examen.')
-  const archivo = leerArchivoSubido(opts.certificadoDataUri)
 
-  const examen = await dbAuditado.examenMedico.create({
-    data: { colaboradorId: t.colaboradorId, tipo: 'EGRESO', fecha: opts.fecha, concepto: opts.concepto ?? 'APTO' },
-  })
+  const datos = { colaboradorId: t.colaboradorId, tipo: 'EGRESO' as const, fecha: opts.fecha, concepto: opts.concepto ?? 'APTO' }
+  const existente = t.examenMedicoId ? await prisma.examenMedico.findUnique({ where: { id: t.examenMedicoId }, select: { id: true, documentoId: true } }) : null
+  const examen = existente
+    ? await dbAuditado.examenMedico.update({ where: { id: existente.id }, data: datos, select: { id: true, documentoId: true } })
+    : await dbAuditado.examenMedico.create({ data: datos, select: { id: true, documentoId: true } })
+  if (opts.certificadoDataUri) await guardarCertificadoEgreso(t.colaboradorId, examen, opts.certificadoDataUri, opts.usuarioId)
+  await dbAuditado.terminacion.update({ where: { id: t.id }, data: { examenMedicoId: examen.id, examenNoAsistio: false, examenRegistradoEn: new Date() } })
+}
+
+/** Guarda el certificado del examen (nivel médico) y lo deja apuntado desde el examen; el anterior se retira. */
+async function guardarCertificadoEgreso(colaboradorId: string, examen: { id: string; documentoId: string | null }, dataUri: string, usuarioId: string): Promise<void> {
+  const archivo = leerArchivoSubido(dataUri)
   const { documentoId } = await guardarDocumentoColaborador({
-    colaboradorId: t.colaboradorId, carpeta: 'examen-egreso', archivo: `certificado-egreso-${examen.id}.${archivo.ext}`,
-    nombre: 'Certificado de examen médico de egreso', contenido: archivo.contenido, mime: archivo.mime, usuarioId: opts.usuarioId,
+    colaboradorId, carpeta: 'examen-egreso', archivo: `certificado-egreso-${examen.id}.${archivo.ext}`,
+    nombre: 'Certificado de examen médico de egreso', contenido: archivo.contenido, mime: archivo.mime, usuarioId,
     nivelAcceso: 'SST_MEDICO', entidad: { tipo: 'ExamenMedico', id: examen.id },
   })
   await dbAuditado.examenMedico.update({ where: { id: examen.id }, data: { documentoId } })
-  await dbAuditado.terminacion.update({ where: { id: t.id }, data: { examenMedicoId: examen.id, examenNoAsistio: false, examenRegistradoEn: new Date() } })
+  if (examen.documentoId && examen.documentoId !== documentoId) await eliminarDocumento(examen.documentoId).catch(() => {})
+}
+
+/**
+ * Adjunta (o reemplaza) el certificado de un examen de egreso ya registrado como
+ * realizado: para cuando se registró sin tener el archivo, o se subió el equivocado.
+ */
+export async function adjuntarCertificadoExamenEgreso(opts: { terminacionId: string; certificadoDataUri: string; usuarioId: string }): Promise<void> {
+  const t = await terminacionAbierta(opts.terminacionId)
+  if (!t.examenMedicoId) throw new ErrorNegocio('Primero registra el examen como realizado; el certificado se adjunta sobre ese registro.')
+  const examen = await prisma.examenMedico.findUnique({ where: { id: t.examenMedicoId }, select: { id: true, documentoId: true } })
+  if (!examen) throw new ErrorNegocio('El examen vinculado ya no existe: vuelve a registrarlo.')
+  await guardarCertificadoEgreso(t.colaboradorId, examen, opts.certificadoDataUri, opts.usuarioId)
 }
 
 /** Soporte del pago de aportes de los últimos 3 meses (art. 65 CST, parágrafo 1): queda en su autoservicio. */

@@ -151,7 +151,8 @@ describe('Cumpleaños', () => {
     expect(doc.nombre).toBe('indicaciones.pdf')
     expect(await prisma.documento.count({ where: { entidadTipo: 'CelebracionCumpleanos', entidadId: id } })).toBe(0)
     actuarComo(encargado)
-    expect(errorDe(await entregarFacturasCumpleanos({ id }))).toContain('al menos una factura')
+    // Sin facturas se puede entregar, pero hay que explicar por qué.
+    expect(errorDe(await entregarFacturasCumpleanos({ id }))).toContain('No hay facturas')
 
     actuarComo(th)
     datosDe(await asignar({ nota: 'Indicaciones actualizadas' }))
@@ -182,7 +183,7 @@ describe('Cumpleaños', () => {
   it('el encargado no puede entregar sin facturas, y un tercero no puede entregar lo ajeno', async () => {
     const c = await prisma.celebracionCumpleanos.findUniqueOrThrow({ where: { colaboradorId_anio: { colaboradorId: homenajeadoId, anio: ANIO } } })
     actuarComo(encargado)
-    expect(errorDe(await entregarFacturasCumpleanos({ id: c.id, valorTotal: 80_000 }))).toContain('al menos una factura')
+    expect(errorDe(await entregarFacturasCumpleanos({ id: c.id, valorTotal: 80_000 }))).toContain('No hay facturas')
     await facturaFalsa(c.id)
     actuarComo(otro)
     expect(errorDe(await entregarFacturasCumpleanos({ id: c.id }))).toContain('no está a tu cargo')
@@ -232,13 +233,17 @@ describe('Cumpleaños', () => {
     actuarComo(th)
     const adjunto = await guardarArchivoTemporal(pdfIndicaciones, th.id, { mimeType: 'application/pdf' })
     const { id } = datosDe(await asignar({ anio: ANIO - 1, indicacionesPdfRef: adjunto.ref }))
-    datosDe(await cancelarCelebracionCumpleanos({ id }))
+    datosDe(await cancelarCelebracionCumpleanos({ id, motivo: 'Prueba: encargo asignado por error' }))
     expect(await prisma.celebracionCumpleanos.findUnique({ where: { id } })).toBeNull()
     expect(await prisma.documento.count({ where: { entidadTipo: 'IndicacionesCumpleanos', entidadId: id } })).toBe(0)
 
     const { id: id2 } = datosDe(await asignar({ anio: ANIO - 2 }))
     await facturaFalsa(id2)
-    expect(errorDe(await cancelarCelebracionCumpleanos({ id: id2 }))).toContain('ya subió archivos')
+    // Con facturas ya subidas también se puede cancelar (con motivo): la celebración
+    // se borra y las facturas pasan al expediente del homenajeado, no se pierden.
+    datosDe(await cancelarCelebracionCumpleanos({ id: id2, motivo: 'Prueba: se cancela con facturas' }))
+    expect(await prisma.celebracionCumpleanos.findUnique({ where: { id: id2 } })).toBeNull()
+    expect(await prisma.documento.count({ where: { entidadTipo: 'Colaborador', nombre: { contains: 'encargo cancelado' } } })).toBeGreaterThan(0)
   })
 
   it('el recordatorio sale una sola vez cuando el cumpleaños está cerca', async () => {

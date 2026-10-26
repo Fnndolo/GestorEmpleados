@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Pill } from '@/components/ui-kit'
 import { ZonaArchivos, SoportesLista, subirArchivoEntidad, type SoporteDoc } from '@/app/(app)/juridica/_ui'
@@ -31,7 +32,8 @@ export type CumpleanosACargoItem = {
  * Los cumpleaños que Talento Humano le encargó a esta persona. Después de la
  * celebración sube las facturas (varias: PDF o fotos) y anota lo que gastó; si
  * TH las devuelve, ve el motivo y vuelve a subir. No hay plazo: se entrega
- * cuando esté listo.
+ * cuando esté listo. Puede entregar sin facturas explicando por qué, y seguir
+ * agregando facturas mientras TH no cierre la celebración.
  */
 export function CumpleanosACargo({ items }: { items: CumpleanosACargoItem[] }) {
   return (
@@ -45,18 +47,25 @@ function Celebracion({ c }: { c: CumpleanosACargoItem }) {
   const router = useRouter()
   const [archivos, setArchivos] = useState<File[]>([])
   const [valor, setValor] = useState(c.valorReportado != null ? String(c.valorReportado) : '')
+  const [nota, setNota] = useState('')
   const [enviando, setEnviando] = useState(false)
+  // Ya entregó y TH no ha cerrado: puede seguir agregando facturas (o corregir el valor).
+  const agregando = c.estado === 'FACTURAS_ENTREGADAS'
+  // Sin ninguna factura (ni subida ni elegida) se exige explicar por qué.
+  const sinFacturas = archivos.length === 0 && c.facturas.length === 0
+  const valorCambio = (valor ? Number(valor) : null) !== c.valorReportado
 
   async function entregar() {
-    // Se acepta entregar sin archivos nuevos si ya había subidos (p. ej. tras una devolución por el valor).
-    if (archivos.length === 0 && c.facturas.length === 0) { toast.error('Adjunta al menos una factura.'); return }
+    if (sinFacturas && nota.trim().length < 5) { toast.error('No hay facturas: explica en una nota corta por qué.'); return }
+    if (agregando && archivos.length === 0 && !valorCambio) { toast.error('Elige las facturas que quieres agregar.'); return }
     setEnviando(true)
     try {
       for (const file of archivos) await subirArchivoEntidad('CelebracionCumpleanos', c.id, file, `Factura — ${file.name}`)
-      const res = await entregarFacturasCumpleanos({ id: c.id, valorTotal: valor ? Number(valor) : undefined })
+      const res = await entregarFacturasCumpleanos({ id: c.id, valorTotal: valor ? Number(valor) : undefined, nota: sinFacturas ? nota.trim() : undefined })
       if (!res.ok) throw new Error(res.error)
-      toast.success('Facturas entregadas. Talento Humano las revisará.')
+      toast.success(agregando ? 'Facturas agregadas. Talento Humano las verá en la revisión.' : sinFacturas ? 'Entregado sin facturas. Talento Humano recibió tu nota.' : 'Facturas entregadas. Talento Humano las revisará.')
       setArchivos([])
+      setNota('')
       router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudieron entregar las facturas.')
@@ -103,26 +112,41 @@ function Celebracion({ c }: { c: CumpleanosACargoItem }) {
         </div>
       )}
 
-      {c.estado === 'ASIGNADA' ? (
-        <div className="space-y-3 border-t pt-3">
-          <p className="text-xs text-muted-foreground">Cuando pase la celebración, sube las facturas de lo que compraste (PDF o fotos) y anota el total.</p>
-          <ZonaArchivos archivos={archivos} onChange={setArchivos} />
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-xs">
-              <Label>Valor total gastado (opcional)</Label>
-              <Input type="number" min={0} step="1" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0" />
-            </div>
-            <Button onClick={entregar} disabled={enviando} className="ml-auto">
-              {enviando ? <Spinner className="size-4" /> : <Upload className="size-4" />} Entregar facturas
-            </Button>
-          </div>
-        </div>
-      ) : (
+      {c.estado !== 'ASIGNADA' && (
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           {c.estado === 'CERRADA' ? <CircleCheck className="size-3.5 text-emerald-600" /> : <Clock className="size-3.5" />}
           {c.valorReportado != null ? `Reportaste ${fmtCOP(c.valorReportado)}. ` : ''}
-          {c.estado === 'CERRADA' ? 'Talento Humano aceptó las facturas. Gracias por organizarlo.' : 'Talento Humano está revisando las facturas.'}
+          {c.estado === 'CERRADA'
+            ? 'Talento Humano aceptó las facturas. Gracias por organizarlo.'
+            : c.facturas.length === 0 ? 'Entregaste sin facturas; Talento Humano lo está revisando.' : 'Talento Humano está revisando las facturas.'}
         </p>
+      )}
+
+      {/* Mientras TH no cierre la celebración se pueden subir (más) facturas. */}
+      {c.estado !== 'CERRADA' && (
+        <div className="space-y-3 border-t pt-3">
+          <p className="text-xs text-muted-foreground">
+            {agregando
+              ? 'Si te faltó alguna factura, agrégala aquí mientras Talento Humano no cierre la celebración.'
+              : 'Cuando pase la celebración, sube las facturas de lo que compraste (PDF o fotos) y anota el total.'}
+          </p>
+          <ZonaArchivos archivos={archivos} onChange={setArchivos} />
+          {sinFacturas && (
+            <div className="space-y-1.5">
+              <Label>¿Por qué no hay facturas? <span className="text-destructive">*</span></Label>
+              <Textarea rows={2} maxLength={300} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Ej.: no entregaron factura, lo pagó otra persona, no hubo gasto…" />
+            </div>
+          )}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-xs">
+              <Label>Valor total gastado</Label>
+              <Input type="number" min={0} step="1" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0" />
+            </div>
+            <Button onClick={entregar} disabled={enviando || (sinFacturas && nota.trim().length < 5)} className="ml-auto">
+              {enviando ? <Spinner className="size-4" /> : <Upload className="size-4" />} {agregando ? 'Agregar facturas' : sinFacturas ? 'Entregar sin facturas' : 'Entregar facturas'}
+            </Button>
+          </div>
+        </div>
       )}
     </CardContent></Card>
   )

@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
@@ -344,6 +345,7 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
   const [dialogoPago, setDialogoPago] = useState(false)
   const [dialogoDeshacer, setDialogoDeshacer] = useState(false)
   const [comprobante, setComprobante] = useState<File | null>(null)
+  const [motivoDeshacer, setMotivoDeshacer] = useState('')
   const estado = pagoLocal?.estado
   const pagado = estado === 'PAGADO'
   const firmada = estado === 'FIRMADA' || pagado
@@ -403,11 +405,12 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
   async function confirmarDeshacer() {
     if (!pagoLocal) return
     setOcupado('deshacer')
-    const res = await marcarPagoPendiente({ pagoId: pagoLocal.id })
+    const res = await marcarPagoPendiente({ pagoId: pagoLocal.id, motivo: motivoDeshacer.trim() })
     setOcupado(null)
     if (!res.ok) { toast.error(res.error); return }
     toast.success('Corregido: vuelve a "firmada".')
     setDialogoDeshacer(false)
+    setMotivoDeshacer('')
     router.refresh()
   }
 
@@ -515,7 +518,7 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
             <DialogDescription>Confirma que ya se hizo el pago de sus horas extra de este período.</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
-            <Label htmlFor="comprobante-pago" className="text-xs text-muted-foreground">Comprobante de pago (opcional)</Label>
+            <Label htmlFor="comprobante-pago" className="text-xs text-muted-foreground">Comprobante de pago</Label>
             <Input id="comprobante-pago" type="file" accept="application/pdf,image/*" onChange={(e) => setComprobante(e.target.files?.[0] ?? null)} />
           </div>
           <DialogFooter>
@@ -534,9 +537,13 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
             <DialogTitle>¿Quitar la marca de pagado?</DialogTitle>
             <DialogDescription>Vuelve a &quot;firmada&quot; (la firma del colaborador no se toca) y retira el comprobante, si había uno.</DialogDescription>
           </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="motivo-deshacer-pago">Motivo <span className="text-destructive">*</span></Label>
+            <Textarea id="motivo-deshacer-pago" rows={2} placeholder="¿Por qué se deshace? Queda en la auditoría." value={motivoDeshacer} onChange={(e) => setMotivoDeshacer(e.target.value)} />
+          </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogoDeshacer(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmarDeshacer} disabled={ocupado !== null}>
+            <Button variant="destructive" onClick={confirmarDeshacer} disabled={ocupado !== null || motivoDeshacer.trim().length < 5}>
               {ocupado === 'deshacer' && <Spinner />} Sí, quitar
             </Button>
           </DialogFooter>

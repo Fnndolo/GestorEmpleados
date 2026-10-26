@@ -4,12 +4,88 @@ import { reducirImagen } from '@/lib/reducir-imagen'
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Eye, Upload, FileText, Image as ImageIcon, X } from 'lucide-react'
+import { Eye, Upload, FileText, Image as ImageIcon, X, Ban, Trash2 } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { cn } from '@/lib/utils'
+
+/**
+ * Anular o eliminar un registro con el motivo obligatorio (queda en auditoría).
+ * El mismo diálogo para procesos, denuncias, documentos legales y habeas data:
+ * cambia el resumen y la acción del servidor.
+ */
+export function DialogAnular({ titulo, detalle, verbo = 'Anular', exito, anular, onClose, onDone }: {
+  titulo: string
+  detalle: React.ReactNode
+  verbo?: 'Anular' | 'Eliminar'
+  /** Texto del toast al confirmar; por defecto "Anulado." / "Eliminado.". */
+  exito?: string
+  anular: (motivo: string) => Promise<{ ok: boolean; error?: string }>
+  onClose: () => void
+  /** Qué hacer al terminar; por defecto refresca la pantalla. */
+  onDone?: () => void
+}) {
+  const router = useRouter()
+  const [motivo, setMotivo] = useState('')
+  const [g, setG] = useState(false)
+  const Icono = verbo === 'Eliminar' ? Trash2 : Ban
+
+  async function confirmar() {
+    setG(true)
+    const res = await anular(motivo)
+    setG(false)
+    if (res.ok) {
+      toast.success(exito ?? (verbo === 'Eliminar' ? 'Eliminado.' : 'Anulado.'))
+      onClose()
+      if (onDone) onDone(); else router.refresh()
+    } else toast.error(res.error ?? `No se pudo ${verbo.toLowerCase()}.`, { duration: 8000 })
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !g && onClose()}>
+      <DialogContent aria-describedby={undefined}>
+        <DialogHeader><DialogTitle>{titulo}</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">{detalle}</p>
+        <div className="space-y-1.5">
+          <Label htmlFor="motivo-anulacion">Motivo <span className="text-destructive">*</span></Label>
+          <Textarea id="motivo-anulacion" rows={2} placeholder={`¿Por qué se ${verbo === 'Eliminar' ? 'elimina' : 'anula'}?`} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={g}>Volver</Button>
+          <Button variant="destructive" onClick={confirmar} disabled={g || motivo.trim().length < 5}>{g ? <Spinner /> : <Icono className="size-4" />} {verbo}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Botón fantasma rojo que abre el diálogo de anular/eliminar. Solo ícono en el celular. */
+export function BotonAnular({ onClick, verbo = 'Anular', bloqueado, soloIcono }: {
+  onClick: () => void
+  verbo?: 'Anular' | 'Eliminar'
+  /** Si viene, el botón se ve pero al tocarlo explica por qué no se puede (un bloqueo nunca esconde el botón). */
+  bloqueado?: string | null
+  soloIcono?: boolean
+}) {
+  const Icono = verbo === 'Eliminar' ? Trash2 : Ban
+  return (
+    <Button
+      size={soloIcono ? 'icon' : 'sm'}
+      variant="ghost"
+      className={cn('text-destructive hover:text-destructive', bloqueado && 'opacity-60')}
+      onClick={() => (bloqueado ? toast.error(bloqueado, { duration: 8000 }) : onClick())}
+      title={bloqueado ?? verbo}
+      aria-label={verbo}
+    >
+      <Icono className="size-4" />{!soloIcono && <span className="hidden sm:inline">{verbo}</span>}
+    </Button>
+  )
+}
 
 export const inputArchivoCls =
   'block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground'

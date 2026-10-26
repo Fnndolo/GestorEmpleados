@@ -153,6 +153,12 @@ export default async function AprobacionesPage({ searchParams }: { searchParams:
               calculoVacaciones,
               // La solicitud volvió tras una devolución: el colaborador corrigió el soporte.
               soporteCorregido: Boolean((s.datos as Record<string, unknown>).soporteCorregidoEn),
+              // El soporte llegó después de radicada (la solicitud nunca estuvo devuelta).
+              soporteAdjuntado: Boolean((s.datos as Record<string, unknown>).soporteAdjuntadoEn),
+              // Se esperaba soporte (EPS/ARL o el de la licencia) y no hay ninguno: se
+              // marca y se advierte al aprobar, pero no bloquea.
+              sinSoporte: (s.tipo === 'INCAPACIDAD' || (s.tipo === 'LICENCIA' && !!datos.licenciaTipo && defLicencia(datos.licenciaTipo).requiereSoporte))
+                && !docsPorSolicitud.has(s.id),
               contrapropuestaRechazada: (() => {
                 if (s.tipo !== 'VACACIONES') return null
                 const cp = (s.datos as Record<string, unknown>).contrapropuesta as

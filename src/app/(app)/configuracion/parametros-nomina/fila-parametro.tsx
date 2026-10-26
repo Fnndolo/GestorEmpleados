@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CalendarPlus, ChevronRight, Paperclip, Save, Trash2 } from 'lucide-react'
+import { CalendarPlus, ChevronRight, Paperclip, Pencil, Save, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,7 +17,7 @@ import { Ayuda } from '@/components/ui-kit/ayuda'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { cn } from '@/lib/utils'
 import { fmtValor } from './formato'
-import { crearParametro, eliminarParametro, eliminarVigenciaParametro } from './acciones'
+import { crearParametro, eliminarParametro, eliminarVigenciaParametro, actualizarParametroNomina } from './acciones'
 import type { ParametroItem, VigenciaItem } from './form'
 
 /**
@@ -38,6 +38,7 @@ export function FilaParametro({
 }) {
   const [abierto, setAbierto] = useState(false)
   const [ocupado, setOcupado] = useState(false)
+  const [corrigiendo, setCorrigiendo] = useState<VigenciaItem | null>(null)
 
   async function borrarParametro() {
     if (!confirm(`¿Eliminar ${p.clave} con todo su histórico? No se puede deshacer.`)) return
@@ -130,23 +131,99 @@ export function FilaParametro({
                 <SubirSoporteVigencia vigenciaId={v.id} onSubido={onCambio} />
               ) : null}
               {puedeEditar && (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="size-7 shrink-0"
-                  disabled={ocupado}
-                  onClick={() => borrarVigencia(v)}
-                  aria-label={`Eliminar la vigencia desde ${v.desde}`}
-                  title="Eliminar esta vigencia"
-                >
-                  <Trash2 className="size-3.5 text-destructive" />
-                </Button>
+                <>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-7 shrink-0"
+                    disabled={ocupado}
+                    onClick={() => setCorrigiendo(v)}
+                    aria-label={`Corregir la vigencia desde ${v.desde}`}
+                    title="Corregir esta vigencia"
+                  >
+                    <Pencil className="size-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-7 shrink-0"
+                    disabled={ocupado}
+                    onClick={() => borrarVigencia(v)}
+                    aria-label={`Eliminar la vigencia desde ${v.desde}`}
+                    title="Eliminar esta vigencia"
+                  >
+                    <Trash2 className="size-3.5 text-destructive" />
+                  </Button>
+                </>
               )}
             </li>
           ))}
         </ul>
       )}
+
+      {corrigiendo && (
+        <DialogCorregirVigencia
+          clave={p.clave} vigencia={corrigiendo}
+          onClose={() => setCorrigiendo(null)} onDone={() => { setCorrigiendo(null); onCambio() }}
+        />
+      )}
     </div>
+  )
+}
+
+/**
+ * Corrige la fila mal digitada (valor, fecha de inicio y fuente). Para un cambio
+ * de ley va «Nueva vigencia»; esto no toca una vigencia que ya usó una nómina
+ * cerrada (el servidor lo impide).
+ */
+function DialogCorregirVigencia({ clave, vigencia, onClose, onDone }: { clave: string; vigencia: VigenciaItem; onClose: () => void; onDone: () => void }) {
+  const [valor, setValor] = useState(String(vigencia.valor))
+  const [desde, setDesde] = useState(vigencia.desde)
+  const [fuente, setFuente] = useState(vigencia.fuente)
+  const [g, setG] = useState(false)
+  const esPorcentaje = vigencia.valor <= 1
+
+  async function guardar() {
+    setG(true)
+    const res = await actualizarParametroNomina({ id: vigencia.id, valor: Number(valor), vigenciaDesde: desde, fuenteLegal: fuente || undefined })
+    setG(false)
+    if (res.ok) { toast.success('Vigencia corregida.'); onDone() }
+    else toast.error(res.error, { duration: 8000 })
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !g && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Corregir vigencia — {clave}</DialogTitle>
+          <DialogDescription>{vigencia.desde} → {vigencia.hasta ?? 'vigente'}. Para un cambio de ley usa «Nueva vigencia»: esto corrige lo que quedó mal digitado.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="gap-1.5">
+              Valor <span className="text-destructive">*</span>
+              {esPorcentaje && <Ayuda texto="Porcentaje en decimal: 0.04 = 4%." etiqueta="Cómo escribir el valor" />}
+            </Label>
+            <Input type="number" step="any" value={valor} onChange={(e) => setValor(e.target.value)} autoFocus />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="gap-1.5">
+              Rige desde <span className="text-destructive">*</span>
+              <Ayuda texto="Si la mueves, la vigencia anterior se cierra el día antes para que no quede hueco." etiqueta="Qué pasa al mover la fecha" />
+            </Label>
+            <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Fuente legal</Label>
+            <Textarea rows={2} value={fuente} onChange={(e) => setFuente(e.target.value)} placeholder="Decreto, ley o resolución" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button>
+          <Button onClick={guardar} disabled={g || valor === '' || !desde}>{g ? <Spinner /> : <Save className="size-4" />} Guardar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

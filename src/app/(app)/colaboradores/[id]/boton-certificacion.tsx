@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { FileBadge, Eye } from 'lucide-react'
+import { FileBadge, Eye, Ban } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Input } from '@/components/ui/input'
@@ -12,11 +12,24 @@ import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { generarCertificacionRRHH } from '../certificacion-acciones'
+import { generarCertificacionRRHH, anularCertificacion } from '../certificacion-acciones'
+import { DialogAnular } from '@/components/contratos/dialog-anular'
 
-export function BotonCertificacion({ colaboradorId }: { colaboradorId: string }) {
+export type CertificacionEmitida = { id: string; tipo: string; dirigidaA: string | null; fecha: string; documentoId: string | null }
+
+const TIPO_CERT: Record<string, string> = {
+  SIMPLE: 'Simple', CON_SALARIO: 'Con salario', CON_FUNCIONES: 'Con funciones', ENTIDAD_FINANCIERA: 'Entidad financiera',
+}
+
+export function BotonCertificacion({ colaboradorId, certificaciones = [], puedeEliminar = false }: {
+  colaboradorId: string
+  /** Las ya emitidas, de la más reciente a la más antigua: se ven y se anulan desde aquí. */
+  certificaciones?: CertificacionEmitida[]
+  puedeEliminar?: boolean
+}) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
+  const [anulando, setAnulando] = useState<CertificacionEmitida | null>(null)
   const [tipo, setTipo] = useState<'SIMPLE' | 'CON_SALARIO' | 'CON_FUNCIONES' | 'ENTIDAD_FINANCIERA'>('SIMPLE')
   const [dirigidaA, setDirigidaA] = useState('')
   const [g, setG] = useState(false)
@@ -79,12 +92,45 @@ export function BotonCertificacion({ colaboradorId }: { colaboradorId: string })
               </div>
             )}
           </div>
+          {certificaciones.length > 0 && (
+            <div className="space-y-1.5 pt-2">
+              <p className="text-xs font-medium text-muted-foreground">Emitidas</p>
+              <ul className="max-h-48 divide-y overflow-y-auto rounded-lg border">
+                {certificaciones.map((cert) => (
+                  <li key={cert.id} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+                    <span className="min-w-0 flex-1 truncate">
+                      {TIPO_CERT[cert.tipo] ?? cert.tipo}{cert.dirigidaA ? ` · ${cert.dirigidaA}` : ''} · {cert.fecha}
+                    </span>
+                    {cert.documentoId && (
+                      <VisorPdf documentoId={cert.documentoId} titulo="Certificación laboral" mimeType="application/pdf" className={buttonVariants({ variant: 'ghost', size: 'icon', className: 'size-7' })}>
+                        <Eye className="size-4" /><span className="sr-only">Ver</span>
+                      </VisorPdf>
+                    )}
+                    {puedeEliminar && (
+                      <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" aria-label="Anular certificación" title="Anular certificación" onClick={() => setAnulando(cert)}>
+                        <Ban className="size-4" />
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAbierto(false)}>Cerrar</Button>
             <Button onClick={generar} disabled={g}>{g ? <Spinner /> : <FileBadge className="size-4" />} Generar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {anulando && (
+        <DialogAnular
+          titulo="Anular certificación"
+          detalle={`${TIPO_CERT[anulando.tipo] ?? anulando.tipo}${anulando.dirigidaA ? ` · dirigida a ${anulando.dirigidaA}` : ''} · ${anulando.fecha} · se borra el registro y su PDF.`}
+          mensajeOk="Certificación anulada."
+          accion={(motivo) => anularCertificacion({ id: anulando.id, motivo })}
+          onClose={() => setAnulando(null)}
+        />
+      )}
     </>
   )
 }

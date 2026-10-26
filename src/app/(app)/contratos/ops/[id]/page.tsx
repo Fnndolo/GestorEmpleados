@@ -21,6 +21,7 @@ import { GenerarAutorizacion, RegenerarDocumentos } from './generar-autorizacion
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import { HabilitarFirma } from './habilitar-firma'
 import { CorregirPosicionFirma } from '@/components/contratos/corregir-posicion-firma'
+import { EditarContratoOps } from './editar-contrato-ops'
 
 export const metadata = { title: 'Contrato OPS · Smart Gadgets RH' }
 
@@ -46,7 +47,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
     ? `${c.colaborador.nombres} ${c.colaborador.apellidos}`
     : snap?.encabezado?.contratistaNombre || snap?.firmaContratistaNombre || 'Contratista sin ficha'
 
-  const [documentos, anexos] = await Promise.all([
+  const [documentos, anexos, sedes, cargos] = await Promise.all([
     prisma.documento.findMany({
       where: { entidadTipo: 'ContratoOps', entidadId: id },
       orderBy: { creadoEn: 'desc' },
@@ -59,7 +60,17 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
       select: { id: true, nombre: true, creadoEn: true },
       orderBy: { creadoEn: 'desc' },
     }),
+    prisma.sede.findMany({ where: { activa: true }, include: { ciudad: true }, orderBy: { nombre: 'asc' } }),
+    prisma.cargo.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' }, select: { id: true, nombre: true } }),
   ])
+  // Por qué no se pueden corregir los datos del contrato (el lápiz se ve igual y lo explica).
+  const bloqueoEdicion = c.firmaContratistaPath
+    ? 'El contratista ya firmó: los datos están congelados. Si cambian las condiciones, regístralas por otrosí (adjúntalo en Documentos) o cierra este contrato y crea uno nuevo.'
+    : c.estado === 'TERMINADO'
+      ? 'Este contrato ya está cerrado: no se corrige.'
+      : c.cuentasCobro.length > 0
+        ? 'Tiene cuentas de cobro radicadas: anúlalas primero si el error está en el contrato, o registra el cambio por otrosí.'
+        : null
 
   // Planillas PILA adjuntadas por el contratista a sus cuentas de cobro:
   // el verificador debe poder VER el archivo, no solo los datos declarados.
@@ -127,6 +138,19 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
               <Button asChild size="icon" variant="outline" title="Ver ficha del contratista" aria-label="Ver ficha del contratista">
                 <Link href={`/colaboradores/${c.colaboradorId}`}><UserRound className="size-4" /></Link>
               </Button>
+            )}
+            {puedeEditar && (
+              <EditarContratoOps
+                motivoBloqueo={bloqueoEdicion}
+                sedes={sedes.map((s) => ({ id: s.id, nombre: s.nombre, ciudad: s.ciudad.nombre }))}
+                cargos={cargos}
+                datos={{
+                  contratoId: c.id, numero: c.numero, objeto: c.objeto,
+                  valorTotal: Number(c.valorTotal), valorMensual: c.valorMensual != null ? Number(c.valorMensual) : null,
+                  supervisorId: c.supervisorId ?? '', cargoId: c.cargoId ?? '', sedeId: c.sedeId,
+                  fechaInicio: formatFechaISO(c.fechaInicio), fechaFin: formatFechaISO(c.fechaFin), rut: c.rut ?? '',
+                }}
+              />
             )}
             {puedeEditar && (
               <AccionesOps
@@ -256,6 +280,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
             id: cc.id, numero: cc.numero, periodo: cc.periodo, valor: Number(cc.valor),
             estado: cc.estado, fechaRadicacion: formatFechaISO(cc.fechaRadicacion),
             fechaPago: cc.fechaPago ? formatFechaISO(cc.fechaPago) : null,
+            concepto: cc.concepto, creadaPorContratista: cc.creadaPorContratista,
             requierePila: cc.requierePila,
             soporte: cc.soporteSs ? {
               estadoVerificacion: cc.soporteSs.estadoVerificacion,
@@ -266,6 +291,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
             planilla: planillaPorCuenta.get(cc.id) ?? null,
           }))}
           puedeEditar={puedeEditar}
+          puedeEliminar={puedeEliminar}
           puedeAprobar={puedeAprobar}
         />
       </CardContent></Card>

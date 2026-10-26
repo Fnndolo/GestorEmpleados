@@ -303,6 +303,10 @@ export default async function AutoservicioPage() {
           : null,
         comprobante: s.tipo === 'PERMISO' && permisoPorSolicitud.has(s.id) ? comprobanteDe(permisoPorSolicitud.get(s.id)!) : null,
         soportes: soportesPorSolicitud.get(s.id) ?? [],
+        // Se esperaba soporte (EPS/ARL o el de la licencia) y aún no lo adjuntó.
+        sinSoporte: (s.tipo === 'INCAPACIDAD' || (!!licTipo && defLicencia(licTipo).requiereSoporte)) && !soportesPorSolicitud.has(s.id),
+        // Mientras nadie la resuelva, el soporte se puede adjuntar desde aquí.
+        adjuntarSoporte: s.estado === 'EN_APROBACION' || s.estado === 'PENDIENTE',
         cancelable: ESTADOS_CANCELABLES.includes(s.estado),
         // Un permiso se puede corregir mientras siga en aprobación y nadie lo haya decidido.
         edicion: s.tipo === 'PERMISO' && s.estado === 'EN_APROBACION' && s.pasos.every((p) => p.estado === 'PENDIENTE')

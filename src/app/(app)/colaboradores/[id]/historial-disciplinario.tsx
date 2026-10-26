@@ -8,7 +8,8 @@ import { Gavel, MessageSquareWarning, Trash2, ExternalLink } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { eliminarLlamadoAtencion } from '@/app/(app)/juridica/acciones'
+import { eliminarLlamadoAtencion, anularProcesoDisciplinario } from '@/app/(app)/juridica/acciones'
+import { DialogAnular, BotonAnular } from '@/app/(app)/juridica/_ui'
 
 export type ItemHistorial =
   | { clase: 'llamado'; id: string; fecha: string; tipo: 'VERBAL' | 'ESCRITO'; motivo: string; detalle: string | null }
@@ -39,6 +40,8 @@ export function HistorialDisciplinario({
 }) {
   const router = useRouter()
   const [borrando, setBorrando] = useState<string | null>(null)
+  // Proceso o llamado (clase 'proceso' del historial) que se va a anular, con motivo.
+  const [anulando, setAnulando] = useState<Extract<ItemHistorial, { clase: 'proceso' }> | null>(null)
 
   async function borrar(id: string) {
     if (!confirm('¿Eliminar este llamado de atención? Se pierde como antecedente.')) return
@@ -99,6 +102,7 @@ export function HistorialDisciplinario({
                 <Button size="sm" variant="ghost" asChild>
                   <Link href={`/juridica/disciplinarios/${i.id}`}><ExternalLink className="size-4" /> Ver</Link>
                 </Button>
+                {puedeEliminar && <BotonAnular soloIcono onClick={() => setAnulando(i)} />}
               </div>
             ) : (
               <div className="flex shrink-0 items-center gap-2">
@@ -119,6 +123,15 @@ export function HistorialDisciplinario({
           </li>
         ))}
       </ul>
+      {anulando && (
+        <DialogAnular
+          titulo="Anular del historial"
+          detalle={`"${anulando.asunto}" · ${anulando.fecha} · se borran sus etapas, soportes y acta; al colaborador se le avisa y deja de aparecer en su historial.`}
+          exito="Anulado. Se le avisó al colaborador."
+          anular={(motivo) => anularProcesoDisciplinario({ id: anulando.id, motivo })}
+          onClose={() => setAnulando(null)}
+        />
+      )}
     </CardContent></Card>
   )
 }

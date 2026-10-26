@@ -7,10 +7,12 @@ import { dbAuditado } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { validarDias } from '@/lib/horarios'
 import { parseFechaISO, hoyBogota } from '@/lib/fechas'
-import { asignarHorario, cancelarCambioProgramado, importarDeAsistencia, vistaPreviaComunicacion } from '@/server/horarios'
+import { asignarHorario, cancelarCambioProgramado, importarDeAsistencia, vistaPreviaComunicacion, editarAsignacion, anularAsignacion } from '@/server/horarios'
 import { guardarCronograma, publicarCronograma, avisosDelCronograma } from '@/server/cronograma'
+import { auditar } from '@/lib/auditoria'
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida')
+const motivo = z.string().trim().min(5, 'Explica por qué se anula.').max(300)
 
 function refrescar(colaboradorId?: string) {
   revalidatePath('/horarios')
@@ -77,14 +79,41 @@ export const activarHorario = accion(
   },
 )
 
-/** Borra una plantilla que nunca se asignó; la que ya se usó solo se desactiva (es historial). */
+/**
+ * Borra una plantilla, con el motivo (queda en auditoría). Si alguien la tiene
+ * vigente o programada no se borra (desactívala); las asignaciones pasadas
+ * conservan su copia de los días y solo pierden el enlace a la plantilla.
+ */
 export const eliminarHorario = accion(
-  { modulo: 'horarios', accion: 'ELIMINAR', schema: z.object({ id: z.uuid() }) },
+  { modulo: 'horarios', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo }) },
   async (d) => {
-    const usos = await prisma.asignacionHorario.count({ where: { horarioId: d.id } })
-    if (usos > 0) throw new ErrorNegocio('Este horario ya se asignó y es parte del historial: desactívalo en vez de borrarlo.')
+    const vigentes = await prisma.asignacionHorario.count({ where: { horarioId: d.id, OR: [{ hasta: null }, { hasta: { gte: hoyBogota() } }] } })
+    if (vigentes > 0) throw new ErrorNegocio(`No se puede eliminar: ${vigentes} persona${vigentes === 1 ? ' lo tiene' : 's lo tienen'} vigente o programado. Desactívalo en vez de borrarlo.`)
     await dbAuditado.horario.delete({ where: { id: d.id } })
+    await auditar('ELIMINAR', 'Horario', { registroId: d.id, descripcion: `Anulado: ${d.motivo}` })
     refrescar()
+    return { ok: true }
+  },
+)
+
+/** Corrige desde cuándo rige una asignación (vigente o pasada) y su motivo. */
+export const editarAsignacionHorario = accion(
+  { modulo: 'horarios', accion: 'EDITAR', schema: z.object({ asignacionId: z.uuid(), desde: fecha, motivo: z.string().trim().max(300).optional() }) },
+  async (d) => {
+    const a = await prisma.asignacionHorario.findUniqueOrThrow({ where: { id: d.asignacionId }, select: { colaboradorId: true } })
+    await editarAsignacion({ asignacionId: d.asignacionId, desde: parseFechaISO(d.desde)!, motivo: d.motivo || null })
+    refrescar(a.colaboradorId)
+    return { ok: true }
+  },
+)
+
+/** Anula una asignación registrada por error, con el motivo: vuelve a regir la anterior. */
+export const anularAsignacionHorario = accion(
+  { modulo: 'horarios', accion: 'ELIMINAR', schema: z.object({ asignacionId: z.uuid(), motivo }) },
+  async (d) => {
+    const a = await prisma.asignacionHorario.findUniqueOrThrow({ where: { id: d.asignacionId }, select: { colaboradorId: true } })
+    await anularAsignacion({ asignacionId: d.asignacionId, motivo: d.motivo })
+    refrescar(a.colaboradorId)
     return { ok: true }
   },
 )

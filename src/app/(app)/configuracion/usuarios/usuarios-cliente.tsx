@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
@@ -9,7 +10,9 @@ import {
   crearUsuarioSchema, editarUsuarioSchema,
   type CrearUsuarioInput, type EditarUsuarioInput,
 } from '@/lib/validaciones/usuarios'
-import { crearUsuario, editarUsuario, reenviarAcceso } from './acciones'
+import { crearUsuario, editarUsuario, reenviarAcceso, eliminarUsuario } from './acciones'
+import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
+import { DialogMotivo } from '../dialog-motivo'
 import { AvatarColaborador } from '@/components/ui-kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,6 +41,8 @@ type Usuario = {
   rolIdsExtra: string[]; rolNombresExtra: string[]
   estado: string; telefonoE164: string | null; debeCambiarPassword: boolean
   ultimoAcceso: string | null; sedeIds: string[]; sedeNombres: string[]
+  /** Por qué no se puede borrar la cuenta (null = sí se puede). */
+  motivoBloqueo: string | null
 }
 type Rol = { id: string; nombre: string }
 type Sede = { id: string; nombre: string; ciudad: string }
@@ -52,12 +57,14 @@ const ESTADO_USUARIO: Record<string, string> = {
 }
 
 export function UsuariosCliente({
-  usuarios, roles, sedes, puedeCrear, puedeEditar,
+  usuarios, roles, sedes, puedeCrear, puedeEditar, puedeEliminar = false,
 }: {
-  usuarios: Usuario[]; roles: Rol[]; sedes: Sede[]; puedeCrear: boolean; puedeEditar: boolean
+  usuarios: Usuario[]; roles: Rol[]; sedes: Sede[]; puedeCrear: boolean; puedeEditar: boolean; puedeEliminar?: boolean
 }) {
+  const router = useRouter()
   const [nuevo, setNuevo] = useState(false)
   const [editar, setEditar] = useState<Usuario | null>(null)
+  const [borrando, setBorrando] = useState<Usuario | null>(null)
 
   return (
     <div>
@@ -100,6 +107,7 @@ export function UsuariosCliente({
                   <ReenviarBoton id={u.id} nombre={u.nombre} correo={u.email} />
                 </>
               )}
+              {puedeEliminar && <BotonEliminar onEliminar={() => setBorrando(u)} etiqueta={`Eliminar ${u.nombre}`} motivoBloqueo={u.motivoBloqueo} />}
             </div>
           )
         })}
@@ -115,7 +123,7 @@ export function UsuariosCliente({
               <TableHead className="w-[20%]">Rol</TableHead>
               <TableHead className="w-[18%]">Sedes</TableHead>
               <TableHead className="w-28">Estado</TableHead>
-              {puedeEditar && <TableHead className="w-[5.5rem]" />}
+              {(puedeEditar || puedeEliminar) && <TableHead className={puedeEliminar ? 'w-[8rem]' : 'w-[5.5rem]'} />}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -147,15 +155,20 @@ export function UsuariosCliente({
                     <p className="mt-0.5 text-[10px] text-amber-600">Pendiente 1er ingreso</p>
                   )}
                 </TableCell>
-                {puedeEditar && (
+                {(puedeEditar || puedeEliminar) && (
                   <TableCell>
                     <div className="flex gap-1">
-                      <Pista texto="Editar">
-                        <Button variant="ghost" size="icon" onClick={() => setEditar(u)} aria-label={`Editar ${u.nombre}`}>
-                          <Pencil className="size-4" />
-                        </Button>
-                      </Pista>
-                      <ReenviarBoton id={u.id} nombre={u.nombre} correo={u.email} />
+                      {puedeEditar && (
+                        <>
+                          <Pista texto="Editar">
+                            <Button variant="ghost" size="icon" onClick={() => setEditar(u)} aria-label={`Editar ${u.nombre}`}>
+                              <Pencil className="size-4" />
+                            </Button>
+                          </Pista>
+                          <ReenviarBoton id={u.id} nombre={u.nombre} correo={u.email} />
+                        </>
+                      )}
+                      {puedeEliminar && <BotonEliminar onEliminar={() => setBorrando(u)} etiqueta={`Eliminar ${u.nombre}`} motivoBloqueo={u.motivoBloqueo} />}
                     </div>
                   </TableCell>
                 )}
@@ -167,6 +180,20 @@ export function UsuariosCliente({
 
       {nuevo && <DialogNuevo roles={roles} sedes={sedes} onClose={() => setNuevo(false)} />}
       {editar && <DialogEditar usuario={editar} roles={roles} sedes={sedes} onClose={() => setEditar(null)} />}
+      {borrando && (
+        <DialogMotivo
+          titulo="Eliminar usuario"
+          resumen={`${borrando.nombre} · ${borrando.email}. Se borra la cuenta y su acceso; no se puede deshacer.`}
+          placeholder="¿Por qué se elimina?"
+          onClose={() => setBorrando(null)}
+          onConfirmar={async (motivo) => {
+            const res = await eliminarUsuario({ id: borrando.id, motivo })
+            if (res.ok) { toast.success('Usuario eliminado.'); router.refresh(); return true }
+            toast.error(res.error, { duration: 8000 })
+            return false
+          }}
+        />
+      )}
     </div>
   )
 }

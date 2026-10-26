@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
-import { Plus, Pencil, Mail, Upload, Check, X, UserPlus, FileText, RefreshCw, ChevronDown } from 'lucide-react'
+import { Plus, Pencil, Mail, Upload, Check, X, UserPlus, FileText, RefreshCw, ChevronDown, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,8 @@ import { Pill, type PillTone } from '@/components/ui-kit'
 import { Encabezado } from '@/components/shell/encabezado'
 import { rangoBreve } from '@/lib/notificaciones/texto'
 import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
-import { crearAcuerdo, editarAcuerdo, enviarAcuerdo, subirAcuerdoFirmado, decidirAcuerdo, convertirEnColaborador, eliminarAcuerdo, regenerarPdfAcuerdo } from './acciones'
+import { crearAcuerdo, editarAcuerdo, enviarAcuerdo, subirAcuerdoFirmado, decidirAcuerdo, convertirEnColaborador, eliminarAcuerdo, regenerarPdfAcuerdo, revertirDecisionAcuerdo } from './acciones'
+import { DialogAnular } from '@/components/contratos/dialog-anular'
 import type { AcuerdoEvaluacionInput } from '@/lib/validaciones/acuerdo-evaluacion'
 import { mensajeError } from '@/lib/errores-accion'
 
@@ -116,6 +117,7 @@ export function AcuerdosCliente({
   // abierto es el que se está mirando.
   const [abierta, setAbierta] = useState<string | null>(null)
   const [convertir, setConvertir] = useState<Acuerdo | null>(null)
+  const [revirtiendo, setRevirtiendo] = useState<Acuerdo | null>(null)
   const [sedeConversion, setSedeConversion] = useState('')
   const [fechaIngreso, setFechaIngreso] = useState('')
 
@@ -314,6 +316,16 @@ export function AcuerdosCliente({
               </Button>
             </>
           )
+          // Deshacer una decisión equivocada: vuelve a "en evaluación". Con ficha ya creada no se puede, y se dice.
+          const bRevertir = puedeAprobar && !enEvaluacion && (
+            <Button
+              size="sm" variant="outline" disabled={trabajando || !!a.colaboradorId}
+              title={a.colaboradorId ? 'No se puede revertir: ya nació una ficha de colaborador de esta evaluación.' : 'Volver a dejar la evaluación sin decisión'}
+              onClick={() => setRevirtiendo(a)}
+            >
+              <Undo2 className="size-4" /> Revertir decisión
+            </Button>
+          )
           const bFicha = puedeCrearColaborador && a.estado === 'APROBADO' && !a.colaboradorId && (
             <Button size="sm" onClick={() => { setConvertir(a); setSedeConversion(''); setFechaIngreso('') }}>
               <UserPlus className="size-4" /> Crear ficha
@@ -388,6 +400,7 @@ export function AcuerdosCliente({
                     {bEnviar}
                     {bSubir}
                     {bDecidir}
+                    {bRevertir}
                     {bFicha}
                   </div>
                 </div>
@@ -396,6 +409,17 @@ export function AcuerdosCliente({
           )
         })}
       </CardContent></Card>
+
+      {revirtiendo && (
+        <DialogAnular
+          titulo={`Revertir la decisión de ${revirtiendo.nombre}`}
+          detalle={`${revirtiendo.numero} · ${ESTADO[revirtiendo.estado]?.texto ?? revirtiendo.estado} → vuelve a "En evaluación". Al aspirante no se le escribe hasta la nueva decisión.`}
+          verbo="Revertir"
+          mensajeOk="Decisión revertida."
+          accion={(motivo) => revertirDecisionAcuerdo({ id: revirtiendo.id, motivo })}
+          onClose={() => setRevirtiendo(null)}
+        />
+      )}
 
       {/* Nueva evaluación */}
       <Dialog open={abierto} onOpenChange={(o) => { setAbierto(o); if (!o) setEditando(null) }}>

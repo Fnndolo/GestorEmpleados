@@ -15,11 +15,14 @@ import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import { cn } from '@/lib/utils'
 import { cambiarEstadoCuenta, cambiarPilaCuenta } from '../ops-acciones'
+import { AccionesCuentaCobro } from '@/components/contratos/cuenta-cobro-acciones'
 
 type Cuenta = {
   id: string; numero: string; periodo: string; concepto: string | null; valor: number
   estado: string; fechaRadicacion: string; documentoId: string | null
   colaborador: string; esOps: boolean; contratoOpsId: string | null
+  /** La radicó el contratista (PDF firmado por él): valor y periodo no se cambian. */
+  creadaPorContratista: boolean
   /** Se le pidió la planilla PILA: sin ella verificada no se aprueba ni se paga. */
   requierePila: boolean
   /** Verificación del soporte de seguridad social (null: aún no hay soporte). */
@@ -41,10 +44,11 @@ const ESTADO: Record<string, string> = {
   APROBADA: 'Aprobada', PAGADA: 'Pagada', RECHAZADA: 'Rechazada',
 }
 
-export function CuentasRevision({ puedeAprobar, puedeEditar, cuentas }: {
+export function CuentasRevision({ puedeAprobar, puedeEditar, puedeEliminar = false, cuentas }: {
   puedeAprobar: boolean
-  /** Pedir o dejar de pedir la PILA, como al radicar. */
+  /** Pedir o dejar de pedir la PILA, como al radicar; y corregir la cuenta. */
   puedeEditar: boolean
+  puedeEliminar?: boolean
   cuentas: Cuenta[]
 }) {
   const router = useRouter()
@@ -88,6 +92,7 @@ export function CuentasRevision({ puedeAprobar, puedeEditar, cuentas }: {
                 />
               )}
               <Badge variant={c.estado === 'PAGADA' || c.estado === 'APROBADA' ? 'default' : c.estado === 'RECHAZADA' || c.estado === 'BLOQUEADA_SS' ? 'destructive' : 'secondary'}>{ESTADO[c.estado]}</Badge>
+              <AccionesCuentaCobro cuenta={c} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />
             </div>
 
             {/* Planilla PILA: solo contratistas OPS. Se ve, se pide o se deja de pedir aquí mismo. */}

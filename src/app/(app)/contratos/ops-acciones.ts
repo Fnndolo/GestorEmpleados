@@ -13,7 +13,7 @@ import { accion, ErrorNegocio } from '@/server/accion'
 import { borrarPdfTemporal, extensionDe, obtenerArchivoAdjunto, obtenerPdfAdjunto } from '@/server/archivos-temporales'
 import { esComprimido } from '@/lib/archivos'
 import { pdfAdjuntoCampos } from '@/lib/validaciones/pdf-adjunto'
-import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, corregirPosicionFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema, cerrarContratoOpsSchema } from '@/lib/validaciones/contrato'
+import { contratoOpsSchema, subirContratoOpsSchema, subirContratoOpsParaFirmaSchema, habilitarFirmaOpsSchema, corregirPosicionFirmaOpsSchema, soporteSsSchema, firmarContratoOpsSchema, entregableOpsSchema, cerrarContratoOpsSchema, editarContratoOpsSchema, editarCuentaCobroSchema, reemplazarSoporteSsSchema } from '@/lib/validaciones/contrato'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
 import { publicarVencimiento, resolverVencimiento, cancelarVencimiento } from '@/server/vencimientos/servicio'
 import { eliminarDocumento } from '@/server/documentos'
@@ -1238,5 +1238,199 @@ export const eliminarContratoOps = accion(
     if (c.colaboradorId) revalidatePath(`/colaboradores/${c.colaboradorId}`)
     revalidatePath('/autoservicio/contratos')
     return { colaboradorId: c.colaboradorId, numero: c.numero }
+  },
+)
+
+// ——— Corregir y anular: contrato OPS, cuentas de cobro y soporte de seguridad social ———
+
+/**
+ * Corregir los datos de un contrato OPS que nadie ha firmado y sin cuentas de
+ * cobro: los campos estructurados del alta. Firmado por el contratista, el
+ * documento está congelado: los cambios van por otrosí (se adjunta como anexo)
+ * o cerrando este contrato y creando uno nuevo.
+ *
+ * Si el PDF se generó desde la plantilla, su texto ya tiene los valores viejos
+ * resueltos: hay que regenerarlo desde Documentos (el cliente lo avisa).
+ */
+export const editarContratoOps = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: editarContratoOpsSchema },
+  async (d) => {
+    const c = await prisma.contratoOps.findUniqueOrThrow({
+      where: { id: d.contratoId },
+      include: { _count: { select: { cuentasCobro: true } } },
+    })
+    if (c.firmaContratistaPath) {
+      throw new ErrorNegocio('El contratista ya firmó este contrato: sus datos están congelados. Si cambian las condiciones, regístralas por otrosí (adjúntalo en Documentos) o cierra este contrato y crea uno nuevo.')
+    }
+    if (c.estado === 'TERMINADO') throw new ErrorNegocio('Este contrato ya está cerrado: no se corrige.')
+    if (c._count.cuentasCobro > 0) {
+      throw new ErrorNegocio('Este contrato ya tiene cuentas de cobro radicadas: anúlalas primero si el error está en el contrato, o registra el cambio por otrosí.')
+    }
+    const numero = v(d.numero) ?? c.numero
+    if (numero !== c.numero) {
+      const dup = await prisma.contratoOps.findUnique({ where: { numero }, select: { id: true } })
+      if (dup) throw new ErrorNegocio(`Ya existe un contrato con el número ${numero}.`)
+    }
+    const objeto = v(d.objeto) ?? c.objeto
+    await dbAuditado.contratoOps.update({
+      where: { id: c.id },
+      data: {
+        numero,
+        objeto,
+        valorTotal: d.valorTotal,
+        valorMensual: d.valorMensual ?? null,
+        supervisorId: v(d.supervisorId),
+        cargoId: v(d.cargoId),
+        sedeId: d.sedeId,
+        fechaInicio: parseFechaISO(d.fechaInicio)!,
+        fechaFin: parseFechaISO(d.fechaFin)!,
+        rut: v(d.rut),
+      },
+    })
+    await publicarVencimientoOps(c.id)
+    if (c.colaboradorId) await alinearCargoFicha(c.colaboradorId, v(d.cargoId))
+    revalidatePath('/contratos')
+    revalidatePath(`/contratos/ops/${c.id}`)
+    if (c.colaboradorId) revalidatePath(`/colaboradores/${c.colaboradorId}`)
+    revalidatePath('/autoservicio/contratos')
+    // El PDF de plantilla quedó con los valores viejos: se avisa para regenerarlo.
+    return { ok: true, regenerarPdf: c.origenPdf === 'GENERADO' && !!c.contenidoPdf }
+  },
+)
+
+/** Quién es el dueño de la cuenta (el colaborador directo o el contratista del OPS). */
+async function duenoDeCuenta(cuenta: { colaboradorId: string | null; contratoOps: { colaboradorId: string | null } | null }) {
+  return cuenta.colaboradorId ?? cuenta.contratoOps?.colaboradorId ?? null
+}
+
+/**
+ * Corregir una cuenta de cobro que no se ha pagado. La que radicó el propio
+ * contratista (su PDF lleva su firma) no cambia de valor ni de periodo: se anula
+ * y se le pide que la radique de nuevo. El concepto y la fecha sí se corrigen.
+ * Si la generó la empresa, el PDF se rehace con los datos corregidos.
+ */
+export const editarCuentaCobro = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: editarCuentaCobroSchema },
+  async (d, usuario) => {
+    const cuenta = await prisma.cuentaCobroOps.findUniqueOrThrow({ where: { id: d.id }, include: { contratoOps: { select: { id: true, colaboradorId: true } } } })
+    if (cuenta.estado === 'PAGADA') throw new ErrorNegocio(`La cuenta ${cuenta.numero} ya está pagada: no se puede cambiar ni anular.`)
+    const cambiaValor = Number(cuenta.valor) !== d.valor || cuenta.periodo !== d.periodo
+    if (cambiaValor && cuenta.creadaPorContratista) {
+      throw new ErrorNegocio('Esta cuenta la radicó el contratista con su firma: el valor y el periodo no se cambian. Anúlala y pídele que radique una nueva.')
+    }
+    if (cuenta.periodo !== d.periodo) {
+      // Mismo titular (por contrato o por colaborador directo) y mismo periodo: ya hay una.
+      const titular = [
+        ...(cuenta.contratoOpsId ? [{ contratoOpsId: cuenta.contratoOpsId }] : []),
+        ...(cuenta.colaboradorId ? [{ colaboradorId: cuenta.colaboradorId }] : []),
+      ]
+      const dup = titular.length
+        ? await prisma.cuentaCobroOps.findFirst({ where: { id: { not: cuenta.id }, periodo: d.periodo, OR: titular }, select: { numero: true } })
+        : null
+      if (dup) throw new ErrorNegocio(`Ya existe la cuenta ${dup.numero} para el periodo ${d.periodo}.`)
+    }
+    await dbAuditado.cuentaCobroOps.update({
+      where: { id: cuenta.id },
+      data: { periodo: d.periodo, valor: d.valor, fechaRadicacion: parseFechaISO(d.fechaRadicacion)!, concepto: v(d.concepto) },
+    })
+    // La cuenta que armó la empresa se vuelve a generar con los datos corregidos.
+    if (!cuenta.creadaPorContratista) await generarPdfCuentaCobro(cuenta.id, usuario.id, null).catch((e) => console.error('No se pudo regenerar la cuenta de cobro:', e))
+
+    revalidatePath('/contratos/cuentas-cobro')
+    if (cuenta.contratoOpsId) revalidatePath(`/contratos/ops/${cuenta.contratoOpsId}`)
+    revalidatePath('/autoservicio/cuentas-cobro')
+    return { ok: true }
+  },
+)
+
+/**
+ * Anular una cuenta de cobro que no se ha pagado, con el motivo. Se lleva su PDF,
+ * la planilla PILA y el soporte de seguridad social; al dueño se le avisa, porque
+ * contaba con ese cobro.
+ */
+export const anularCuentaCobro = accion(
+  { modulo: 'contratos', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: z.string().trim().min(5, 'Explica por qué se anula.').max(300) }) },
+  async (d) => {
+    const cuenta = await prisma.cuentaCobroOps.findUniqueOrThrow({ where: { id: d.id }, include: { contratoOps: { select: { id: true, colaboradorId: true } } } })
+    if (cuenta.estado === 'PAGADA') throw new ErrorNegocio(`La cuenta ${cuenta.numero} ya está pagada: no se puede anular. Si el pago fue un error, regístralo con el área contable.`)
+
+    const docs = await prisma.documento.findMany({ where: { entidadTipo: 'CuentaCobroOps', entidadId: cuenta.id }, select: { id: true } })
+    for (const doc of docs) await eliminarDocumento(doc.id).catch(() => {})
+    // El soporte de seguridad social cae en cascada con la cuenta.
+    await dbAuditado.cuentaCobroOps.delete({ where: { id: cuenta.id } })
+    await auditar('ELIMINAR', 'CuentaCobroOps', { registroId: cuenta.id, descripcion: `Anulada ${cuenta.numero} (${cuenta.periodo}): ${d.motivo}` })
+
+    const duenoId = await duenoDeCuenta(cuenta)
+    const uid = duenoId ? await usuarioDeColaborador(duenoId) : null
+    if (uid) {
+      await avisar(uid, {
+        evento: 'cuenta_cobro_estado',
+        titulo: `Tu cuenta de cobro ${cuenta.numero} fue anulada`,
+        mensaje: `Periodo ${cuenta.periodo} · Motivo: ${d.motivo}${cuenta.creadaPorContratista ? ' · Si corresponde, radica una nueva.' : ''}`,
+        enlace: '/autoservicio/cuentas-cobro',
+        llamadoAccion: 'Ver mis cuentas de cobro',
+      }).catch(() => {})
+    }
+    revalidatePath('/contratos/cuentas-cobro')
+    if (cuenta.contratoOpsId) revalidatePath(`/contratos/ops/${cuenta.contratoOpsId}`)
+    revalidatePath('/autoservicio/cuentas-cobro')
+    return { ok: true }
+  },
+)
+
+/** Las planillas PILA adjuntas a una cuenta (van con la entidad de la cuenta y se reconocen por el nombre). */
+async function borrarPlanillasDe(cuentaId: string) {
+  const planillas = await prisma.documento.findMany({
+    where: { entidadTipo: 'CuentaCobroOps', entidadId: cuentaId, nombre: { startsWith: 'Planilla PILA' } },
+    select: { id: true },
+  })
+  for (const p of planillas) await eliminarDocumento(p.id).catch(() => {})
+}
+
+/**
+ * Reemplazar el soporte de seguridad social de una cuenta: la planilla anterior
+ * se borra y los datos declarados vuelven a "pendiente de verificar" con los
+ * nuevos valores. El archivo nuevo lo sube el cliente aparte (misma ruta que el
+ * contratista desde su autoservicio). No se toca si la cuenta ya se aprobó o pagó.
+ */
+export const reemplazarSoporteSs = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: reemplazarSoporteSsSchema },
+  async (d, usuario) => {
+    const cuenta = await prisma.cuentaCobroOps.findUniqueOrThrow({ where: { id: d.cuentaCobroId }, select: { id: true, numero: true, estado: true, contratoOpsId: true } })
+    if (cuenta.estado === 'APROBADA' || cuenta.estado === 'PAGADA') {
+      throw new ErrorNegocio(`La cuenta ${cuenta.numero} ya se aprobó con este soporte: no se reemplaza.`)
+    }
+    await borrarPlanillasDe(cuenta.id)
+    const datos = {
+      operador: v(d.operador), periodoCotizado: d.periodoCotizado, ibcDeclarado: d.ibcDeclarado ?? null,
+      estadoVerificacion: 'PENDIENTE' as const, verificadoPorId: usuario.id, verificadoEn: new Date(),
+      observaciones: `Soporte reemplazado: ${d.motivo}`,
+    }
+    await dbAuditado.soporteSsOps.upsert({ where: { cuentaCobroId: cuenta.id }, create: { cuentaCobroId: cuenta.id, ...datos }, update: datos })
+    await auditar('EDITAR', 'SoporteSsOps', { registroId: cuenta.id, descripcion: `Soporte de la cuenta ${cuenta.numero} reemplazado: ${d.motivo}` })
+    revalidatePath('/contratos/cuentas-cobro')
+    if (cuenta.contratoOpsId) revalidatePath(`/contratos/ops/${cuenta.contratoOpsId}`)
+    return { ok: true }
+  },
+)
+
+/** Eliminar el soporte de seguridad social (datos y planilla) de una cuenta aún no aprobada. */
+export const eliminarSoporteSs = accion(
+  { modulo: 'contratos', accion: 'ELIMINAR', schema: z.object({ cuentaCobroId: z.uuid(), motivo: z.string().trim().min(5, 'Explica por qué se elimina.').max(300) }) },
+  async (d) => {
+    const cuenta = await prisma.cuentaCobroOps.findUniqueOrThrow({ where: { id: d.cuentaCobroId }, select: { id: true, numero: true, estado: true, contratoOpsId: true, soporteSs: { select: { id: true } } } })
+    if (cuenta.estado === 'APROBADA' || cuenta.estado === 'PAGADA') {
+      throw new ErrorNegocio(`La cuenta ${cuenta.numero} ya se aprobó con este soporte: no se elimina.`)
+    }
+    await borrarPlanillasDe(cuenta.id)
+    if (cuenta.soporteSs) {
+      await dbAuditado.soporteSsOps.delete({ where: { id: cuenta.soporteSs.id } })
+      await auditar('ELIMINAR', 'SoporteSsOps', { registroId: cuenta.soporteSs.id, descripcion: `Anulado (cuenta ${cuenta.numero}): ${d.motivo}` })
+    }
+    // Sin soporte, la cuenta vuelve a estar recién radicada.
+    if (cuenta.estado === 'EN_VERIFICACION_SS') await dbAuditado.cuentaCobroOps.update({ where: { id: cuenta.id }, data: { estado: 'RADICADA' } })
+    revalidatePath('/contratos/cuentas-cobro')
+    if (cuenta.contratoOpsId) revalidatePath(`/contratos/ops/${cuenta.contratoOpsId}`)
+    return { ok: true }
   },
 )

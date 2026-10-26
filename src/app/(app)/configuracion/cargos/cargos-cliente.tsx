@@ -15,12 +15,14 @@ import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { crearCargo, editarCargo, alternarCargo } from './acciones'
+import { crearCargo, editarCargo, alternarCargo, eliminarCargo } from './acciones'
+import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
+import { DialogMotivo } from '../dialog-motivo'
 import { Encabezado } from '@/components/shell/encabezado'
 import { EditorFunciones } from '@/components/contratos/editor-funciones'
 import type { FuncionesCargo } from '@/lib/contrato-variables'
 
-type Cargo = { id: string; nombre: string; areaId: string; area: string; nivel: string; funciones: string; funcionesContrato: FuncionesCargo; claseRiesgoDefecto: string; rolDefectoId: string; requiereTarjetaProfesional: boolean; activo: boolean; asignados: number }
+type Cargo = { id: string; nombre: string; areaId: string; area: string; nivel: string; funciones: string; funcionesContrato: FuncionesCargo; claseRiesgoDefecto: string; rolDefectoId: string; requiereTarjetaProfesional: boolean; activo: boolean; asignados: number; usos: { colaboradores: number; contratos: number; acuerdos: number } }
 type Area = { id: string; nombre: string }
 type Rol = { id: string; nombre: string }
 
@@ -28,9 +30,21 @@ const NIVELES = [{ v: 'directivo', l: 'Directivo' }, { v: 'coordinacion', l: 'Co
 const RIESGOS = ['I', 'II', 'III', 'IV', 'V']
 const NONE = '__none__'
 
-export function CargosCliente({ puedeCrear, puedeEditar, areas, roles, cargos }: { puedeCrear: boolean; puedeEditar: boolean; areas: Area[]; roles: Rol[]; cargos: Cargo[] }) {
+/** Por qué NO se puede borrar el cargo, o null si sí (todo lo que estorba, de una vez). */
+function motivoNoEliminar(c: Cargo): string | null {
+  const usos = [
+    c.usos.colaboradores > 0 && `${c.usos.colaboradores} colaborador(es)`,
+    c.usos.contratos > 0 && `${c.usos.contratos} contrato(s)`,
+    c.usos.acuerdos > 0 && `${c.usos.acuerdos} acuerdo(s) de evaluación`,
+  ].filter(Boolean)
+  if (usos.length === 0) return null
+  return `No se puede eliminar: el cargo tiene ${usos.join(', ')}. Desactívalo en su lugar.`
+}
+
+export function CargosCliente({ puedeCrear, puedeEditar, puedeEliminar = false, areas, roles, cargos }: { puedeCrear: boolean; puedeEditar: boolean; puedeEliminar?: boolean; areas: Area[]; roles: Rol[]; cargos: Cargo[] }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
+  const [borrando, setBorrando] = useState<Cargo | null>(null)
   const [editando, setEditando] = useState<Cargo | null>(null)
   const [g, setG] = useState(false)
   const [f, setF] = useState<{ nombre: string; areaId: string; nivel: string; funciones: string; funcionesContrato: FuncionesCargo; claseRiesgoDefecto: string; rolDefectoId: string; requiereTarjetaProfesional: boolean; activo: boolean }>({ nombre: '', areaId: '', nivel: '', funciones: '', funcionesContrato: [], claseRiesgoDefecto: '', rolDefectoId: '', requiereTarjetaProfesional: false, activo: true })
@@ -96,17 +110,38 @@ export function CargosCliente({ puedeCrear, puedeEditar, areas, roles, cargos }:
                 </Button>
               </>
             )}
+            {puedeEliminar && (
+              // Ancho fijo: la papelera bloqueada mide distinto y descuadraba la columna.
+              <span className="grid w-9 shrink-0 place-items-center">
+                <BotonEliminar onEliminar={() => setBorrando(c)} etiqueta={`Eliminar ${c.nombre}`} motivoBloqueo={motivoNoEliminar(c)} />
+              </span>
+            )}
           </div>
         ))}
       </CardContent></Card>
+
+      {borrando && (
+        <DialogMotivo
+          titulo="Eliminar cargo"
+          resumen={`${borrando.nombre} · ${borrando.area}. No se puede deshacer.`}
+          placeholder="¿Por qué se elimina?"
+          onClose={() => setBorrando(null)}
+          onConfirmar={async (motivo) => {
+            const res = await eliminarCargo({ id: borrando.id, motivo })
+            if (res.ok) { toast.success('Cargo eliminado.'); router.refresh(); return true }
+            toast.error(res.error, { duration: 8000 })
+            return false
+          }}
+        />
+      )}
 
       <Dialog open={abierto} onOpenChange={setAbierto}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editando ? 'Editar cargo' : 'Nuevo cargo'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1.5"><Label>Nombre</Label><Input value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Nombre <span className="text-destructive">*</span></Label><Input value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} /></div>
             <div className="space-y-1.5">
-              <Label>Área</Label>
+              <Label>Área <span className="text-destructive">*</span></Label>
               <Select value={f.areaId} onValueChange={(v) => setF({ ...f, areaId: v })}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
                 <SelectContent>{areas.map((a) => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}</SelectContent>
@@ -141,9 +176,9 @@ export function CargosCliente({ puedeCrear, puedeEditar, areas, roles, cargos }:
                 <span className="block text-xs text-muted-foreground">Se pide como documento del expediente a quien tenga este cargo.</span>
               </span>
             </label>
-            <div className="space-y-1.5"><Label>Funciones (opcional)</Label><Textarea rows={3} value={f.funciones} onChange={(e) => setF({ ...f, funciones: e.target.value })} placeholder="Usadas en la certificación laboral con funciones" /></div>
+            <div className="space-y-1.5"><Label>Funciones</Label><Textarea rows={3} value={f.funciones} onChange={(e) => setF({ ...f, funciones: e.target.value })} placeholder="Usadas en la certificación laboral con funciones" /></div>
             <div className="space-y-1.5">
-              <Label>Funciones para el contrato (opcional)</Label>
+              <Label>Funciones para el contrato</Label>
               <p className="text-xs text-muted-foreground">Grupos con viñetas que se insertan en la cláusula de funciones del contrato. Añade, edita o elimina.</p>
               <EditorFunciones value={f.funcionesContrato} onChange={(v) => setF({ ...f, funcionesContrato: v })} />
             </div>

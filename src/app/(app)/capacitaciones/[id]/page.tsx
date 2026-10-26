@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatFechaLarga, formatFechaISO } from '@/lib/fechas'
 import { Asistencia } from './asistencia'
+import { AccionesCapacitacion } from '../crear-capacitacion'
 import { GestorDocumentos } from '@/components/documentos/gestor-documentos'
 
 export const metadata = { title: 'Capacitación · Smart Gadgets RH' }
@@ -16,6 +17,7 @@ export default async function CapacitacionPage({ params }: { params: Promise<{ i
   const { id } = await params
   const usuario = await requerirPermiso('capacitaciones', 'VER')
   const puedeEditar = tienePermiso(usuario, 'capacitaciones', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'capacitaciones', 'ELIMINAR')
 
   const c = await prisma.capacitacion.findUnique({
     where: { id },
@@ -40,7 +42,23 @@ export default async function CapacitacionPage({ params }: { params: Promise<{ i
 
   return (
     <div className="max-w-5xl">
-      <Encabezado titulo={c.titulo} descripcion={`${TIPO[c.tipo]} · ${formatFechaLarga(c.fecha)}`} acciones={<Badge variant="outline">{c.asistencias.length} asistentes</Badge>} volver />
+      <Encabezado
+        titulo={c.titulo}
+        descripcion={`${TIPO[c.tipo]} · ${formatFechaLarga(c.fecha)}${c.duracionHoras ? ` · ${Number(c.duracionHoras)} h` : ''}${c.facilitador ? ` · ${c.facilitador}` : ''}`}
+        acciones={(
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{c.asistencias.length} asistentes</Badge>
+            <AccionesCapacitacion
+              capacitacion={{ id: c.id, titulo: c.titulo, tipo: c.tipo, fecha: formatFechaISO(c.fecha), duracionHoras: c.duracionHoras != null ? Number(c.duracionHoras) : null, facilitador: c.facilitador, descripcion: c.descripcion }}
+              asistentes={c.asistencias.length}
+              puedeEditar={puedeEditar}
+              puedeEliminar={puedeEliminar}
+              volverAlEliminar
+            />
+          </div>
+        )}
+        volver
+      />
       {c.descripcion && <Card className="mb-4"><CardContent className="py-3 text-sm text-muted-foreground">{c.descripcion}</CardContent></Card>}
       <Asistencia
         capacitacionId={c.id}

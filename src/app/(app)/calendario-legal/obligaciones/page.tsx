@@ -8,6 +8,7 @@ export const metadata = { title: 'Obligaciones legales · Smart Gadgets RH' }
 export default async function ObligacionesPage() {
   const usuario = await requerirPermiso('calendario_legal', 'VER')
   const puedeGestionar = tienePermiso(usuario, 'calendario_legal', 'CREAR')
+  const puedeEliminar = tienePermiso(usuario, 'calendario_legal', 'ELIMINAR')
 
   const [obligaciones, roles] = await Promise.all([
     prisma.obligacionLegal.findMany({
@@ -26,6 +27,7 @@ export default async function ObligacionesPage() {
       />
       <ObligacionesCliente
         puedeGestionar={puedeGestionar}
+        puedeEliminar={puedeEliminar}
         roles={roles.map((r) => r.nombre)}
         obligaciones={obligaciones.map((o) => ({
           id: o.id,

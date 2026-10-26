@@ -2,7 +2,10 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { dbAuditado } from '@/lib/auditoria'
+import { dbAuditado, auditar } from '@/lib/auditoria'
+import { eliminarDocumento } from '@/server/documentos'
+import { eliminarArchivo } from '@/server/storage'
+import { rutaMiniatura } from '@/lib/foto'
 import { prisma } from '@/lib/db'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { colaboradorSchema, educacionSchema } from '@/lib/validaciones/colaborador'
@@ -237,5 +240,86 @@ export const eliminarEducacion = accion(
   async ({ id, colaboradorId }) => {
     await dbAuditado.educacionColaborador.delete({ where: { id } })
     revalidatePath(`/colaboradores/${colaboradorId}`)
+  },
+)
+
+export const editarEducacion = accion(
+  { modulo: 'colaboradores', accion: 'EDITAR', schema: educacionSchema.extend({ id: z.uuid() }) },
+  async ({ id, ...d }) => {
+    const edu = await prisma.educacionColaborador.findUniqueOrThrow({ where: { id }, select: { colaboradorId: true } })
+    await dbAuditado.educacionColaborador.update({
+      where: { id },
+      data: { nivel: d.nivel, titulo: d.titulo, institucion: d.institucion, fechaGrado: parseFechaISO(d.fechaGrado), enCurso: d.enCurso },
+    })
+    revalidatePath(`/colaboradores/${edu.colaboradorId}`)
+    return { ok: true }
+  },
+)
+
+/**
+ * Borrar una ficha creada por error (persona duplicada, alta equivocada). Solo
+ * si no tiene historia: contratos, nóminas, novedades ni documentos aparte de
+ * la foto. Con historia, lo que corresponde es cambiar su estado (Retirado), no
+ * borrar: esos registros son la prueba de lo que pasó. El usuario de acceso, si
+ * lo tenía, queda sin ficha y se desactiva desde Usuarios.
+ */
+export const eliminarColaborador = accion(
+  { modulo: 'colaboradores', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: z.string().trim().min(5, 'Explica por qué se elimina.').max(300) }) },
+  async ({ id, motivo }) => {
+    const c = await prisma.colaborador.findUniqueOrThrow({
+      where: { id },
+      select: {
+        nombres: true, apellidos: true, fotoPath: true, usuarioId: true,
+        _count: {
+          select: {
+            contratos: true, contratosOps: true, liquidaciones: true, incapacidades: true, licencias: true, permisos: true,
+            vacaciones: true, novedadesConcepto: true, bonificaciones: true, comisiones: true, prestamos: true, novedadesHoras: true,
+            cuentasCobro: true, terminaciones: true, solicitudes: true, llamadosAtencion: true, procesosDisciplinarios: true, asignacionesActivo: true,
+          },
+        },
+      },
+    })
+    const documentos = await prisma.documento.count({ where: { entidadTipo: 'Colaborador', entidadId: id } })
+    const n = c._count
+    const plural = (k: number, uno: string, varios: string) => (k === 1 ? `1 ${uno}` : `${k} ${varios}`)
+    const tiene = [
+      n.contratos + n.contratosOps > 0 ? plural(n.contratos + n.contratosOps, 'contrato', 'contratos') : null,
+      n.liquidaciones > 0 ? plural(n.liquidaciones, 'nómina liquidada', 'nóminas liquidadas') : null,
+      n.incapacidades + n.licencias + n.permisos + n.vacaciones + n.novedadesConcepto + n.bonificaciones + n.comisiones + n.prestamos + n.novedadesHoras > 0
+        ? plural(n.incapacidades + n.licencias + n.permisos + n.vacaciones + n.novedadesConcepto + n.bonificaciones + n.comisiones + n.prestamos + n.novedadesHoras, 'novedad', 'novedades')
+        : null,
+      n.cuentasCobro > 0 ? plural(n.cuentasCobro, 'cuenta de cobro', 'cuentas de cobro') : null,
+      n.solicitudes > 0 ? plural(n.solicitudes, 'solicitud', 'solicitudes') : null,
+      n.terminaciones > 0 ? plural(n.terminaciones, 'terminación', 'terminaciones') : null,
+      n.llamadosAtencion + n.procesosDisciplinarios > 0 ? plural(n.llamadosAtencion + n.procesosDisciplinarios, 'registro disciplinario', 'registros disciplinarios') : null,
+      n.asignacionesActivo > 0 ? plural(n.asignacionesActivo, 'activo asignado', 'activos asignados') : null,
+      documentos > 0 ? plural(documentos, 'documento', 'documentos') : null,
+    ].filter((x): x is string => !!x)
+    if (tiene.length > 0) {
+      throw new ErrorNegocio(`No se puede eliminar: tiene ${tiene.join(', ')}. Una persona con historia no se borra; si se retiró, cambia su estado a Retirado desde Editar.`)
+    }
+
+    // Lo poco que puede tener una ficha sin historia: foto, estudios (con sus
+    // certificados) y el vínculo con la evaluación de la que nació. Los archivos
+    // se borran DESPUÉS de que la base aceptó el borrado: si otro módulo (SST,
+    // comités…) todavía la referencia, la ficha queda intacta.
+    const estudios = await prisma.educacionColaborador.findMany({ where: { colaboradorId: id }, select: { id: true } })
+    const docsEdu = estudios.length
+      ? await prisma.documento.findMany({ where: { entidadTipo: 'EducacionColaborador', entidadId: { in: estudios.map((e) => e.id) } }, select: { id: true } })
+      : []
+    await prisma.acuerdoEvaluacion.updateMany({ where: { colaboradorId: id }, data: { colaboradorId: null } })
+    try {
+      await dbAuditado.colaborador.delete({ where: { id } })
+    } catch {
+      throw new ErrorNegocio('No se puede eliminar: la ficha tiene registros relacionados en otros módulos (SST, activos, comités…). Si la persona se retiró, cambia su estado a Retirado desde Editar.')
+    }
+    for (const doc of docsEdu) await eliminarDocumento(doc.id).catch(() => {})
+    if (c.fotoPath) {
+      await eliminarArchivo(c.fotoPath).catch(() => {})
+      await eliminarArchivo(rutaMiniatura(c.fotoPath)).catch(() => {})
+    }
+    await auditar('ELIMINAR', 'Colaborador', { registroId: id, descripcion: `Eliminado ${c.nombres} ${c.apellidos}: ${motivo}` })
+    revalidatePath('/colaboradores')
+    return { ok: true, teniaUsuario: !!c.usuarioId }
   },
 )

@@ -341,3 +341,99 @@ export const cerrarContratoOpsSchema = z.object({
   observacion: z.string().trim().max(500).optional().or(z.literal('')),
 })
 export type CerrarContratoOpsInput = z.infer<typeof cerrarContratoOpsSchema>
+
+// ——— Editar y anular registros de contratos (convención CRUD) ———
+
+/** Anular o eliminar cualquier registro del módulo: siempre con el porqué. */
+export const anulacionContratoSchema = z.object({
+  id: z.uuid(),
+  motivo: z.string().trim().min(5, 'Explica por qué se anula.').max(300),
+})
+export type AnulacionContratoInput = z.infer<typeof anulacionContratoSchema>
+
+/** Corregir una prórroga: solo sus fechas (el modelo no guarda observaciones). */
+export const editarProrrogaSchema = z.object({
+  id: z.uuid(),
+  fechaInicio: fecha,
+  fechaFin: fecha,
+  fechaFirma: fechaOpc,
+})
+export type EditarProrrogaInput = z.infer<typeof editarProrrogaSchema>
+
+/** Corregir una suspensión: fechas, causa y descripción. */
+export const editarSuspensionSchema = suspensionSchema.omit({ contratoId: true }).extend({ id: z.uuid() })
+export type EditarSuspensionInput = z.infer<typeof editarSuspensionSchema>
+
+/**
+ * Corregir un otrosí que todavía no firmó el trabajador: fecha, descripción y
+ * lo pactado (tipos y valores). El PDF no se cambia aquí: si el documento está
+ * mal, se anula el otrosí y se registra de nuevo.
+ */
+export const editarOtrosiSchema = z
+  .object({
+    id: z.uuid(),
+    fecha: fechaOpc,
+    descripcion: z.string().trim().max(500).optional().or(z.literal('')),
+    tiposCambio: z.array(z.enum(['SALARIO', 'CARGO', 'SEDE', 'MODALIDAD_TRABAJO', 'JORNADA', 'FUNCIONES', 'DURACION', 'OTRO'])).min(1, 'Indica al menos un cambio'),
+    salarioNuevo: z.coerce.number().min(0).optional(),
+    cargoNuevoId: uuidOpc,
+    sedeNuevaId: uuidOpc,
+    modalidadNueva: z.enum(['PRESENCIAL', 'REMOTO', 'HIBRIDO']).optional().or(z.literal('')),
+    fechaInicioNueva: fechaOpc,
+    fechaFinNueva: fechaOpc,
+  })
+  .superRefine((d, ctx) => {
+    if (!d.tiposCambio.includes('DURACION')) return
+    if (!d.fechaInicioNueva || !d.fechaFinNueva) {
+      ctx.addIssue({ code: 'custom', path: ['fechaFinNueva'], message: 'Indica la fecha de inicio y la de fin del nuevo periodo' })
+    } else if (d.fechaFinNueva < d.fechaInicioNueva) {
+      ctx.addIssue({ code: 'custom', path: ['fechaFinNueva'], message: 'La fecha de fin debe ser igual o posterior a la de inicio' })
+    }
+  })
+export type EditarOtrosiInput = z.infer<typeof editarOtrosiSchema>
+
+/** Corregir una variación salarial: el nuevo salario, desde cuándo rige y el motivo. */
+export const editarVariacionSalarialSchema = z.object({
+  id: z.uuid(),
+  salarioNuevo: z.coerce.number().min(0),
+  fechaVigencia: fecha,
+  motivo: z.string().trim().max(200).optional().or(z.literal('')),
+})
+export type EditarVariacionSalarialInput = z.infer<typeof editarVariacionSalarialSchema>
+
+/**
+ * Corregir los datos de un contrato OPS que todavía nadie firmó. Son los campos
+ * estructurados del alta (`form-ops.tsx`); el texto del documento no se toca aquí.
+ */
+export const editarContratoOpsSchema = contratoOpsSchema
+  .pick({
+    objeto: true, valorTotal: true, valorMensual: true, supervisorId: true, cargoId: true,
+    sedeId: true, fechaInicio: true, fechaFin: true, rut: true, numero: true,
+  })
+  .extend({ contratoId: z.uuid() })
+  .refine((d) => d.fechaFin >= d.fechaInicio, { message: 'La fecha de fin debe ser igual o posterior a la de inicio', path: ['fechaFin'] })
+export type EditarContratoOpsInput = z.infer<typeof editarContratoOpsSchema>
+
+/** Corregir una cuenta de cobro que aún no se pagó. */
+export const editarCuentaCobroSchema = z.object({
+  id: z.uuid(),
+  periodo: z.string().regex(/^\d{4}-\d{2}$/, 'Periodo inválido (AAAA-MM)'),
+  valor: z.coerce.number().min(1),
+  fechaRadicacion: fecha,
+  concepto: z.string().trim().max(200).optional().or(z.literal('')),
+})
+export type EditarCuentaCobroInput = z.infer<typeof editarCuentaCobroSchema>
+
+/**
+ * Reemplazar el soporte de seguridad social de una cuenta: los datos declarados
+ * vuelven a "pendiente" y la planilla anterior se borra (la nueva la sube el
+ * cliente aparte, como hace el contratista desde su autoservicio).
+ */
+export const reemplazarSoporteSsSchema = z.object({
+  cuentaCobroId: z.uuid(),
+  operador: z.string().trim().max(60).optional().or(z.literal('')),
+  periodoCotizado: z.string().regex(/^\d{4}-\d{2}$/, 'Periodo inválido (AAAA-MM)'),
+  ibcDeclarado: z.coerce.number().min(0).optional(),
+  motivo: z.string().trim().min(5, 'Explica por qué se reemplaza.').max(300),
+})
+export type ReemplazarSoporteSsInput = z.infer<typeof reemplazarSoporteSsSchema>

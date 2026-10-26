@@ -109,3 +109,23 @@ export const duplicarPlantilla = accion(
     return { id: copia.id }
   },
 )
+
+/**
+ * Activa o desactiva una plantilla sin borrarla. No se desactiva la única
+ * activa de su tipo: sin ella no se podrían crear contratos de ese tipo.
+ */
+export const alternarPlantillaContrato = accion(
+  { modulo: 'configuracion', accion: 'EDITAR', schema: z.object({ id: z.uuid(), activa: z.boolean() }) },
+  async ({ id, activa }) => {
+    const plantilla = await prisma.plantillaContrato.findUniqueOrThrow({ where: { id }, select: { tipo: true, activa: true } })
+    if (!activa && plantilla.activa) {
+      const otras = await prisma.plantillaContrato.count({ where: { tipo: plantilla.tipo, activa: true, NOT: { id } } })
+      if (otras === 0) {
+        throw new ErrorNegocio(`Es la única plantilla activa de tipo ${plantilla.tipo}: sin ella no se pueden crear contratos. Activa otra antes de desactivarla.`)
+      }
+    }
+    await dbAuditado.plantillaContrato.update({ where: { id }, data: { activa } })
+    revalidar(id)
+    return { ok: true }
+  },
+)

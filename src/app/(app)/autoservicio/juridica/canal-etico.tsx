@@ -15,7 +15,42 @@ import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { crearMiDenuncia, crearMiConsultaReclamo, consultarMiDenuncia } from '../juridica-acciones'
+import { crearMiDenuncia, crearMiConsultaReclamo, consultarMiDenuncia, adjuntarEvidenciaDenuncia } from '../juridica-acciones'
+
+const ACEPTA_EVIDENCIA = 'image/*,application/pdf,audio/*,video/*'
+
+/** Sube cada evidencia al reporte identificado por su código; devuelve cuántas fallaron. */
+async function subirEvidencias(codigo: string, archivos: File[]): Promise<number> {
+  let fallidos = 0
+  for (const archivo of archivos) {
+    try {
+      const fd = new FormData()
+      fd.append('archivo', await reducirImagen(archivo))
+      fd.append('codigo', codigo)
+      const up = await fetch('/api/linea-etica/soporte', { method: 'POST', body: fd })
+      if (!up.ok) fallidos++
+    } catch {
+      fallidos++
+    }
+  }
+  return fallidos
+}
+
+/** Archivos elegidos como evidencia, cada uno con su X. */
+function ListaEvidencias({ archivos, onQuitar }: { archivos: File[]; onQuitar: (i: number) => void }) {
+  if (archivos.length === 0) return null
+  return (
+    <ul className="space-y-1 rounded-lg border p-2 text-xs">
+      {archivos.map((a, i) => (
+        <li key={`${a.name}-${i}`} className="flex items-center gap-2">
+          <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate">{a.name}</span>
+          <button type="button" onClick={() => onQuitar(i)} className="text-muted-foreground hover:text-destructive" aria-label="Quitar"><X className="size-3.5" /></button>
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 const ESTADO_DENUNCIA: Record<string, { label: string; tone: PillTone; nota: string }> = {
   RECIBIDA: { label: 'Recibida', tone: 'warn', nota: 'Tu denuncia fue recibida y está pendiente de revisión por el Comité de Convivencia / Jurídica.' },
@@ -109,7 +144,8 @@ function DialogCodigo({ codigo, onClose }: { codigo: string; onClose: () => void
         <DialogHeader>
           <DialogTitle>Denuncia enviada de forma confidencial</DialogTitle>
           <DialogDescription>
-            Guarda este código: es tu <strong>única</strong> forma de consultar el estado de tu denuncia.
+            Guarda este código: es tu <strong>única</strong> forma de consultar el estado de tu denuncia
+            y de agregarle evidencias después (desde «Consultar con mi código»).
             No se registró quién la envió, así que el código no se puede recuperar después.
           </DialogDescription>
         </DialogHeader>
@@ -130,6 +166,10 @@ function DialogSeguimiento({ onClose }: { onClose: () => void }) {
   const [codigo, setCodigo] = useState('')
   const [g, setG] = useState(false)
   const [resultado, setResultado] = useState<{ estado: string; radicadaEn: string; actualizadaEn: string; resolucion: string | null } | null>(null)
+  // Evidencias que se agregan después de enviado el reporte (mientras siga abierto).
+  const [archivos, setArchivos] = useState<File[]>([])
+  const inputArchivo = useRef<HTMLInputElement>(null)
+  const [adjuntando, setAdjuntando] = useState(false)
 
   async function consultar() {
     if (codigo.trim().length < 4) { toast.error('Escribe tu código de seguimiento (ej.: DA-1A2B3C4D).'); return }
@@ -138,9 +178,27 @@ function DialogSeguimiento({ onClose }: { onClose: () => void }) {
     setG(false)
     if (!res.ok) { setResultado(null); toast.error(res.error); return }
     setResultado(res.datos as typeof resultado)
+    setArchivos([])
+  }
+
+  async function adjuntar() {
+    if (archivos.length === 0) { toast.error('Elige al menos un archivo.'); return }
+    setAdjuntando(true)
+    const cod = codigo.trim().toUpperCase()
+    const fallidos = await subirEvidencias(cod, archivos)
+    const subidos = archivos.length - fallidos
+    if (subidos === 0) { setAdjuntando(false); toast.error('No se pudo adjuntar ningún archivo. Verifica el código o inténtalo de nuevo.'); return }
+    const res = await adjuntarEvidenciaDenuncia({ codigo: cod, cantidad: subidos })
+    setAdjuntando(false)
+    if (!res.ok) { toast.error(res.error); return }
+    if (fallidos > 0) toast.warning(`Se adjuntaron ${subidos} de ${archivos.length} archivos.`)
+    else toast.success(subidos === 1 ? 'Evidencia agregada al reporte.' : 'Evidencias agregadas al reporte.')
+    setArchivos([])
+    setResultado((r) => r ? { ...r, actualizadaEn: new Date().toISOString() } : r)
   }
 
   const info = resultado ? ESTADO_DENUNCIA[resultado.estado] ?? ESTADO_DENUNCIA.RECIBIDA : null
+  const abierta = resultado?.estado === 'RECIBIDA' || resultado?.estado === 'EN_INVESTIGACION'
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -173,6 +231,32 @@ function DialogSeguimiento({ onClose }: { onClose: () => void }) {
               )}
             </div>
           )}
+
+          {/* Mientras el caso siga abierto se le pueden sumar evidencias: van por
+              el mismo camino que al crear (el código es la prueba de que son de este reporte). */}
+          {abierta && (
+            <div className="space-y-2 rounded-lg border p-3">
+              <p className="text-sm font-medium">Agregar evidencias</p>
+              <p className="text-xs text-muted-foreground">Capturas, fotos, audios o PDF que no tenías al enviar el reporte.</p>
+              <input
+                ref={inputArchivo}
+                type="file"
+                multiple
+                accept={ACEPTA_EVIDENCIA}
+                className="hidden"
+                onChange={(e) => { setArchivos((prev) => [...prev, ...Array.from(e.target.files ?? [])]); e.target.value = '' }}
+              />
+              <ListaEvidencias archivos={archivos} onQuitar={(i) => setArchivos((prev) => prev.filter((_, j) => j !== i))} />
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button size="sm" onClick={() => inputArchivo.current?.click()} disabled={adjuntando}>
+                  <Paperclip className="size-4" /> {archivos.length > 0 ? 'Agregar otro archivo' : 'Elegir archivos'}
+                </Button>
+                <Button size="sm" onClick={adjuntar} disabled={adjuntando || archivos.length === 0}>
+                  {adjuntando ? <Spinner /> : <Paperclip className="size-4" />} Adjuntar al reporte
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cerrar</Button>
@@ -195,24 +279,13 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
   async function enviar() {
     if (asunto.trim().length < 3) { toast.error('Escribe de qué se trata.'); return }
     if (hechos.trim().length < 10) { toast.error('Describe los hechos (mínimo 10 caracteres).'); return }
-    if (archivos.length === 0) { toast.error('Adjunta al menos una evidencia (captura, foto, audio o PDF).'); return }
+    // Las evidencias no frenan el reporte: se pueden agregar después con el código.
     setG(true)
     const res = await crearMiDenuncia({ asunto, hechos, fechaHechos: fechaHechos || undefined })
     if (!res.ok) { setG(false); toast.error(res.error); return }
     // Las evidencias van por su propio endpoint; la prueba de que son de este
     // reporte es el código.
-    let fallidos = 0
-    for (const archivo of archivos) {
-      try {
-        const fd = new FormData()
-        fd.append('archivo', await reducirImagen(archivo))
-        fd.append('codigo', res.datos.codigo)
-        const up = await fetch('/api/linea-etica/soporte', { method: 'POST', body: fd })
-        if (!up.ok) fallidos++
-      } catch {
-        fallidos++
-      }
-    }
+    const fallidos = await subirEvidencias(res.datos.codigo, archivos)
     setG(false)
     if (fallidos > 0) toast.warning(`El reporte se envió, pero ${fallidos} de ${archivos.length} archivos no se pudieron adjuntar.`)
     // El código se muestra en un diálogo persistente (con copiar), no en un toast efímero.
@@ -233,29 +306,22 @@ function DialogDenuncia({ onClose, onCreada }: { onClose: () => void; onCreada: 
           </Campo>
           <Campo label="Detalles" obligatorio><Textarea rows={5} value={hechos} onChange={(e) => setHechos(e.target.value)} placeholder="Qué pasó, quiénes, dónde y cuándo." /></Campo>
           <Campo label="Fecha de los hechos"><Input type="date" value={fechaHechos} onChange={(e) => setFechaHechos(e.target.value)} /></Campo>
-          <Campo label="Evidencias" obligatorio>
+          <Campo label="Evidencias">
             <input
               ref={inputArchivo}
               type="file"
               multiple
-              accept="image/*,application/pdf,audio/*,video/*"
+              accept={ACEPTA_EVIDENCIA}
               className="hidden"
               onChange={(e) => { setArchivos((prev) => [...prev, ...Array.from(e.target.files ?? [])]); e.target.value = '' }}
             />
-            {archivos.length > 0 && (
-              <ul className="space-y-1 rounded-lg border p-2 text-xs">
-                {archivos.map((a, i) => (
-                  <li key={`${a.name}-${i}`} className="flex items-center gap-2">
-                    <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate">{a.name}</span>
-                    <button type="button" onClick={() => setArchivos((prev) => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive" aria-label="Quitar"><X className="size-3.5" /></button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ListaEvidencias archivos={archivos} onQuitar={(i) => setArchivos((prev) => prev.filter((_, j) => j !== i))} />
             <Button type="button" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
               <Paperclip className="size-4" /> {archivos.length > 0 ? 'Agregar otro archivo' : 'Adjuntar capturas, fotos, audios o PDF'}
             </Button>
+            {archivos.length === 0 && (
+              <p className="text-xs text-muted-foreground">Si aún no las tienes, envía el reporte y agrégalas después con tu código de seguimiento.</p>
+            )}
           </Campo>
         </div>
 

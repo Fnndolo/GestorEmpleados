@@ -18,6 +18,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { FirmaCaptura } from '@/components/firma/firma-captura'
 import { resolverPaso, emitirCertificacion, previsualizarCertificacion, proponerFechas } from '../acciones'
 
@@ -42,6 +46,10 @@ type Solicitud = {
   contrapropuestaRechazada: { fechaInicio: string; fechaFin: string; respuesta: string | null } | null
   /** La solicitud fue devuelta y el colaborador ya corrigió el soporte. */
   soporteCorregido: boolean
+  /** La radicó sin soporte y lo adjuntó después (sin pasar por devolución). */
+  soporteAdjuntado: boolean
+  /** Se esperaba soporte (incapacidad o licencia que lo pide) y no hay ninguno: se advierte, no bloquea. */
+  sinSoporte: boolean
 }
 const TIPO: Record<string, string> = { VACACIONES: 'Vacaciones', PERMISO: 'Permiso', HORAS_EXTRA: 'Horas extra', INCAPACIDAD: 'Incapacidad', CERTIFICACION_LABORAL: 'Certificación', LICENCIA: 'Licencia' }
 
@@ -68,6 +76,15 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
   // Plegadas por defecto: quién, qué y los botones bastan para decidir lo
   // rutinario; sede, saldo, avisos, soportes y opciones finas salen al tocar.
   const [abierta, setAbierta] = useState<string | null>(null)
+  // Aprobar o registrar una solicitud marcada "Sin soporte": se advierte y se
+  // confirma, no se bloquea (el soporte puede llegar después).
+  const [confirmarSinSoporte, setConfirmarSinSoporte] = useState<Solicitud | null>(null)
+
+  /** Aprobar/registrar: con "Sin soporte" pasa primero por la advertencia. */
+  function aprobarConAviso(s: Solicitud) {
+    if (s.sinSoporte) { setConfirmarSinSoporte(s); return }
+    if (s.licenciaDerecho) registrarLicencia(s.pasoId); else resolver(s.pasoId, true)
+  }
 
   async function resolver(pasoId: string, aprobar: boolean, conFechas = false) {
     setProcesando(pasoId)
@@ -145,6 +162,8 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
                   <Pill tone="muted">{TIPO[s.tipo]}</Pill>
                   {s.calculoVacaciones?.anticipadas && <Pill tone="warn">Anticipadas</Pill>}
                   {s.soporteCorregido && <Pill tone="ok">Soporte corregido</Pill>}
+                  {s.soporteAdjuntado && !s.soporteCorregido && <Pill tone="ok">Soporte adjuntado</Pill>}
+                  {s.sinSoporte && <Pill tone="warn">Sin soporte</Pill>}
                   {s.contrapropuestaRechazada && <Pill tone="bad">Rechazó las fechas</Pill>}
                 </span>
                 <span className="mt-0.5 block truncate text-xs text-muted-foreground">
@@ -216,6 +235,18 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
                     <div>
                       <p className="font-medium">Licencia de ley: no se aprueba ni se niega.</p>
                       <p className="text-muted-foreground">Valida el soporte y regístrala. Si el soporte no acredita el hecho, devuélvela explicando qué falta.</p>
+                    </div>
+                  </div>
+                )}
+                {s.sinSoporte && (
+                  <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs">
+                    <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <div>
+                      <p className="font-medium">Sin soporte adjunto</p>
+                      <p className="text-muted-foreground">
+                        {s.tipo === 'INCAPACIDAD' ? 'No adjuntó el soporte de la EPS/ARL.' : 'No adjuntó el soporte de la licencia.'} El colaborador puede
+                        subirlo desde su autoservicio mientras la solicitud siga abierta. Puedes {s.licenciaDerecho ? 'registrarla' : 'aprobarla'} igual o devolverla pidiendo el soporte.
+                      </p>
                     </div>
                   </div>
                 )}
@@ -316,8 +347,8 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
                 <Button size="sm" onClick={() => { setSoporteInvalido(s.pasoId); setComentario('') }} disabled={procesando === s.pasoId}>
                   <X className="size-4" /> Soporte no válido
                 </Button>
-                <Button size="sm" onClick={() => registrarLicencia(s.pasoId)} disabled={procesando === s.pasoId}>
-                  {procesando === s.pasoId ? <Spinner /> : <Check className="size-4" />} Validar y registrar
+                <Button size="sm" onClick={() => aprobarConAviso(s)} disabled={procesando === s.pasoId}>
+                  {procesando === s.pasoId ? <Spinner /> : <Check className="size-4" />} {s.sinSoporte ? 'Registrar' : 'Validar y registrar'}
                 </Button>
               </div>
             ) : (
@@ -343,7 +374,7 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
                     <FilePenLine className="size-4" /> Emitir certificación
                   </Button>
                 ) : (
-                  <Button size="sm" onClick={() => resolver(s.pasoId, true)} disabled={procesando === s.pasoId}>
+                  <Button size="sm" onClick={() => aprobarConAviso(s)} disabled={procesando === s.pasoId}>
                     {procesando === s.pasoId ? <Spinner /> : <Check className="size-4" />} Aprobar
                   </Button>
                 )}
@@ -355,6 +386,33 @@ export function BandejaAprobaciones({ solicitudes, plazoComprobanteDias }: { sol
       })}
 
       {certDe && <DialogCertificacion solicitud={certDe} onClose={() => setCertDe(null)} onDone={() => { setCertDe(null); router.refresh() }} />}
+
+      {/* Advertencia (no bloqueo) al aprobar o registrar sin soporte. */}
+      <AlertDialog open={!!confirmarSinSoporte} onOpenChange={(o) => !o && setConfirmarSinSoporte(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Esta solicitud no tiene soporte</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmarSinSoporte?.colaborador} no adjuntó {confirmarSinSoporte?.tipo === 'INCAPACIDAD' ? 'el soporte de la EPS/ARL de su incapacidad' : 'el soporte de su licencia'}.
+              Puedes {confirmarSinSoporte?.licenciaDerecho ? 'registrarla' : 'aprobarla'} igual y pedirle que lo suba después, o volver y devolverla para que lo adjunte antes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Volver</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                const s = confirmarSinSoporte
+                setConfirmarSinSoporte(null)
+                if (!s) return
+                if (s.licenciaDerecho) registrarLicencia(s.pasoId); else resolver(s.pasoId, true)
+              }}
+            >
+              <TriangleAlert className="size-4" /> {confirmarSinSoporte?.licenciaDerecho ? 'Registrar sin soporte' : 'Aprobar sin soporte'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

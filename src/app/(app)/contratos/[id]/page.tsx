@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Pill } from '@/components/ui-kit'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { FileText, ShieldCheck, TriangleAlert, UserRound, CalendarPlus, FilePen, CirclePause } from 'lucide-react'
-import { formatFechaCorta, duracionContrato, hoyBogota } from '@/lib/fechas'
+import { formatFechaCorta, formatFechaISO, duracionContrato, hoyBogota } from '@/lib/fechas'
 import { FilaDocumento, VerDocumento } from '@/components/contratos/fila-documento'
 import { FilaAnexo } from '@/components/contratos/fila-anexo'
 import { fmtCOP } from '@/lib/moneda'
@@ -22,6 +22,8 @@ import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import { CorregirPosicionFirma } from '@/components/contratos/corregir-posicion-firma'
 import { METODO_CORRECCION_POSICION } from '@/server/contratos-estampar'
 import { resumenOtrosi, ETIQUETA_CAMBIO_OTROSI, type ValoresOtrosi, type TipoCambioOtrosi } from '@/lib/otrosi'
+import { AccionesProrroga, AccionesOtrosi, AccionesSuspension, HistorialSalarial } from './modificaciones-cliente'
+import { numeroOtrosiDeMotivo } from '@/server/contratos-modificaciones'
 
 export const metadata = { title: 'Contrato · Smart Gadgets RH' }
 
@@ -52,7 +54,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
   })
   if (!c) notFound()
 
-  const [cargos, sedes, documentos, empresaCfg, evidencias, anexos] = await Promise.all([
+  const [cargos, sedes, documentos, empresaCfg, evidencias, anexos, variaciones] = await Promise.all([
     prisma.cargo.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
     prisma.sede.findMany({ where: { activa: true }, include: { ciudad: true }, orderBy: { nombre: 'asc' } }),
     prisma.documento.findMany({
@@ -69,7 +71,15 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
       select: { id: true, nombre: true, creadoEn: true },
       orderBy: { creadoEn: 'desc' },
     }),
+    // Historial salarial del colaborador: cada otrosí de salario deja una variación.
+    prisma.variacionSalarial.findMany({ where: { colaboradorId: c.colaboradorId }, orderBy: [{ fechaVigencia: 'desc' }, { creadoEn: 'desc' }] }),
   ])
+  const catalogos = {
+    cargos: cargos.map((x) => ({ id: x.id, nombre: x.nombre })),
+    sedes: sedes.map((x) => ({ id: x.id, nombre: x.nombre, ciudad: x.ciudad.nombre })),
+  }
+  const ultimaProrroga = Math.max(0, ...c.prorrogas.map((p) => p.numero))
+  const ultimoOtrosi = Math.max(0, ...c.otrosis.map((o) => o.numero))
 
   // Cada documento con sus versiones (la vigente primero: la firmada si ya la hay) y su estado.
   const version = (d: { id: string; nombre: string; creadoEn: Date }) => ({ id: d.id, nombre: d.nombre, fecha: formatFechaCorta(d.creadoEn) })
@@ -120,6 +130,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
   // Días que le quedan a un contrato con fecha de fin: lo primero que se mira en un término fijo.
   const diasParaVencer = c.fechaFin && c.estado === 'ACTIVO' ? Math.ceil((c.fechaFin.getTime() - hoyBogota().getTime()) / 86_400_000) : null
   const hayModificaciones = c.prorrogas.length + c.otrosis.length + c.suspensiones.length > 0
+  const hayHistorialSalarial = variaciones.length > 0
 
   return (
     <div className="max-w-6xl space-y-4">
@@ -142,8 +153,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
                 numero={c.numero}
                 sedeId={c.sedeId}
                 puedeEliminar={puedeEliminar}
-                cargos={cargos.map((x) => ({ id: x.id, nombre: x.nombre }))}
-                sedes={sedes.map((x) => ({ id: x.id, nombre: x.nombre, ciudad: x.ciudad.nombre }))}
+                {...catalogos}
               />
             )}
           </>
@@ -262,6 +272,12 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
                 {puedeEditar && (
                   <AdjuntarDocumento destino="prorroga" id={p.id} tieneDocumento={Boolean(p.documentoId)} etiqueta={p.documentoId ? 'Reemplazar PDF' : 'Adjuntar PDF'} variante="ghost" tamano="icon" className="size-8" />
                 )}
+                <AccionesProrroga
+                  prorroga={{ id: p.id, numero: p.numero, fechaInicio: formatFechaISO(p.fechaInicio), fechaFin: formatFechaISO(p.fechaFin), fechaFirma: formatFechaISO(p.fechaFirma) }}
+                  esUltima={p.numero === ultimaProrroga}
+                  puedeEditar={puedeEditar}
+                  puedeEliminar={puedeEliminar}
+                />
               </FilaDocumento>
             ))}
             {c.otrosis.map((o) => {
@@ -283,13 +299,45 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
                   {puedeEditar && !o.requiereFirma && (
                     <AdjuntarDocumento destino="otrosi" id={o.id} tieneDocumento={Boolean(o.documentoId)} etiqueta={o.documentoId ? 'Reemplazar PDF' : 'Adjuntar PDF'} variante="ghost" tamano="icon" className="size-8" />
                   )}
+                  <AccionesOtrosi
+                    otrosi={{
+                      id: o.id, numero: o.numero, fecha: formatFechaISO(o.fecha), descripcion: o.descripcion ?? '',
+                      tiposCambio: o.tiposCambio, valoresNuevos: o.valoresNuevos as ValoresOtrosi | null,
+                      firmado: !!o.firmaEmpleadoPath, requiereFirma: o.requiereFirma,
+                    }}
+                    esUltimo={o.numero === ultimoOtrosi}
+                    puedeEditar={puedeEditar}
+                    puedeEliminar={puedeEliminar}
+                    {...catalogos}
+                  />
                 </FilaDocumento>
               )
             })}
             {c.suspensiones.map((su) => (
-              <FilaDocumento key={su.id} icono={CirclePause} titulo={`Suspensión · ${CAUSA_SUSP[su.causa]}`} sub={`${formatFechaCorta(su.fechaInicio)}${su.fechaFin ? ` a ${formatFechaCorta(su.fechaFin)}` : ' · sin fecha de fin'}`} />
+              <FilaDocumento key={su.id} icono={CirclePause} titulo={`Suspensión · ${CAUSA_SUSP[su.causa]}`} sub={`${formatFechaCorta(su.fechaInicio)}${su.fechaFin ? ` a ${formatFechaCorta(su.fechaFin)}` : ' · sin fecha de fin'}`}>
+                <AccionesSuspension
+                  suspension={{ id: su.id, fechaInicio: formatFechaISO(su.fechaInicio), fechaFin: formatFechaISO(su.fechaFin), causa: su.causa, descripcion: su.descripcion ?? '', etiquetaCausa: CAUSA_SUSP[su.causa] }}
+                  puedeEditar={puedeEditar}
+                  puedeEliminar={puedeEliminar}
+                />
+              </FilaDocumento>
             ))}
           </ul>
+        </CardContent></Card>
+      )}
+
+      {/* Historial salarial: cada cambio de salario del colaborador, con quién lo originó. */}
+      {hayHistorialSalarial && (
+        <Card className="py-0"><CardContent className="p-4 sm:p-5">
+          <HistorialSalarial
+            puedeEditar={puedeEditar}
+            puedeEliminar={puedeEliminar}
+            variaciones={variaciones.map((vs) => ({
+              id: vs.id, fechaVigencia: formatFechaISO(vs.fechaVigencia),
+              salarioAnterior: Number(vs.salarioAnterior), salarioNuevo: Number(vs.salarioNuevo),
+              motivo: vs.motivo ?? '', deOtrosi: numeroOtrosiDeMotivo(vs.motivo),
+            }))}
+          />
         </CardContent></Card>
       )}
     </div>

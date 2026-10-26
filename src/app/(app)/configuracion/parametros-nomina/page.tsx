@@ -54,14 +54,20 @@ export default async function ParametrosNominaPage() {
     })
   }
 
+  // Igual que los parámetros: la primera fila por código es la vigente y las
+  // demás son su histórico (para corregir o borrar la que quedó mal).
   const tiposPorCodigo = new Map<string, TipoHoraItem>()
   for (const t of tiposHora) {
-    if (tiposPorCodigo.has(t.codigo)) continue
+    const fila = { id: t.id, factor: Number(t.factor), desde: formatFechaISO(t.vigenteDesde) ?? '', hasta: t.vigenteHasta ? formatFechaISO(t.vigenteHasta) : null }
+    const ya = tiposPorCodigo.get(t.codigo)
+    if (ya) { ya.historial.push(fila); continue }
     tiposPorCodigo.set(t.codigo, {
       codigo: t.codigo,
       nombre: t.nombre,
-      factor: Number(t.factor),
-      desde: formatFechaISO(t.vigenteDesde) ?? '',
+      factor: fila.factor,
+      desde: fila.desde,
+      delMotor: ['HED', 'HEN', 'RN', 'RD', 'RND', 'HEDD', 'HEND'].includes(t.codigo),
+      historial: [fila],
     })
   }
 

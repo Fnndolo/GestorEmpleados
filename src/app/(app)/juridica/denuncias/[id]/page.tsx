@@ -10,7 +10,7 @@ import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { formatFechaLarga } from '@/lib/fechas'
 import { etiquetaReporte, esAcoso } from '@/lib/linea-etica'
 import { SoportesEntidad } from '../../_ui'
-import { AccionesDenuncia } from './acciones-denuncia'
+import { AccionesDenuncia, BotonEliminarDenuncia } from './acciones-denuncia'
 
 export const metadata = { title: 'Reporte de la línea ética · Smart Gadgets RH' }
 
@@ -20,6 +20,7 @@ export default async function DenunciaPage({ params }: { params: Promise<{ id: s
   const { id } = await params
   const usuario = await requerirPermiso('juridica', 'VER')
   const puedeEditar = tienePermiso(usuario, 'juridica', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'juridica', 'ELIMINAR')
 
   const d = await prisma.denunciaAcoso.findUnique({ where: { id } })
   if (!d) notFound()
@@ -37,7 +38,12 @@ export default async function DenunciaPage({ params }: { params: Promise<{ id: s
       <Encabezado
         titulo={d.asunto ? `${d.asunto} · ${d.codigo}` : `Denuncia ${d.codigo}`}
         descripcion={`${etiquetaReporte(d.tipo)} · ${d.anonima ? 'reporte anónimo' : `reportado por ${d.denuncianteNombre ?? '—'}`}${esAcoso(d.tipo) ? ' · Comité de Convivencia' : ''}`}
-        acciones={<Badge variant={d.estado === 'RESUELTA' ? 'default' : 'secondary'}>{ESTADO[d.estado]}</Badge>}
+        acciones={
+          <div className="flex items-center gap-1.5">
+            <Badge variant={d.estado === 'RESUELTA' ? 'default' : 'secondary'}>{ESTADO[d.estado]}</Badge>
+            {puedeEliminar && <BotonEliminarDenuncia id={d.id} codigo={d.codigo} estado={d.estado} />}
+          </div>
+        }
         // /juridica/denuncias no es página: sin memoria, la flecha vuelve a la pestaña de denuncias.
         volver="/juridica?tab=denuncias"
       />

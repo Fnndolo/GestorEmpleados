@@ -6,8 +6,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { GraduationCap, ChevronRight } from 'lucide-react'
 import { Chip } from '@/components/ui-kit'
-import { formatFechaCorta } from '@/lib/fechas'
-import { CrearCapacitacion } from './crear-capacitacion'
+import { formatFechaCorta, formatFechaISO } from '@/lib/fechas'
+import { CrearCapacitacion, AccionesCapacitacion } from './crear-capacitacion'
 
 export const metadata = { title: 'Capacitaciones · Smart Gadgets RH' }
 
@@ -16,6 +16,8 @@ const TIPO: Record<string, string> = { INDUCCION: 'Inducción', REINDUCCION: 'Re
 export default async function CapacitacionesPage() {
   const usuario = await requerirPermiso('capacitaciones', 'VER')
   const puedeCrear = tienePermiso(usuario, 'capacitaciones', 'CREAR')
+  const puedeEditar = tienePermiso(usuario, 'capacitaciones', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'capacitaciones', 'ELIMINAR')
 
   const capacitaciones = await prisma.capacitacion.findMany({
     include: { _count: { select: { asistencias: true } } },
@@ -31,15 +33,25 @@ export default async function CapacitacionesPage() {
       ) : (
         <Card><CardContent className="p-0 divide-y">
           {capacitaciones.map((c) => (
-            <Link key={c.id} href={`/capacitaciones/${c.id}`} className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/40">
-              <Chip icono={GraduationCap} color="violet" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm truncate">{c.titulo}</p>
-                <p className="text-xs text-muted-foreground">{formatFechaCorta(c.fecha)} · {c._count.asistencias} asistente(s)</p>
-              </div>
-              <Badge variant="outline">{TIPO[c.tipo]}</Badge>
-              <ChevronRight className="size-4 text-muted-foreground" />
-            </Link>
+            // El enlace cubre la fila; los botones de editar/eliminar van fuera
+            // de él para que no abran el detalle al tocarlos.
+            <div key={c.id} className="flex items-center gap-1 pr-2 transition-colors hover:bg-accent/40">
+              <Link href={`/capacitaciones/${c.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-3">
+                <Chip icono={GraduationCap} color="violet" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{c.titulo}</p>
+                  <p className="text-xs text-muted-foreground">{formatFechaCorta(c.fecha)} · {c._count.asistencias} asistente(s)</p>
+                </div>
+                <Badge variant="outline" className="hidden sm:inline-flex">{TIPO[c.tipo]}</Badge>
+                <ChevronRight className="size-4 text-muted-foreground" />
+              </Link>
+              <AccionesCapacitacion
+                capacitacion={{ id: c.id, titulo: c.titulo, tipo: c.tipo, fecha: formatFechaISO(c.fecha), duracionHoras: c.duracionHoras != null ? Number(c.duracionHoras) : null, facilitador: c.facilitador, descripcion: c.descripcion }}
+                asistentes={c._count.asistencias}
+                puedeEditar={puedeEditar}
+                puedeEliminar={puedeEliminar}
+              />
+            </div>
           ))}
         </CardContent></Card>
       )}

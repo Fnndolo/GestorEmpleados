@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { fmtCOP } from '@/lib/moneda'
 import { formatFechaCorta } from '@/lib/fechas'
 import { registrarSoporteSs, cambiarEstadoCuenta } from '../../ops-acciones'
+import { AccionesCuentaCobro, AccionesSoporteSs } from '@/components/contratos/cuenta-cobro-acciones'
 
 type Soporte = { estadoVerificacion: string; periodoCotizado: string; ibcDeclarado: number | null; operador: string | null }
 type Planilla = { id: string; nombre: string; esImagen: boolean }
@@ -24,6 +25,9 @@ type Cuenta = {
   fechaRadicacion: string; fechaPago: string | null; soporte: Soporte | null; planilla: Planilla | null
   /** Se le pidió la planilla PILA: sin ella verificada no se aprueba ni se paga. */
   requierePila: boolean
+  concepto: string | null
+  /** La radicó el contratista (PDF firmado por él): valor y periodo no se cambian. */
+  creadaPorContratista: boolean
 }
 
 const ESTADO_SS: Record<string, string> = { VALIDA: 'válida', INVALIDA: 'inválida', PENDIENTE: 'pendiente' }
@@ -34,10 +38,10 @@ const ESTADO_LABEL: Record<string, string> = {
 }
 
 export function CuentasCobro({
-  contratoOpsId, valorMensual, cuentas, puedeEditar, puedeAprobar,
+  contratoOpsId, valorMensual, cuentas, puedeEditar, puedeEliminar = false, puedeAprobar,
 }: {
   contratoOpsId: string; valorMensual: number | null; cuentas: Cuenta[]
-  puedeEditar: boolean; puedeAprobar: boolean
+  puedeEditar: boolean; puedeEliminar?: boolean; puedeAprobar: boolean
 }) {
   const router = useRouter()
   const [soporteDe, setSoporteDe] = useState<Cuenta | null>(null)
@@ -66,6 +70,8 @@ export function CuentasCobro({
                     <p className="truncate text-xs text-muted-foreground">{fmtCOP(cc.valor)} · radicada {formatFechaCorta(new Date(cc.fechaRadicacion))}{cc.fechaPago ? ` · pagada ${formatFechaCorta(new Date(cc.fechaPago))}` : ''}</p>
                   </div>
                   <Pill tone={cc.estado === 'PAGADA' || cc.estado === 'APROBADA' ? 'ok' : cc.estado === 'BLOQUEADA_SS' || cc.estado === 'RECHAZADA' ? 'bad' : 'warn'}>{ESTADO_LABEL[cc.estado]}</Pill>
+                  {/* Corregir o anular la cuenta: siempre visibles, bloqueados (y explicados) si ya se pagó. */}
+                  <AccionesCuentaCobro cuenta={cc} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />
                 </div>
 
                 {/* Seguridad social: requisito para aprobar y pagar. */}
@@ -89,6 +95,7 @@ export function CuentasCobro({
                     {puedeEditar && (
                       <Button size="sm" variant="outline" onClick={() => setSoporteDe(cc)}>{cc.soporte ? 'Editar SS' : 'Registrar SS'}</Button>
                     )}
+                    <AccionesSoporteSs cuenta={cc} soporte={cc.soporte} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />
                     {puedeAprobar && sig && (
                       <>
                         <AccionEstado

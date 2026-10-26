@@ -13,6 +13,7 @@ import { formatFechaCorta, formatFechaLarga } from '@/lib/fechas'
 import { PazSalvoBoton } from './paz-salvo-boton'
 import { AcuerdoDescuento } from './acuerdo-descuento'
 import { CuotasDescuento } from './cuotas-descuento'
+import { AccionesPrestamo } from './acciones-prestamo'
 import { mesLargo } from '@/lib/descuentos'
 
 export const metadata = { title: 'Detalle de descuento · Smart Gadgets RH' }
@@ -22,6 +23,7 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
   const usuario = await requerirPermiso('nomina', 'VER')
   const puedeExportar = tienePermiso(usuario, 'nomina', 'EXPORTAR')
   const puedeEditar = tienePermiso(usuario, 'nomina', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'nomina', 'ELIMINAR')
 
   const prestamo = await prisma.prestamo.findUnique({
     where: { id },
@@ -33,8 +35,10 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
   if (!prestamo) notFound()
 
   const pagadas = prestamo.cuotas.filter((c) => c.pagada).length
-  const faltantes = prestamo.numeroCuotas - pagadas
-  const pct = prestamo.numeroCuotas > 0 ? Math.round((pagadas / prestamo.numeroCuotas) * 100) : 0
+  // Las cuotas reales: ajustarlas puede quitar o agregar respecto al plan original.
+  const totalCuotas = prestamo.cuotas.length
+  const faltantes = totalCuotas - pagadas
+  const pct = totalCuotas > 0 ? Math.round((pagadas / totalCuotas) * 100) : 0
   const pazSalvo = prestamo.estado === 'PAGADO'
     ? await prisma.documento.findFirst({ where: { entidadTipo: 'Prestamo', entidadId: prestamo.id }, orderBy: { creadoEn: 'desc' } })
     : null
@@ -45,6 +49,23 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
         volver
         titulo={`Descuento · ${prestamo.colaborador.nombres} ${prestamo.colaborador.apellidos}`}
         descripcion={`${prestamo.descripcion ?? 'Descuento de nómina'} · desde ${mesLargo(prestamo.fechaInicio)}`}
+        acciones={
+          <AccionesPrestamo
+            puedeEditar={puedeEditar}
+            puedeEliminar={puedeEliminar}
+            prestamo={{
+              id: prestamo.id,
+              colaborador: `${prestamo.colaborador.nombres} ${prestamo.colaborador.apellidos}`,
+              descripcion: prestamo.descripcion ?? 'Descuento',
+              valorTotal: Number(prestamo.valorTotal),
+              numeroCuotas: prestamo.numeroCuotas,
+              mesInicio: prestamo.fechaInicio.toISOString().slice(0, 7),
+              conCuotasPagadas: pagadas > 0,
+              firmado: !!prestamo.firmaEmpleadoFecha,
+              porFirmar: prestamo.requiereFirma && !!prestamo.acuerdoDocId && !prestamo.firmaEmpleadoFecha,
+            }}
+          />
+        }
       />
 
       <Card className="mb-4"><CardContent className="py-5 space-y-4">
@@ -59,7 +80,7 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
         </div>
         <div>
           <div className="flex justify-between text-sm mb-1">
-            <span>{pagadas} de {prestamo.numeroCuotas} cuotas pagadas</span>
+            <span>{pagadas} de {totalCuotas} cuotas pagadas</span>
             <span className="text-muted-foreground">{faltantes} por pagar</span>
           </div>
           <Progress value={pct} />

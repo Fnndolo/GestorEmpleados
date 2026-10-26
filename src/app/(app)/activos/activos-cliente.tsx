@@ -3,8 +3,9 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Laptop, Shirt, Eye, UserPlus, Undo2, Trash2, Pencil, Camera, X } from 'lucide-react'
+import { Plus, Laptop, Shirt, Eye, UserPlus, Undo2, Trash2, Pencil, Camera, X, Ban, MoreHorizontal } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,14 +21,24 @@ import { Ayuda } from '@/components/ui-kit/ayuda'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
 import { Checkbox } from '@/components/ui/checkbox'
 import { fmtCOP } from '@/lib/moneda'
-import { formatFechaCorta } from '@/lib/fechas'
-import { crearActivos, asignarActivos, devolverActivo, registrarDotacion } from './acciones'
+import { formatFechaCorta, parseFechaISO } from '@/lib/fechas'
+import {
+  crearActivos, asignarActivos, devolverActivo, registrarDotacion,
+  editarActivo, darDeBajaActivo, eliminarActivo, editarAsignacionActivo, anularAsignacionActivo, editarEntregaDotacion, anularEntregaDotacion,
+} from './acciones'
 import { FotoActivo, subirFotoActivo } from '@/components/activos/foto-activo'
 import { iconoActivo } from '@/lib/activos-visual'
 
-type Activo = { id: string; codigo: string; nombre: string; tipo: string; estado: string; valor: number | null; fotoUrl: string | null; asignacion: { id: string; colaborador: string; actaEntregaDocId: string | null; actaFirmada: boolean } | null }
+type Asignacion = { id: string; colaborador: string; actaEntregaDocId: string | null; actaFirmada: boolean; fechaEntrega: string; observaciones: string | null }
+type Activo = {
+  id: string; codigo: string; nombre: string; tipo: string; estado: string; valor: number | null; fotoUrl: string | null
+  marca: string | null; serie: string | null; sedeId: string | null; observaciones: string | null
+  /** Cuántas veces se ha entregado (abiertas o devueltas): si es 0, se puede borrar; si no, solo dar de baja. */
+  vecesEntregado: number
+  asignacion: Asignacion | null
+}
 type Dotacion = {
-  id: string; colaborador: string; anio: number; corte: string; items: string; fechaEntrega: string
+  id: string; colaboradorId: string; colaborador: string; anio: number; corte: string; items: string; fechaEntrega: string
   /** PDF del recibido (arts. 230-234 CST); lo firma el colaborador desde su autoservicio. */
   recibidoDocId: string | null
   firmado: boolean
@@ -37,10 +48,23 @@ type Sede = { id: string; nombre: string; ciudad: string }
 const ESTADO: Record<string, string> = { DISPONIBLE: 'Disponible', ASIGNADO: 'Asignado', EN_MANTENIMIENTO: 'Mantenimiento', DADO_DE_BAJA: 'De baja' }
 const TONO_ACTIVO: Record<string, PillTone> = { DISPONIBLE: 'ok', ASIGNADO: 'info', EN_MANTENIMIENTO: 'warn', DADO_DE_BAJA: 'muted' }
 
-export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCrear, puedeEditar }: { activos: Activo[]; dotaciones: Dotacion[]; sedes: Sede[]; sedeActual: string; puedeCrear: boolean; puedeEditar: boolean }) {
+/** Qué se está editando o anulando desde la lista; cada caso abre su ventana. */
+type Pendiente =
+  | { tipo: 'editarActivo'; activo: Activo }
+  | { tipo: 'bajaActivo'; activo: Activo }
+  | { tipo: 'eliminarActivo'; activo: Activo }
+  | { tipo: 'editarEntrega'; activo: Activo }
+  | { tipo: 'anularEntrega'; activo: Activo }
+  | { tipo: 'editarDotacion'; dotacion: Dotacion }
+  | { tipo: 'anularDotacion'; dotacion: Dotacion }
+
+export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCrear, puedeEditar, puedeEliminar }: {
+  activos: Activo[]; dotaciones: Dotacion[]; sedes: Sede[]; sedeActual: string; puedeCrear: boolean; puedeEditar: boolean; puedeEliminar: boolean
+}) {
   const [tab, setTab] = useState<'activos' | 'dotacion'>('activos')
   const [dialogo, setDialogo] = useState<'activo' | 'asignar' | 'dotacion' | null>(null)
   const [asignarActivoId, setAsignarActivoId] = useState<string | null>(null)
+  const [pendiente, setPendiente] = useState<Pendiente | null>(null)
   const disponibles = activos.filter((a) => a.estado === 'DISPONIBLE')
   const hayDisponibles = disponibles.length > 0
 
@@ -124,6 +148,43 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
                 {puedeEditar && a.asignacion && (
                   <DevolverBoton asignacionId={a.asignacion.id} />
                 )}
+                {/* Corregir o anular: lo que no es del día a día va en un menú
+                    para que la fila no se desborde en el celular. */}
+                {(puedeEditar || puedeEliminar) && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Más acciones" title="Más acciones">
+                      <MoreHorizontal className="size-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {puedeEditar && (
+                        <DropdownMenuItem onClick={() => setPendiente({ tipo: 'editarActivo', activo: a })}>
+                          <Pencil className="size-4" /> Editar activo
+                        </DropdownMenuItem>
+                      )}
+                      {puedeEditar && a.asignacion && (
+                        <DropdownMenuItem onClick={() => setPendiente({ tipo: 'editarEntrega', activo: a })}>
+                          <Pencil className="size-4" /> Editar entrega
+                        </DropdownMenuItem>
+                      )}
+                      {puedeEliminar && a.asignacion && (
+                        <DropdownMenuItem variant="destructive" onClick={() => setPendiente({ tipo: 'anularEntrega', activo: a })}>
+                          <Ban className="size-4" /> Anular entrega
+                        </DropdownMenuItem>
+                      )}
+                      {puedeEliminar && puedeEditar && (a.vecesEntregado === 0 || a.estado !== 'DADO_DE_BAJA') && <DropdownMenuSeparator />}
+                      {puedeEliminar && a.vecesEntregado === 0 && (
+                        <DropdownMenuItem variant="destructive" onClick={() => setPendiente({ tipo: 'eliminarActivo', activo: a })}>
+                          <Trash2 className="size-4" /> Eliminar activo
+                        </DropdownMenuItem>
+                      )}
+                      {puedeEliminar && a.estado !== 'DADO_DE_BAJA' && (
+                        <DropdownMenuItem variant="destructive" onClick={() => setPendiente({ tipo: 'bajaActivo', activo: a })}>
+                          <Ban className="size-4" /> Dar de baja
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 </div>
               </div>
             ))}
@@ -155,11 +216,68 @@ export function ActivosCliente({ activos, dotaciones, sedes, sedeActual, puedeCr
                     etiqueta={d.recibidoDocId ? 'Rehacer o reemplazar el recibido' : 'Generar o subir el recibido'}
                   />
                 )}
+                {puedeEditar && (
+                  <Button variant="ghost" size="icon" aria-label="Editar entrega" title={d.firmado ? 'Ya está firmada: no se puede cambiar' : 'Editar entrega'} onClick={() => setPendiente({ tipo: 'editarDotacion', dotacion: d })}>
+                    <Pencil className="size-4" />
+                  </Button>
+                )}
+                {puedeEliminar && (
+                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" aria-label="Anular entrega" title={d.firmado ? 'Ya está firmada: no se puede anular' : 'Anular entrega'} onClick={() => setPendiente({ tipo: 'anularDotacion', dotacion: d })}>
+                    <Ban className="size-4" />
+                  </Button>
+                )}
                 </div>
               </div>
             ))}
           </CardContent></Card>
         )
+      )}
+
+      {pendiente?.tipo === 'editarActivo' && <DialogActivo sedes={sedes} sedeActual={sedeActual} inicial={pendiente.activo} onClose={() => setPendiente(null)} />}
+      {pendiente?.tipo === 'editarEntrega' && pendiente.activo.asignacion && (
+        <DialogEditarEntrega activo={pendiente.activo} asignacion={pendiente.activo.asignacion} onClose={() => setPendiente(null)} />
+      )}
+      {pendiente?.tipo === 'anularEntrega' && pendiente.activo.asignacion && (
+        <DialogMotivo
+          titulo="Anular entrega"
+          detalle={`${pendiente.activo.nombre} (${pendiente.activo.codigo}) · entregado a ${pendiente.activo.asignacion.colaborador} el ${formatFechaCorta(parseFechaISO(pendiente.activo.asignacion.fechaEntrega))} · el acta se retira, el activo vuelve a estar disponible y se le avisa al colaborador`}
+          bloqueo={pendiente.activo.asignacion.actaFirmada ? 'El colaborador ya firmó el acta de entrega: no se puede anular. Usa «Devolver» para cerrar la entrega con su acta.' : null}
+          icono="anular"
+          ejecutar={(motivo) => anularAsignacionActivo({ asignacionId: pendiente.activo.asignacion!.id, motivo })}
+          onClose={() => setPendiente(null)}
+        />
+      )}
+      {pendiente?.tipo === 'bajaActivo' && (
+        <DialogMotivo
+          titulo="Dar de baja"
+          detalle={`${pendiente.activo.nombre} (${pendiente.activo.codigo}) · queda en el inventario como «De baja», con el motivo en sus observaciones`}
+          bloqueo={pendiente.activo.asignacion ? `Está entregado a ${pendiente.activo.asignacion.colaborador}: devuélvelo o anula la entrega antes de darlo de baja.` : null}
+          icono="anular"
+          textoBoton="Dar de baja"
+          ejecutar={(motivo) => darDeBajaActivo({ id: pendiente.activo.id, motivo })}
+          onClose={() => setPendiente(null)}
+        />
+      )}
+      {pendiente?.tipo === 'eliminarActivo' && (
+        <DialogMotivo
+          titulo="Eliminar activo"
+          detalle={`${pendiente.activo.nombre} (${pendiente.activo.codigo}) · nunca se ha entregado, así que desaparece del inventario`}
+          icono="eliminar"
+          textoBoton="Eliminar"
+          ejecutar={(motivo) => eliminarActivo({ id: pendiente.activo.id, motivo })}
+          onClose={() => setPendiente(null)}
+        />
+      )}
+      {pendiente?.tipo === 'editarDotacion' && <DialogDotacion inicial={pendiente.dotacion} onClose={() => setPendiente(null)} />}
+      {pendiente?.tipo === 'anularDotacion' && (
+        <DialogMotivo
+          titulo="Anular entrega de dotación"
+          detalle={`${pendiente.dotacion.colaborador} · ${pendiente.dotacion.corte} ${pendiente.dotacion.anio} · ${pendiente.dotacion.items} · el recibido se borra y se le avisa al trabajador`}
+          bloqueo={pendiente.dotacion.firmado ? 'El trabajador ya firmó el recibido: no se puede anular.' : null}
+          icono="anular"
+          ejecutar={(motivo) => anularEntregaDotacion({ id: pendiente.dotacion.id, motivo })}
+          onClose={() => setPendiente(null)}
+        />
       )}
 
       {dialogo === 'activo' && <DialogActivo sedes={sedes} sedeActual={sedeActual} onClose={() => setDialogo(null)} />}
@@ -190,12 +308,101 @@ function DevolverBoton({ asignacionId }: { asignacionId: string }) {
   )
 }
 
+/**
+ * Confirmación de anular, dar de baja o eliminar, con el motivo obligatorio
+ * (queda en auditoría). Si hay un bloqueo (acta firmada, activo entregado), el
+ * botón se ve pero explica por qué no se puede.
+ */
+function DialogMotivo({ titulo, detalle, bloqueo, icono, textoBoton, ejecutar, onClose }: {
+  titulo: string
+  detalle: string
+  bloqueo?: string | null
+  icono: 'anular' | 'eliminar'
+  textoBoton?: string
+  ejecutar: (motivo: string) => Promise<{ ok: boolean; error?: string }>
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const [motivo, setMotivo] = useState('')
+  const [g, setG] = useState(false)
+  const Icono = icono === 'eliminar' ? Trash2 : Ban
+
+  async function confirmar() {
+    setG(true)
+    const res = await ejecutar(motivo)
+    setG(false)
+    if (res.ok) { toast.success('Anulado.'); onClose(); router.refresh() } else toast.error(res.error ?? 'No se pudo anular.')
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !g && onClose()}>
+      <DialogContent aria-describedby={undefined}>
+        <DialogHeader><DialogTitle>{titulo}</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">{detalle}</p>
+        {bloqueo ? (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{bloqueo}</p>
+        ) : (
+          <div className="space-y-1.5">
+            <Label htmlFor="motivo-anulacion">Motivo <Req /></Label>
+            <Textarea id="motivo-anulacion" rows={2} placeholder="¿Por qué se anula?" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={g}>Volver</Button>
+          <Button variant="destructive" onClick={confirmar} disabled={g || Boolean(bloqueo) || motivo.trim().length < 5}>
+            {g ? <Spinner /> : <Icono className="size-4" />} {textoBoton ?? 'Anular'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Corregir la fecha o las observaciones de una entrega que aún no se ha firmado. */
+function DialogEditarEntrega({ activo, asignacion, onClose }: { activo: Activo; asignacion: Asignacion; onClose: () => void }) {
+  const router = useRouter()
+  const [fecha, setFecha] = useState(asignacion.fechaEntrega)
+  const [observaciones, setObservaciones] = useState(asignacion.observaciones ?? '')
+  const [g, setG] = useState(false)
+
+  async function guardar() {
+    if (!fecha) { toast.error('Indica la fecha de entrega.'); return }
+    setG(true)
+    const res = await editarAsignacionActivo({ asignacionId: asignacion.id, fechaEntrega: fecha, observaciones })
+    setG(false)
+    if (res.ok) { toast.success('Entrega actualizada.'); onClose(); router.refresh() } else toast.error(res.error)
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !g && onClose()}>
+      <DialogContent aria-describedby={undefined}>
+        <DialogHeader><DialogTitle>Editar entrega</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">{activo.nombre} ({activo.codigo}) · {asignacion.colaborador}</p>
+        {asignacion.actaFirmada ? (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+            El colaborador ya firmó el acta de entrega: no se puede cambiar. Si hace falta, devuelve el activo y entrégalo de nuevo.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <Campo label={<>Fecha de entrega <Req /></>}><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
+            <Campo label="Observaciones"><Textarea rows={2} maxLength={300} value={observaciones} onChange={(e) => setObservaciones(e.target.value)} /></Campo>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button>
+          <Button onClick={guardar} disabled={g || asignacion.actaFirmada}>{g && <Spinner />}Guardar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 /** Una línea del alta en lote. La sede es común a todas y va aparte. */
-type CampoTexto = 'codigo' | 'nombre' | 'tipo' | 'marca' | 'serie' | 'valor'
+type CampoTexto = 'codigo' | 'nombre' | 'tipo' | 'marca' | 'serie' | 'valor' | 'observaciones'
 /** Foto elegida y su vista previa (URL local, se libera al quitarla o cambiarla). */
 type FotoElegida = { archivo: File; url: string }
 type FilaActivo = Record<CampoTexto, string> & { foto: FotoElegida | null }
-const FILA_VACIA: FilaActivo = { codigo: '', nombre: '', tipo: '', marca: '', serie: '', valor: '', foto: null }
+const FILA_VACIA: FilaActivo = { codigo: '', nombre: '', tipo: '', marca: '', serie: '', valor: '', observaciones: '', foto: null }
 
 /** Marca de campo obligatorio. */
 const Req = () => <span className="text-destructive">*</span>
@@ -258,10 +465,18 @@ function ElegirFoto({ foto, onChange }: { foto: FotoElegida | null; onChange: (f
  * Alta de activos en lote: un computador, un mouse, un teclado y una silla se
  * registran de una sola vez en vez de abrir el formulario cuatro veces.
  */
-function DialogActivo({ sedes, sedeActual, onClose }: { sedes: Sede[]; sedeActual: string; onClose: () => void }) {
+function DialogActivo({ sedes, sedeActual, inicial, onClose }: {
+  sedes: Sede[]
+  sedeActual: string
+  /** Activo a corregir: el mismo formulario, con una sola fila precargada y sin foto (se cambia desde la lista). */
+  inicial?: Activo
+  onClose: () => void
+}) {
   const router = useRouter()
-  const [filas, setFilas] = useState<FilaActivo[]>([{ ...FILA_VACIA }])
-  const [sedeId, setSedeId] = useState(sedeActual)
+  const [filas, setFilas] = useState<FilaActivo[]>(inicial
+    ? [{ codigo: inicial.codigo, nombre: inicial.nombre, tipo: inicial.tipo, marca: inicial.marca ?? '', serie: inicial.serie ?? '', valor: inicial.valor != null ? String(inicial.valor) : '', observaciones: inicial.observaciones ?? '', foto: null }]
+    : [{ ...FILA_VACIA }])
+  const [sedeId, setSedeId] = useState(inicial ? inicial.sedeId ?? '' : sedeActual)
   /** Índice del activo abierto en el acordeón; los demás quedan resumidos. */
   const [abierto, setAbierto] = useState(0)
   const [g, setG] = useState(false)
@@ -290,15 +505,25 @@ function DialogActivo({ sedes, sedeActual, onClose }: { sedes: Sede[]; sedeActua
     const incompleta = llenas.findIndex((f) => !f.codigo.trim() || !f.nombre.trim() || !f.tipo.trim())
     if (incompleta >= 0) { toast.error(`Al activo ${incompleta + 1} le falta código, nombre o tipo.`); return }
 
-    setG(true)
-    const res = await crearActivos({
-      activos: llenas.map((f) => ({
-        codigo: f.codigo.trim(), nombre: f.nombre.trim(), tipo: f.tipo.trim(),
-        marca: f.marca.trim(), serie: f.serie.trim(),
-        valor: f.valor ? Number(f.valor) : undefined,
-        sedeId,
-      })),
+    const datosDe = (f: FilaActivo) => ({
+      codigo: f.codigo.trim(), nombre: f.nombre.trim(), tipo: f.tipo.trim(),
+      marca: f.marca.trim(), serie: f.serie.trim(),
+      valor: f.valor ? Number(f.valor) : undefined,
+      sedeId, observaciones: f.observaciones.trim(),
     })
+
+    if (inicial) {
+      setG(true)
+      const res = await editarActivo({ id: inicial.id, ...datosDe(llenas[0]) })
+      setG(false)
+      if (!res.ok) { toast.error(res.error); return }
+      toast.success('Activo actualizado.')
+      onClose(); router.refresh()
+      return
+    }
+
+    setG(true)
+    const res = await crearActivos({ activos: llenas.map(datosDe) })
     if (!res.ok) { setG(false); toast.error(res.error); return }
 
     // Las fotos se suben ya creados los activos, cada una al suyo. Si alguna
@@ -321,13 +546,13 @@ function DialogActivo({ sedes, sedeActual, onClose }: { sedes: Sede[]; sedeActua
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-1.5">
-            Nuevos activos
-            <Ayuda texto="Puedes registrar varios de una vez: computador, mouse, teclado, silla… Se crean todos juntos o ninguno, así que un código repetido no deja el inventario a medias." />
+            {inicial ? 'Editar activo' : 'Nuevos activos'}
+            {!inicial && <Ayuda texto="Puedes registrar varios de una vez: computador, mouse, teclado, silla… Se crean todos juntos o ninguno, así que un código repetido no deja el inventario a medias." />}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
-          <Campo label="Sede (para todos)">
+          <Campo label={inicial ? 'Sede' : 'Sede (para todos)'}>
             <Select value={sedeId} onValueChange={setSedeId}>
               <SelectTrigger className="w-full"><SelectValue placeholder="Sede…" /></SelectTrigger>
               <SelectContent>{sedes.map((s) => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)}</SelectContent>
@@ -369,22 +594,25 @@ function DialogActivo({ sedes, sedeActual, onClose }: { sedes: Sede[]; sedeActua
                     <Campo label="Marca"><Input value={f.marca} onChange={(e) => set(i, 'marca', e.target.value)} /></Campo>
                     <Campo label="Serie"><Input value={f.serie} onChange={(e) => set(i, 'serie', e.target.value)} /></Campo>
                     <div className="col-span-2"><Campo label="Valor"><Input type="number" value={f.valor} onChange={(e) => set(i, 'valor', e.target.value)} placeholder="0" /></Campo></div>
-                    <div className="col-span-2"><Campo label="Foto"><ElegirFoto foto={f.foto} onChange={(foto) => setFoto(i, foto)} /></Campo></div>
+                    <div className="col-span-2"><Campo label="Observaciones"><Textarea rows={2} maxLength={300} value={f.observaciones} onChange={(e) => set(i, 'observaciones', e.target.value)} /></Campo></div>
+                    {!inicial && <div className="col-span-2"><Campo label="Foto"><ElegirFoto foto={f.foto} onChange={(foto) => setFoto(i, foto)} /></Campo></div>}
                   </div>
                 )}
               </div>
             )
           })}
 
-          <Button type="button" size="sm" className="w-full" onClick={añadir}>
-            <Plus className="size-4" /> Añadir otro activo
-          </Button>
+          {!inicial && (
+            <Button type="button" size="sm" className="w-full" onClick={añadir}>
+              <Plus className="size-4" /> Añadir otro activo
+            </Button>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="ghost" disabled={g} onClick={onClose}>Cancelar</Button>
           <Button onClick={guardar} disabled={g}>
-            {g && <Spinner />}{llenas.length > 1 ? `Crear ${llenas.length} activos` : 'Crear activo'}
+            {g && <Spinner />}{inicial ? 'Guardar' : llenas.length > 1 ? `Crear ${llenas.length} activos` : 'Crear activo'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -480,38 +708,46 @@ function DialogAsignar({ activoId, disponibles, onClose }: {
   )
 }
 
-function DialogDotacion({ onClose }: { onClose: () => void }) {
+/** Registrar (sin `inicial`) o corregir una entrega de dotación. La persona no se cambia: se anula y se registra otra. */
+function DialogDotacion({ inicial, onClose }: { inicial?: Dotacion; onClose: () => void }) {
   const router = useRouter()
-  const [colaboradorId, setColaboradorId] = useState('')
-  const [anio, setAnio] = useState(String(new Date().getUTCFullYear()))
-  const [corte, setCorte] = useState('Abril')
-  const [items, setItems] = useState('')
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
+  const [colaboradorId, setColaboradorId] = useState(inicial?.colaboradorId ?? '')
+  const [anio, setAnio] = useState(inicial ? String(inicial.anio) : String(new Date().getUTCFullYear()))
+  const [corte, setCorte] = useState(inicial?.corte ?? 'Abril')
+  const [items, setItems] = useState(inicial?.items ?? '')
+  const [fecha, setFecha] = useState(inicial?.fechaEntrega ?? new Date().toISOString().slice(0, 10))
   const [g, setG] = useState(false)
+  const bloqueada = Boolean(inicial?.firmado)
   async function guardar() {
     if (!colaboradorId) { toast.error('Selecciona un colaborador.'); return }
     setG(true)
-    const res = await registrarDotacion({ colaboradorId, anio: Number(anio), corte: corte as 'Abril', items, fechaEntrega: fecha })
+    const comunes = { anio: Number(anio), corte: corte as 'Abril', items, fechaEntrega: fecha }
+    const res = inicial ? await editarEntregaDotacion({ id: inicial.id, ...comunes }) : await registrarDotacion({ colaboradorId, ...comunes })
     setG(false)
-    if (res.ok) { toast.success('Dotación registrada.'); onClose(); router.refresh() } else toast.error(res.error)
+    if (res.ok) { toast.success(inicial ? 'Dotación actualizada. El recibido se rehizo.' : 'Dotación registrada.'); onClose(); router.refresh() } else toast.error(res.error)
   }
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(o) => !o && !g && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Registrar entrega de dotación</DialogTitle></DialogHeader>
-        <div className="space-y-4">
-          <Campo label="Colaborador"><SelectorColaborador value={colaboradorId} onChange={(id) => setColaboradorId(id)} /></Campo>
+        <DialogHeader><DialogTitle>{inicial ? `Editar dotación · ${inicial.colaborador}` : 'Registrar entrega de dotación'}</DialogTitle></DialogHeader>
+        {bloqueada && (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+            El trabajador ya firmó el recibido: no se puede cambiar. Registra una entrega nueva si hace falta.
+          </p>
+        )}
+        <fieldset disabled={bloqueada} className="space-y-4">
+          {!inicial && <Campo label={<>Colaborador <Req /></>}><SelectorColaborador value={colaboradorId} onChange={(id) => setColaboradorId(id)} /></Campo>}
           <div className="grid grid-cols-2 gap-3">
-            <Campo label="Corte (entrega)">
+            <Campo label={<>Corte (entrega) <Req /></>}>
               <Select value={corte} onValueChange={setCorte}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="Abril">Abril</SelectItem><SelectItem value="Agosto">Agosto</SelectItem><SelectItem value="Diciembre">Diciembre</SelectItem></SelectContent></Select>
             </Campo>
-            <Campo label="Año"><Input type="number" value={anio} onChange={(e) => setAnio(e.target.value)} /></Campo>
+            <Campo label={<>Año <Req /></>}><Input type="number" value={anio} onChange={(e) => setAnio(e.target.value)} /></Campo>
           </div>
-          <Campo label="Prendas entregadas"><Textarea rows={2} value={items} onChange={(e) => setItems(e.target.value)} placeholder="2 camisas, 1 pantalón, 1 par de zapatos…" /></Campo>
-          <Campo label="Fecha de entrega"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
-        </div>
-        <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Registrar</Button></DialogFooter>
+          <Campo label={<>Prendas entregadas <Req /></>}><Textarea rows={2} value={items} onChange={(e) => setItems(e.target.value)} placeholder="2 camisas, 1 pantalón, 1 par de zapatos…" /></Campo>
+          <Campo label={<>Fecha de entrega <Req /></>}><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
+        </fieldset>
+        <DialogFooter><Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button><Button onClick={guardar} disabled={g || bloqueada}>{g && <Spinner />}{inicial ? 'Guardar' : 'Registrar'}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   )

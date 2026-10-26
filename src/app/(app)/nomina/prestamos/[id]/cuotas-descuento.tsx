@@ -52,7 +52,7 @@ export function CuotasDescuento({ prestamoId, cuotas, saldo, puedeAjustar }: {
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-2 text-sm font-medium">
                 Cuota {c.numero}
-                {c.ajustada && <Pill tone="info">Acordada</Pill>}
+                {c.ajustada && <Pill tone="info">Ajustada</Pill>}
               </p>
               <p className="text-xs text-muted-foreground">
                 {c.pagada ? `Pagada${c.fechaPago ? ` · ${c.fechaPago}` : ''}` : c.valor === 0 && c.ajustada ? 'Ese mes no se descuenta' : 'Pendiente'}
@@ -109,7 +109,7 @@ function DialogAjuste({ prestamoId, cuotaId, numero, valor, saldo, onClose }: {
           <Label htmlFor="cuota-valor">Cuánto se descuenta en esta cuota <span className="text-destructive">*</span></Label>
           <Input id="cuota-valor" inputMode="numeric" value={texto} onChange={(e) => setTexto(e.target.value.replace(/\D/g, ''))} />
           <p className="text-xs text-muted-foreground">
-            {fmtCOP(monto)} · saldo {fmtCOP(saldo)}. Con 0 ese mes no se descuenta; lo que falte se agrega en cuotas al final.
+            {fmtCOP(monto)}. Con 0 ese mes no se descuenta. Las cuotas siguientes se recalculan solas para completar el saldo de {fmtCOP(saldo)}.
           </p>
         </div>
         <DialogFooter>

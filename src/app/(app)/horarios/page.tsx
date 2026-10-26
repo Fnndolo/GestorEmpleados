@@ -6,6 +6,7 @@ import { Encabezado } from '@/components/shell/encabezado'
 import { Card, CardContent } from '@/components/ui/card'
 import { AvatarColaborador, Pill } from '@/components/ui-kit'
 import { AsignarHorario, type PlantillaHorario } from '@/components/horarios/asignar-horario'
+import { HistorialHorario, type AsignacionItem } from '@/components/horarios/historial-horario'
 import { conexionAsistencia } from '@/server/asistencia/cliente'
 import { sedeActualId } from '@/server/sede-actual'
 import { datosCronograma } from '@/server/cronograma'
@@ -37,6 +38,7 @@ const nombreMes = (mes: string) => `${MESES[Number(mes.slice(5, 7)) - 1]} ${mes.
 export default async function HorariosPage({ searchParams }: { searchParams: Promise<{ ver?: string; sede?: string; mes?: string; nuevo?: string }> }) {
   const usuario = await requerirPermiso('horarios', 'VER')
   const puedeEditar = tienePermiso(usuario, 'horarios', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'horarios', 'ELIMINAR')
   const sp = await searchParams
   const vista: Vista = sp.ver && sp.ver in VISTAS ? (sp.ver as Vista) : 'personas'
 
@@ -90,7 +92,7 @@ export default async function HorariosPage({ searchParams }: { searchParams: Pro
       {vista === 'personas' && (
         <Personas
           sedes={sedes} sedeId={sedeId} enlace={enlace} plantillas={plantillas}
-          puedeEditar={puedeEditar} conAsistencia={conAsistencia} hoyISO={hoyISO}
+          puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} conAsistencia={conAsistencia} hoyISO={hoyISO}
         />
       )}
 
@@ -99,12 +101,13 @@ export default async function HorariosPage({ searchParams }: { searchParams: Pro
           key={sp.nuevo ?? 'lista'}
           abrirNueva={puedeEditar && sp.nuevo === '1'}
           puedeEditar={puedeEditar}
+          puedeEliminar={puedeEliminar}
           hoy={hoyISO}
           plantillas={await Promise.all(plantillasBd.map(async (p) => ({
             id: p.id, nombre: p.nombre, descripcion: p.descripcion, activo: p.activo, dias: p.dias as DiasHorario,
             personas: await prisma.asignacionHorario.count({ where: { horarioId: p.id, hasta: null } }),
-            // Lo tuvo alguien alguna vez: es historial y no se borra (se desactiva).
-            usado: (await prisma.asignacionHorario.count({ where: { horarioId: p.id } })) > 0,
+            // Quién lo tiene vigente o programado: con alguno no se borra (se desactiva).
+            vigentes: await prisma.asignacionHorario.count({ where: { horarioId: p.id, OR: [{ hasta: null }, { hasta: { gte: hoy } }] } }),
           })))}
         />
       )}
@@ -117,12 +120,13 @@ export default async function HorariosPage({ searchParams }: { searchParams: Pro
 }
 
 /** Pestaña Personas: el horario de hoy de cada uno, lo programado y cómo va en AsistencIA. */
-async function Personas({ sedes, sedeId, enlace, plantillas, puedeEditar, conAsistencia, hoyISO }: {
+async function Personas({ sedes, sedeId, enlace, plantillas, puedeEditar, puedeEliminar, conAsistencia, hoyISO }: {
   sedes: { id: string; nombre: string }[]
   sedeId: string | null
   enlace: (c: Record<string, string | null>) => string
   plantillas: PlantillaHorario[]
   puedeEditar: boolean
+  puedeEliminar: boolean
   conAsistencia: boolean
   hoyISO: string
 }) {
@@ -132,18 +136,22 @@ async function Personas({ sedes, sedeId, enlace, plantillas, puedeEditar, conAsi
     select: {
       id: true, nombres: true, apellidos: true, fotoPath: true,
       sede: { select: { nombre: true } }, cargo: { select: { nombre: true } },
+      // Todas, también las pasadas: el historial permite corregir o anular la que quedó mal.
       asignacionesHorario: {
-        where: { OR: [{ hasta: null }, { hasta: { gte: hoy } }] },
         orderBy: { desde: 'asc' },
-        select: { id: true, desde: true, dias: true, horarioId: true, sincronizadoEn: true, errorSincronizacion: true, horario: { select: { nombre: true } } },
+        select: { id: true, desde: true, hasta: true, dias: true, horarioId: true, motivo: true, origen: true, sincronizadoEn: true, errorSincronizacion: true, horario: { select: { nombre: true } } },
       },
     },
     orderBy: [{ nombres: 'asc' }, { apellidos: 'asc' }],
   })
   const filas = colabs.map((c) => {
-    const vigente = c.asignacionesHorario.filter((a) => a.desde <= hoy).at(-1) ?? null
+    const vigente = c.asignacionesHorario.filter((a) => a.desde <= hoy && (!a.hasta || a.hasta >= hoy)).at(-1) ?? null
     const programada = c.asignacionesHorario.find((a) => a.desde > hoy) ?? null
-    return { c, vigente, programada }
+    const historial: AsignacionItem[] = [...c.asignacionesHorario].reverse().map((a) => ({
+      id: a.id, desde: formatFechaISO(a.desde), hasta: a.hasta ? formatFechaISO(a.hasta) : null,
+      horario: a.horario?.nombre ?? 'Horario propio', resumen: resumenHorario(a.dias as DiasHorario), motivo: a.motivo, origen: a.origen,
+    }))
+    return { c, vigente, programada, historial }
   })
   const sinHorario = filas.filter((f) => !f.vigente).length
   const corto = (nombre: string) => nombre.slice(prefijoComun(sedes.map((x) => x.nombre)).length) || nombre
@@ -168,11 +176,11 @@ async function Personas({ sedes, sedeId, enlace, plantillas, puedeEditar, conAsi
         </CardContent></Card>
       ) : (
         <Card className="py-0"><CardContent className="divide-y p-0">
-          {filas.map(({ c, vigente, programada }) => {
+          {filas.map(({ c, vigente, programada, historial }) => {
             const nombre = `${c.nombres} ${c.apellidos}`
             const dias = vigente?.dias as DiasHorario | undefined
             return (
-              <div key={c.id} className="flex items-center gap-3 p-3">
+              <div key={c.id} className="flex items-center gap-2 p-3 sm:gap-3">
                 <AvatarColaborador nombre={nombre} fotoUrl={urlFoto(c.id, c.fotoPath, true)} />
                 <div className="grid min-w-0 flex-1 gap-x-3 sm:grid-cols-2 sm:items-center">
                   <div className="min-w-0">
@@ -201,6 +209,9 @@ async function Personas({ sedes, sedeId, enlace, plantillas, puedeEditar, conAsi
                     )}
                   </div>
                 </div>
+                {(puedeEditar || puedeEliminar) && (
+                  <HistorialHorario nombre={nombre} asignaciones={historial} hoy={hoyISO} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />
+                )}
                 {puedeEditar && (
                   <AsignarHorario
                     colaboradorId={c.id} nombre={nombre} plantillas={plantillas} hoy={hoyISO} conAsistencia={conAsistencia}

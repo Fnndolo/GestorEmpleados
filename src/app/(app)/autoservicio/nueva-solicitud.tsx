@@ -193,12 +193,12 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
     } else if (tipo === 'INCAPACIDAD') {
       if (!incaIni || !incaFin) return 'Indica las fechas de inicio y fin de la incapacidad.'
       if (incaFin < incaIni) return 'La fecha de fin no puede ser anterior a la de inicio.'
-      if (archivos.length === 0) return 'Adjunta el soporte de la incapacidad (obligatorio).'
+      // El soporte de la EPS/ARL no frena el reporte: se puede adjuntar después
+      // desde Mi actividad mientras Talento Humano no la resuelva.
     } else if (tipo === 'LICENCIA') {
       if (!lic) return 'Selecciona el tipo de licencia.'
       if (!licIni || !licFin) return 'Indica las fechas de inicio y fin de la licencia.'
       if (licFin < licIni) return 'La fecha de fin no puede ser anterior a la de inicio.'
-      if (lic.requiereSoporte && archivos.length === 0) return `Adjunta el soporte: ${lic.soporteEsperado}`
     } else if (tipo === 'CERTIFICACION_LABORAL') {
       if (!certTipo) return 'Selecciona el tipo de certificación.'
     }
@@ -310,7 +310,10 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
   }
 
   const permiteAdjunto = tipo === 'PERMISO' || tipo === 'HORAS_EXTRA' || tipo === 'VACACIONES' || tipo === 'INCAPACIDAD' || tipo === 'LICENCIA'
-  const adjuntoObligatorio = tipo === 'INCAPACIDAD' || (tipo === 'HORAS_EXTRA' && SOPORTE_HORAS_EXTRA_OBLIGATORIO) || (tipo === 'LICENCIA' && !!lic?.requiereSoporte)
+  const adjuntoObligatorio = tipo === 'HORAS_EXTRA' && SOPORTE_HORAS_EXTRA_OBLIGATORIO
+  // Soporte que se espera pero no frena el envío: queda marcada "Sin soporte" y
+  // se adjunta después desde Mi actividad mientras no se resuelva.
+  const soporteEsperadoDespues = tipo === 'INCAPACIDAD' || (tipo === 'LICENCIA' && !!lic?.requiereSoporte)
 
   return (
     <>
@@ -552,8 +555,11 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
                   <Paperclip className="size-4" /> {archivos.length > 0 ? 'Agregar otro archivo' : 'Adjuntar imagen o PDF'}
                 </Button>
                 {adjuntoObligatorio && archivos.length === 0 && (
-                  <p className="text-xs text-destructive">
-                    {tipo === 'INCAPACIDAD' ? 'Debes adjuntar el soporte de la incapacidad.' : tipo === 'HORAS_EXTRA' ? 'Debes adjuntar el soporte que justifica las horas extra.' : 'Debes adjuntar el soporte de la licencia.'}
+                  <p className="text-xs text-destructive">Debes adjuntar el soporte que justifica las horas extra.</p>
+                )}
+                {soporteEsperadoDespues && archivos.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {tipo === 'INCAPACIDAD' ? 'Si aún no tienes el soporte de la EPS/ARL, envía la solicitud y adjúntalo después' : 'Si aún no tienes el soporte, envía la solicitud y adjúntalo después'} desde Mi actividad, mientras no se resuelva.
                   </p>
                 )}
               </div>

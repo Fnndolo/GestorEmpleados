@@ -4,19 +4,21 @@ import { reducirImagen } from '@/lib/reducir-imagen'
 import { useId, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Banknote, Paperclip } from 'lucide-react'
+import { Ban, Banknote, Paperclip } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { pagarNominaPersona } from '../acciones'
+import { pagarNominaPersona, deshacerPagoNominaPersona } from '../acciones'
+import { DialogMotivo } from '../dialog-motivo'
 
 /**
- * Registrar el pago de la nómina de una persona, con el comprobante de su
- * transferencia. En una ya pagada sirve para cambiar el comprobante o la fecha.
+ * Registrar el pago de la nómina de una persona. El comprobante de la
+ * transferencia es un soporte: se adjunta en el momento o después. En una ya
+ * pagada sirve para adjuntar o cambiar el comprobante, o corregir la fecha.
  */
-export function PagarPersona({ liquidacionId, nombre, neto, periodo, hoy, pagadoEn = null }: {
+export function PagarPersona({ liquidacionId, nombre, neto, periodo, hoy, pagadoEn = null, conComprobante = false }: {
   liquidacionId: string
   nombre: string
   neto: string
@@ -24,12 +26,15 @@ export function PagarPersona({ liquidacionId, nombre, neto, periodo, hoy, pagado
   hoy: string
   /** Fecha del pago ya registrado (yyyy-mm-dd); null si falta pagar. */
   pagadoEn?: string | null
+  /** Ya pagada y con comprobante: el botón es para cambiarlo; sin él, para adjuntarlo. */
+  conComprobante?: boolean
 }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
   const [fecha, setFecha] = useState(pagadoEn ?? hoy)
   const [archivo, setArchivo] = useState<{ nombre: string; dataUri: string } | null>(null)
   const [g, setG] = useState(false)
+  const [deshaciendo, setDeshaciendo] = useState(false)
   const pagado = !!pagadoEn
 
   async function elegir(e: React.ChangeEvent<HTMLInputElement>) {
@@ -46,12 +51,12 @@ export function PagarPersona({ liquidacionId, nombre, neto, periodo, hoy, pagado
   }
 
   async function guardar() {
-    if (!archivo) return
+    if (!fecha) return
     setG(true)
-    const res = await pagarNominaPersona({ liquidacionId, fechaPago: fecha, comprobante: archivo.dataUri })
+    const res = await pagarNominaPersona({ liquidacionId, fechaPago: fecha, comprobante: archivo?.dataUri })
     setG(false)
     if (!res.ok) { toast.error(res.error); return }
-    toast.success(pagado ? 'Comprobante actualizado.' : `Pago registrado. Le avisamos a ${nombre.split(' ')[0]}.`)
+    toast.success(pagado ? (archivo ? 'Comprobante guardado.' : 'Fecha actualizada.') : `Pago registrado. Le avisamos a ${nombre.split(' ')[0]}.`)
     if (!pagado && res.datos.periodoPagado) toast.success('Ya están pagados todos: el periodo quedó pagado.')
     setAbierto(false)
     setArchivo(null)
@@ -63,7 +68,25 @@ export function PagarPersona({ liquidacionId, nombre, neto, periodo, hoy, pagado
   return (
     <>
       {pagado ? (
-        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setAbierto(true)}>Cambiar</Button>
+        <>
+          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setAbierto(true)}>
+            {conComprobante ? 'Cambiar' : <><Paperclip className="size-3.5" /> Adjuntar comprobante</>}
+          </Button>
+          {/* Se registró a la persona equivocada o no se había pagado: vuelve a "por pagar". */}
+          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive hover:text-destructive" onClick={() => setDeshaciendo(true)} title="Deshacer el registro del pago">
+            <Ban className="size-3.5" /> Deshacer
+          </Button>
+          {deshaciendo && (
+            <DialogMotivo
+              titulo="Deshacer el pago registrado"
+              detalle={`${nombre} · nómina de ${periodo} · ${neto} · pagado el ${pagadoEn}. La nómina vuelve a "por pagar" y el comprobante se retira; se le avisa al colaborador.`}
+              verbo="Deshacer pago"
+              exito="Pago deshecho. Se le avisó al colaborador."
+              confirmar={(motivo) => deshacerPagoNominaPersona({ liquidacionId, motivo })}
+              onClose={() => setDeshaciendo(false)}
+            />
+          )}
+        </>
       ) : (
         <Button size="sm" onClick={() => setAbierto(true)}>
           <Banknote className="size-4" /> <span className="hidden sm:inline">Registrar pago</span><span className="sm:hidden">Pagar</span>
@@ -72,7 +95,7 @@ export function PagarPersona({ liquidacionId, nombre, neto, periodo, hoy, pagado
       <Dialog open={abierto} onOpenChange={(o) => { if (!g) setAbierto(o) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{pagado ? 'Cambiar comprobante' : 'Registrar pago'} · {neto}</DialogTitle>
+            <DialogTitle>{pagado ? (conComprobante ? 'Cambiar comprobante' : 'Adjuntar comprobante') : 'Registrar pago'} · {neto}</DialogTitle>
             <DialogDescription>{nombre} · nómina de {periodo}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -81,17 +104,18 @@ export function PagarPersona({ liquidacionId, nombre, neto, periodo, hoy, pagado
               <Input id={`fecha-${id}`} type="date" value={fecha} max={hoy} onChange={(e) => setFecha(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`archivo-${id}`}>Comprobante de la transferencia <span className="text-destructive">*</span></Label>
+              <Label htmlFor={`archivo-${id}`}>Comprobante de la transferencia</Label>
               <label htmlFor={`archivo-${id}`} className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground hover:bg-accent/50">
                 <Paperclip className="size-4 shrink-0" />
                 <span className="min-w-0 truncate">{archivo ? archivo.nombre : 'Elegir PDF o imagen'}</span>
               </label>
+              {!archivo && <p className="text-[11px] text-muted-foreground">{pagado ? 'Si no eliges archivo, solo se guarda la fecha.' : 'Se puede adjuntar después desde la misma fila.'}</p>}
               <input id={`archivo-${id}`} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={elegir} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAbierto(false)} disabled={g}>Cancelar</Button>
-            <Button onClick={guardar} disabled={g || !archivo || !fecha}>{g && <Spinner />}{pagado ? 'Guardar' : 'Registrar pago'}</Button>
+            <Button onClick={guardar} disabled={g || !fecha || (pagado && !archivo && fecha === pagadoEn)}>{g && <Spinner />}{pagado ? 'Guardar' : 'Registrar pago'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -26,6 +26,7 @@ import { CARTA_PRINCIPAL, NOMBRE_CARTA } from '@/lib/terminaciones/cartas'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { buttonVariants } from '@/components/ui/button'
 import { FileText } from 'lucide-react'
+import { NuevaTerminacion } from '../nueva-terminacion'
 
 export const metadata = { title: 'Terminación · Smart Gadgets RH' }
 
@@ -108,7 +109,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   const idsUsuarios = [...new Set((pys?.items ?? []).flatMap((i) => [i.responsableId, i.verificadoPorId]).filter((x): x is string => !!x))]
   const [usuarios, examen, renuncia] = await Promise.all([
     idsUsuarios.length ? prisma.user.findMany({ where: { id: { in: idsUsuarios } }, select: { id: true, name: true } }) : [],
-    t.examenMedicoId ? prisma.examenMedico.findUnique({ where: { id: t.examenMedicoId }, select: { fecha: true } }) : null,
+    t.examenMedicoId ? prisma.examenMedico.findUnique({ where: { id: t.examenMedicoId }, select: { fecha: true, concepto: true, documentoId: true } }) : null,
     prisma.renuncia.findUnique({ where: { terminacionId: t.id }, select: { creadoEn: true } }),
   ])
   const nombreUsuario = new Map(usuarios.map((u) => [u.id, u.name]))
@@ -241,6 +242,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
         terminacionId={t.id}
         ordenDocId={t.ordenExamenDocId}
         resultado={examenHecho}
+        examen={examen && !t.examenNoAsistio ? { fechaISO: formatFechaISO(examen.fecha), concepto: examen.concepto, certificadoDocId: examen.documentoId } : null}
         hoy={hoyBogotaISO()}
         puedeEditar={puedeEditar}
         cerrada={cerrada}
@@ -269,7 +271,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
             {!cerrada && puedeEditar && (
               <AccionesLiquidacion
                 terminacionId={t.id} colaborador={nombre} fechaRetiro={formatFechaISO(t.fechaRetiro)}
-                bases={bases} ventana={ventana} variableGuardado={variableGuardado} ajustesMonetarios={ajustesMonetarios} puedeEditar puedeEliminar={false}
+                bases={bases} ventana={ventana} variableGuardado={variableGuardado} ajustesMonetarios={ajustesMonetarios} puedeEditar puedeEliminar={puedeEliminar}
               />
             )}
           </>
@@ -293,7 +295,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
             variableGuardado={variableGuardado}
             ajustesMonetarios={ajustesMonetarios}
             puedeEditar
-            puedeEliminar={false}
+            puedeEliminar={puedeEliminar}
           />
         )}
         <DocumentoFirma
@@ -310,6 +312,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
           total={fmtCOP(Number(liq.total))}
           firmada={!!liq.firmadoEn}
           pagadaEn={fecha(liq.pagadoEn)}
+          pagadaISO={liq.pagadoEn ? formatFechaISO(liq.pagadoEn) : null}
           comprobanteDocId={liq.comprobanteDocId}
           hoy={hoyBogotaISO()}
           puedeEditar={puedeEditar}
@@ -349,6 +352,16 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
             <Button asChild size="icon" variant="outline" title="Ver ficha del colaborador" aria-label="Ver ficha del colaborador">
               <Link href={`/colaboradores/${t.colaborador.id}`}><UserRound className="size-4" /></Link>
             </Button>
+            {/* Corregir el registro (tipo, fecha, preaviso, motivo). Cerrada, el lápiz explica por qué no. */}
+            {puedeEditar && (
+              <NuevaTerminacion
+                colaboradorInicial={t.colaborador.id}
+                inicial={{
+                  id: t.id, tipo: t.tipo, fechaRetiro: formatFechaISO(t.fechaRetiro), preavisoDias: t.preavisoDias, motivo: t.motivo,
+                  procesoDisciplinarioId: t.procesoDisciplinarioId, desdeRenuncia: !!renuncia, cerrada,
+                }}
+              />
+            )}
             {/* Anular solo mientras no esté cerrada: después ya se pagó. */}
             {!cerrada && puedeEliminar && (
               <AccionesLiquidacion

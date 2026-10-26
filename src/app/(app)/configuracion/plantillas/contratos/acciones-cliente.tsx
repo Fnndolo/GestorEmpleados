@@ -5,18 +5,31 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { Spinner } from '@/components/ui/spinner'
 import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
-import { duplicarPlantilla, eliminarPlantilla } from './acciones'
+import { duplicarPlantilla, eliminarPlantilla, alternarPlantillaContrato } from './acciones'
 
-/** Duplicar y eliminar desde la lista, sin entrar al editor. */
+/** Activar/desactivar, duplicar y eliminar desde la lista, sin entrar al editor. */
 export function AccionesPlantilla({
-  id, nombre, puedeCrear, puedeEliminar,
+  id, nombre, tipo, activa, unicaActiva, puedeCrear, puedeEditar = false, puedeEliminar,
 }: {
-  id: string; nombre: string; puedeCrear: boolean; puedeEliminar: boolean
+  id: string; nombre: string; tipo: string; activa: boolean
+  /** Es la única activa de su tipo: no se desactiva ni se borra. */
+  unicaActiva: boolean
+  puedeCrear: boolean; puedeEditar?: boolean; puedeEliminar: boolean
 }) {
   const router = useRouter()
   const [ocupado, setOcupado] = useState(false)
+  const bloqueoUnica = `Es la única plantilla activa de tipo ${tipo}: sin ella no se pueden crear contratos. Crea o activa otra primero.`
+
+  async function alternar(v: boolean) {
+    setOcupado(true)
+    const res = await alternarPlantillaContrato({ id, activa: v })
+    setOcupado(false)
+    if (res.ok) { toast.success(v ? 'Plantilla activada.' : 'Plantilla desactivada: ya no sale al crear contratos.'); router.refresh() }
+    else toast.error(res.error, { duration: 8000 })
+  }
 
   async function duplicar() {
     setOcupado(true)
@@ -39,12 +52,19 @@ export function AccionesPlantilla({
 
   return (
     <div className="flex shrink-0 items-center gap-1">
+      {puedeEditar && (
+        <Switch
+          checked={activa} onCheckedChange={alternar} disabled={ocupado || unicaActiva}
+          aria-label={activa ? `Desactivar ${nombre}` : `Activar ${nombre}`}
+          title={unicaActiva ? bloqueoUnica : activa ? 'Activa' : 'Inactiva'}
+        />
+      )}
       {puedeCrear && (
         <Button size="icon" variant="ghost" onClick={duplicar} disabled={ocupado} aria-label="Duplicar plantilla" title="Duplicar">
           {ocupado ? <Spinner /> : <Copy className="size-4" />}
         </Button>
       )}
-      {puedeEliminar && <BotonEliminar onEliminar={eliminar} etiqueta="Eliminar plantilla" />}
+      {puedeEliminar && <BotonEliminar onEliminar={eliminar} etiqueta="Eliminar plantilla" motivoBloqueo={unicaActiva ? bloqueoUnica : null} />}
     </div>
   )
 }

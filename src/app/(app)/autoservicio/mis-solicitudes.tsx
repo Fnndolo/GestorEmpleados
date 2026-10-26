@@ -76,6 +76,10 @@ export type SolicitudItem = {
   cancelable?: boolean
   /** Soportes que se adjuntaron a la solicitud (cita, incapacidad, licencia…). */
   soportes?: { id: string; nombre: string; esImagen: boolean }[]
+  /** Se esperaba soporte (EPS/ARL o el de la licencia) y aún no hay ninguno. */
+  sinSoporte?: boolean
+  /** Sigue abierta (nadie la resolvió): el soporte se puede adjuntar desde aquí. */
+  adjuntarSoporte?: boolean
   /** De la última semana o todavía abierta: se ve sin pulsar "Ver más". */
   reciente?: boolean
 }
@@ -121,15 +125,36 @@ function CampoLargo({ label, valor }: { label: string; valor: string }) {
   )
 }
 
+/** Archivos elegidos para un soporte, cada uno con su X para quitarlo. */
+function ArchivosSoporte({ archivos, onQuitar }: { archivos: File[]; onQuitar: (i: number) => void }) {
+  if (archivos.length === 0) return null
+  return (
+    <ul className="space-y-1 rounded-lg border bg-card p-2">
+      {archivos.map((a, i) => (
+        <li key={`${a.name}-${i}`} className="flex items-center gap-2">
+          <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate">{a.name}</span>
+          <button type="button" aria-label={`Quitar ${a.name}`} className="shrink-0 text-destructive" onClick={() => onQuitar(i)}>
+            <X className="size-3.5" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }) {
   const router = useRouter()
   const [abierta, setAbierta] = useState<string | null>(null)
   const [respondiendo, setRespondiendo] = useState<string | null>(null)
   const [rechazando, setRechazando] = useState<string | null>(null) // solicitudId con el motivo abierto
   const [motivoRechazo, setMotivoRechazo] = useState('')
-  // Corrección de soporte de licencia devuelta
+  // Soporte de una solicitud: la devuelta por soporte insuficiente (corrección) o
+  // la radicada sin soporte (se adjunta después). Un solo selector para toda la
+  // lista: se recuerda para qué solicitud se abrió y los archivos se acumulan.
   const inputSoporte = useRef<HTMLInputElement>(null)
-  const [archivoSoporte, setArchivoSoporte] = useState<File | null>(null)
+  const [soportePara, setSoportePara] = useState<string | null>(null)
+  const [archivosSoporte, setArchivosSoporte] = useState<{ solicitudId: string; files: File[] } | null>(null)
   const [corrigiendo, setCorrigiendo] = useState<string | null>(null)
   // Comprobante de asistencia de un permiso. Un solo selector de archivo para toda
   // la lista: se recuerda para qué permiso se abrió, así el archivo elegido no se
@@ -165,21 +190,28 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
     }
   }
 
-  async function enviarSoporteCorregido(solicitudId: string) {
-    if (!archivoSoporte) { toast.error('Adjunta el soporte corregido.'); return }
+  /** Sube los archivos elegidos a la solicitud y avisa al servidor. `corregido` = venía DEVUELTA. */
+  async function enviarSoporte(solicitudId: string, corregido: boolean) {
+    if (archivosSoporte?.solicitudId !== solicitudId || archivosSoporte.files.length === 0) {
+      toast.error(corregido ? 'Adjunta el soporte corregido.' : 'Adjunta el soporte.'); return
+    }
     setCorrigiendo(solicitudId)
     try {
-      const fd = new FormData()
-      fd.append('archivo', await reducirImagen(archivoSoporte))
-      fd.append('entidadTipo', 'Solicitud')
-      fd.append('entidadId', solicitudId)
-      fd.append('nombre', `Soporte corregido — ${archivoSoporte.name}`)
-      const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
-      if (!up.ok) throw new Error('No se pudo subir el archivo.')
+      for (const file of archivosSoporte.files) {
+        const fd = new FormData()
+        fd.append('archivo', await reducirImagen(file))
+        fd.append('entidadTipo', 'Solicitud')
+        fd.append('entidadId', solicitudId)
+        fd.append('nombre', `${corregido ? 'Soporte corregido' : 'Soporte solicitud'} — ${file.name}`)
+        const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        if (!up.ok) throw new Error(`No se pudo subir ${file.name}.`)
+      }
       const res = await corregirMiSoporte({ solicitudId })
       if (!res.ok) throw new Error(res.error)
-      toast.success('Soporte enviado. Talento Humano lo validará sobre esta misma solicitud.')
-      setArchivoSoporte(null)
+      toast.success(corregido
+        ? 'Soporte enviado. Talento Humano lo validará sobre esta misma solicitud.'
+        : 'Soporte adjuntado. Le avisamos a quien tiene tu solicitud.')
+      setArchivosSoporte(null)
       router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo enviar el soporte.')
@@ -242,6 +274,23 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
           e.target.value = ''
         }}
       />
+      {/* Selector de archivo de los soportes (corrección o adjuntado después). */}
+      <input
+        ref={inputSoporte}
+        type="file"
+        accept="image/*,application/pdf"
+        multiple
+        hidden
+        onChange={(e) => {
+          const nuevos = Array.from(e.target.files ?? [])
+          if (nuevos.length > 0 && soportePara) {
+            setArchivosSoporte((prev) =>
+              prev?.solicitudId === soportePara ? { solicitudId: soportePara, files: [...prev.files, ...nuevos] } : { solicitudId: soportePara, files: nuevos },
+            )
+          }
+          e.target.value = ''
+        }}
+      />
       {visibles.length === 0 && (
         <p className="p-4 text-center text-sm text-muted-foreground">Nada nuevo esta semana.</p>
       )}
@@ -265,6 +314,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                   {s.creadoEn}{s.origen ? ` · ${s.origen}` : ''}{s.resultado && !s.certId && !expandida ? ` · ${s.resultado}` : ''}
                 </p>
               </div>
+              {s.sinSoporte && <Pill tone="warn">Sin soporte</Pill>}
               <Pill tone={TONO_ESTADO[s.estado] ?? 'muted'}>{s.estadoEtiqueta}</Pill>
               <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expandida && 'rotate-180')} />
             </button>
@@ -422,19 +472,44 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
                       <p className="mt-0.5 text-muted-foreground">Sigue abierta: sube el soporte corregido y vuelve a validación.</p>
                     </div>
                   </div>
-                  <input
-                    ref={inputSoporte}
-                    type="file"
-                    accept="image/*,application/pdf"
-                    className="hidden"
-                    onChange={(e) => setArchivoSoporte(e.target.files?.[0] ?? null)}
+                  <ArchivosSoporte
+                    archivos={archivosSoporte?.solicitudId === s.id ? archivosSoporte.files : []}
+                    onQuitar={(i) => setArchivosSoporte((prev) => prev ? { ...prev, files: prev.files.filter((_, j) => j !== i) } : prev)}
                   />
                   <div className="flex flex-wrap justify-end gap-2">
-                    <Button size="sm" onClick={() => inputSoporte.current?.click()} disabled={corrigiendo !== null}>
-                      <Paperclip className="size-4" /> {archivoSoporte ? archivoSoporte.name : 'Adjuntar soporte'}
+                    <Button size="sm" onClick={() => { setSoportePara(s.id); inputSoporte.current?.click() }} disabled={corrigiendo !== null}>
+                      <Paperclip className="size-4" /> Adjuntar soporte
                     </Button>
-                    <Button size="sm" onClick={() => enviarSoporteCorregido(s.id)} disabled={corrigiendo !== null || !archivoSoporte}>
+                    <Button size="sm" onClick={() => enviarSoporte(s.id, true)} disabled={corrigiendo !== null || archivosSoporte?.solicitudId !== s.id || archivosSoporte.files.length === 0}>
                       {corrigiendo === s.id ? <Spinner /> : <FileUp className="size-4" />} Enviar corrección
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Radicada sin soporte (incapacidad o licencia que lo pide) y aún abierta:
+                  se adjunta aquí mismo, sin crear otra solicitud. */}
+              {s.estado !== 'DEVUELTA' && s.sinSoporte && s.adjuntarSoporte && (
+                <div className="mx-3 mb-3 space-y-2.5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
+                  <div className="flex items-start gap-2">
+                    <Paperclip className="mt-0.5 size-4 shrink-0" />
+                    <div>
+                      <p className="text-[13px] font-medium">Falta el soporte</p>
+                      <p className="mt-0.5 text-muted-foreground">
+                        {s.tipo === 'INCAPACIDAD' ? 'Adjunta el soporte de la EPS/ARL' : 'Adjunta el soporte de la licencia'} cuando lo tengas; la solicitud sigue su trámite mientras tanto.
+                      </p>
+                    </div>
+                  </div>
+                  <ArchivosSoporte
+                    archivos={archivosSoporte?.solicitudId === s.id ? archivosSoporte.files : []}
+                    onQuitar={(i) => setArchivosSoporte((prev) => prev ? { ...prev, files: prev.files.filter((_, j) => j !== i) } : prev)}
+                  />
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button size="sm" onClick={() => { setSoportePara(s.id); inputSoporte.current?.click() }} disabled={corrigiendo !== null}>
+                      <Paperclip className="size-4" /> Adjuntar soporte
+                    </Button>
+                    <Button size="sm" onClick={() => enviarSoporte(s.id, false)} disabled={corrigiendo !== null || archivosSoporte?.solicitudId !== s.id || archivosSoporte.files.length === 0}>
+                      {corrigiendo === s.id ? <Spinner /> : <FileUp className="size-4" />} Enviar
                     </Button>
                   </div>
                 </div>

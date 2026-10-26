@@ -67,16 +67,17 @@ export async function generarPdfCuentaCobro(cuentaId: string, usuarioId: string,
 export const ENTIDAD_COMPROBANTE_CUENTA = 'CuentaCobroOpsPago'
 
 /**
- * Registra el pago de una cuenta de cobro aprobada, con su comprobante (PDF o
- * imagen de la transferencia): la cuenta pasa a PAGADA con la fecha del pago y
- * el comprobante queda guardado con ella. Volver a registrarlo en una cuenta ya
- * pagada reemplaza el comprobante y la fecha (p. ej. si se subió el archivo
- * equivocado).
+ * Registra el pago de una cuenta de cobro aprobada: la cuenta pasa a PAGADA con
+ * la fecha del pago. El comprobante (PDF o imagen de la transferencia) es un
+ * soporte: se puede adjuntar en el momento o después, desde la misma fila.
+ * Volver a registrarlo en una cuenta ya pagada actualiza la fecha y, si viene
+ * archivo, reemplaza el comprobante (p. ej. si se subió el equivocado); sin
+ * archivo, el que había se conserva.
  */
 export async function registrarPagoCuentaCobro(opts: {
   cuentaId: string
   fechaPago: Date
-  comprobanteDataUri: string
+  comprobanteDataUri?: string | null
   usuarioId: string
 }): Promise<{ numero: string; colaboradorId: string | null; valor: number }> {
   const cuenta = await prisma.cuentaCobroOps.findUniqueOrThrow({
@@ -92,26 +93,28 @@ export async function registrarPagoCuentaCobro(opts: {
     throw new ErrorNegocio('No se puede pagar sin el soporte de seguridad social verificado como válido.')
   }
 
-  const m = opts.comprobanteDataUri.match(/^data:([^;]+);base64,(.+)$/)
-  if (!m) throw new ErrorNegocio('El comprobante no es un archivo válido.')
-  const [, mime, b64] = m
-  if (!['application/pdf', 'image/png', 'image/jpeg', 'image/webp'].includes(mime)) throw new ErrorNegocio('El comprobante debe ser un PDF o una imagen.')
-  const contenido = Buffer.from(b64, 'base64')
-  if (contenido.byteLength > 8 * 1024 * 1024) throw new ErrorNegocio('El comprobante pesa más de 8 MB.')
-  const ext = mime === 'application/pdf' ? 'pdf' : mime.split('/')[1]
-  const archivo = await subirArchivo(`cuentas-cobro/${cuenta.id}/pago`, `comprobante-${cuenta.numero}.${ext}`, contenido, mime)
+  // Sin archivo solo se registra (o corrige) la fecha; el comprobante que hubiera se conserva.
+  let anteriores: { id: string }[] = []
+  if (opts.comprobanteDataUri) {
+    const m = opts.comprobanteDataUri.match(/^data:([^;]+);base64,(.+)$/)
+    if (!m) throw new ErrorNegocio('El comprobante no es un archivo válido.')
+    const [, mime, b64] = m
+    if (!['application/pdf', 'image/png', 'image/jpeg', 'image/webp'].includes(mime)) throw new ErrorNegocio('El comprobante debe ser un PDF o una imagen.')
+    const contenido = Buffer.from(b64, 'base64')
+    if (contenido.byteLength > 8 * 1024 * 1024) throw new ErrorNegocio('El comprobante pesa más de 8 MB.')
+    const ext = mime === 'application/pdf' ? 'pdf' : mime.split('/')[1]
+    const archivo = await subirArchivo(`cuentas-cobro/${cuenta.id}/pago`, `comprobante-${cuenta.numero}.${ext}`, contenido, mime)
 
-  const anteriores = await prisma.documento.findMany({ where: { entidadTipo: ENTIDAD_COMPROBANTE_CUENTA, entidadId: cuenta.id }, select: { id: true } })
-  await dbAuditado.documento.create({
-    data: {
-      entidadTipo: ENTIDAD_COMPROBANTE_CUENTA, entidadId: cuenta.id, nombre: `Comprobante de pago · ${cuenta.numero}`,
-      bucket: archivo.bucket, storagePath: archivo.storagePath, mimeType: mime, tamanoBytes: archivo.tamanoBytes,
-      nivelAcceso: 'GENERAL', sedeId: cuenta.contratoOps?.sedeId ?? null, subidoPorId: opts.usuarioId,
-    },
-  })
-  await dbAuditado.cuentaCobroOps.update({ where: { id: cuenta.id }, data: { estado: 'PAGADA', fechaPago: opts.fechaPago } })
-  if (anteriores.length) {
-    for (const d of anteriores) await eliminarDocumento(d.id).catch(() => {})
+    anteriores = await prisma.documento.findMany({ where: { entidadTipo: ENTIDAD_COMPROBANTE_CUENTA, entidadId: cuenta.id }, select: { id: true } })
+    await dbAuditado.documento.create({
+      data: {
+        entidadTipo: ENTIDAD_COMPROBANTE_CUENTA, entidadId: cuenta.id, nombre: `Comprobante de pago · ${cuenta.numero}`,
+        bucket: archivo.bucket, storagePath: archivo.storagePath, mimeType: mime, tamanoBytes: archivo.tamanoBytes,
+        nivelAcceso: 'GENERAL', sedeId: cuenta.contratoOps?.sedeId ?? null, subidoPorId: opts.usuarioId,
+      },
+    })
   }
+  await dbAuditado.cuentaCobroOps.update({ where: { id: cuenta.id }, data: { estado: 'PAGADA', fechaPago: opts.fechaPago } })
+  for (const d of anteriores) await eliminarDocumento(d.id).catch(() => {})
   return { numero: cuenta.numero, colaboradorId: cuenta.colaboradorId ?? cuenta.contratoOps?.colaboradorId ?? null, valor: Number(cuenta.valor) }
 }

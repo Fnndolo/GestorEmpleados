@@ -18,12 +18,16 @@ export default async function PlantillasPage() {
   if (!GENERAR_CONTRATOS_DESDE_PLANTILLA) redirect('/configuracion/plantillas/membrete')
   const usuario = await requerirPermiso('configuracion', 'VER')
   const puedeCrear = tienePermiso(usuario, 'configuracion', 'CREAR')
+  const puedeEditar = tienePermiso(usuario, 'configuracion', 'EDITAR')
   const puedeEliminar = tienePermiso(usuario, 'configuracion', 'ELIMINAR')
 
   const plantillas = await prisma.plantillaContrato.findMany({
     orderBy: [{ tipo: 'asc' }, { nombre: 'asc' }],
     include: { _count: { select: { clausulas: true } } },
   })
+  // La única activa de su tipo no se desactiva ni se borra: sin ella no habría contratos de ese tipo.
+  const activasPorTipo = new Map<string, number>()
+  for (const p of plantillas) if (p.activa) activasPorTipo.set(p.tipo, (activasPorTipo.get(p.tipo) ?? 0) + 1)
 
   return (
     <div>
@@ -63,7 +67,7 @@ export default async function PlantillasPage() {
                   {p.titulo} · {p._count.clausulas} cláusula(s)
                 </p>
               </Link>
-              <AccionesPlantilla id={p.id} nombre={p.nombre} puedeCrear={puedeCrear} puedeEliminar={puedeEliminar} />
+              <AccionesPlantilla id={p.id} nombre={p.nombre} tipo={p.tipo} activa={p.activa} unicaActiva={p.activa && (activasPorTipo.get(p.tipo) ?? 0) === 1} puedeCrear={puedeCrear} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
             </div>
           ))}

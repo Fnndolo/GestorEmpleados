@@ -3,15 +3,18 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Calculator, CircleCheck, Lock, LockOpen, Trash2, FileText, FileSpreadsheet, RefreshCw, Ellipsis } from 'lucide-react'
+import { Calculator, CircleCheck, Lock, LockOpen, Trash2, FileText, FileSpreadsheet, RefreshCw, Ellipsis, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import {
   AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { liquidar, aprobarPeriodo, cerrarPeriodo, reabrirPeriodo, eliminarPeriodo, generarPdfDesprendibles } from '../acciones'
+import { liquidar, aprobarPeriodo, cerrarPeriodo, reabrirPeriodo, eliminarPeriodo, generarPdfDesprendibles, editarPeriodo } from '../acciones'
 
 type Resultado = { ok: boolean; error?: string; datos?: unknown }
 
@@ -49,14 +52,18 @@ export function avisosDeNomina(datos: unknown) {
  * corregir, y lo ocasional (desprendibles, PILA, reabrir, eliminar) en el menú.
  */
 export function AccionesPeriodo({
-  periodoId, estado, tieneLiquidaciones, puedeOperar, puedeAprobar, puedeExportar,
+  periodoId, estado, tieneLiquidaciones, puedeOperar, puedeAprobar, puedeExportar, puedeEditar = false, datos,
 }: {
   periodoId: string; estado: string; tieneLiquidaciones: boolean
   puedeOperar: boolean; puedeAprobar: boolean; puedeExportar: boolean
+  puedeEditar?: boolean
+  /** Lo que se puede corregir del periodo (nombre y fechas, yyyy-mm-dd). */
+  datos?: { nombre: string; fechaInicio: string; fechaFin: string }
 }) {
   const router = useRouter()
   const [cargando, setCargando] = useState<string | null>(null)
   const [confirmar, setConfirmar] = useState<'reabrir' | 'eliminar' | null>(null)
+  const [editando, setEditando] = useState(false)
 
   async function ejecutar(clave: string, fn: () => Promise<Resultado>, exito: string): Promise<boolean> {
     setCargando(clave)
@@ -74,8 +81,11 @@ export function AccionesPeriodo({
   const puedeReabrir = puedeAprobar && (estado === 'APROBADA' || estado === 'CERRADA')
   const exportar = puedeExportar && tieneLiquidaciones
   const eliminar = puedeAprobar && editable
+  // Corregir nombre o fechas: se muestra siempre que haya permiso; la acción
+  // explica el bloqueo si el periodo ya está aprobado o cerrado.
+  const editar = puedeEditar && !!datos
   const ocupado = cargando !== null
-  const hayMenu = exportar || puedeReabrir || eliminar
+  const hayMenu = exportar || puedeReabrir || eliminar || editar
 
   return (
     <div className="flex items-center gap-2">
@@ -109,6 +119,11 @@ export function AccionesPeriodo({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-60">
+            {editar && (
+              <DropdownMenuItem onSelect={() => setEditando(true)} title={editable ? undefined : 'Solo se corrige un periodo en borrador o calculado'}>
+                <Pencil className="size-4" /> Editar nombre y fechas
+              </DropdownMenuItem>
+            )}
             {exportar && (
               <>
                 <DropdownMenuItem onSelect={() => ejecutar('pdf', () => generarPdfDesprendibles({ periodoId }), 'Desprendibles generados.')}>
@@ -134,6 +149,15 @@ export function AccionesPeriodo({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+      )}
+
+      {editando && datos && (
+        <DialogEditarPeriodo
+          periodoId={periodoId}
+          datos={datos}
+          onClose={() => setEditando(false)}
+          onRecalcular={puedeOperar ? () => ejecutar('liq', () => liquidar({ periodoId }), 'Nómina recalculada con las fechas nuevas.') : undefined}
+        />
       )}
 
       <AlertDialog open={confirmar !== null} onOpenChange={(o) => { if (!o && !ocupado) setConfirmar(null) }}>
@@ -177,5 +201,57 @@ export function AccionesPeriodo({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+/**
+ * Corregir el nombre o las fechas de un periodo en borrador o calculado. Si
+ * cambian las fechas de uno calculado, el cálculo se descarta y se vuelve a
+ * hacer de una vez con las fechas nuevas.
+ */
+function DialogEditarPeriodo({ periodoId, datos, onClose, onRecalcular }: {
+  periodoId: string
+  datos: { nombre: string; fechaInicio: string; fechaFin: string }
+  onClose: () => void
+  onRecalcular?: () => Promise<boolean>
+}) {
+  const router = useRouter()
+  const [nombre, setNombre] = useState(datos.nombre)
+  const [inicio, setInicio] = useState(datos.fechaInicio)
+  const [fin, setFin] = useState(datos.fechaFin)
+  const [g, setG] = useState(false)
+
+  async function guardar() {
+    setG(true)
+    const res = await editarPeriodo({ periodoId, nombre: nombre.trim(), fechaInicio: inicio, fechaFin: fin })
+    setG(false)
+    if (!res.ok) { toast.error(res.error); return }
+    toast.success('Periodo actualizado.')
+    onClose()
+    if (res.datos.recalcular && onRecalcular) await onRecalcular()
+    else router.refresh()
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !g && onClose()}>
+      <DialogContent aria-describedby={undefined}>
+        <DialogHeader><DialogTitle>Editar periodo</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="per-nombre">Nombre <span className="text-destructive">*</span></Label>
+            <Input id="per-nombre" value={nombre} maxLength={80} onChange={(e) => setNombre(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5"><Label htmlFor="per-inicio">Desde <span className="text-destructive">*</span></Label><Input id="per-inicio" type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} /></div>
+            <div className="space-y-1.5"><Label htmlFor="per-fin">Hasta <span className="text-destructive">*</span></Label><Input id="per-fin" type="date" value={fin} onChange={(e) => setFin(e.target.value)} /></div>
+          </div>
+          <p className="text-xs text-muted-foreground">Si cambian las fechas de un periodo ya calculado, se recalcula con las nuevas. No puede cruzarse con otro periodo del mismo tipo.</p>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button>
+          <Button onClick={guardar} disabled={g || nombre.trim().length < 3 || !inicio || !fin}>{g && <Spinner />}Guardar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

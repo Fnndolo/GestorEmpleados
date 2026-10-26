@@ -12,12 +12,16 @@ export default async function ActivosPage() {
   const usuario = await requerirPermiso('activos', 'VER')
   const puedeCrear = tienePermiso(usuario, 'activos', 'CREAR')
   const puedeEditar = tienePermiso(usuario, 'activos', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'activos', 'ELIMINAR')
   const sede = await sedeActualId()
 
   const [activos, dotaciones, sedes] = await Promise.all([
     prisma.activo.findMany({
       where: sede ? { sedeId: sede } : {},
-      include: { asignaciones: { where: { fechaDevolucion: null }, include: { colaborador: { select: { nombres: true, apellidos: true } } }, take: 1 } },
+      include: {
+        asignaciones: { where: { fechaDevolucion: null }, include: { colaborador: { select: { nombres: true, apellidos: true } } }, take: 1 },
+        _count: { select: { asignaciones: true } },
+      },
       orderBy: { creadoEn: 'desc' },
       take: 200,
     }),
@@ -35,18 +39,29 @@ export default async function ActivosPage() {
       <ActivosCliente
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
+        puedeEliminar={puedeEliminar}
         sedes={sedes.map((s) => ({ id: s.id, nombre: s.nombre, ciudad: s.ciudad.nombre }))}
         // La lista filtra por la sede activa: un activo creado sin sede se saldría
         // del listado, así que el formulario arranca con la sede en la que estás.
         sedeActual={sede ?? ''}
         activos={activos.map((a) => ({
           id: a.id, codigo: a.codigo, nombre: a.nombre, tipo: a.tipo, estado: a.estado,
+          marca: a.marca, serie: a.serie, sedeId: a.sedeId, observaciones: a.observaciones,
           valor: a.valor ? Number(a.valor) : null,
           fotoUrl: urlFotoActivo(a.id, a.fotoPath),
-          asignacion: a.asignaciones[0] ? { id: a.asignaciones[0].id, colaborador: `${a.asignaciones[0].colaborador.nombres} ${a.asignaciones[0].colaborador.apellidos}`, actaEntregaDocId: a.asignaciones[0].actaEntregaDocId, actaFirmada: Boolean(a.asignaciones[0].firmaEntregaEn) } : null,
+          vecesEntregado: a._count.asignaciones,
+          asignacion: a.asignaciones[0] ? {
+            id: a.asignaciones[0].id,
+            colaborador: `${a.asignaciones[0].colaborador.nombres} ${a.asignaciones[0].colaborador.apellidos}`,
+            actaEntregaDocId: a.asignaciones[0].actaEntregaDocId,
+            actaFirmada: Boolean(a.asignaciones[0].firmaEntregaEn),
+            fechaEntrega: formatFechaISO(a.asignaciones[0].fechaEntrega),
+            observaciones: a.asignaciones[0].observaciones,
+          } : null,
         }))}
         dotaciones={dotaciones.map((d) => ({
           id: d.id,
+          colaboradorId: d.colaboradorId,
           colaborador: `${d.colaborador.nombres} ${d.colaborador.apellidos}`,
           anio: d.anio, corte: d.corte, items: d.items,
           fechaEntrega: formatFechaISO(d.fechaEntrega),

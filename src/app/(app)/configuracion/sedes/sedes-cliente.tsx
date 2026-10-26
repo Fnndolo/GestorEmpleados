@@ -7,9 +7,10 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { Pencil, Building2, MapPin, Star } from 'lucide-react'
 import { sedeSchema, ciudadSchema, type SedeInput, type CiudadInput } from '@/lib/validaciones/catalogos'
-import { crearSede, editarSede, crearCiudad, editarCiudad, eliminarCiudad } from './acciones'
+import { crearSede, editarSede, crearCiudad, editarCiudad, eliminarCiudad, alternarSede, eliminarSede } from './acciones'
 import { Button } from '@/components/ui/button'
 import { BotonEliminar } from '@/components/ui-kit/boton-eliminar'
+import { DialogMotivo } from '../dialog-motivo'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -26,8 +27,27 @@ import { cn } from '@/lib/utils'
 type Sede = {
   id: string; nombre: string; ciudadId: string; ciudadNombre: string
   direccion: string; telefono: string | null; esPrincipal: boolean; activa: boolean
+  usos: { colaboradores: number; contratos: number; usuarios: number; cronogramas: number; activos: number }
 }
 type Ciudad = { id: string; nombre: string; departamento: string; codigoDane: string; enUso: number }
+
+/**
+ * Por qué NO se puede borrar la sede, o null si sí. Enumera todo lo que estorba
+ * de una vez, para no resolverlo de a uno y volver a probar.
+ */
+function motivoNoEliminarSede(s: Sede): string | null {
+  if (s.esPrincipal) return 'Es la sede principal: marca otra como principal antes de eliminarla.'
+  const u = s.usos
+  const usos = [
+    u.colaboradores > 0 && `${u.colaboradores} colaborador(es)`,
+    u.contratos > 0 && `${u.contratos} contrato(s)`,
+    u.usuarios > 0 && `${u.usuarios} usuario(s) asignado(s)`,
+    u.cronogramas > 0 && `${u.cronogramas} cronograma(s) dominical(es)`,
+    u.activos > 0 && `${u.activos} activo(s)`,
+  ].filter(Boolean)
+  if (usos.length === 0) return null
+  return `No se puede eliminar: la sede tiene ${usos.join(', ')}. Desactívala en su lugar.`
+}
 
 export function SedesCliente({
   sedes, ciudades, puedeCrear, puedeEditar, puedeEliminar,
@@ -38,7 +58,14 @@ export function SedesCliente({
   const [nuevaSede, setNuevaSede] = useState(false)
   const [nuevaCiudad, setNuevaCiudad] = useState(false)
   const [editarCiudadItem, setEditarCiudadItem] = useState<Ciudad | null>(null)
+  const [borrandoSede, setBorrandoSede] = useState<Sede | null>(null)
   const router = useRouter()
+
+  async function alternar(s: Sede) {
+    const res = await alternarSede({ id: s.id, activa: !s.activa })
+    if (res.ok) { toast.success(s.activa ? 'Sede desactivada: sale de los selectores.' : 'Sede activada.'); router.refresh() }
+    else toast.error(res.error)
+  }
 
   async function borrarCiudad(c: Ciudad) {
     if (!confirm(`¿Eliminar la ciudad "${c.nombre}"?`)) return
@@ -91,14 +118,42 @@ export function SedesCliente({
                 </p>
               </div>
               {puedeEditar && (
-                <Button variant="ghost" size="icon" onClick={() => setEditar(s)} aria-label={`Editar ${s.nombre}`} title="Editar">
-                  <Pencil className="size-4" />
-                </Button>
+                <>
+                  {/* La principal no se desactiva: el servidor también lo impide. */}
+                  <Switch
+                    checked={s.activa} onCheckedChange={() => alternar(s)} disabled={s.esPrincipal && s.activa}
+                    aria-label={s.activa ? `Desactivar ${s.nombre}` : `Activar ${s.nombre}`}
+                    title={s.esPrincipal && s.activa ? 'La sede principal no se puede desactivar' : s.activa ? 'Activa' : 'Inactiva'}
+                  />
+                  <Button variant="ghost" size="icon" onClick={() => setEditar(s)} aria-label={`Editar ${s.nombre}`} title="Editar">
+                    <Pencil className="size-4" />
+                  </Button>
+                </>
+              )}
+              {puedeEliminar && (
+                <span className="grid w-9 shrink-0 place-items-center">
+                  <BotonEliminar onEliminar={() => setBorrandoSede(s)} etiqueta={`Eliminar ${s.nombre}`} motivoBloqueo={motivoNoEliminarSede(s)} />
+                </span>
               )}
             </div>
           ))}
         </CardContent></Card>
       ))}
+
+      {borrandoSede && (
+        <DialogMotivo
+          titulo="Eliminar sede"
+          resumen={`${borrandoSede.nombre} · ${borrandoSede.ciudadNombre}. No se puede deshacer.`}
+          placeholder="¿Por qué se elimina?"
+          onClose={() => setBorrandoSede(null)}
+          onConfirmar={async (motivo) => {
+            const res = await eliminarSede({ id: borrandoSede.id, motivo })
+            if (res.ok) { toast.success('Sede eliminada.'); router.refresh(); return true }
+            toast.error(res.error, { duration: 8000 })
+            return false
+          }}
+        />
+      )}
 
       {vista === 'ciudades' && (ciudades.length === 0 ? (
         <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Aún no hay ciudades.</CardContent></Card>
@@ -174,12 +229,12 @@ function DialogSede({ ciudades, sede, onClose }: { ciudades: Ciudad[]; sede: Sed
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Nombre</Label>
+            <Label>Nombre <span className="text-destructive">*</span></Label>
             <Input {...register('nombre')} placeholder="Sede Centro" />
             {errors.nombre && <p className="text-xs text-destructive">{errors.nombre.message}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label>Ciudad</Label>
+            <Label>Ciudad <span className="text-destructive">*</span></Label>
             <Select defaultValue={sede?.ciudadId} onValueChange={(v) => setValue('ciudadId', v)}>
               <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
               <SelectContent>
@@ -189,7 +244,7 @@ function DialogSede({ ciudades, sede, onClose }: { ciudades: Ciudad[]; sede: Sed
             {errors.ciudadId && <p className="text-xs text-destructive">{errors.ciudadId.message}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label>Dirección</Label>
+            <Label>Dirección <span className="text-destructive">*</span></Label>
             <Input {...register('direccion')} />
             {errors.direccion && <p className="text-xs text-destructive">{errors.direccion.message}</p>}
           </div>
@@ -243,17 +298,17 @@ function DialogCiudad({ ciudad, onClose }: { ciudad: Ciudad | null; onClose: () 
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Nombre</Label>
+            <Label>Nombre <span className="text-destructive">*</span></Label>
             <Input {...register('nombre')} placeholder="Cali" />
             {errors.nombre && <p className="text-xs text-destructive">{errors.nombre.message}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label>Departamento</Label>
+            <Label>Departamento <span className="text-destructive">*</span></Label>
             <Input {...register('departamento')} placeholder="Valle del Cauca" />
             {errors.departamento && <p className="text-xs text-destructive">{errors.departamento.message}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label>Código DANE (opcional)</Label>
+            <Label>Código DANE</Label>
             <Input {...register('codigoDane')} placeholder="76001" />
           </div>
           <DialogFooter>

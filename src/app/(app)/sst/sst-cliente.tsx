@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Paperclip, OctagonAlert, Flame, ClipboardCheck, IdCard, Landmark, Scale, CircleCheck, FileWarning, LayoutGrid, ChartLine, ChevronLeft, ScrollText, UserCheck, CalendarCheck, CircleAlert, Eye, Siren, Trash2 } from 'lucide-react'
+import { Plus, Stethoscope, TriangleAlert, Users, HardHat, ShieldAlert, Paperclip, OctagonAlert, Flame, ClipboardCheck, IdCard, Landmark, Scale, CircleCheck, FileWarning, LayoutGrid, ChartLine, ChevronLeft, ScrollText, UserCheck, CalendarCheck, CircleAlert, Eye, Siren, Trash2, Pencil } from 'lucide-react'
 import { Chip, Pill, Stat, AvatarColaborador, type PillTone } from '@/components/ui-kit'
 import { urlFoto } from '@/lib/foto'
 import { AdjuntarDocumento } from '@/components/documentos/adjuntar-documento'
@@ -36,7 +36,15 @@ import {
   guardarIndicadorSst,
   vincularDocumentoAutoeval, crearAccionMejora, marcarAccionMejora, vincularEvidenciaAccionMejora, eliminarAccionMejora,
   registrarNovedadArl, vincularSoporteNovedadArl, crearSeguimientoExamen, cerrarSeguimientoExamen,
+  editarComite, eliminarComite, editarReunionComite, eliminarReunionComite, editarMiembroComite,
+  editarExamenMedico, eliminarExamenMedico, editarSeguimientoExamen, eliminarSeguimientoExamen,
+  editarAccidente, eliminarAccidente, editarNovedadArl, eliminarNovedadArl,
+  editarEpp, eliminarEpp, editarEntregaEpp, eliminarEntregaEpp, editarPeligro, eliminarPeligro, eliminarProfesiograma,
+  editarPlanEmergencia, eliminarPlanEmergencia, editarBrigadista, editarSimulacro, eliminarSimulacro,
+  editarInspeccion, eliminarInspeccion, editarResponsableSgsst, eliminarResponsableSgsst, eliminarPlanTrabajoSst,
+  eliminarAutoevaluacion, editarAccionMejora, eliminarIndicadorSst,
 } from './acciones'
+import { DialogEliminar, BotonEditar, BotonEliminar, type Eliminacion } from './dialogo-eliminar'
 
 const TITULO_TAB: Record<string, string> = {
   tablero: 'Tablero',
@@ -63,10 +71,10 @@ const TONO_CONCEPTO: Record<string, PillTone> = { APTO: 'ok', APTO_CON_RECOMENDA
 const TONO_NIVEL: Record<string, PillTone> = { BAJO: 'ok', MEDIO: 'warn', ALTO: 'bad', CRITICO: 'bad' }
 
 type Props = {
-  tab: string; puedeCrear: boolean; puedeEditar: boolean; verSalud: boolean; headcount: number
+  tab: string; puedeCrear: boolean; puedeEditar: boolean; puedeEliminar: boolean; verSalud: boolean; editaSalud: boolean; eliminaSalud: boolean; headcount: number
   comites: {
-    id: string; tipo: string; vigenciaHasta: string
-    miembros: { id: string; colaborador: string; rol: string; porEmpleador: boolean }[]
+    id: string; tipo: string; fechaConformacion: string; vigenciaHasta: string
+    miembros: { id: string; colaboradorId: string; colaborador: string; rol: string; porEmpleador: boolean }[]
     reuniones: { id: string; fecha: string; temas: string; compromisos: string | null; actaDocId: string | null }[]
   }[]
   examenes: {
@@ -84,12 +92,12 @@ type Props = {
     diasIncapacidad: number | null; estado: string; furat: boolean; investigacion: string | null; esIncidente: boolean
     documentos: { id: string; nombre: string }[]
   }[]
-  epps: { id: string; nombre: string }[]
-  entregasEpp: { id: string; colaboradorId: string; colaborador: string; fotoPath: string | null; elemento: string; cantidad: number; fecha: string; firmado: boolean; soporteDocId: string | null }[]
+  epps: { id: string; nombre: string; vidaUtilMeses: number | null; entregas: number }[]
+  entregasEpp: { id: string; elementoEppId: string; reposicion: boolean; colaboradorId: string; colaborador: string; fotoPath: string | null; elemento: string; cantidad: number; fecha: string; firmado: boolean; soporteDocId: string | null }[]
   peligros: {
     id: string; proceso: string; peligro: string; riesgo: string; nivel: string; controles: string | null
     rutinaria: boolean; controlFuente: string | null; controlMedio: string | null; controlIndividuo: string | null
-    responsable: string | null; fechaRevision: string | null; sede: string | null
+    responsable: string | null; fechaRevision: string | null; sedeId: string | null; sede: string | null
   }[]
   autoeval: {
     id: string; anio: number; puntaje: number; nivelEstandar: number; planMejora: string | null; documentoId: string | null
@@ -101,10 +109,10 @@ type Props = {
   sedes: { id: string; nombre: string }[]
   cargos: { id: string; nombre: string }[]
   profesiogramas: { id: string; cargoId: string; cargo: string; riesgosExpuestos: string; examenesRequeridos: string; aptitudesRequeridas: string; restricciones: string | null }[]
-  planesEmergencia: { id: string; version: string; vigenciaDesde: string; vigenciaHasta: string; vencido: boolean; documentoId: string | null; sede: string | null }[]
-  brigadistas: { id: string; colaborador: string; rol: string; sede: string | null; fotoUrl: string | null }[]
-  simulacros: { id: string; fecha: string; tipo: string; participantes: number | null; observaciones: string | null; documentoId: string | null; sede: string | null }[]
-  inspecciones: { id: string; fecha: string; tipo: string; area: string | null; hallazgos: string; responsable: string | null; estado: string; fechaCierre: string | null; documentoId: string | null; sede: string | null }[]
+  planesEmergencia: { id: string; version: string; vigenciaDesde: string; vigenciaHasta: string; vencido: boolean; documentoId: string | null; sedeId: string | null; sede: string | null }[]
+  brigadistas: { id: string; colaboradorId: string; colaborador: string; rol: string; sedeId: string | null; sede: string | null; fotoUrl: string | null }[]
+  simulacros: { id: string; fecha: string; tipo: string; participantes: number | null; observaciones: string | null; documentoId: string | null; sedeId: string | null; sede: string | null }[]
+  inspecciones: { id: string; fecha: string; tipo: string; area: string | null; hallazgos: string; responsable: string | null; estado: string; fechaCierre: string | null; documentoId: string | null; sedeId: string | null; sede: string | null }[]
   semaforo: { clave: string; label: string; estado: 'ok' | 'warn' | 'bad'; detalle: string; tab: string }[]
   estructura: {
     politica: { id: string; titulo: string; firmadaEn: string | null } | null
@@ -165,6 +173,19 @@ export function SstCliente(p: Props) {
   const [normaAbierta, setNormaAbierta] = useState<Props['normas'][number] | null>(null)
   const [examenAbierto, setExamenAbierto] = useState<Props['examenes'][number] | null>(null)
   const [indicadorAbierto, setIndicadorAbierto] = useState(false)
+  // Registro que se está corrigiendo (abre el diálogo de crear precargado) y
+  // registro que se está anulando (abre el diálogo de motivo).
+  const [examenEditando, setExamenEditando] = useState<Props['examenes'][number] | null>(null)
+  const [accidenteEditando, setAccidenteEditando] = useState<Props['accidentes'][number] | null>(null)
+  const [novedadEditando, setNovedadEditando] = useState<Props['novedadesArl'][number] | null>(null)
+  const [entregaEditando, setEntregaEditando] = useState<Props['entregasEpp'][number] | null>(null)
+  const [eppEditando, setEppEditando] = useState<Props['epps'][number] | null>(null)
+  const [peligroEditando, setPeligroEditando] = useState<Props['peligros'][number] | null>(null)
+  const [profesiogramaEditando, setProfesiogramaEditando] = useState<Props['profesiogramas'][number] | null>(null)
+  const [inspeccionEditando, setInspeccionEditando] = useState<Props['inspecciones'][number] | null>(null)
+  const [comiteEditando, setComiteEditando] = useState<Props['comites'][number] | null>(null)
+  const [indicadorEditando, setIndicadorEditando] = useState<Props['indicadores'][number] | null>(null)
+  const [eliminando, setEliminando] = useState<Eliminacion | null>(null)
   const MES: Record<number, string> = { 1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic' }
 
   // Cifras del tablero. El resto de contadores por módulo se fue con el mosaico
@@ -431,12 +452,22 @@ export function SstCliente(p: Props) {
                   {MES[p.indicadores[0].mes]} {p.indicadores[0].anio} · {p.indicadores[0].numAccidentes} accidente{p.indicadores[0].numAccidentes === 1 ? '' : 's'}, {p.indicadores[0].diasPerdidos} días perdidos, {p.indicadores[0].diasAusentismo} días de ausentismo sobre {p.indicadores[0].numTrabajadores} trabajadores.
                   Bandas de referencia internas (no un umbral legal único): verde = sin accidentalidad/ausentismo relevante, ámbar = frecuencia/severidad/ausentismo moderados, rojo = IF&gt;20, IS&gt;200 o ausentismo&gt;5%.
                 </p>
-                {p.indicadores.length > 1 && (
+                {(p.indicadores.length > 1 || p.puedeEditar || p.puedeEliminar) && (
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
-                      <thead><tr className="text-muted-foreground"><th className="text-left font-normal">Mes</th><th className="font-normal">IF</th><th className="font-normal">IS</th><th className="font-normal">Ausent.%</th></tr></thead>
+                      <thead><tr className="text-muted-foreground"><th className="text-left font-normal">Mes</th><th className="font-normal">IF</th><th className="font-normal">IS</th><th className="font-normal">Ausent.%</th>{(p.puedeEditar || p.puedeEliminar) && <th className="font-normal"><span className="sr-only">Acciones</span></th>}</tr></thead>
                       <tbody>{p.indicadores.map((i) => (
-                        <tr key={`${i.anio}-${i.mes}`} className="border-t"><td className="py-1">{MES[i.mes]} {i.anio}</td><td className="text-center">{i.frecuencia}</td><td className="text-center">{i.severidad}</td><td className="text-center">{i.ausentismo}</td></tr>
+                        <tr key={`${i.anio}-${i.mes}`} className="border-t"><td className="py-1">{MES[i.mes]} {i.anio}</td><td className="text-center">{i.frecuencia}</td><td className="text-center">{i.severidad}</td><td className="text-center">{i.ausentismo}</td>
+                          {(p.puedeEditar || p.puedeEliminar) && (
+                            <td className="whitespace-nowrap text-right">
+                              {p.puedeEditar && <BotonEditar onClick={() => setIndicadorEditando(i)} etiqueta={`Editar ${MES[i.mes]} ${i.anio}`} />}
+                              {p.puedeEliminar && <BotonEliminar etiqueta={`Eliminar ${MES[i.mes]} ${i.anio}`} onClick={() => setEliminando({
+                                titulo: 'Eliminar indicador mensual', detalle: `${MES[i.mes]} ${i.anio} · ${i.numTrabajadores} trabajadores · ${i.horasHombre} horas-hombre`,
+                                eliminar: (motivo) => eliminarIndicadorSst({ anio: i.anio, mes: i.mes, motivo }),
+                              })} />}
+                            </td>
+                          )}
+                        </tr>
                       ))}</tbody>
                     </table>
                   </div>
@@ -448,7 +479,7 @@ export function SstCliente(p: Props) {
       )}
 
       {tab === 'estructura' && (
-        <EstructuraSgsst estructura={p.estructura} puedeEditar={p.puedeEditar} />
+        <EstructuraSgsst estructura={p.estructura} puedeEditar={p.puedeEditar} puedeEliminar={p.puedeEliminar} />
       )}
 
       {tab === 'matriz' && (p.normas.length === 0 ? <Vacio /> : (
@@ -499,6 +530,12 @@ export function SstCliente(p: Props) {
                 <Pill tone={e.seguimientoCerrado ? 'ok' : 'warn'}>{e.seguimientoCerrado ? 'Seguimiento cerrado' : `Seguimiento (${e.seguimientos.length})`}</Pill>
               </button>
             )}
+            {p.puedeEditar && <BotonEditar onClick={() => setExamenEditando(e)} etiqueta="Editar examen" />}
+            {p.puedeEliminar && <BotonEliminar etiqueta="Eliminar examen" onClick={() => setEliminando({
+              titulo: 'Eliminar examen médico', detalle: `${e.colaborador} · ${e.tipo} · ${formatFechaCorta(new Date(e.fecha))}`,
+              nota: 'Se borran también el certificado, las notas de seguimiento y la alerta de vencimiento.',
+              eliminar: (motivo) => eliminarExamenMedico({ id: e.id, motivo }),
+            })} />}
           </div>
         ))}</CardContent></Card>
       ))}
@@ -521,6 +558,13 @@ export function SstCliente(p: Props) {
               </VisorPdf>
             )}
             <Pill tone="info">{TIPO_NOVEDAD_ARL[n.tipo] ?? n.tipo}</Pill>
+            {p.puedeEditar && <BotonEditar onClick={() => setNovedadEditando(n)} etiqueta="Editar novedad" />}
+            {p.puedeEliminar && <BotonEliminar etiqueta="Eliminar novedad" onClick={() => setEliminando({
+              titulo: 'Eliminar novedad de ARL', detalle: `${n.colaborador} · ${TIPO_NOVEDAD_ARL[n.tipo] ?? n.tipo} · ${formatFechaCorta(new Date(n.fecha))}`,
+              nota: n.tipo === 'CAMBIO_CLASE_RIESGO' ? 'Se borra el soporte. La clase de riesgo de la ficha vuelve a la del cambio anterior que siga registrado.' : 'Se borra también el soporte adjunto.',
+              eliminar: (motivo) => eliminarNovedadArl({ id: n.id, motivo }),
+              onExito: (datos) => toast.success(mensajeClaseRiesgo('Novedad eliminada.', datos)),
+            })} />}
           </div>
         ))}</CardContent></Card>
       ))}
@@ -553,7 +597,17 @@ export function SstCliente(p: Props) {
 
       {tab === 'epp' && (
         <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">{p.epps.map((e) => <Badge key={e.id} variant="outline">{e.nombre}</Badge>)}</div>
+          <div className="flex flex-wrap gap-2">{p.epps.map((e) => (
+            <Badge key={e.id} variant="outline" className={cn('gap-1', (p.puedeEditar || p.puedeEliminar) && 'pr-0.5')}>
+              {e.nombre}{e.vidaUtilMeses ? <span className="text-muted-foreground">· {e.vidaUtilMeses} m</span> : null}
+              {p.puedeEditar && <BotonEditar className="size-6 text-muted-foreground hover:text-foreground" onClick={() => setEppEditando(e)} etiqueta={`Editar ${e.nombre}`} />}
+              {p.puedeEliminar && <BotonEliminar
+                className="size-6 text-destructive hover:text-destructive" etiqueta={`Eliminar ${e.nombre}`}
+                bloqueado={e.entregas > 0 ? `${e.nombre} tiene ${e.entregas} entrega${e.entregas === 1 ? '' : 's'} registrada${e.entregas === 1 ? '' : 's'}: no se puede eliminar. Anula primero esas entregas si fueron un error.` : null}
+                onClick={() => setEliminando({ titulo: 'Eliminar EPP del catálogo', detalle: e.nombre, eliminar: (motivo) => eliminarEpp({ id: e.id, motivo }) })}
+              />}
+            </Badge>
+          ))}</div>
           {p.entregasEpp.length === 0 ? <Vacio /> : (
             <Card><CardContent className="p-0 divide-y">{p.entregasEpp.map((e) => (
               <div key={e.id} className="flex flex-wrap items-center gap-3 p-3">
@@ -570,6 +624,12 @@ export function SstCliente(p: Props) {
                   />
                 )}
                 <Pill tone={e.firmado ? 'ok' : 'warn'}>{e.firmado ? 'Firmado' : 'Pendiente de firma'}</Pill>
+                {p.puedeEditar && <BotonEditar etiqueta="Editar entrega" onClick={() => (e.firmado ? toast.error(BLOQUEO_EPP_FIRMADO) : setEntregaEditando(e))} className={e.firmado ? 'size-8 shrink-0 text-muted-foreground opacity-50' : undefined} />}
+                {p.puedeEliminar && <BotonEliminar etiqueta="Anular entrega" bloqueado={e.firmado ? BLOQUEO_EPP_FIRMADO : null} onClick={() => setEliminando({
+                  titulo: 'Anular entrega de EPP', detalle: `${e.colaborador} · ${e.cantidad}× ${e.elemento} · ${formatFechaCorta(new Date(e.fecha))}`,
+                  nota: 'Se borra la constancia de recibido y se le avisa al colaborador que ya no debe firmarla.',
+                  eliminar: (motivo) => eliminarEntregaEpp({ id: e.id, motivo }), exito: 'Entrega anulada.', verbo: 'Anular',
+                })} />}
               </div>
             ))}</CardContent></Card>
           )}
@@ -594,6 +654,11 @@ export function SstCliente(p: Props) {
               )}
             </div>
             <Pill tone={TONO_NIVEL[pe.nivel] ?? 'muted'}>{NIVEL[pe.nivel]}</Pill>
+            {p.puedeEditar && <BotonEditar onClick={() => setPeligroEditando(pe)} etiqueta="Editar peligro" />}
+            {p.puedeEliminar && <BotonEliminar etiqueta="Eliminar peligro" onClick={() => setEliminando({
+              titulo: 'Eliminar peligro de la matriz', detalle: `${pe.peligro} — ${pe.riesgo} · ${pe.proceso}`,
+              eliminar: (motivo) => eliminarPeligro({ id: pe.id, motivo }),
+            })} />}
           </div>
         ))}</CardContent></Card>
       ))}
@@ -601,7 +666,13 @@ export function SstCliente(p: Props) {
       {tab === 'profesiograma' && (p.profesiogramas.length === 0 ? <Vacio /> : (
         <Card><CardContent className="p-0 divide-y">{p.profesiogramas.map((pr) => (
           <div key={pr.id} className="space-y-1 p-3">
-            <div className="flex items-center gap-3"><Chip icono={IdCard} color={TINTA} /><p className="text-sm font-medium">{pr.cargo}</p></div>
+            <div className="flex items-center gap-3">
+              <Chip icono={IdCard} color={TINTA} /><p className="min-w-0 flex-1 text-sm font-medium">{pr.cargo}</p>
+              {p.puedeEditar && <BotonEditar onClick={() => setProfesiogramaEditando(pr)} etiqueta="Editar profesiograma" />}
+              {p.puedeEliminar && <BotonEliminar etiqueta="Eliminar profesiograma" onClick={() => setEliminando({
+                titulo: 'Eliminar profesiograma', detalle: `Cargo: ${pr.cargo}`, eliminar: (motivo) => eliminarProfesiograma({ id: pr.id, motivo }),
+              })} />}
+            </div>
             <p className="pl-11 text-xs text-muted-foreground"><b>Riesgos:</b> {pr.riesgosExpuestos}</p>
             <p className="pl-11 text-xs text-muted-foreground"><b>Exámenes requeridos:</b> {pr.examenesRequeridos}</p>
             <p className="pl-11 text-xs text-muted-foreground"><b>Aptitudes:</b> {pr.aptitudesRequeridas}</p>
@@ -611,7 +682,7 @@ export function SstCliente(p: Props) {
       ))}
 
       {tab === 'emergencias' && (
-        <Emergencias puedeCrear={p.puedeCrear} sedes={p.sedes} planes={p.planesEmergencia} brigadistas={p.brigadistas} simulacros={p.simulacros} />
+        <Emergencias puedeCrear={p.puedeCrear} puedeEditar={p.puedeEditar} puedeEliminar={p.puedeEliminar} sedes={p.sedes} planes={p.planesEmergencia} brigadistas={p.brigadistas} simulacros={p.simulacros} />
       )}
 
       {tab === 'inspecciones' && (p.inspecciones.length === 0 ? <Vacio /> : (
@@ -629,25 +700,68 @@ export function SstCliente(p: Props) {
       ))}
 
       {tab === 'autoeval' && (
-        <PanelAutoeval autoeval={p.autoeval} puedeEditar={p.puedeEditar} />
+        <PanelAutoeval autoeval={p.autoeval} puedeEditar={p.puedeEditar} puedeEliminar={p.puedeEliminar} />
       )}
 
-      {dialogo === 'examenes' && <DialogExamen verSalud={p.verSalud} onClose={() => setDialogo(null)} />}
-      {dialogo === 'accidentes' && <DialogAccidente onClose={() => setDialogo(null)} />}
-      {accidenteAbierto && <DialogSeguimientoAccidente accidente={accidenteAbierto} onClose={() => setAccidenteAbierto(null)} />}
-      {comiteAbierto && <DialogComiteDetalle comite={comiteAbierto} onClose={() => setComiteAbierto(null)} />}
-      {dialogo === 'comites' && <DialogComite onClose={() => setDialogo(null)} />}
-      {dialogo === 'epp' && <DialogEpp epps={p.epps} onClose={() => setDialogo(null)} />}
-      {dialogo === 'ipevr' && <DialogPeligro sedes={p.sedes} onClose={() => setDialogo(null)} />}
-      {dialogo === 'profesiograma' && <DialogProfesiograma cargos={p.cargos} onClose={() => setDialogo(null)} />}
-      {dialogo === 'inspecciones' && <DialogInspeccion sedes={p.sedes} onClose={() => setDialogo(null)} />}
-      {inspeccionAbierta && <DialogSeguimientoInspeccion inspeccion={inspeccionAbierta} onClose={() => setInspeccionAbierta(null)} />}
+      {(dialogo === 'examenes' || examenEditando) && <DialogExamen verSalud={p.verSalud} inicial={examenEditando ?? undefined} onClose={() => { setDialogo(null); setExamenEditando(null) }} />}
+      {(dialogo === 'accidentes' || accidenteEditando) && <DialogAccidente inicial={accidenteEditando ?? undefined} onClose={() => { setDialogo(null); setAccidenteEditando(null) }} />}
+      {accidenteAbierto && (
+        <DialogSeguimientoAccidente
+          accidente={accidenteAbierto} onClose={() => setAccidenteAbierto(null)}
+          onEditar={p.puedeEditar ? () => { setAccidenteEditando(accidenteAbierto); setAccidenteAbierto(null) } : undefined}
+          onEliminar={p.puedeEliminar ? () => {
+            const a = accidenteAbierto
+            setAccidenteAbierto(null)
+            setEliminando({
+              titulo: a.esIncidente ? 'Eliminar incidente' : 'Eliminar accidente de trabajo', detalle: `${a.colaborador} · ${formatFechaCorta(new Date(a.fecha))} · ${a.descripcion}`,
+              nota: 'Se borran también los soportes adjuntos y la alerta FURAT; el indicador del mes se recalcula.',
+              eliminar: (motivo) => eliminarAccidente({ id: a.id, motivo }),
+            })
+          } : undefined}
+        />
+      )}
+      {comiteAbierto && (
+        <DialogComiteDetalle
+          comite={comiteAbierto} puedeEditar={p.puedeEditar} puedeEliminar={p.puedeEliminar} onClose={() => setComiteAbierto(null)}
+          onEditar={() => { setComiteEditando(comiteAbierto); setComiteAbierto(null) }}
+          onEliminar={() => {
+            const c = comiteAbierto
+            setComiteAbierto(null)
+            setEliminando({
+              titulo: 'Eliminar comité', detalle: `${TIPO_COMITE[c.tipo]} · conformado el ${formatFechaCorta(new Date(c.fechaConformacion))}`,
+              nota: `Se borran también sus ${c.miembros.length} miembro${c.miembros.length === 1 ? '' : 's'}, ${c.reuniones.length} reunión${c.reuniones.length === 1 ? '' : 'es'} con sus actas y la alerta de renovación.`,
+              eliminar: (motivo) => eliminarComite({ id: c.id, motivo }),
+            })
+          }}
+        />
+      )}
+      {(dialogo === 'comites' || comiteEditando) && <DialogComite inicial={comiteEditando ?? undefined} onClose={() => { setDialogo(null); setComiteEditando(null) }} />}
+      {(dialogo === 'epp' || entregaEditando) && <DialogEpp epps={p.epps} inicial={entregaEditando ?? undefined} onClose={() => { setDialogo(null); setEntregaEditando(null) }} />}
+      {eppEditando && <DialogElementoEpp epp={eppEditando} onClose={() => setEppEditando(null)} />}
+      {(dialogo === 'ipevr' || peligroEditando) && <DialogPeligro sedes={p.sedes} inicial={peligroEditando ?? undefined} onClose={() => { setDialogo(null); setPeligroEditando(null) }} />}
+      {(dialogo === 'profesiograma' || profesiogramaEditando) && <DialogProfesiograma cargos={p.cargos} inicial={profesiogramaEditando ?? undefined} onClose={() => { setDialogo(null); setProfesiogramaEditando(null) }} />}
+      {(dialogo === 'inspecciones' || inspeccionEditando) && <DialogInspeccion sedes={p.sedes} inicial={inspeccionEditando ?? undefined} onClose={() => { setDialogo(null); setInspeccionEditando(null) }} />}
+      {inspeccionAbierta && (
+        <DialogSeguimientoInspeccion
+          inspeccion={inspeccionAbierta} onClose={() => setInspeccionAbierta(null)}
+          onEditar={p.puedeEditar ? () => { setInspeccionEditando(inspeccionAbierta); setInspeccionAbierta(null) } : undefined}
+          onEliminar={p.puedeEliminar ? () => {
+            const i = inspeccionAbierta
+            setInspeccionAbierta(null)
+            setEliminando({
+              titulo: 'Eliminar inspección', detalle: `${i.tipo}${i.area ? ` — ${i.area}` : ''} · ${formatFechaCorta(new Date(i.fecha))}`,
+              nota: 'Se borra también el soporte adjunto.', eliminar: (motivo) => eliminarInspeccion({ id: i.id, motivo }),
+            })
+          } : undefined}
+        />
+      )}
       {dialogo === 'autoeval' && <DialogAutoeval onClose={() => setDialogo(null)} />}
       {dialogo === 'matriz' && <DialogNorma onClose={() => setDialogo(null)} />}
-      {dialogo === 'arl' && <DialogNovedadArl onClose={() => setDialogo(null)} />}
-      {examenAbierto && <DialogSeguimientoRecomendaciones examen={examenAbierto} onClose={() => setExamenAbierto(null)} />}
-      {normaAbierta && <DialogNorma norma={normaAbierta} puedeEditar={p.puedeEditar} onClose={() => setNormaAbierta(null)} />}
-      {indicadorAbierto && <DialogIndicadorSst onClose={() => setIndicadorAbierto(false)} />}
+      {(dialogo === 'arl' || novedadEditando) && <DialogNovedadArl inicial={novedadEditando ?? undefined} onClose={() => { setDialogo(null); setNovedadEditando(null) }} />}
+      {examenAbierto && <DialogSeguimientoRecomendaciones examen={examenAbierto} editaSalud={p.editaSalud} eliminaSalud={p.eliminaSalud} onClose={() => setExamenAbierto(null)} />}
+      {normaAbierta && <DialogNorma norma={normaAbierta} puedeEditar={p.puedeEditar} puedeEliminar={p.puedeEliminar} onClose={() => setNormaAbierta(null)} />}
+      {(indicadorAbierto || indicadorEditando) && <DialogIndicadorSst inicial={indicadorEditando ?? undefined} onClose={() => { setIndicadorAbierto(false); setIndicadorEditando(null) }} />}
+      {eliminando && <DialogEliminar {...eliminando} onClose={() => setEliminando(null)} />}
       </div>
       </div>
     </div>
@@ -655,17 +769,42 @@ export function SstCliente(p: Props) {
 }
 
 function Vacio() { return <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Sin registros.</CardContent></Card> }
-function Campo({ label, children }: { label: string; children: React.ReactNode }) { return <div className="space-y-1.5"><Label>{label}</Label>{children}</div> }
+function Campo({ label, children, obligatorio }: { label: string; children: React.ReactNode; obligatorio?: boolean }) {
+  return <div className="space-y-1.5"><Label>{label}{obligatorio && <> <span className="text-destructive">*</span></>}</Label>{children}</div>
+}
 
-function DialogExamen({ verSalud, onClose }: { verSalud: boolean; onClose: () => void }) {
-  const router = useRouter(); const [colaboradorId, setColaboradorId] = useState(''); const [f, setF] = useState<Record<string, string>>({ tipo: 'PERIODICO', concepto: 'APTO', fecha: new Date().toISOString().slice(0, 10) }); const [archivo, setArchivo] = useState<File | null>(null); const [g, setG] = useState(false)
+const BLOQUEO_EPP_FIRMADO = 'El trabajador ya firmó el recibido de esta entrega: no se puede cambiar ni anular. Si hubo un error, registra una entrega nueva o una reposición.'
+
+/**
+ * Editar o anular un cambio de clase de riesgo mueve la ficha del colaborador:
+ * el toast dice en qué clase quedó, o avisa que hay que revisarla si no quedó
+ * otra novedad que la respalde.
+ */
+function mensajeClaseRiesgo(base: string, datos: unknown): string {
+  const d = datos as { tocaClase?: boolean; claseRiesgo?: string | null } | undefined
+  if (!d?.tocaClase) return base
+  return d.claseRiesgo
+    ? `${base} La ficha del colaborador quedó en clase de riesgo ${d.claseRiesgo}.`
+    : `${base} Revisa la clase de riesgo en la ficha del colaborador: no quedó otra novedad que la respalde.`
+}
+
+function DialogExamen({ verSalud, inicial, onClose }: { verSalud: boolean; inicial?: Props['examenes'][number]; onClose: () => void }) {
+  const router = useRouter(); const [colaboradorId, setColaboradorId] = useState(inicial?.colaboradorId ?? '')
+  const [f, setF] = useState<Record<string, string>>({
+    tipo: inicial?.tipo ?? 'PERIODICO', concepto: inicial?.concepto ?? 'APTO', fecha: inicial?.fecha ?? new Date().toISOString().slice(0, 10),
+    fechaVencimiento: inicial?.vencimiento ?? '', recomendaciones: inicial?.recomendaciones ?? '', restricciones: inicial?.restricciones ?? '',
+  })
+  const [archivo, setArchivo] = useState<File | null>(null); const [g, setG] = useState(false)
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
   async function guardar() {
-    if (!colaboradorId) { toast.error('Selecciona un colaborador.'); return }
+    if (!inicial && !colaboradorId) { toast.error('Selecciona un colaborador.'); return }
     setG(true)
-    const res = await crearExamenMedico({ colaboradorId, tipo: f.tipo as 'PERIODICO', fecha: f.fecha, fechaVencimiento: f.fechaVencimiento, concepto: f.concepto as 'APTO', recomendaciones: f.recomendaciones, restricciones: f.restricciones })
+    // Sin permiso de salud el formulario no muestra recomendaciones/restricciones: no se mandan, para no borrarlas.
+    const salud = verSalud ? { recomendaciones: f.recomendaciones, restricciones: f.restricciones } : {}
+    const comunes = { tipo: f.tipo as 'PERIODICO', fecha: f.fecha, fechaVencimiento: f.fechaVencimiento, concepto: f.concepto as 'APTO', ...salud }
+    const res = inicial ? await editarExamenMedico({ id: inicial.id, ...comunes }) : await crearExamenMedico({ colaboradorId, ...comunes })
     if (!res.ok) { setG(false); toast.error(res.error); return }
-    const examenId = (res.datos as { id: string }).id
+    const examenId = inicial ? inicial.id : (res.datos as { id: string }).id
     if (archivo) {
       try {
         const fd = new FormData()
@@ -678,49 +817,65 @@ function DialogExamen({ verSalud, onClose }: { verSalud: boolean; onClose: () =>
           const { id: documentoId } = await up.json()
           await vincularSoporteExamen({ examenId, documentoId })
         } else {
-          toast.warning('El examen se registró, pero el certificado no se pudo adjuntar.')
+          toast.warning('El examen se guardó, pero el certificado no se pudo adjuntar.')
         }
-      } catch { toast.warning('El examen se registró, pero el certificado no se pudo adjuntar.') }
+      } catch { toast.warning('El examen se guardó, pero el certificado no se pudo adjuntar.') }
     }
-    setG(false); toast.success('Examen registrado.'); onClose(); router.refresh()
+    setG(false); toast.success(inicial ? 'Examen actualizado.' : 'Examen registrado.'); onClose(); router.refresh()
   }
-  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Registrar examen médico</DialogTitle></DialogHeader>
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{inicial ? `Editar examen médico · ${inicial.colaborador}` : 'Registrar examen médico'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
-      <Campo label="Colaborador"><SelectorColaborador value={colaboradorId} onChange={(id) => setColaboradorId(id)} /></Campo>
+      {!inicial && <Campo label="Colaborador" obligatorio><SelectorColaborador value={colaboradorId} onChange={(id) => setColaboradorId(id)} /></Campo>}
       <div className="grid grid-cols-2 gap-3">
-        <Campo label="Tipo"><Select value={f.tipo} onValueChange={(v) => set('tipo', v)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="INGRESO">Ingreso</SelectItem><SelectItem value="PERIODICO">Periódico</SelectItem><SelectItem value="EGRESO">Egreso</SelectItem><SelectItem value="POST_INCAPACIDAD">Post incapacidad</SelectItem></SelectContent></Select></Campo>
-        <Campo label="Concepto"><Select value={f.concepto} onValueChange={(v) => set('concepto', v)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(CONCEPTO).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select></Campo>
+        <Campo label="Tipo" obligatorio><Select value={f.tipo} onValueChange={(v) => set('tipo', v)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="INGRESO">Ingreso</SelectItem><SelectItem value="PERIODICO">Periódico</SelectItem><SelectItem value="EGRESO">Egreso</SelectItem><SelectItem value="POST_INCAPACIDAD">Post incapacidad</SelectItem></SelectContent></Select></Campo>
+        <Campo label="Concepto" obligatorio><Select value={f.concepto} onValueChange={(v) => set('concepto', v)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(CONCEPTO).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select></Campo>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Campo label="Fecha"><Input type="date" value={f.fecha} onChange={(e) => set('fecha', e.target.value)} /></Campo>
-        <Campo label="Próximo examen (vence)"><Input type="date" onChange={(e) => set('fechaVencimiento', e.target.value)} /></Campo>
+        <Campo label="Fecha" obligatorio><Input type="date" value={f.fecha} onChange={(e) => set('fecha', e.target.value)} /></Campo>
+        <Campo label="Próximo examen (vence)"><Input type="date" value={f.fechaVencimiento} onChange={(e) => set('fechaVencimiento', e.target.value)} /></Campo>
       </div>
-      {verSalud && <><Campo label="Recomendaciones (sensible)"><Textarea rows={2} onChange={(e) => set('recomendaciones', e.target.value)} /></Campo><Campo label="Restricciones (sensible)"><Textarea rows={2} onChange={(e) => set('restricciones', e.target.value)} /></Campo></>}
-      <Campo label="Certificado del examen (opcional)">
+      {verSalud && <><Campo label="Recomendaciones (sensible)"><Textarea rows={2} value={f.recomendaciones} onChange={(e) => set('recomendaciones', e.target.value)} /></Campo><Campo label="Restricciones (sensible)"><Textarea rows={2} value={f.restricciones} onChange={(e) => set('restricciones', e.target.value)} /></Campo></>}
+      <Campo label={inicial?.documentoId ? 'Reemplazar certificado del examen' : 'Certificado del examen'}>
         <input type="file" accept="image/*,application/pdf" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground" />
         <p className="text-xs text-muted-foreground">Acceso restringido (dato de salud, Ley 1581): solo lo ve quien tiene permiso sobre datos de salud.</p>
       </Campo>
     </div>
-    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Registrar</Button></DialogFooter></DialogContent></Dialog>)
+    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}{inicial ? 'Guardar' : 'Registrar'}</Button></DialogFooter></DialogContent></Dialog>)
 }
 
-function DialogAccidente({ onClose }: { onClose: () => void }) {
-  const router = useRouter(); const [colaboradorId, setColaboradorId] = useState(''); const [f, setF] = useState<Record<string, string>>({ fecha: new Date().toISOString().slice(0, 10) }); const [esIncidente, setEsIncidente] = useState(false); const [g, setG] = useState(false)
+function DialogAccidente({ inicial, onClose }: { inicial?: Props['accidentes'][number]; onClose: () => void }) {
+  const router = useRouter(); const [colaboradorId, setColaboradorId] = useState(inicial?.colaboradorId ?? '')
+  const [f, setF] = useState<Record<string, string>>({
+    fecha: inicial?.fecha ?? new Date().toISOString().slice(0, 10), descripcion: inicial?.descripcion ?? '', parteCuerpo: inicial?.parteCuerpo ?? '',
+    diasIncapacidad: inicial?.diasIncapacidad != null ? String(inicial.diasIncapacidad) : '',
+  })
+  const [esIncidente, setEsIncidente] = useState(inicial?.esIncidente ?? false); const [g, setG] = useState(false)
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
-  async function guardar() { if (!colaboradorId) { toast.error('Selecciona un colaborador.'); return } setG(true); const res = await reportarAccidente({ colaboradorId, fecha: f.fecha, descripcion: f.descripcion ?? '', parteCuerpo: f.parteCuerpo, diasIncapacidad: f.diasIncapacidad ? Number(f.diasIncapacidad) : undefined, esIncidente }); setG(false); if (res.ok) { toast.success(esIncidente ? 'Incidente reportado para investigación.' : 'Accidente reportado. Alerta FURAT generada.'); onClose(); router.refresh() } else toast.error(res.error) }
-  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>{esIncidente ? 'Reportar incidente de trabajo' : 'Reportar accidente de trabajo'}</DialogTitle></DialogHeader>
+  async function guardar() {
+    if (!colaboradorId) { toast.error('Selecciona un colaborador.'); return }
+    setG(true)
+    const datos = { colaboradorId, fecha: f.fecha, descripcion: f.descripcion ?? '', parteCuerpo: f.parteCuerpo, diasIncapacidad: f.diasIncapacidad ? Number(f.diasIncapacidad) : undefined, esIncidente }
+    const res = inicial ? await editarAccidente({ id: inicial.id, ...datos }) : await reportarAccidente(datos)
+    setG(false)
+    if (res.ok) {
+      toast.success(inicial ? 'Reporte actualizado.' : esIncidente ? 'Incidente reportado para investigación.' : 'Accidente reportado. Alerta FURAT generada.')
+      onClose(); router.refresh()
+    } else toast.error(res.error)
+  }
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>{inicial ? 'Editar reporte' : esIncidente ? 'Reportar incidente de trabajo' : 'Reportar accidente de trabajo'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
       <label className="flex items-center gap-2 text-sm"><Checkbox checked={esIncidente} onCheckedChange={(v) => setEsIncidente(Boolean(v))} /> Es un incidente (casi-accidente, sin lesión)</label>
       {esIncidente && <p className="text-xs text-muted-foreground">Los incidentes se investigan igual que los accidentes (Res. 1401/2007), pero no se reportan a la ARL ni suman a los índices de accidentalidad.</p>}
-      <Campo label="Colaborador"><SelectorColaborador value={colaboradorId} onChange={(id) => setColaboradorId(id)} /></Campo>
-      <div className="grid grid-cols-2 gap-3"><Campo label="Fecha"><Input type="date" value={f.fecha} onChange={(e) => set('fecha', e.target.value)} /></Campo>{!esIncidente && <Campo label="Parte del cuerpo"><Input onChange={(e) => set('parteCuerpo', e.target.value)} /></Campo>}</div>
-      <Campo label="Descripción"><Textarea rows={3} onChange={(e) => set('descripcion', e.target.value)} /></Campo>
-      {!esIncidente && <Campo label="Días de incapacidad"><Input type="number" onChange={(e) => set('diasIncapacidad', e.target.value)} /></Campo>}
+      <Campo label="Colaborador" obligatorio><SelectorColaborador value={colaboradorId} onChange={(id) => setColaboradorId(id)} /></Campo>
+      <div className="grid grid-cols-2 gap-3"><Campo label="Fecha" obligatorio><Input type="date" value={f.fecha} onChange={(e) => set('fecha', e.target.value)} /></Campo>{!esIncidente && <Campo label="Parte del cuerpo"><Input value={f.parteCuerpo} onChange={(e) => set('parteCuerpo', e.target.value)} /></Campo>}</div>
+      <Campo label="Descripción" obligatorio><Textarea rows={3} value={f.descripcion} onChange={(e) => set('descripcion', e.target.value)} /></Campo>
+      {!esIncidente && <Campo label="Días de incapacidad"><Input type="number" value={f.diasIncapacidad} onChange={(e) => set('diasIncapacidad', e.target.value)} /></Campo>}
+      {inicial && <p className="text-xs text-muted-foreground">El estado, la investigación y el reporte FURAT se manejan desde el seguimiento. La alerta FURAT se reprograma con la fecha nueva.</p>}
     </div>
-    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Reportar</Button></DialogFooter></DialogContent></Dialog>)
+    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}{inicial ? 'Guardar' : 'Reportar'}</Button></DialogFooter></DialogContent></Dialog>)
 }
 
-function DialogSeguimientoAccidente({ accidente, onClose }: { accidente: Props['accidentes'][number]; onClose: () => void }) {
+function DialogSeguimientoAccidente({ accidente, onEditar, onEliminar, onClose }: { accidente: Props['accidentes'][number]; onEditar?: () => void; onEliminar?: () => void; onClose: () => void }) {
   const router = useRouter()
   const [estado, setEstado] = useState(accidente.estado)
   const [investigacion, setInvestigacion] = useState(accidente.investigacion ?? '')
@@ -772,53 +927,68 @@ function DialogSeguimientoAccidente({ accidente, onClose }: { accidente: Props['
         <input type="file" accept="image/*,application/pdf" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground" />
       </Campo>
     </div>
-    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Guardar</Button></DialogFooter></DialogContent></Dialog>)
+    <DialogFooter className="flex-wrap gap-2">
+      {onEliminar && <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={onEliminar}><Trash2 className="size-4" /> Eliminar</Button>}
+      {onEditar && <Button variant="ghost" onClick={onEditar}><Pencil className="size-4" /> Editar reporte</Button>}
+      <Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Guardar</Button>
+    </DialogFooter></DialogContent></Dialog>)
 }
 
-function DialogComite({ onClose }: { onClose: () => void }) {
-  const router = useRouter(); const [tipo, setTipo] = useState('COPASST'); const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10)); const [g, setG] = useState(false)
-  async function guardar() { setG(true); const res = await crearComite({ tipo: tipo as 'COPASST', fechaConformacion: fecha }); setG(false); if (res.ok) { toast.success('Comité conformado.'); onClose(); router.refresh() } else toast.error(res.error) }
-  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>Conformar comité</DialogTitle></DialogHeader>
+function DialogComite({ inicial, onClose }: { inicial?: Props['comites'][number]; onClose: () => void }) {
+  const router = useRouter(); const [tipo, setTipo] = useState(inicial?.tipo ?? 'COPASST'); const [fecha, setFecha] = useState(inicial?.fechaConformacion ?? new Date().toISOString().slice(0, 10)); const [g, setG] = useState(false)
+  async function guardar() {
+    setG(true)
+    const res = inicial ? await editarComite({ id: inicial.id, tipo: tipo as 'COPASST', fechaConformacion: fecha }) : await crearComite({ tipo: tipo as 'COPASST', fechaConformacion: fecha })
+    setG(false); if (res.ok) { toast.success(inicial ? 'Comité actualizado.' : 'Comité conformado.'); onClose(); router.refresh() } else toast.error(res.error)
+  }
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>{inicial ? 'Editar comité' : 'Conformar comité'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
-      <Campo label="Tipo"><Select value={tipo} onValueChange={setTipo}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="VIGIA_SST">Vigía SST</SelectItem><SelectItem value="COPASST">COPASST</SelectItem><SelectItem value="CONVIVENCIA">Comité de Convivencia</SelectItem></SelectContent></Select></Campo>
-      <Campo label="Fecha de conformación"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
-      <p className="text-xs text-muted-foreground">La renovación a 2 años se programará como alerta automática.</p>
+      <Campo label="Tipo" obligatorio><Select value={tipo} onValueChange={setTipo}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="VIGIA_SST">Vigía SST</SelectItem><SelectItem value="COPASST">COPASST</SelectItem><SelectItem value="CONVIVENCIA">Comité de Convivencia</SelectItem></SelectContent></Select></Campo>
+      <Campo label="Fecha de conformación" obligatorio><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
+      <p className="text-xs text-muted-foreground">{inicial ? 'La vigencia (2 años) y la alerta de renovación se recalculan con la fecha nueva.' : 'La renovación a 2 años se programará como alerta automática.'}</p>
     </div>
-    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Conformar</Button></DialogFooter></DialogContent></Dialog>)
+    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}{inicial ? 'Guardar' : 'Conformar'}</Button></DialogFooter></DialogContent></Dialog>)
 }
 
-function DialogComiteDetalle({ comite, onClose }: { comite: Props['comites'][number]; onClose: () => void }) {
+function DialogComiteDetalle({ comite, puedeEditar, puedeEliminar, onEditar, onEliminar, onClose }: {
+  comite: Props['comites'][number]; puedeEditar: boolean; puedeEliminar: boolean; onEditar: () => void; onEliminar: () => void; onClose: () => void
+}) {
   const router = useRouter()
   const [colaboradorId, setColaboradorId] = useState('')
   const [rol, setRol] = useState('')
   const [porEmpleador, setPorEmpleador] = useState(false)
+  const [miembroEditando, setMiembroEditando] = useState<string | null>(null)
   const [gMiembro, setGMiembro] = useState(false)
 
   const [fechaReunion, setFechaReunion] = useState(new Date().toISOString().slice(0, 10))
   const [temas, setTemas] = useState('')
   const [compromisos, setCompromisos] = useState('')
   const [actaArchivo, setActaArchivo] = useState<File | null>(null)
+  const [reunionEditando, setReunionEditando] = useState<string | null>(null)
   const [gReunion, setGReunion] = useState(false)
+  const [eliminando, setEliminando] = useState<Eliminacion | null>(null)
 
-  async function agregarMiembro() {
+  function limpiarMiembro() { setMiembroEditando(null); setColaboradorId(''); setRol(''); setPorEmpleador(false) }
+  function limpiarReunion() { setReunionEditando(null); setFechaReunion(new Date().toISOString().slice(0, 10)); setTemas(''); setCompromisos(''); setActaArchivo(null) }
+
+  async function guardarMiembro() {
     if (!colaboradorId || !rol.trim()) { toast.error('Selecciona colaborador y rol.'); return }
     setGMiembro(true)
-    const res = await agregarMiembroComite({ comiteId: comite.id, colaboradorId, rol: rol.trim(), porEmpleador })
+    const res = miembroEditando
+      ? await editarMiembroComite({ id: miembroEditando, colaboradorId, rol: rol.trim(), porEmpleador })
+      : await agregarMiembroComite({ comiteId: comite.id, colaboradorId, rol: rol.trim(), porEmpleador })
     setGMiembro(false)
-    if (res.ok) { setColaboradorId(''); setRol(''); setPorEmpleador(false); toast.success('Miembro agregado.'); router.refresh() } else toast.error(res.error)
-  }
-
-  async function quitarMiembro(id: string) {
-    const res = await eliminarMiembroComite({ id })
-    if (res.ok) { toast.success('Miembro eliminado.'); router.refresh() } else toast.error(res.error)
+    if (res.ok) { limpiarMiembro(); toast.success(miembroEditando ? 'Miembro actualizado.' : 'Miembro agregado.'); router.refresh() } else toast.error(res.error)
   }
 
   async function guardarReunion() {
     if (!temas.trim()) { toast.error('Describe los temas tratados.'); return }
     setGReunion(true)
-    const res = await registrarReunionComite({ comiteId: comite.id, fecha: fechaReunion, temas: temas.trim(), compromisos: compromisos.trim() || undefined })
+    const res = reunionEditando
+      ? await editarReunionComite({ id: reunionEditando, fecha: fechaReunion, temas: temas.trim(), compromisos: compromisos.trim() || undefined })
+      : await registrarReunionComite({ comiteId: comite.id, fecha: fechaReunion, temas: temas.trim(), compromisos: compromisos.trim() || undefined })
     if (!res.ok) { setGReunion(false); toast.error(res.error); return }
-    const reunionId = (res.datos as { id: string }).id
+    const reunionId = reunionEditando ?? (res.datos as { id: string }).id
     if (actaArchivo) {
       try {
         const fd = new FormData()
@@ -830,31 +1000,41 @@ function DialogComiteDetalle({ comite, onClose }: { comite: Props['comites'][num
         if (up.ok) {
           const { id: documentoId } = await up.json()
           await vincularActaReunion({ reunionId, documentoId })
-        } else toast.warning('La reunión se registró, pero el acta no se pudo adjuntar.')
-      } catch { toast.warning('La reunión se registró, pero el acta no se pudo adjuntar.') }
+        } else toast.warning('La reunión se guardó, pero el acta no se pudo adjuntar.')
+      } catch { toast.warning('La reunión se guardó, pero el acta no se pudo adjuntar.') }
     }
-    setGReunion(false); setTemas(''); setCompromisos(''); setActaArchivo(null)
-    toast.success('Reunión registrada.'); router.refresh()
+    setGReunion(false); const editaba = Boolean(reunionEditando); limpiarReunion()
+    toast.success(editaba ? 'Reunión actualizada.' : 'Reunión registrada.'); router.refresh()
   }
 
   return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl"><DialogHeader><DialogTitle>{TIPO_COMITE[comite.tipo]}</DialogTitle></DialogHeader>
     <div className="space-y-6">
+      <p className="text-xs text-muted-foreground">Conformado el {formatFechaCorta(new Date(comite.fechaConformacion))} · vigente hasta {formatFechaCorta(new Date(comite.vigenciaHasta))}</p>
       <div>
         <p className="mb-2 text-sm font-medium">Miembros</p>
         {comite.miembros.length > 0 && (
           <ul className="mb-3 space-y-1">{comite.miembros.map((m) => (
             <li key={m.id} className="flex items-center gap-2 text-sm">
               <span className="min-w-0 flex-1 truncate">{m.colaborador} <span className="text-xs text-muted-foreground">— {m.rol} ({m.porEmpleador ? 'empleador' : 'trabajadores'})</span></span>
-              <button type="button" onClick={() => quitarMiembro(m.id)} className="text-xs text-destructive hover:underline">Quitar</button>
+              {puedeEditar && <BotonEditar className="size-6 shrink-0 text-muted-foreground hover:text-foreground" etiqueta="Editar miembro" onClick={() => { setMiembroEditando(m.id); setColaboradorId(m.colaboradorId); setRol(m.rol); setPorEmpleador(m.porEmpleador) }} />}
+              {puedeEditar && <BotonEliminar className="size-6 shrink-0 text-destructive hover:text-destructive" etiqueta="Quitar del comité" onClick={() => setEliminando({
+                titulo: 'Quitar miembro del comité', detalle: `${m.colaborador} — ${m.rol}`,
+                eliminar: (motivo) => eliminarMiembroComite({ id: m.id, motivo }), exito: 'Miembro quitado.', verbo: 'Quitar',
+              })} />}
             </li>
           ))}</ul>
         )}
-        <div className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[2fr_1fr_auto_auto]">
-          <SelectorColaborador value={colaboradorId} onChange={setColaboradorId} />
-          <Input placeholder="Rol (Presidente, Secretario…)" value={rol} onChange={(e) => setRol(e.target.value)} />
-          <label className="flex items-center gap-1.5 whitespace-nowrap text-xs"><Checkbox checked={porEmpleador} onCheckedChange={(v) => setPorEmpleador(Boolean(v))} /> Empleador</label>
-          <Button size="sm" onClick={agregarMiembro} disabled={gMiembro}>{gMiembro && <Spinner />}Agregar</Button>
-        </div>
+        {puedeEditar && (
+          <div className="space-y-2">
+            {miembroEditando && <p className="text-xs text-muted-foreground">Editando miembro · <button type="button" className="text-primary hover:underline" onClick={limpiarMiembro}>cancelar</button></p>}
+            <div className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[2fr_1fr_auto_auto]">
+              <SelectorColaborador value={colaboradorId} onChange={setColaboradorId} />
+              <Input placeholder="Rol (Presidente, Secretario…)" value={rol} onChange={(e) => setRol(e.target.value)} />
+              <label className="flex items-center gap-1.5 whitespace-nowrap text-xs"><Checkbox checked={porEmpleador} onCheckedChange={(v) => setPorEmpleador(Boolean(v))} /> Empleador</label>
+              <Button size="sm" onClick={guardarMiembro} disabled={gMiembro}>{gMiembro && <Spinner />}{miembroEditando ? 'Guardar' : 'Agregar'}</Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div>
@@ -862,134 +1042,200 @@ function DialogComiteDetalle({ comite, onClose }: { comite: Props['comites'][num
         {comite.reuniones.length > 0 && (
           <ul className="mb-3 space-y-2">{comite.reuniones.map((r) => (
             <li key={r.id} className="rounded-md border p-2 text-sm">
-              <p className="font-medium">{formatFechaCorta(new Date(r.fecha))}</p>
-              <p className="text-xs text-muted-foreground">{r.temas}</p>
-              {r.compromisos && <p className="text-xs text-muted-foreground">Compromisos: {r.compromisos}</p>}
-              {r.actaDocId ? (
-                <VisorPdf documentoId={r.actaDocId} titulo="Acta" className="text-xs text-primary hover:underline">Ver acta</VisorPdf>
-              ) : <p className="text-xs text-amber-600">Sin acta adjunta</p>}
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{formatFechaCorta(new Date(r.fecha))}</p>
+                  <p className="text-xs text-muted-foreground">{r.temas}</p>
+                  {r.compromisos && <p className="text-xs text-muted-foreground">Compromisos: {r.compromisos}</p>}
+                  {r.actaDocId ? (
+                    <VisorPdf documentoId={r.actaDocId} titulo="Acta" className="text-xs text-primary hover:underline">Ver acta</VisorPdf>
+                  ) : <p className="text-xs text-amber-600">Sin acta adjunta</p>}
+                </div>
+                {puedeEditar && <BotonEditar className="size-6 shrink-0 text-muted-foreground hover:text-foreground" etiqueta="Editar reunión" onClick={() => { setReunionEditando(r.id); setFechaReunion(r.fecha); setTemas(r.temas); setCompromisos(r.compromisos ?? '') }} />}
+                {puedeEliminar && <BotonEliminar className="size-6 shrink-0 text-destructive hover:text-destructive" etiqueta="Eliminar reunión" onClick={() => setEliminando({
+                  titulo: 'Eliminar reunión', detalle: `${TIPO_COMITE[comite.tipo]} · ${formatFechaCorta(new Date(r.fecha))}`,
+                  nota: r.actaDocId ? 'Se borra también el acta adjunta.' : undefined,
+                  eliminar: (motivo) => eliminarReunionComite({ id: r.id, motivo }), exito: 'Reunión eliminada.',
+                })} />}
+              </div>
             </li>
           ))}</ul>
         )}
-        <div className="space-y-2 rounded-md border p-3">
-          <div className="grid grid-cols-2 gap-2"><Input type="date" value={fechaReunion} onChange={(e) => setFechaReunion(e.target.value)} /></div>
-          <Textarea rows={2} placeholder="Temas tratados" value={temas} onChange={(e) => setTemas(e.target.value)} />
-          <Textarea rows={2} placeholder="Compromisos (opcional)" value={compromisos} onChange={(e) => setCompromisos(e.target.value)} />
-          <input type="file" accept="image/*,application/pdf" onChange={(e) => setActaArchivo(e.target.files?.[0] ?? null)} className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground" />
-          <Button size="sm" onClick={guardarReunion} disabled={gReunion}>{gReunion && <Spinner />}Registrar reunión</Button>
-        </div>
+        {puedeEditar && (
+          <div className="space-y-2 rounded-md border p-3">
+            {reunionEditando && <p className="text-xs text-muted-foreground">Editando reunión · <button type="button" className="text-primary hover:underline" onClick={limpiarReunion}>cancelar</button></p>}
+            <div className="grid grid-cols-2 gap-2"><Input type="date" value={fechaReunion} onChange={(e) => setFechaReunion(e.target.value)} /></div>
+            <Textarea rows={2} placeholder="Temas tratados" value={temas} onChange={(e) => setTemas(e.target.value)} />
+            <Textarea rows={2} placeholder="Compromisos" value={compromisos} onChange={(e) => setCompromisos(e.target.value)} />
+            <input type="file" accept="image/*,application/pdf" onChange={(e) => setActaArchivo(e.target.files?.[0] ?? null)} className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground" />
+            <Button size="sm" onClick={guardarReunion} disabled={gReunion}>{gReunion && <Spinner />}{reunionEditando ? 'Guardar cambios' : 'Registrar reunión'}</Button>
+          </div>
+        )}
       </div>
     </div>
-    <DialogFooter><Button variant="ghost" onClick={onClose}>Cerrar</Button></DialogFooter></DialogContent></Dialog>)
+    <DialogFooter className="flex-wrap gap-2">
+      {puedeEliminar && <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={onEliminar}><Trash2 className="size-4" /> Eliminar comité</Button>}
+      {puedeEditar && <Button variant="ghost" onClick={onEditar}><Pencil className="size-4" /> Editar</Button>}
+      <Button variant="ghost" onClick={onClose}>Cerrar</Button>
+    </DialogFooter>
+    {eliminando && <DialogEliminar {...eliminando} onClose={() => setEliminando(null)} />}
+  </DialogContent></Dialog>)
 }
 
-function DialogEpp({ epps, onClose }: { epps: { id: string; nombre: string }[]; onClose: () => void }) {
-  const router = useRouter(); const [colaboradorId, setColaboradorId] = useState(''); const [elementoEppId, setElementoEppId] = useState(''); const [nuevoEpp, setNuevoEpp] = useState(''); const [cantidad, setCantidad] = useState('1'); const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10)); const [reposicion, setReposicion] = useState(false); const [g, setG] = useState(false)
+function DialogEpp({ epps, inicial, onClose }: { epps: Props['epps']; inicial?: Props['entregasEpp'][number]; onClose: () => void }) {
+  const router = useRouter(); const [colaboradorId, setColaboradorId] = useState(inicial?.colaboradorId ?? ''); const [elementoEppId, setElementoEppId] = useState(inicial?.elementoEppId ?? '')
+  const [nuevoEpp, setNuevoEpp] = useState(''); const [vidaUtil, setVidaUtil] = useState('')
+  const [cantidad, setCantidad] = useState(String(inicial?.cantidad ?? 1)); const [fecha, setFecha] = useState(inicial?.fecha ?? new Date().toISOString().slice(0, 10)); const [reposicion, setReposicion] = useState(inicial?.reposicion ?? false); const [g, setG] = useState(false)
   async function guardar() {
     setG(true)
-    if (nuevoEpp.trim()) { await crearEpp({ nombre: nuevoEpp.trim() }); toast.success('EPP creado. Vuelve a seleccionarlo.'); setG(false); router.refresh(); return }
+    if (!inicial && nuevoEpp.trim()) {
+      const res = await crearEpp({ nombre: nuevoEpp.trim(), vidaUtilMeses: vidaUtil ? Number(vidaUtil) : undefined })
+      setG(false); if (res.ok) { toast.success('EPP creado. Vuelve a seleccionarlo.'); setNuevoEpp(''); setVidaUtil(''); router.refresh() } else toast.error(res.error)
+      return
+    }
     if (!colaboradorId || !elementoEppId) { toast.error('Selecciona colaborador y EPP.'); setG(false); return }
-    const res = await entregarEpp({ elementoEppId, colaboradorId, cantidad: Number(cantidad), fechaEntrega: fecha, reposicion }); setG(false)
-    if (res.ok) { toast.success('Entrega registrada.'); onClose(); router.refresh() } else toast.error(res.error)
+    const datos = { elementoEppId, colaboradorId, cantidad: Number(cantidad), fechaEntrega: fecha, reposicion }
+    const res = inicial ? await editarEntregaEpp({ id: inicial.id, ...datos }) : await entregarEpp(datos); setG(false)
+    if (res.ok) { toast.success(inicial ? 'Entrega actualizada. La constancia de recibido se rehizo.' : 'Entrega registrada.'); onClose(); router.refresh() } else toast.error(res.error)
   }
-  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>Entregar EPP</DialogTitle></DialogHeader>
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>{inicial ? 'Editar entrega de EPP' : 'Entregar EPP'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
-      <Campo label="Nuevo elemento (opcional)"><Input value={nuevoEpp} onChange={(e) => setNuevoEpp(e.target.value)} placeholder="Crear nuevo EPP…" /></Campo>
+      {!inicial && (
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <Campo label="Nuevo elemento"><Input value={nuevoEpp} onChange={(e) => setNuevoEpp(e.target.value)} placeholder="Crear nuevo EPP…" /></Campo>
+          {nuevoEpp && <Campo label="Vida útil (meses)"><Input type="number" min={0} className="w-28" value={vidaUtil} onChange={(e) => setVidaUtil(e.target.value)} /></Campo>}
+        </div>
+      )}
       {!nuevoEpp && <>
-        <Campo label="Colaborador"><SelectorColaborador value={colaboradorId} onChange={(id) => setColaboradorId(id)} /></Campo>
-        <Campo label="Elemento"><Select value={elementoEppId} onValueChange={setElementoEppId}><SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger><SelectContent>{epps.map((e) => <SelectItem key={e.id} value={e.id}>{e.nombre}</SelectItem>)}</SelectContent></Select></Campo>
-        <div className="grid grid-cols-2 gap-3"><Campo label="Cantidad"><Input type="number" value={cantidad} onChange={(e) => setCantidad(e.target.value)} /></Campo><Campo label="Fecha"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo></div>
+        <Campo label="Colaborador" obligatorio><SelectorColaborador value={colaboradorId} onChange={(id) => setColaboradorId(id)} /></Campo>
+        <Campo label="Elemento" obligatorio><Select value={elementoEppId} onValueChange={setElementoEppId}><SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger><SelectContent>{epps.map((e) => <SelectItem key={e.id} value={e.id}>{e.nombre}</SelectItem>)}</SelectContent></Select></Campo>
+        <div className="grid grid-cols-2 gap-3"><Campo label="Cantidad" obligatorio><Input type="number" min={1} value={cantidad} onChange={(e) => setCantidad(e.target.value)} /></Campo><Campo label="Fecha" obligatorio><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo></div>
         <label className="flex items-center gap-2 text-sm"><Checkbox checked={reposicion} onCheckedChange={(v) => setReposicion(Boolean(v))} /> Es reposición</label>
+        {inicial && <p className="text-xs text-muted-foreground">Al guardar se rehace la constancia de recibido (el trabajador aún no la ha firmado).</p>}
       </>}
     </div>
-    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}{nuevoEpp ? 'Crear EPP' : 'Entregar'}</Button></DialogFooter></DialogContent></Dialog>)
+    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}{inicial ? 'Guardar' : nuevoEpp ? 'Crear EPP' : 'Entregar'}</Button></DialogFooter></DialogContent></Dialog>)
 }
 
-function DialogPeligro({ sedes, onClose }: { sedes: { id: string; nombre: string }[]; onClose: () => void }) {
-  const router = useRouter(); const [f, setF] = useState<Record<string, string>>({ nivel: 'MEDIO' }); const [rutinaria, setRutinaria] = useState(true); const [g, setG] = useState(false)
+/** Corregir un elemento del catálogo de EPP (nombre y vida útil). */
+function DialogElementoEpp({ epp, onClose }: { epp: Props['epps'][number]; onClose: () => void }) {
+  const router = useRouter(); const [nombre, setNombre] = useState(epp.nombre); const [vidaUtil, setVidaUtil] = useState(epp.vidaUtilMeses != null ? String(epp.vidaUtilMeses) : ''); const [g, setG] = useState(false)
+  async function guardar() {
+    setG(true)
+    const res = await editarEpp({ id: epp.id, nombre: nombre.trim(), vidaUtilMeses: vidaUtil ? Number(vidaUtil) : undefined })
+    setG(false); if (res.ok) { toast.success('EPP actualizado.'); onClose(); router.refresh() } else toast.error(res.error)
+  }
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>Editar EPP</DialogTitle></DialogHeader>
+    <div className="space-y-4">
+      <Campo label="Nombre" obligatorio><Input value={nombre} onChange={(e) => setNombre(e.target.value)} /></Campo>
+      <Campo label="Vida útil (meses)"><Input type="number" min={0} value={vidaUtil} onChange={(e) => setVidaUtil(e.target.value)} /></Campo>
+      {epp.entregas > 0 && <p className="text-xs text-muted-foreground">Este elemento tiene {epp.entregas} entrega{epp.entregas === 1 ? '' : 's'} registrada{epp.entregas === 1 ? '' : 's'}; el cambio de nombre se verá en todas.</p>}
+    </div>
+    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g || nombre.trim().length < 2}>{g && <Spinner />}Guardar</Button></DialogFooter></DialogContent></Dialog>)
+}
+
+function DialogPeligro({ sedes, inicial, onClose }: { sedes: { id: string; nombre: string }[]; inicial?: Props['peligros'][number]; onClose: () => void }) {
+  const router = useRouter()
+  const [f, setF] = useState<Record<string, string>>({
+    nivel: inicial?.nivel ?? 'MEDIO', proceso: inicial?.proceso ?? '', peligro: inicial?.peligro ?? '', riesgo: inicial?.riesgo ?? '', controles: inicial?.controles ?? '',
+    sedeId: inicial?.sedeId ?? '', controlFuente: inicial?.controlFuente ?? '', controlMedio: inicial?.controlMedio ?? '', controlIndividuo: inicial?.controlIndividuo ?? '',
+    responsable: inicial?.responsable ?? '', fechaRevision: inicial?.fechaRevision ?? '',
+  })
+  const [rutinaria, setRutinaria] = useState(inicial?.rutinaria ?? true); const [g, setG] = useState(false)
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
   async function guardar() {
     setG(true)
-    const res = await crearPeligro({
+    const datos = {
       proceso: f.proceso ?? '', peligro: f.peligro ?? '', riesgo: f.riesgo ?? '', nivel: f.nivel as 'MEDIO', controles: f.controles,
       sedeId: f.sedeId, rutinaria, controlFuente: f.controlFuente, controlMedio: f.controlMedio, controlIndividuo: f.controlIndividuo,
       responsable: f.responsable, fechaRevision: f.fechaRevision,
-    })
-    setG(false); if (res.ok) { toast.success('Peligro registrado.'); onClose(); router.refresh() } else toast.error(res.error)
+    }
+    const res = inicial ? await editarPeligro({ id: inicial.id, ...datos }) : await crearPeligro(datos)
+    setG(false); if (res.ok) { toast.success(inicial ? 'Peligro actualizado.' : 'Peligro registrado.'); onClose(); router.refresh() } else toast.error(res.error)
   }
-  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Registrar peligro (matriz IPEVR — GTC 45)</DialogTitle></DialogHeader>
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{inicial ? 'Editar peligro (matriz IPEVR)' : 'Registrar peligro (matriz IPEVR — GTC 45)'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <Campo label="Proceso"><Input onChange={(e) => set('proceso', e.target.value)} /></Campo>
-        <Campo label="Sede"><Select value={f.sedeId ?? ''} onValueChange={(v) => set('sedeId', v)}><SelectTrigger className="w-full"><SelectValue placeholder="Todas" /></SelectTrigger><SelectContent>{sedes.map((s) => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)}</SelectContent></Select></Campo>
+        <Campo label="Proceso" obligatorio><Input value={f.proceso} onChange={(e) => set('proceso', e.target.value)} /></Campo>
+        <Campo label="Sede"><SelectorSede sedes={sedes} value={f.sedeId} onChange={(v) => set('sedeId', v)} /></Campo>
       </div>
-      <Campo label="Peligro"><Input onChange={(e) => set('peligro', e.target.value)} /></Campo>
-      <Campo label="Riesgo"><Input onChange={(e) => set('riesgo', e.target.value)} /></Campo>
+      <Campo label="Peligro" obligatorio><Input value={f.peligro} onChange={(e) => set('peligro', e.target.value)} /></Campo>
+      <Campo label="Riesgo" obligatorio><Input value={f.riesgo} onChange={(e) => set('riesgo', e.target.value)} /></Campo>
       <div className="grid grid-cols-2 gap-3">
-        <Campo label="Nivel"><Select value={f.nivel} onValueChange={(v) => set('nivel', v)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(NIVEL).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select></Campo>
+        <Campo label="Nivel" obligatorio><Select value={f.nivel} onValueChange={(v) => set('nivel', v)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(NIVEL).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select></Campo>
         <label className="flex items-center gap-2 self-end text-sm pb-2"><Checkbox checked={rutinaria} onCheckedChange={(v) => setRutinaria(Boolean(v))} /> Tarea rutinaria</label>
       </div>
-      <Campo label="Controles existentes (resumen)"><Textarea rows={2} onChange={(e) => set('controles', e.target.value)} /></Campo>
+      <Campo label="Controles existentes (resumen)"><Textarea rows={2} value={f.controles} onChange={(e) => set('controles', e.target.value)} /></Campo>
       <div className="grid grid-cols-3 gap-2">
-        <Campo label="Control en la fuente"><Input onChange={(e) => set('controlFuente', e.target.value)} /></Campo>
-        <Campo label="Control en el medio"><Input onChange={(e) => set('controlMedio', e.target.value)} /></Campo>
-        <Campo label="Control en el individuo (EPP)"><Input onChange={(e) => set('controlIndividuo', e.target.value)} /></Campo>
+        <Campo label="Control en la fuente"><Input value={f.controlFuente} onChange={(e) => set('controlFuente', e.target.value)} /></Campo>
+        <Campo label="Control en el medio"><Input value={f.controlMedio} onChange={(e) => set('controlMedio', e.target.value)} /></Campo>
+        <Campo label="Control en el individuo (EPP)"><Input value={f.controlIndividuo} onChange={(e) => set('controlIndividuo', e.target.value)} /></Campo>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Campo label="Responsable"><Input onChange={(e) => set('responsable', e.target.value)} /></Campo>
-        <Campo label="Fecha de revisión"><Input type="date" onChange={(e) => set('fechaRevision', e.target.value)} /></Campo>
+        <Campo label="Responsable"><Input value={f.responsable} onChange={(e) => set('responsable', e.target.value)} /></Campo>
+        <Campo label="Fecha de revisión"><Input type="date" value={f.fechaRevision} onChange={(e) => set('fechaRevision', e.target.value)} /></Campo>
       </div>
     </div>
-    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Registrar</Button></DialogFooter></DialogContent></Dialog>)
+    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}{inicial ? 'Guardar' : 'Registrar'}</Button></DialogFooter></DialogContent></Dialog>)
 }
 
-function DialogProfesiograma({ cargos, onClose }: { cargos: { id: string; nombre: string }[]; onClose: () => void }) {
-  const router = useRouter(); const [cargoId, setCargoId] = useState(''); const [f, setF] = useState<Record<string, string>>({}); const [g, setG] = useState(false)
+function DialogProfesiograma({ cargos, inicial, onClose }: { cargos: { id: string; nombre: string }[]; inicial?: Props['profesiogramas'][number]; onClose: () => void }) {
+  const router = useRouter(); const [cargoId, setCargoId] = useState(inicial?.cargoId ?? '')
+  const [f, setF] = useState<Record<string, string>>({
+    riesgosExpuestos: inicial?.riesgosExpuestos ?? '', examenesRequeridos: inicial?.examenesRequeridos ?? '', aptitudesRequeridas: inicial?.aptitudesRequeridas ?? '', restricciones: inicial?.restricciones ?? '',
+  })
+  const [g, setG] = useState(false)
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
   async function guardar() {
     if (!cargoId || !f.riesgosExpuestos?.trim() || !f.examenesRequeridos?.trim() || !f.aptitudesRequeridas?.trim()) { toast.error('Completa el cargo, riesgos, exámenes y aptitudes.'); return }
     setG(true)
     const res = await guardarProfesiograma({ cargoId, riesgosExpuestos: f.riesgosExpuestos, examenesRequeridos: f.examenesRequeridos, aptitudesRequeridas: f.aptitudesRequeridas, restricciones: f.restricciones })
-    setG(false); if (res.ok) { toast.success('Profesiograma guardado.'); onClose(); router.refresh() } else toast.error(res.error)
+    setG(false); if (res.ok) { toast.success(inicial ? 'Profesiograma actualizado.' : 'Profesiograma guardado.'); onClose(); router.refresh() } else toast.error(res.error)
   }
-  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Profesiograma por cargo</DialogTitle></DialogHeader>
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{inicial ? `Editar profesiograma · ${inicial.cargo}` : 'Profesiograma por cargo'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
-      <Campo label="Cargo"><Select value={cargoId} onValueChange={setCargoId}><SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger><SelectContent>{cargos.map((c) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}</SelectContent></Select></Campo>
-      <Campo label="Riesgos a los que está expuesto"><Textarea rows={2} value={f.riesgosExpuestos ?? ''} onChange={(e) => set('riesgosExpuestos', e.target.value)} /></Campo>
-      <Campo label="Exámenes médicos ocupacionales requeridos"><Textarea rows={2} value={f.examenesRequeridos ?? ''} onChange={(e) => set('examenesRequeridos', e.target.value)} /></Campo>
-      <Campo label="Aptitudes físicas/psicológicas requeridas"><Textarea rows={2} value={f.aptitudesRequeridas ?? ''} onChange={(e) => set('aptitudesRequeridas', e.target.value)} /></Campo>
-      <Campo label="Restricciones típicas del cargo (opcional)"><Textarea rows={2} value={f.restricciones ?? ''} onChange={(e) => set('restricciones', e.target.value)} /></Campo>
-      <p className="text-xs text-muted-foreground">Si el cargo ya tiene profesiograma, guardar lo actualiza.</p>
+      <Campo label="Cargo" obligatorio><Select value={cargoId} onValueChange={setCargoId} disabled={Boolean(inicial)}><SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger><SelectContent>{cargos.map((c) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}</SelectContent></Select></Campo>
+      <Campo label="Riesgos a los que está expuesto" obligatorio><Textarea rows={2} value={f.riesgosExpuestos ?? ''} onChange={(e) => set('riesgosExpuestos', e.target.value)} /></Campo>
+      <Campo label="Exámenes médicos ocupacionales requeridos" obligatorio><Textarea rows={2} value={f.examenesRequeridos ?? ''} onChange={(e) => set('examenesRequeridos', e.target.value)} /></Campo>
+      <Campo label="Aptitudes físicas/psicológicas requeridas" obligatorio><Textarea rows={2} value={f.aptitudesRequeridas ?? ''} onChange={(e) => set('aptitudesRequeridas', e.target.value)} /></Campo>
+      <Campo label="Restricciones típicas del cargo"><Textarea rows={2} value={f.restricciones ?? ''} onChange={(e) => set('restricciones', e.target.value)} /></Campo>
+      {!inicial && <p className="text-xs text-muted-foreground">Si el cargo ya tiene profesiograma, guardar lo actualiza.</p>}
     </div>
     <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Guardar</Button></DialogFooter></DialogContent></Dialog>)
 }
 
-function DialogInspeccion({ sedes, onClose }: { sedes: { id: string; nombre: string }[]; onClose: () => void }) {
-  const router = useRouter(); const [f, setF] = useState<Record<string, string>>({ tipo: 'Locativa', fecha: new Date().toISOString().slice(0, 10) }); const [g, setG] = useState(false)
+function DialogInspeccion({ sedes, inicial, onClose }: { sedes: { id: string; nombre: string }[]; inicial?: Props['inspecciones'][number]; onClose: () => void }) {
+  const router = useRouter()
+  const [f, setF] = useState<Record<string, string>>({
+    tipo: inicial?.tipo ?? 'Locativa', fecha: inicial?.fecha ?? new Date().toISOString().slice(0, 10), sedeId: inicial?.sedeId ?? '',
+    area: inicial?.area ?? '', hallazgos: inicial?.hallazgos ?? '', responsable: inicial?.responsable ?? '',
+  })
+  const [g, setG] = useState(false)
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
   async function guardar() {
     if (!f.hallazgos?.trim()) { toast.error('Describe los hallazgos.'); return }
     setG(true)
-    const res = await registrarInspeccion({ sedeId: f.sedeId, fecha: f.fecha, tipo: f.tipo, area: f.area, hallazgos: f.hallazgos, responsable: f.responsable })
-    setG(false); if (res.ok) { toast.success('Inspección registrada.'); onClose(); router.refresh() } else toast.error(res.error)
+    const datos = { sedeId: f.sedeId, fecha: f.fecha, tipo: f.tipo, area: f.area, hallazgos: f.hallazgos, responsable: f.responsable }
+    const res = inicial ? await editarInspeccion({ id: inicial.id, ...datos }) : await registrarInspeccion(datos)
+    setG(false); if (res.ok) { toast.success(inicial ? 'Inspección actualizada.' : 'Inspección registrada.'); onClose(); router.refresh() } else toast.error(res.error)
   }
-  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>Registrar inspección de seguridad</DialogTitle></DialogHeader>
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>{inicial ? 'Editar inspección de seguridad' : 'Registrar inspección de seguridad'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <Campo label="Tipo"><Input value={f.tipo} onChange={(e) => set('tipo', e.target.value)} placeholder="Locativa, extintores, equipos…" /></Campo>
-        <Campo label="Sede"><Select value={f.sedeId ?? ''} onValueChange={(v) => set('sedeId', v)}><SelectTrigger className="w-full"><SelectValue placeholder="Todas" /></SelectTrigger><SelectContent>{sedes.map((s) => <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>)}</SelectContent></Select></Campo>
+        <Campo label="Tipo" obligatorio><Input value={f.tipo} onChange={(e) => set('tipo', e.target.value)} placeholder="Locativa, extintores, equipos…" /></Campo>
+        <Campo label="Sede"><SelectorSede sedes={sedes} value={f.sedeId} onChange={(v) => set('sedeId', v)} /></Campo>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Campo label="Fecha"><Input type="date" value={f.fecha} onChange={(e) => set('fecha', e.target.value)} /></Campo>
-        <Campo label="Área"><Input onChange={(e) => set('area', e.target.value)} /></Campo>
+        <Campo label="Fecha" obligatorio><Input type="date" value={f.fecha} onChange={(e) => set('fecha', e.target.value)} /></Campo>
+        <Campo label="Área"><Input value={f.area} onChange={(e) => set('area', e.target.value)} /></Campo>
       </div>
-      <Campo label="Hallazgos"><Textarea rows={3} onChange={(e) => set('hallazgos', e.target.value)} /></Campo>
-      <Campo label="Responsable"><Input onChange={(e) => set('responsable', e.target.value)} /></Campo>
+      <Campo label="Hallazgos" obligatorio><Textarea rows={3} value={f.hallazgos} onChange={(e) => set('hallazgos', e.target.value)} /></Campo>
+      <Campo label="Responsable"><Input value={f.responsable} onChange={(e) => set('responsable', e.target.value)} /></Campo>
     </div>
-    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Registrar</Button></DialogFooter></DialogContent></Dialog>)
+    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}{inicial ? 'Guardar' : 'Registrar'}</Button></DialogFooter></DialogContent></Dialog>)
 }
 
-function DialogSeguimientoInspeccion({ inspeccion, onClose }: { inspeccion: Props['inspecciones'][number]; onClose: () => void }) {
+function DialogSeguimientoInspeccion({ inspeccion, onEditar, onEliminar, onClose }: { inspeccion: Props['inspecciones'][number]; onEditar?: () => void; onEliminar?: () => void; onClose: () => void }) {
   const router = useRouter(); const [fechaCierre, setFechaCierre] = useState(new Date().toISOString().slice(0, 10)); const [archivo, setArchivo] = useState<File | null>(null); const [g, setG] = useState(false)
 
   async function adjuntar() {
@@ -1033,7 +1279,9 @@ function DialogSeguimientoInspeccion({ inspeccion, onClose }: { inspeccion: Prop
         <p className="text-sm text-muted-foreground">Cerrada el {inspeccion.fechaCierre ? formatFechaCorta(new Date(inspeccion.fechaCierre)) : '—'}.</p>
       )}
     </div>
-    <DialogFooter>
+    <DialogFooter className="flex-wrap gap-2">
+      {onEliminar && <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={onEliminar}><Trash2 className="size-4" /> Eliminar</Button>}
+      {onEditar && <Button variant="ghost" onClick={onEditar}><Pencil className="size-4" /> Editar</Button>}
       <Button variant="ghost" onClick={onClose}>Cerrar</Button>
       {inspeccion.estado === 'ABIERTA' && <Button onClick={cerrar} disabled={g}>{g && <Spinner />}Marcar como resuelta</Button>}
     </DialogFooter>
@@ -1048,8 +1296,10 @@ type SubEmergencia = 'plan' | 'brigada' | 'simulacros'
  * ver una cosa a la vez, y cada alta en su diálogo en vez de formularios
  * sueltos en la página.
  */
-function Emergencias({ puedeCrear, sedes, planes, brigadistas, simulacros }: {
+function Emergencias({ puedeCrear, puedeEditar, puedeEliminar, sedes, planes, brigadistas, simulacros }: {
   puedeCrear: boolean
+  puedeEditar: boolean
+  puedeEliminar: boolean
   sedes: SedeOpcion[]
   planes: Props['planesEmergencia']
   brigadistas: Props['brigadistas']
@@ -1057,6 +1307,10 @@ function Emergencias({ puedeCrear, sedes, planes, brigadistas, simulacros }: {
 }) {
   const [sub, setSub] = useState<SubEmergencia>('plan')
   const [dialogo, setDialogo] = useState<SubEmergencia | null>(null)
+  const [planEditando, setPlanEditando] = useState<Props['planesEmergencia'][number] | null>(null)
+  const [brigadistaEditando, setBrigadistaEditando] = useState<Props['brigadistas'][number] | null>(null)
+  const [simulacroEditando, setSimulacroEditando] = useState<Props['simulacros'][number] | null>(null)
+  const [eliminando, setEliminando] = useState<Eliminacion | null>(null)
   const vigente = planes.find((pl) => !pl.vencido)
   const opciones: { k: SubEmergencia; titulo: string; n: number; aviso?: boolean }[] = [
     { k: 'plan', titulo: 'Plan', n: planes.length, aviso: !vigente },
@@ -1085,13 +1339,14 @@ function Emergencias({ puedeCrear, sedes, planes, brigadistas, simulacros }: {
         )}
       </div>
 
-      {sub === 'plan' && <ListaPlanes planes={planes} puedeCrear={puedeCrear} />}
-      {sub === 'brigada' && <ListaBrigada brigadistas={brigadistas} puedeCrear={puedeCrear} />}
-      {sub === 'simulacros' && <ListaSimulacros simulacros={simulacros} />}
+      {sub === 'plan' && <ListaPlanes planes={planes} puedeCrear={puedeCrear} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} onEditar={setPlanEditando} onEliminar={setEliminando} />}
+      {sub === 'brigada' && <ListaBrigada brigadistas={brigadistas} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} onEditar={setBrigadistaEditando} onEliminar={setEliminando} />}
+      {sub === 'simulacros' && <ListaSimulacros simulacros={simulacros} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} onEditar={setSimulacroEditando} onEliminar={setEliminando} />}
 
-      {dialogo === 'plan' && <DialogPlanEmergencia sedes={sedes} onClose={() => setDialogo(null)} />}
-      {dialogo === 'brigada' && <DialogBrigadista sedes={sedes} onClose={() => setDialogo(null)} />}
-      {dialogo === 'simulacros' && <DialogSimulacro sedes={sedes} onClose={() => setDialogo(null)} />}
+      {(dialogo === 'plan' || planEditando) && <DialogPlanEmergencia sedes={sedes} inicial={planEditando ?? undefined} onClose={() => { setDialogo(null); setPlanEditando(null) }} />}
+      {(dialogo === 'brigada' || brigadistaEditando) && <DialogBrigadista sedes={sedes} inicial={brigadistaEditando ?? undefined} onClose={() => { setDialogo(null); setBrigadistaEditando(null) }} />}
+      {(dialogo === 'simulacros' || simulacroEditando) && <DialogSimulacro sedes={sedes} inicial={simulacroEditando ?? undefined} onClose={() => { setDialogo(null); setSimulacroEditando(null) }} />}
+      {eliminando && <DialogEliminar {...eliminando} onClose={() => setEliminando(null)} />}
     </div>
   )
 }
@@ -1106,7 +1361,9 @@ function VacioEmergencia({ icono: Icono, titulo, texto }: { icono: typeof Flame;
   )
 }
 
-function ListaPlanes({ planes, puedeCrear }: { planes: Props['planesEmergencia']; puedeCrear: boolean }) {
+type AccionesLista<T> = { puedeEditar: boolean; puedeEliminar: boolean; onEditar: (item: T) => void; onEliminar: (e: Eliminacion) => void }
+
+function ListaPlanes({ planes, puedeCrear, puedeEditar, puedeEliminar, onEditar, onEliminar }: { planes: Props['planesEmergencia']; puedeCrear: boolean } & AccionesLista<Props['planesEmergencia'][number]>) {
   const router = useRouter()
   const [subiendo, setSubiendo] = useState<string | null>(null)
   async function adjuntar(planId: string, archivo: File) {
@@ -1142,18 +1399,18 @@ function ListaPlanes({ planes, puedeCrear }: { planes: Props['planesEmergencia']
               <input type="file" accept="application/pdf" className="sr-only" disabled={subiendo !== null} onChange={(e) => { const f = e.target.files?.[0]; if (f) adjuntar(pl.id, f) }} />
             </label>
           ) : <span className="text-xs text-muted-foreground">Sin documento</span>}
+          {puedeEditar && <BotonEditar onClick={() => onEditar(pl)} etiqueta="Editar plan" />}
+          {puedeEliminar && <BotonEliminar etiqueta="Eliminar plan" onClick={() => onEliminar({
+            titulo: 'Eliminar plan de emergencias', detalle: `Versión ${pl.version} · ${pl.sede ?? 'Todas las sedes'} · ${formatFechaCorta(new Date(pl.vigenciaDesde))} – ${formatFechaCorta(new Date(pl.vigenciaHasta))}`,
+            nota: 'Se borran también el PDF adjunto y la alerta de actualización.', eliminar: (motivo) => eliminarPlanEmergencia({ id: pl.id, motivo }),
+          })} />}
         </div>
       ))}
     </CardContent></Card>
   )
 }
 
-function ListaBrigada({ brigadistas, puedeCrear }: { brigadistas: Props['brigadistas']; puedeCrear: boolean }) {
-  const router = useRouter()
-  async function quitar(id: string) {
-    const res = await eliminarBrigadista({ id })
-    if (res.ok) { toast.success('Brigadista quitado.'); router.refresh() } else toast.error(res.error)
-  }
+function ListaBrigada({ brigadistas, puedeEditar, puedeEliminar, onEditar, onEliminar }: { brigadistas: Props['brigadistas'] } & AccionesLista<Props['brigadistas'][number]>) {
   if (brigadistas.length === 0) {
     return <VacioEmergencia icono={Users} titulo="Sin brigadistas" texto="La brigada atiende la emergencia mientras llega la ayuda: evacuación, primeros auxilios y control de incendios. Asigna al menos una persona por sede." />
   }
@@ -1166,16 +1423,18 @@ function ListaBrigada({ brigadistas, puedeCrear }: { brigadistas: Props['brigadi
             <p className="truncate text-sm font-medium">{b.colaborador}</p>
             <p className="truncate text-xs text-muted-foreground">{b.rol} · {b.sede ?? 'Todas las sedes'}</p>
           </div>
-          {puedeCrear && (
-            <Button size="icon" variant="ghost" onClick={() => quitar(b.id)} aria-label={`Quitar a ${b.colaborador} de la brigada`} title="Quitar de la brigada"><Trash2 className="size-4 text-destructive" /></Button>
-          )}
+          {puedeEditar && <BotonEditar onClick={() => onEditar(b)} etiqueta={`Editar a ${b.colaborador}`} />}
+          {puedeEliminar && <BotonEliminar etiqueta={`Retirar a ${b.colaborador} de la brigada`} onClick={() => onEliminar({
+            titulo: 'Retirar de la brigada', detalle: `${b.colaborador} · ${b.rol} · ${b.sede ?? 'Todas las sedes'}`,
+            eliminar: (motivo) => eliminarBrigadista({ id: b.id, motivo }), exito: 'Brigadista retirado.', verbo: 'Retirar',
+          })} />}
         </div>
       ))}
     </CardContent></Card>
   )
 }
 
-function ListaSimulacros({ simulacros }: { simulacros: Props['simulacros'] }) {
+function ListaSimulacros({ simulacros, puedeEditar, puedeEliminar, onEditar, onEliminar }: { simulacros: Props['simulacros'] } & AccionesLista<Props['simulacros'][number]>) {
   if (simulacros.length === 0) {
     return <VacioEmergencia icono={Siren} titulo="Sin simulacros" texto="Se recomienda al menos un simulacro al año por sede. Registra la fecha, los participantes y el acta como evidencia." />
   }
@@ -1192,6 +1451,11 @@ function ListaSimulacros({ simulacros }: { simulacros: Props['simulacros'] }) {
             {s.observaciones && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{s.observaciones}</p>}
           </div>
           {s.documentoId && <VisorPdf documentoId={s.documentoId} titulo="Acta del simulacro" className={buttonVariants({ size: 'sm', variant: 'outline' })}><Eye className="size-4" /> Acta</VisorPdf>}
+          {puedeEditar && <BotonEditar onClick={() => onEditar(s)} etiqueta="Editar simulacro" />}
+          {puedeEliminar && <BotonEliminar etiqueta="Eliminar simulacro" onClick={() => onEliminar({
+            titulo: 'Eliminar simulacro', detalle: `${s.tipo} · ${s.sede ?? 'Todas las sedes'} · ${formatFechaCorta(new Date(s.fecha))}`,
+            nota: s.documentoId ? 'Se borra también el acta adjunta.' : undefined, eliminar: (motivo) => eliminarSimulacro({ id: s.id, motivo }),
+          })} />}
         </div>
       ))}
     </CardContent></Card>
@@ -1212,20 +1476,20 @@ function SelectorSede({ sedes, value, onChange }: { sedes: SedeOpcion[]; value: 
   )
 }
 
-function DialogPlanEmergencia({ sedes, onClose }: { sedes: SedeOpcion[]; onClose: () => void }) {
+function DialogPlanEmergencia({ sedes, inicial, onClose }: { sedes: SedeOpcion[]; inicial?: Props['planesEmergencia'][number]; onClose: () => void }) {
   const router = useRouter()
-  const [f, setF] = useState({ version: '1', sedeId: '', vigenciaDesde: new Date().toISOString().slice(0, 10), vigenciaHasta: '' })
+  const [f, setF] = useState({ version: inicial?.version ?? '1', sedeId: inicial?.sedeId ?? '', vigenciaDesde: inicial?.vigenciaDesde ?? new Date().toISOString().slice(0, 10), vigenciaHasta: inicial?.vigenciaHasta ?? '' })
   const [g, setG] = useState(false)
   async function crear() {
     setG(true)
-    const res = await crearPlanEmergencia(f)
+    const res = inicial ? await editarPlanEmergencia({ id: inicial.id, ...f }) : await crearPlanEmergencia(f)
     setG(false)
     if (!res.ok) { toast.error(res.error); return }
-    toast.success('Plan de emergencias registrado. Adjunta el documento desde la lista.'); onClose(); router.refresh()
+    toast.success(inicial ? 'Plan de emergencias actualizado.' : 'Plan de emergencias registrado. Adjunta el documento desde la lista.'); onClose(); router.refresh()
   }
   return (
     <Dialog open onOpenChange={(o) => { if (!o && !g) onClose() }}><DialogContent>
-      <DialogHeader><DialogTitle>Nuevo plan de emergencias</DialogTitle></DialogHeader>
+      <DialogHeader><DialogTitle>{inicial ? 'Editar plan de emergencias' : 'Nuevo plan de emergencias'}</DialogTitle></DialogHeader>
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5"><Label>Versión <Obligatorio /></Label><Input value={f.version} onChange={(e) => setF({ ...f, version: e.target.value })} /></div>
@@ -1233,33 +1497,33 @@ function DialogPlanEmergencia({ sedes, onClose }: { sedes: SedeOpcion[]; onClose
           <div className="space-y-1.5"><Label>Vigente desde <Obligatorio /></Label><Input type="date" value={f.vigenciaDesde} onChange={(e) => setF({ ...f, vigenciaDesde: e.target.value })} /></div>
           <div className="space-y-1.5"><Label>Vigente hasta <Obligatorio /></Label><Input type="date" min={f.vigenciaDesde} value={f.vigenciaHasta} onChange={(e) => setF({ ...f, vigenciaHasta: e.target.value })} /></div>
         </div>
-        <p className="text-xs text-muted-foreground">Antes de que venza te llegará una alerta para actualizarlo.</p>
+        <p className="text-xs text-muted-foreground">{inicial ? 'La alerta de actualización se reprograma con la vigencia nueva.' : 'Antes de que venza te llegará una alerta para actualizarlo.'}</p>
       </div>
-      <DialogFooter><Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button><Button onClick={crear} disabled={g || !f.version.trim() || !f.vigenciaDesde || !f.vigenciaHasta}>{g && <Spinner />} Registrar</Button></DialogFooter>
+      <DialogFooter><Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button><Button onClick={crear} disabled={g || !f.version.trim() || !f.vigenciaDesde || !f.vigenciaHasta}>{g && <Spinner />} {inicial ? 'Guardar' : 'Registrar'}</Button></DialogFooter>
     </DialogContent></Dialog>
   )
 }
 
 const ROLES_BRIGADA = ['Evacuación', 'Primeros auxilios', 'Control de incendios', 'Coordinador de brigada']
 
-function DialogBrigadista({ sedes, onClose }: { sedes: SedeOpcion[]; onClose: () => void }) {
+function DialogBrigadista({ sedes, inicial, onClose }: { sedes: SedeOpcion[]; inicial?: Props['brigadistas'][number]; onClose: () => void }) {
   const router = useRouter()
-  const [colaboradorId, setColaboradorId] = useState('')
-  const [rol, setRol] = useState('')
-  const [sedeId, setSedeId] = useState('')
+  const [colaboradorId, setColaboradorId] = useState(inicial?.colaboradorId ?? '')
+  const [rol, setRol] = useState(inicial?.rol ?? '')
+  const [sedeId, setSedeId] = useState(inicial?.sedeId ?? '')
   const [g, setG] = useState(false)
   async function agregar() {
     setG(true)
-    const res = await agregarBrigadista({ colaboradorId, sedeId, rol: rol.trim() })
+    const res = inicial ? await editarBrigadista({ id: inicial.id, sedeId, rol: rol.trim() }) : await agregarBrigadista({ colaboradorId, sedeId, rol: rol.trim() })
     setG(false)
     if (!res.ok) { toast.error(res.error); return }
-    toast.success('Brigadista agregado.'); onClose(); router.refresh()
+    toast.success(inicial ? 'Brigadista actualizado.' : 'Brigadista agregado.'); onClose(); router.refresh()
   }
   return (
     <Dialog open onOpenChange={(o) => { if (!o && !g) onClose() }}><DialogContent>
-      <DialogHeader><DialogTitle>Agregar brigadista</DialogTitle></DialogHeader>
+      <DialogHeader><DialogTitle>{inicial ? `Editar brigadista · ${inicial.colaborador}` : 'Agregar brigadista'}</DialogTitle></DialogHeader>
       <div className="space-y-4">
-        <div className="space-y-1.5"><Label>Colaborador <Obligatorio /></Label><SelectorColaborador value={colaboradorId} onChange={setColaboradorId} /></div>
+        {!inicial && <div className="space-y-1.5"><Label>Colaborador <Obligatorio /></Label><SelectorColaborador value={colaboradorId} onChange={setColaboradorId} /></div>}
         <div className="space-y-1.5">
           <Label>Rol <Obligatorio /></Label>
           <div className="flex flex-wrap gap-1.5">
@@ -1271,21 +1535,25 @@ function DialogBrigadista({ sedes, onClose }: { sedes: SedeOpcion[]; onClose: ()
         </div>
         <div className="space-y-1.5"><Label>Sede</Label><SelectorSede sedes={sedes} value={sedeId} onChange={setSedeId} /></div>
       </div>
-      <DialogFooter><Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button><Button onClick={agregar} disabled={g || !colaboradorId || rol.trim().length < 2}>{g && <Spinner />} Agregar</Button></DialogFooter>
+      <DialogFooter><Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button><Button onClick={agregar} disabled={g || (!inicial && !colaboradorId) || rol.trim().length < 2}>{g && <Spinner />} {inicial ? 'Guardar' : 'Agregar'}</Button></DialogFooter>
     </DialogContent></Dialog>
   )
 }
 
-function DialogSimulacro({ sedes, onClose }: { sedes: SedeOpcion[]; onClose: () => void }) {
+function DialogSimulacro({ sedes, inicial, onClose }: { sedes: SedeOpcion[]; inicial?: Props['simulacros'][number]; onClose: () => void }) {
   const router = useRouter()
-  const [f, setF] = useState({ tipo: 'Evacuación', fecha: new Date().toISOString().slice(0, 10), sedeId: '', participantes: '', observaciones: '' })
+  const [f, setF] = useState({
+    tipo: inicial?.tipo ?? 'Evacuación', fecha: inicial?.fecha ?? new Date().toISOString().slice(0, 10), sedeId: inicial?.sedeId ?? '',
+    participantes: inicial?.participantes != null ? String(inicial.participantes) : '', observaciones: inicial?.observaciones ?? '',
+  })
   const [archivo, setArchivo] = useState<File | null>(null)
   const [g, setG] = useState(false)
   async function registrar() {
     setG(true)
-    const res = await registrarSimulacro({ sedeId: f.sedeId, fecha: f.fecha, tipo: f.tipo.trim(), participantes: f.participantes ? Number(f.participantes) : undefined, observaciones: f.observaciones.trim() || undefined })
+    const datos = { sedeId: f.sedeId, fecha: f.fecha, tipo: f.tipo.trim(), participantes: f.participantes ? Number(f.participantes) : undefined, observaciones: f.observaciones.trim() || undefined }
+    const res = inicial ? await editarSimulacro({ id: inicial.id, ...datos }) : await registrarSimulacro(datos)
     if (!res.ok) { setG(false); toast.error(res.error); return }
-    const simulacroId = (res.datos as { id: string }).id
+    const simulacroId = inicial ? inicial.id : (res.datos as { id: string }).id
     if (archivo) {
       try {
         const fd = new FormData()
@@ -1295,14 +1563,14 @@ function DialogSimulacro({ sedes, onClose }: { sedes: SedeOpcion[]; onClose: () 
         fd.append('nombre', `Acta simulacro ${f.tipo}`)
         const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
         if (up.ok) { const { id: documentoId } = await up.json(); await vincularDocumentoSimulacro({ simulacroId, documentoId }) }
-        else toast.warning('El simulacro se registró, pero el acta no se pudo adjuntar.')
-      } catch { toast.warning('El simulacro se registró, pero el acta no se pudo adjuntar.') }
+        else toast.warning('El simulacro se guardó, pero el acta no se pudo adjuntar.')
+      } catch { toast.warning('El simulacro se guardó, pero el acta no se pudo adjuntar.') }
     }
-    setG(false); toast.success('Simulacro registrado.'); onClose(); router.refresh()
+    setG(false); toast.success(inicial ? 'Simulacro actualizado.' : 'Simulacro registrado.'); onClose(); router.refresh()
   }
   return (
     <Dialog open onOpenChange={(o) => { if (!o && !g) onClose() }}><DialogContent className="max-h-[90dvh] overflow-y-auto">
-      <DialogHeader><DialogTitle>Registrar simulacro</DialogTitle></DialogHeader>
+      <DialogHeader><DialogTitle>{inicial ? 'Editar simulacro' : 'Registrar simulacro'}</DialogTitle></DialogHeader>
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5"><Label>Tipo <Obligatorio /></Label><Input value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })} placeholder="Evacuación, sismo, incendio…" /></div>
@@ -1312,22 +1580,25 @@ function DialogSimulacro({ sedes, onClose }: { sedes: SedeOpcion[]; onClose: () 
         </div>
         <div className="space-y-1.5"><Label>Observaciones</Label><Textarea rows={2} value={f.observaciones} onChange={(e) => setF({ ...f, observaciones: e.target.value })} placeholder="Tiempo de evacuación, lo que salió bien y lo que hay que mejorar" /></div>
         <div className="space-y-1.5">
-          <Label>Acta del simulacro</Label>
+          <Label>{inicial?.documentoId ? 'Reemplazar acta del simulacro' : 'Acta del simulacro'}</Label>
           <label className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'max-w-full cursor-pointer')}>
             <Paperclip className="size-4" /> <span className="truncate">{archivo ? archivo.name : 'Adjuntar PDF o foto'}</span>
             <input type="file" accept="image/*,application/pdf" className="sr-only" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />
           </label>
         </div>
       </div>
-      <DialogFooter><Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button><Button onClick={registrar} disabled={g || f.tipo.trim().length < 2 || !f.fecha}>{g && <Spinner />} Registrar</Button></DialogFooter>
+      <DialogFooter><Button variant="ghost" onClick={onClose} disabled={g}>Cancelar</Button><Button onClick={registrar} disabled={g || f.tipo.trim().length < 2 || !f.fecha}>{g && <Spinner />} {inicial ? 'Guardar' : 'Registrar'}</Button></DialogFooter>
     </DialogContent></Dialog>
   )
 }
 
-function DialogIndicadorSst({ onClose }: { onClose: () => void }) {
+function DialogIndicadorSst({ inicial, onClose }: { inicial?: Props['indicadores'][number]; onClose: () => void }) {
   const router = useRouter()
   const hoy = new Date()
-  const [f, setF] = useState<Record<string, string>>({ anio: String(hoy.getFullYear()), mes: String(hoy.getMonth() + 1) })
+  const [f, setF] = useState<Record<string, string>>({
+    anio: String(inicial?.anio ?? hoy.getFullYear()), mes: String(inicial?.mes ?? hoy.getMonth() + 1),
+    numTrabajadores: inicial ? String(inicial.numTrabajadores) : '', horasHombre: inicial ? String(inicial.horasHombre) : '', diasAusentismo: inicial ? String(inicial.diasAusentismo) : '',
+  })
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
   const [g, setG] = useState(false)
 
@@ -1338,37 +1609,46 @@ function DialogIndicadorSst({ onClose }: { onClose: () => void }) {
       anio: Number(f.anio), mes: Number(f.mes), numTrabajadores: Number(f.numTrabajadores),
       horasHombre: Number(f.horasHombre), diasAusentismo: Number(f.diasAusentismo || 0),
     })
-    setG(false); if (res.ok) { toast.success('Indicador mensual guardado.'); onClose(); router.refresh() } else toast.error(res.error)
+    setG(false); if (res.ok) { toast.success(inicial ? 'Indicador mensual actualizado.' : 'Indicador mensual guardado.'); onClose(); router.refresh() } else toast.error(res.error)
   }
 
-  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>Registrar indicador mensual</DialogTitle></DialogHeader>
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>{inicial ? 'Editar indicador mensual' : 'Registrar indicador mensual'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <Campo label="Año"><Input type="number" value={f.anio} onChange={(e) => set('anio', e.target.value)} /></Campo>
-        <Campo label="Mes"><Select value={f.mes} onValueChange={(v) => set('mes', v)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <SelectItem key={m} value={String(m)}>{m}</SelectItem>)}</SelectContent></Select></Campo>
+        <Campo label="Año" obligatorio><Input type="number" value={f.anio} onChange={(e) => set('anio', e.target.value)} disabled={Boolean(inicial)} /></Campo>
+        <Campo label="Mes" obligatorio><Select value={f.mes} onValueChange={(v) => set('mes', v)} disabled={Boolean(inicial)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <SelectItem key={m} value={String(m)}>{m}</SelectItem>)}</SelectContent></Select></Campo>
       </div>
-      <Campo label="N.° de trabajadores del periodo"><Input type="number" onChange={(e) => set('numTrabajadores', e.target.value)} /></Campo>
-      <Campo label="Horas-hombre trabajadas en el mes"><Input type="number" onChange={(e) => set('horasHombre', e.target.value)} /></Campo>
-      <Campo label="Días de ausentismo (incapacidad + permisos no vacacionales)"><Input type="number" onChange={(e) => set('diasAusentismo', e.target.value)} /></Campo>
+      <Campo label="N.° de trabajadores del periodo" obligatorio><Input type="number" value={f.numTrabajadores} onChange={(e) => set('numTrabajadores', e.target.value)} /></Campo>
+      <Campo label="Horas-hombre trabajadas en el mes" obligatorio><Input type="number" value={f.horasHombre} onChange={(e) => set('horasHombre', e.target.value)} /></Campo>
+      <Campo label="Días de ausentismo (incapacidad + permisos no vacacionales)"><Input type="number" value={f.diasAusentismo} onChange={(e) => set('diasAusentismo', e.target.value)} /></Campo>
       <p className="text-xs text-muted-foreground">Los accidentes y días perdidos del mes se toman automáticamente de lo ya reportado en la pestaña Accidentes.</p>
     </div>
     <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Guardar</Button></DialogFooter></DialogContent></Dialog>)
 }
 
-function DialogAutoeval({ onClose }: { onClose: () => void }) {
-  const router = useRouter(); const [f, setF] = useState<Record<string, string>>({ anio: String(new Date().getUTCFullYear()), nivelEstandar: '60' }); const [g, setG] = useState(false)
+function DialogAutoeval({ inicial, onClose }: { inicial?: NonNullable<Props['autoeval']>; onClose: () => void }) {
+  const router = useRouter()
+  const [f, setF] = useState<Record<string, string>>({
+    anio: String(inicial?.anio ?? new Date().getUTCFullYear()), nivelEstandar: String(inicial?.nivelEstandar ?? 60),
+    puntaje: inicial ? String(inicial.puntaje) : '', planMejora: inicial?.planMejora ?? '',
+  })
+  const [g, setG] = useState(false)
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
-  async function guardar() { setG(true); const res = await registrarAutoevaluacion({ anio: Number(f.anio), puntaje: Number(f.puntaje || 0), nivelEstandar: Number(f.nivelEstandar), planMejora: f.planMejora }); setG(false); if (res.ok) { toast.success('Autoevaluación registrada.'); onClose(); router.refresh() } else toast.error(res.error) }
-  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>Autoevaluación de estándares mínimos</DialogTitle></DialogHeader>
+  async function guardar() {
+    setG(true)
+    const res = await registrarAutoevaluacion({ anio: Number(f.anio), puntaje: Number(f.puntaje || 0), nivelEstandar: Number(f.nivelEstandar), planMejora: f.planMejora })
+    setG(false); if (res.ok) { toast.success(inicial ? 'Autoevaluación actualizada.' : 'Autoevaluación registrada.'); onClose(); router.refresh() } else toast.error(res.error)
+  }
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>{inicial ? `Editar autoevaluación ${inicial.anio}` : 'Autoevaluación de estándares mínimos'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
-        <Campo label="Año"><Input type="number" value={f.anio} onChange={(e) => set('anio', e.target.value)} /></Campo>
-        <Campo label="Puntaje"><Input type="number" onChange={(e) => set('puntaje', e.target.value)} /></Campo>
-        <Campo label="Estándares"><Select value={f.nivelEstandar} onValueChange={(v) => set('nivelEstandar', v)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="7">7</SelectItem><SelectItem value="21">21</SelectItem><SelectItem value="60">60</SelectItem></SelectContent></Select></Campo>
+        <Campo label="Año" obligatorio><Input type="number" value={f.anio} onChange={(e) => set('anio', e.target.value)} disabled={Boolean(inicial)} /></Campo>
+        <Campo label="Puntaje" obligatorio><Input type="number" value={f.puntaje} onChange={(e) => set('puntaje', e.target.value)} /></Campo>
+        <Campo label="Estándares" obligatorio><Select value={f.nivelEstandar} onValueChange={(v) => set('nivelEstandar', v)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="7">7</SelectItem><SelectItem value="21">21</SelectItem><SelectItem value="60">60</SelectItem></SelectContent></Select></Campo>
       </div>
-      <Campo label="Plan de mejora"><Textarea rows={3} onChange={(e) => set('planMejora', e.target.value)} /></Campo>
+      <Campo label="Plan de mejora"><Textarea rows={3} value={f.planMejora} onChange={(e) => set('planMejora', e.target.value)} /></Campo>
     </div>
-    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Registrar</Button></DialogFooter></DialogContent></Dialog>)
+    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}{inicial ? 'Guardar' : 'Registrar'}</Button></DialogFooter></DialogContent></Dialog>)
 }
 
 // ── Estructura del SG-SST ───────────────────────────────────────────────────
@@ -1387,8 +1667,9 @@ async function subirDoc(archivo: File, entidadTipo: string, entidadId: string, n
   } catch { return null }
 }
 
-function EstructuraSgsst({ estructura, puedeEditar }: { estructura: Props['estructura']; puedeEditar: boolean }) {
-  const [dialogo, setDialogo] = useState<'politica' | 'responsable' | 'plan' | null>(null)
+function EstructuraSgsst({ estructura, puedeEditar, puedeEliminar }: { estructura: Props['estructura']; puedeEditar: boolean; puedeEliminar: boolean }) {
+  const [dialogo, setDialogo] = useState<'politica' | 'responsable' | 'responsable-editar' | 'plan' | null>(null)
+  const [eliminando, setEliminando] = useState<Eliminacion | null>(null)
   const e = estructura
   return (
     <div className="space-y-3">
@@ -1424,6 +1705,12 @@ function EstructuraSgsst({ estructura, puedeEditar }: { estructura: Props['estru
         </div>
         <Pill tone={e.responsable ? (e.responsable.cartaDocId ? 'ok' : 'warn') : 'bad'}>{e.responsable ? (e.responsable.cartaDocId ? 'Designado' : 'Sin carta') : 'Falta'}</Pill>
         {puedeEditar && <Button size="sm" onClick={() => setDialogo('responsable')}>{e.responsable ? 'Cambiar' : 'Designar'}</Button>}
+        {puedeEditar && e.responsable && <BotonEditar onClick={() => setDialogo('responsable-editar')} etiqueta="Editar designación (fecha, licencia, horas)" />}
+        {puedeEliminar && e.responsable && <BotonEliminar etiqueta="Anular designación" onClick={() => setEliminando({
+          titulo: 'Anular designación del responsable', detalle: `${e.responsable!.colaborador} · designado el ${formatFechaCorta(new Date(e.responsable!.fechaDesignacion))}`,
+          nota: 'Se borra la carta adjunta. Si había una designación anterior, vuelve a quedar vigente.',
+          eliminar: (motivo) => eliminarResponsableSgsst({ id: e.responsable!.id, motivo }), exito: 'Designación anulada.', verbo: 'Anular',
+        })} />}
       </CardContent></Card>
 
       <Card><CardContent className="flex flex-wrap items-center gap-3 py-4">
@@ -1442,11 +1729,17 @@ function EstructuraSgsst({ estructura, puedeEditar }: { estructura: Props['estru
         </div>
         <Pill tone={e.plan ? (e.plan.documentoId ? 'ok' : 'warn') : 'bad'}>{e.plan ? (e.plan.documentoId ? 'Registrado' : 'Sin PDF') : 'Falta'}</Pill>
         {puedeEditar && <Button size="sm" onClick={() => setDialogo('plan')}>{e.plan ? 'Actualizar' : 'Registrar'}</Button>}
+        {puedeEliminar && e.plan && <BotonEliminar etiqueta="Eliminar plan de trabajo" onClick={() => setEliminando({
+          titulo: 'Eliminar plan de trabajo anual', detalle: `Plan ${e.plan!.anio} · avance ${e.plan!.avancePct}%`,
+          nota: e.plan!.documentoId ? 'Se borra también el PDF adjunto.' : undefined, eliminar: (motivo) => eliminarPlanTrabajoSst({ id: e.plan!.id, motivo }),
+        })} />}
       </CardContent></Card>
 
       {dialogo === 'politica' && <DialogPolitica politicas={e.politicasDisponibles} onClose={() => setDialogo(null)} />}
       {dialogo === 'responsable' && <DialogResponsable onClose={() => setDialogo(null)} />}
+      {dialogo === 'responsable-editar' && e.responsable && <DialogResponsable inicial={e.responsable} onClose={() => setDialogo(null)} />}
       {dialogo === 'plan' && <DialogPlanTrabajo plan={e.plan} anioActual={e.anioActual} onClose={() => setDialogo(null)} />}
+      {eliminando && <DialogEliminar {...eliminando} onClose={() => setEliminando(null)} />}
     </div>
   )
 }
@@ -1478,41 +1771,42 @@ function DialogPolitica({ politicas, onClose }: { politicas: Props['estructura']
     <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g || politicas.length === 0}>{g && <Spinner />}Vincular</Button></DialogFooter></DialogContent></Dialog>)
 }
 
-function DialogResponsable({ onClose }: { onClose: () => void }) {
+function DialogResponsable({ inicial, onClose }: { inicial?: NonNullable<Props['estructura']['responsable']>; onClose: () => void }) {
   const router = useRouter()
   const [colaboradorId, setColaboradorId] = useState('')
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
-  const [licencia, setLicencia] = useState('')
-  const [horas, setHoras] = useState('')
+  const [fecha, setFecha] = useState(inicial?.fechaDesignacion ?? new Date().toISOString().slice(0, 10))
+  const [licencia, setLicencia] = useState(inicial?.licenciaSst ?? '')
+  const [horas, setHoras] = useState(inicial?.cursoHoras != null ? String(inicial.cursoHoras) : '')
   const [carta, setCarta] = useState<File | null>(null)
   const [g, setG] = useState(false)
   async function guardar() {
-    if (!colaboradorId) { toast.error('Selecciona el colaborador.'); return }
+    if (!inicial && !colaboradorId) { toast.error('Selecciona el colaborador.'); return }
     setG(true)
-    const res = await designarResponsableSgsst({ colaboradorId, fechaDesignacion: fecha, licenciaSst: licencia || undefined, cursoHoras: horas ? Number(horas) : undefined })
+    const comunes = { fechaDesignacion: fecha, licenciaSst: licencia || undefined, cursoHoras: horas ? Number(horas) : undefined }
+    const res = inicial ? await editarResponsableSgsst({ id: inicial.id, ...comunes }) : await designarResponsableSgsst({ colaboradorId, ...comunes })
     if (!res.ok) { setG(false); toast.error(res.error); return }
-    const responsableId = (res.datos as { id: string }).id
+    const responsableId = inicial ? inicial.id : (res.datos as { id: string }).id
     if (carta) {
       const docId = await subirDoc(carta, 'ResponsableSgsst', responsableId, 'Carta de designación SG-SST')
       if (docId) await vincularCartaResponsable({ responsableId, documentoId: docId })
       else toast.warning('La designación quedó registrada, pero la carta no se pudo adjuntar.')
     }
-    setG(false); toast.success('Responsable del SG-SST designado.'); onClose(); router.refresh()
+    setG(false); toast.success(inicial ? 'Designación actualizada.' : 'Responsable del SG-SST designado.'); onClose(); router.refresh()
   }
-  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Designar responsable del SG-SST</DialogTitle></DialogHeader>
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{inicial ? `Editar designación · ${inicial.colaborador}` : 'Designar responsable del SG-SST'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
-      <Campo label="Colaborador"><SelectorColaborador value={colaboradorId} onChange={setColaboradorId} /></Campo>
+      {!inicial && <Campo label="Colaborador" obligatorio><SelectorColaborador value={colaboradorId} onChange={setColaboradorId} /></Campo>}
       <div className="grid grid-cols-2 gap-3">
-        <Campo label="Fecha de designación"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
+        <Campo label="Fecha de designación" obligatorio><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
         <Campo label="Curso virtual (horas)"><Select value={horas} onValueChange={setHoras}><SelectTrigger className="w-full"><SelectValue placeholder="—" /></SelectTrigger><SelectContent><SelectItem value="20">20 horas</SelectItem><SelectItem value="50">50 horas</SelectItem></SelectContent></Select></Campo>
       </div>
       <Campo label="Licencia en SST (si aplica)"><Input value={licencia} onChange={(e) => setLicencia(e.target.value)} placeholder="Nro. de licencia" /></Campo>
-      <Campo label="Carta de designación firmada (PDF/foto)">
+      <Campo label={inicial?.cartaDocId ? 'Reemplazar carta de designación (PDF/foto)' : 'Carta de designación firmada (PDF/foto)'}>
         <input type="file" accept="image/*,application/pdf" onChange={(e) => setCarta(e.target.files?.[0] ?? null)} className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground" />
       </Campo>
-      <p className="text-xs text-muted-foreground">La designación anterior queda en el histórico (se desactiva automáticamente).</p>
+      {!inicial && <p className="text-xs text-muted-foreground">La designación anterior queda en el histórico (se desactiva automáticamente).</p>}
     </div>
-    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Designar</Button></DialogFooter></DialogContent></Dialog>)
+    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}{inicial ? 'Guardar' : 'Designar'}</Button></DialogFooter></DialogContent></Dialog>)
 }
 
 function DialogPlanTrabajo({ plan, anioActual, onClose }: { plan: Props['estructura']['plan']; anioActual: number; onClose: () => void }) {
@@ -1552,7 +1846,7 @@ function DialogPlanTrabajo({ plan, anioActual, onClose }: { plan: Props['estruct
 
 // ── Matriz legal (normograma) ───────────────────────────────────────────────
 
-function DialogNorma({ norma, puedeEditar = true, onClose }: { norma?: Props['normas'][number]; puedeEditar?: boolean; onClose: () => void }) {
+function DialogNorma({ norma, puedeEditar = true, puedeEliminar = false, onClose }: { norma?: Props['normas'][number]; puedeEditar?: boolean; puedeEliminar?: boolean; onClose: () => void }) {
   const router = useRouter()
   const [f, setF] = useState<Record<string, string>>({
     norma: norma?.norma ?? '', emisor: norma?.emisor ?? '', tema: norma?.tema ?? '', articulos: norma?.articulos ?? '',
@@ -1560,6 +1854,7 @@ function DialogNorma({ norma, puedeEditar = true, onClose }: { norma?: Props['no
   })
   const [archivo, setArchivo] = useState<File | null>(null)
   const [g, setG] = useState(false)
+  const [retirando, setRetirando] = useState(false)
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
   const soloLectura = !puedeEditar
 
@@ -1579,19 +1874,13 @@ function DialogNorma({ norma, puedeEditar = true, onClose }: { norma?: Props['no
     setG(false); toast.success('Norma guardada.'); onClose(); router.refresh()
   }
 
-  async function eliminar() {
-    if (!norma) return
-    const res = await eliminarNormaMatrizLegal({ id: norma.id })
-    if (res.ok) { toast.success('Norma retirada de la matriz.'); onClose(); router.refresh() } else toast.error(res.error)
-  }
-
   return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{norma ? 'Norma de la matriz legal' : 'Agregar norma'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <Campo label="Norma"><Input value={f.norma} onChange={(e) => set('norma', e.target.value)} placeholder="Decreto 1072 de 2015" disabled={soloLectura} /></Campo>
+        <Campo label="Norma" obligatorio={!soloLectura}><Input value={f.norma} onChange={(e) => set('norma', e.target.value)} placeholder="Decreto 1072 de 2015" disabled={soloLectura} /></Campo>
         <Campo label="Emisor"><Input value={f.emisor} onChange={(e) => set('emisor', e.target.value)} placeholder="Ministerio del Trabajo" disabled={soloLectura} /></Campo>
       </div>
-      <Campo label="Tema / qué regula"><Textarea rows={2} value={f.tema} onChange={(e) => set('tema', e.target.value)} disabled={soloLectura} /></Campo>
+      <Campo label="Tema / qué regula" obligatorio={!soloLectura}><Textarea rows={2} value={f.tema} onChange={(e) => set('tema', e.target.value)} disabled={soloLectura} /></Campo>
       <div className="grid grid-cols-2 gap-3">
         <Campo label="Artículos aplicables"><Input value={f.articulos} onChange={(e) => set('articulos', e.target.value)} disabled={soloLectura} /></Campo>
         <Campo label="Cumplimiento"><Select value={f.cumplimiento} onValueChange={(v) => set('cumplimiento', v)} disabled={soloLectura}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(CUMPLIMIENTO).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select></Campo>
@@ -1608,17 +1897,30 @@ function DialogNorma({ norma, puedeEditar = true, onClose }: { norma?: Props['no
       )}
     </div>
     <DialogFooter className="gap-2">
-      {norma && !soloLectura && <Button variant="ghost" className="text-destructive" onClick={eliminar}>Retirar</Button>}
+      {norma && puedeEliminar && <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setRetirando(true)}><Trash2 className="size-4" /> Retirar</Button>}
       <Button variant="ghost" onClick={onClose}>Cerrar</Button>
       {!soloLectura && <Button onClick={guardar} disabled={g || !f.norma || !f.tema}>{g && <Spinner />}Guardar</Button>}
-    </DialogFooter></DialogContent></Dialog>)
+    </DialogFooter>
+    {retirando && norma && (
+      <DialogEliminar
+        titulo="Retirar norma de la matriz" detalle={`${norma.norma} · ${norma.tema}`} verbo="Retirar"
+        nota="La norma deja de verse en la matriz; queda en el histórico con el motivo."
+        eliminar={(motivo) => eliminarNormaMatrizLegal({ id: norma.id, motivo })}
+        onExito={() => { toast.success('Norma retirada de la matriz.'); onClose() }}
+        onClose={() => setRetirando(false)}
+      />
+    )}
+  </DialogContent></Dialog>)
 }
 
 // ── Autoevaluación + plan de mejoramiento (Res. 0312 art. 28) ───────────────
 
-function PanelAutoeval({ autoeval, puedeEditar }: { autoeval: Props['autoeval']; puedeEditar: boolean }) {
+function PanelAutoeval({ autoeval, puedeEditar, puedeEliminar }: { autoeval: Props['autoeval']; puedeEditar: boolean; puedeEliminar: boolean }) {
   const router = useRouter()
   const [dialogoAccion, setDialogoAccion] = useState(false)
+  const [editandoAutoeval, setEditandoAutoeval] = useState(false)
+  const [accionEditando, setAccionEditando] = useState<NonNullable<Props['autoeval']>['acciones'][number] | null>(null)
+  const [eliminando, setEliminando] = useState<Eliminacion | null>(null)
   const [subiendoPlan, setSubiendoPlan] = useState(false)
 
   async function adjuntarPlan(archivo: File) {
@@ -1647,11 +1949,6 @@ function PanelAutoeval({ autoeval, puedeEditar }: { autoeval: Props['autoeval'];
     } else toast.error('No se pudo adjuntar la evidencia.')
   }
 
-  async function eliminar(id: string) {
-    const res = await eliminarAccionMejora({ id })
-    if (res.ok) { toast.success('Acción eliminada.'); router.refresh() } else toast.error(res.error)
-  }
-
   if (!autoeval) return <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Sin autoevaluación registrada. Usa “Nuevo” para registrarla.</CardContent></Card>
 
   const cumplidas = autoeval.acciones.filter((a) => a.cumplida).length
@@ -1672,6 +1969,12 @@ function PanelAutoeval({ autoeval, puedeEditar }: { autoeval: Props['autoeval'];
             <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) adjuntarPlan(f) }} />
           </label>
         )}
+        {puedeEditar && <BotonEditar onClick={() => setEditandoAutoeval(true)} etiqueta="Editar autoevaluación" />}
+        {puedeEliminar && <BotonEliminar etiqueta="Eliminar autoevaluación" onClick={() => setEliminando({
+          titulo: 'Eliminar autoevaluación', detalle: `Año ${autoeval.anio} · ${autoeval.puntaje}% (${autoeval.nivelEstandar} estándares)`,
+          nota: `Se borran también sus ${autoeval.acciones.length} acción${autoeval.acciones.length === 1 ? '' : 'es'} de mejora con evidencias y alertas, y el PDF del plan.`,
+          eliminar: (motivo) => eliminarAutoevaluacion({ id: autoeval.id, motivo }),
+        })} />}
       </CardContent></Card>
 
       <div className="flex items-center justify-between gap-2">
@@ -1704,110 +2007,120 @@ function PanelAutoeval({ autoeval, puedeEditar }: { autoeval: Props['autoeval'];
                     <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) adjuntarEvidencia(a.id, f) }} />
                   </label>
                 )}
-                {puedeEditar && !a.cumplida && (
-                  <button type="button" onClick={() => eliminar(a.id)} className="text-xs text-destructive hover:underline">Eliminar</button>
-                )}
               </div>
             </div>
             {a.vencida && <Pill tone="bad">Vencida</Pill>}
             {a.cumplida && <Pill tone="ok">Cumplida</Pill>}
+            {puedeEditar && <BotonEditar onClick={() => setAccionEditando(a)} etiqueta="Editar acción" />}
+            {puedeEliminar && <BotonEliminar etiqueta="Eliminar acción" onClick={() => setEliminando({
+              titulo: 'Eliminar acción de mejora', detalle: `${a.actividad} · ${a.responsable} · límite ${formatFechaCorta(new Date(a.fechaLimite))}`,
+              nota: a.evidenciaDocId ? 'Se borran también la evidencia adjunta y la alerta.' : 'Se borra también su alerta de vencimiento.',
+              eliminar: (motivo) => eliminarAccionMejora({ id: a.id, motivo }),
+            })} />}
           </div>
         ))}</CardContent></Card>
       )}
 
-      {dialogoAccion && <DialogAccionMejora autoevaluacionId={autoeval.id} onClose={() => setDialogoAccion(false)} />}
+      {(dialogoAccion || accionEditando) && <DialogAccionMejora autoevaluacionId={autoeval.id} inicial={accionEditando ?? undefined} onClose={() => { setDialogoAccion(false); setAccionEditando(null) }} />}
+      {editandoAutoeval && <DialogAutoeval inicial={autoeval} onClose={() => setEditandoAutoeval(false)} />}
+      {eliminando && <DialogEliminar {...eliminando} onClose={() => setEliminando(null)} />}
     </div>
   )
 }
 
-function DialogAccionMejora({ autoevaluacionId, onClose }: { autoevaluacionId: string; onClose: () => void }) {
+function DialogAccionMejora({ autoevaluacionId, inicial, onClose }: { autoevaluacionId: string; inicial?: NonNullable<Props['autoeval']>['acciones'][number]; onClose: () => void }) {
   const router = useRouter()
-  const [f, setF] = useState<Record<string, string>>({})
+  const [f, setF] = useState<Record<string, string>>({ actividad: inicial?.actividad ?? '', responsable: inicial?.responsable ?? '', fechaLimite: inicial?.fechaLimite ?? '', recursos: inicial?.recursos ?? '' })
   const [g, setG] = useState(false)
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
   async function guardar() {
     if (!f.actividad || !f.responsable || !f.fechaLimite) { toast.error('Actividad, responsable y fecha límite son obligatorios.'); return }
     setG(true)
-    const res = await crearAccionMejora({ autoevaluacionId, actividad: f.actividad, responsable: f.responsable, fechaLimite: f.fechaLimite, recursos: f.recursos })
+    const datos = { actividad: f.actividad, responsable: f.responsable, fechaLimite: f.fechaLimite, recursos: f.recursos }
+    const res = inicial ? await editarAccionMejora({ id: inicial.id, ...datos }) : await crearAccionMejora({ autoevaluacionId, ...datos })
     setG(false)
-    if (res.ok) { toast.success('Acción registrada. Se programó la alerta de la fecha límite.'); onClose(); router.refresh() } else toast.error(res.error)
+    if (res.ok) { toast.success(inicial ? 'Acción actualizada.' : 'Acción registrada. Se programó la alerta de la fecha límite.'); onClose(); router.refresh() } else toast.error(res.error)
   }
-  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>Acción del plan de mejora</DialogTitle></DialogHeader>
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent><DialogHeader><DialogTitle>{inicial ? 'Editar acción del plan de mejora' : 'Acción del plan de mejora'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
-      <Campo label="Actividad"><Textarea rows={2} onChange={(e) => set('actividad', e.target.value)} placeholder="Qué se va a hacer para cerrar el estándar incumplido" /></Campo>
+      <Campo label="Actividad" obligatorio><Textarea rows={2} value={f.actividad} onChange={(e) => set('actividad', e.target.value)} placeholder="Qué se va a hacer para cerrar el estándar incumplido" /></Campo>
       <div className="grid grid-cols-2 gap-3">
-        <Campo label="Responsable"><Input onChange={(e) => set('responsable', e.target.value)} /></Campo>
-        <Campo label="Fecha límite"><Input type="date" onChange={(e) => set('fechaLimite', e.target.value)} /></Campo>
+        <Campo label="Responsable" obligatorio><Input value={f.responsable} onChange={(e) => set('responsable', e.target.value)} /></Campo>
+        <Campo label="Fecha límite" obligatorio><Input type="date" value={f.fechaLimite} onChange={(e) => set('fechaLimite', e.target.value)} /></Campo>
       </div>
-      <Campo label="Recursos (opcional)"><Input onChange={(e) => set('recursos', e.target.value)} placeholder="Presupuesto, personal, materiales…" /></Campo>
+      <Campo label="Recursos"><Input value={f.recursos} onChange={(e) => set('recursos', e.target.value)} placeholder="Presupuesto, personal, materiales…" /></Campo>
     </div>
-    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Registrar</Button></DialogFooter></DialogContent></Dialog>)
+    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}{inicial ? 'Guardar' : 'Registrar'}</Button></DialogFooter></DialogContent></Dialog>)
 }
 
 // ── Salud ocupacional: novedades ARL y seguimiento a recomendaciones ────────
 
-function DialogNovedadArl({ onClose }: { onClose: () => void }) {
+function DialogNovedadArl({ inicial, onClose }: { inicial?: Props['novedadesArl'][number]; onClose: () => void }) {
   const router = useRouter()
-  const [colaboradorId, setColaboradorId] = useState('')
-  const [tipo, setTipo] = useState('AFILIACION')
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
-  const [claseRiesgo, setClaseRiesgo] = useState('')
-  const [detalle, setDetalle] = useState('')
+  const [colaboradorId, setColaboradorId] = useState(inicial?.colaboradorId ?? '')
+  const [tipo, setTipo] = useState(inicial?.tipo ?? 'AFILIACION')
+  const [fecha, setFecha] = useState(inicial?.fecha ?? new Date().toISOString().slice(0, 10))
+  const [claseRiesgo, setClaseRiesgo] = useState(inicial?.claseRiesgo ?? '')
+  const [detalle, setDetalle] = useState(inicial?.detalle ?? '')
   const [archivo, setArchivo] = useState<File | null>(null)
   const [g, setG] = useState(false)
 
   async function guardar() {
-    if (!colaboradorId) { toast.error('Selecciona un colaborador.'); return }
+    if (!inicial && !colaboradorId) { toast.error('Selecciona un colaborador.'); return }
     if (tipo === 'CAMBIO_CLASE_RIESGO' && !claseRiesgo) { toast.error('Indica la nueva clase de riesgo.'); return }
     setG(true)
-    const res = await registrarNovedadArl({
-      colaboradorId, tipo: tipo as 'AFILIACION', fecha, detalle: detalle || undefined,
-      claseRiesgo: (claseRiesgo || '') as '' | 'I',
-    })
+    const comunes = { tipo: tipo as 'AFILIACION', fecha, detalle: detalle || undefined, claseRiesgo: (claseRiesgo || '') as '' | 'I' }
+    const res = inicial ? await editarNovedadArl({ id: inicial.id, ...comunes }) : await registrarNovedadArl({ colaboradorId, ...comunes })
     if (!res.ok) { setG(false); toast.error(res.error); return }
-    const novedadId = (res.datos as { id: string }).id
+    const novedadId = inicial ? inicial.id : (res.datos as { id: string }).id
     if (archivo) {
       const docId = await subirDoc(archivo, 'NovedadArl', novedadId, `Soporte novedad ARL — ${TIPO_NOVEDAD_ARL[tipo]}`)
       if (docId) await vincularSoporteNovedadArl({ novedadId, documentoId: docId })
-      else toast.warning('La novedad se registró, pero el soporte no se pudo adjuntar.')
+      else toast.warning('La novedad se guardó, pero el soporte no se pudo adjuntar.')
     }
-    setG(false); toast.success('Novedad de ARL registrada.'); onClose(); router.refresh()
+    setG(false); toast.success(inicial ? mensajeClaseRiesgo('Novedad actualizada.', res.datos) : 'Novedad de ARL registrada.'); onClose(); router.refresh()
   }
 
-  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Registrar novedad de ARL</DialogTitle></DialogHeader>
+  return (<Dialog open onOpenChange={(o) => !o && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{inicial ? `Editar novedad de ARL · ${inicial.colaborador}` : 'Registrar novedad de ARL'}</DialogTitle></DialogHeader>
     <div className="space-y-4">
-      <Campo label="Colaborador"><SelectorColaborador value={colaboradorId} onChange={setColaboradorId} /></Campo>
+      {!inicial && <Campo label="Colaborador" obligatorio><SelectorColaborador value={colaboradorId} onChange={setColaboradorId} /></Campo>}
       <div className="grid grid-cols-2 gap-3">
-        <Campo label="Tipo"><Select value={tipo} onValueChange={setTipo}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(TIPO_NOVEDAD_ARL).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select></Campo>
-        <Campo label="Fecha"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
+        <Campo label="Tipo" obligatorio><Select value={tipo} onValueChange={setTipo}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(TIPO_NOVEDAD_ARL).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select></Campo>
+        <Campo label="Fecha" obligatorio><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
       </div>
       {tipo === 'CAMBIO_CLASE_RIESGO' && (
-        <Campo label="Nueva clase de riesgo">
+        <Campo label="Nueva clase de riesgo" obligatorio>
           <Select value={claseRiesgo} onValueChange={setClaseRiesgo}><SelectTrigger className="w-full"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
             <SelectContent>{['I', 'II', 'III', 'IV', 'V'].map((c) => <SelectItem key={c} value={c}>Clase {c}</SelectItem>)}</SelectContent></Select>
         </Campo>
       )}
-      <Campo label="Detalle (opcional)"><Textarea rows={2} value={detalle} onChange={(e) => setDetalle(e.target.value)} placeholder="ARL destino, motivo del cambio…" /></Campo>
-      <Campo label="Soporte (formulario/constancia de la ARL)">
+      <Campo label="Detalle"><Textarea rows={2} value={detalle} onChange={(e) => setDetalle(e.target.value)} placeholder="ARL destino, motivo del cambio…" /></Campo>
+      <Campo label={inicial?.soporteDocId ? 'Reemplazar soporte (formulario/constancia de la ARL)' : 'Soporte (formulario/constancia de la ARL)'}>
         <input type="file" accept="image/*,application/pdf" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground" />
       </Campo>
       <p className="text-xs text-muted-foreground">Un cambio de clase de riesgo actualiza también la ficha del colaborador.</p>
     </div>
-    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}Registrar</Button></DialogFooter></DialogContent></Dialog>)
+    <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={guardar} disabled={g}>{g && <Spinner />}{inicial ? 'Guardar' : 'Registrar'}</Button></DialogFooter></DialogContent></Dialog>)
 }
 
-function DialogSeguimientoRecomendaciones({ examen, onClose }: { examen: Props['examenes'][number]; onClose: () => void }) {
+function DialogSeguimientoRecomendaciones({ examen, editaSalud, eliminaSalud, onClose }: { examen: Props['examenes'][number]; editaSalud: boolean; eliminaSalud: boolean; onClose: () => void }) {
   const router = useRouter()
   const [nota, setNota] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [eliminando, setEliminando] = useState<Eliminacion | null>(null)
   const [g, setG] = useState(false)
+
+  function limpiar() { setEditandoId(null); setNota(''); setFecha(new Date().toISOString().slice(0, 10)) }
 
   async function agregar() {
     if (!nota.trim()) { toast.error('Escribe la nota de seguimiento.'); return }
     setG(true)
-    const res = await crearSeguimientoExamen({ examenId: examen.id, fecha, nota: nota.trim() })
+    const res = editandoId
+      ? await editarSeguimientoExamen({ id: editandoId, fecha, nota: nota.trim() })
+      : await crearSeguimientoExamen({ examenId: examen.id, fecha, nota: nota.trim() })
     setG(false)
-    if (res.ok) { setNota(''); toast.success('Seguimiento registrado.'); router.refresh() } else toast.error(res.error)
+    if (res.ok) { const editaba = Boolean(editandoId); limpiar(); toast.success(editaba ? 'Seguimiento actualizado.' : 'Seguimiento registrado.'); router.refresh() } else toast.error(res.error)
   }
 
   async function cerrar(cerrado: boolean) {
@@ -1825,24 +2138,36 @@ function DialogSeguimientoRecomendaciones({ examen, onClose }: { examen: Props['
         <div className="space-y-1">
           <Label>Notas de seguimiento</Label>
           <ul className="space-y-1.5">{examen.seguimientos.map((s) => (
-            <li key={s.id} className="rounded-md border p-2 text-sm">
-              <p className="text-xs font-medium">{formatFechaCorta(new Date(s.fecha))}</p>
-              <p className="text-xs text-muted-foreground">{s.nota}</p>
+            <li key={s.id} className="flex items-start gap-2 rounded-md border p-2 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium">{formatFechaCorta(new Date(s.fecha))}</p>
+                <p className="text-xs text-muted-foreground">{s.nota}</p>
+              </div>
+              {editaSalud && <BotonEditar className="size-6 shrink-0 text-muted-foreground hover:text-foreground" etiqueta="Editar nota" onClick={() => { setEditandoId(s.id); setFecha(s.fecha); setNota(s.nota) }} />}
+              {eliminaSalud && <BotonEliminar className="size-6 shrink-0 text-destructive hover:text-destructive" etiqueta="Eliminar nota" onClick={() => setEliminando({
+                titulo: 'Eliminar nota de seguimiento', detalle: `${formatFechaCorta(new Date(s.fecha))} · ${s.nota}`,
+                eliminar: (motivo) => eliminarSeguimientoExamen({ id: s.id, motivo }), exito: 'Nota eliminada.',
+              })} />}
             </li>
           ))}</ul>
         </div>
       )}
 
-      <div className="space-y-2 rounded-md border p-3">
-        <div className="grid grid-cols-2 gap-2"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
-        <Textarea rows={2} placeholder="Qué se verificó, ajustes al puesto, remisiones…" value={nota} onChange={(e) => setNota(e.target.value)} />
-        <Button size="sm" onClick={agregar} disabled={g}>{g && <Spinner />}Agregar nota</Button>
-      </div>
+      {editaSalud && (
+        <div className="space-y-2 rounded-md border p-3">
+          {editandoId && <p className="text-xs text-muted-foreground">Editando nota · <button type="button" className="text-primary hover:underline" onClick={limpiar}>cancelar</button></p>}
+          <div className="grid grid-cols-2 gap-2"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
+          <Textarea rows={2} placeholder="Qué se verificó, ajustes al puesto, remisiones…" value={nota} onChange={(e) => setNota(e.target.value)} />
+          <Button size="sm" onClick={agregar} disabled={g}>{g && <Spinner />}{editandoId ? 'Guardar cambios' : 'Agregar nota'}</Button>
+        </div>
+      )}
     </div>
     <DialogFooter className="gap-2">
-      {examen.seguimientoCerrado
+      {editaSalud && (examen.seguimientoCerrado
         ? <Button onClick={() => cerrar(false)}>Reabrir seguimiento</Button>
-        : <Button onClick={() => cerrar(true)}>Cerrar seguimiento</Button>}
+        : <Button onClick={() => cerrar(true)}>Cerrar seguimiento</Button>)}
       <Button variant="ghost" onClick={onClose}>Cerrar</Button>
-    </DialogFooter></DialogContent></Dialog>)
+    </DialogFooter>
+    {eliminando && <DialogEliminar {...eliminando} onClose={() => setEliminando(null)} />}
+  </DialogContent></Dialog>)
 }

@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { Plus, Trash2, GraduationCap, Paperclip, FileText } from 'lucide-react'
+import { Plus, Trash2, GraduationCap, Paperclip, FileText, Pencil } from 'lucide-react'
 import { educacionSchema, type EducacionInput } from '@/lib/validaciones/colaborador'
-import { agregarEducacion, eliminarEducacion } from '../acciones'
+import { agregarEducacion, editarEducacion, eliminarEducacion } from '../acciones'
 import { NIVEL_EDUCATIVO } from '@/lib/etiquetas'
 import { formatFechaCorta } from '@/lib/fechas'
 import { Button } from '@/components/ui/button'
@@ -33,6 +33,7 @@ export function EducacionLista({
 }) {
   const router = useRouter()
   const [nuevo, setNuevo] = useState(false)
+  const [editando, setEditando] = useState<Educacion | null>(null)
 
   return (
     <div className="space-y-3">
@@ -65,6 +66,11 @@ export function EducacionLista({
                 </VisorPdf>
               )}
               {puedeEditar && (
+                <Button variant="ghost" size="icon" aria-label="Editar estudio" title="Editar estudio" onClick={() => setEditando(e)}>
+                  <Pencil className="size-4" />
+                </Button>
+              )}
+              {puedeEditar && (
                 <Button
                   variant="ghost" size="icon" aria-label="Eliminar"
                   onClick={async () => {
@@ -81,49 +87,55 @@ export function EducacionLista({
         ))
       )}
       {nuevo && <DialogEducacion colaboradorId={colaboradorId} onClose={() => setNuevo(false)} onGuardado={() => { setNuevo(false); router.refresh() }} />}
+      {editando && <DialogEducacion colaboradorId={colaboradorId} inicial={editando} onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); router.refresh() }} />}
     </div>
   )
 }
 
+/** Agregar un estudio o, con `inicial`, corregir uno ya registrado (mismo formulario, precargado). */
 function DialogEducacion({
-  colaboradorId, onClose, onGuardado,
-}: { colaboradorId: string; onClose: () => void; onGuardado: () => void }) {
+  colaboradorId, inicial, onClose, onGuardado,
+}: { colaboradorId: string; inicial?: Educacion; onClose: () => void; onGuardado: () => void }) {
   const [guardando, setGuardando] = useState(false)
   const [archivo, setArchivo] = useState<File | null>(null)
   const inputArchivo = useRef<HTMLInputElement>(null)
+  const editando = !!inicial
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<EducacionInput>({
     resolver: zodResolver(educacionSchema),
-    defaultValues: { colaboradorId, nivel: 'PREGRADO', titulo: '', institucion: '', fechaGrado: '', enCurso: false },
+    defaultValues: inicial
+      ? { colaboradorId, nivel: inicial.nivel as EducacionInput['nivel'], titulo: inicial.titulo, institucion: inicial.institucion, fechaGrado: inicial.fechaGrado ?? '', enCurso: inicial.enCurso }
+      : { colaboradorId, nivel: 'PREGRADO', titulo: '', institucion: '', fechaGrado: '', enCurso: false },
   })
 
   async function onSubmit(d: EducacionInput) {
     setGuardando(true)
-    const res = await agregarEducacion(d)
+    const res = inicial ? await editarEducacion({ id: inicial.id, ...d }) : await agregarEducacion(d)
     if (!res.ok) { setGuardando(false); toast.error(res.error); return }
-    // Adjuntar el certificado (opcional) al estudio recién creado
+    const estudioId = inicial ? inicial.id : (res.datos as { id: string }).id
+    // Adjuntar el certificado (opcional) al estudio
     if (archivo) {
       try {
         const fd = new FormData()
         fd.append('archivo', await reducirImagen(archivo))
         fd.append('entidadTipo', 'EducacionColaborador')
-        fd.append('entidadId', (res.datos as { id: string }).id)
+        fd.append('entidadId', estudioId)
         fd.append('nombre', `Certificado — ${d.titulo}`)
         await fetch('/api/documentos/subir', { method: 'POST', body: fd })
       } catch { /* el certificado es opcional */ }
     }
     setGuardando(false)
-    toast.success('Estudio agregado.')
+    toast.success(editando ? 'Estudio actualizado.' : 'Estudio agregado.')
     onGuardado()
   }
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Agregar estudio</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{editando ? 'Editar estudio' : 'Agregar estudio'}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Nivel</Label>
-            <Select defaultValue="PREGRADO" onValueChange={(v) => setValue('nivel', v as EducacionInput['nivel'])}>
+            <Label>Nivel <span className="text-destructive">*</span></Label>
+            <Select defaultValue={inicial?.nivel ?? 'PREGRADO'} onValueChange={(v) => setValue('nivel', v as EducacionInput['nivel'])}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Object.entries(NIVEL_EDUCATIVO).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
@@ -131,12 +143,12 @@ function DialogEducacion({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Título</Label>
+            <Label>Título <span className="text-destructive">*</span></Label>
             <Input {...register('titulo')} />
             {errors.titulo && <p className="text-xs text-destructive">{errors.titulo.message}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label>Institución</Label>
+            <Label>Institución <span className="text-destructive">*</span></Label>
             <Input {...register('institucion')} />
             {errors.institucion && <p className="text-xs text-destructive">{errors.institucion.message}</p>}
           </div>
@@ -149,15 +161,15 @@ function DialogEducacion({
             En curso
           </label>
           <div className="space-y-1.5">
-            <Label>Certificado (opcional)</Label>
+            <Label>Certificado</Label>
             <input ref={inputArchivo} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} />
             <Button type="button" size="sm" className="w-full justify-start" onClick={() => inputArchivo.current?.click()}>
-              <Paperclip className="size-4" /> {archivo ? archivo.name : 'Adjuntar certificado o diploma'}
+              <Paperclip className="size-4" /> {archivo ? archivo.name : inicial?.certificadoDocId ? 'Reemplazar certificado o diploma' : 'Adjuntar certificado o diploma'}
             </Button>
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
-            <Button type="submit" disabled={guardando}>{guardando && <Spinner />}Agregar</Button>
+            <Button type="submit" disabled={guardando}>{guardando && <Spinner />}{editando ? 'Guardar' : 'Agregar'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

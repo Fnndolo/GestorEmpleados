@@ -130,25 +130,43 @@ export function AccionesContrato({
   )
 }
 
-function DialogProrroga({ contratoId, onClose, onDone }: { contratoId: string; onClose: () => void; onDone: () => void }) {
-  const [ini, setIni] = useState('')
-  const [fin, setFin] = useState('')
-  const [firma, setFirma] = useState('')
+type DatosProrroga = { fechaInicio: string; fechaFin: string; fechaFirma: string }
+
+/**
+ * Registrar una prórroga o, con `inicial` y `guardar`, corregir una ya
+ * registrada (el mismo diálogo, precargado, con título "Editar").
+ */
+export function DialogProrroga({ contratoId, inicial, guardar: guardarExterno, onClose, onDone }: {
+  contratoId?: string
+  inicial?: DatosProrroga
+  guardar?: (d: DatosProrroga) => Promise<{ ok: boolean; error?: string }>
+  onClose: () => void
+  onDone?: () => void
+}) {
+  const router = useRouter()
+  const [ini, setIni] = useState(inicial?.fechaInicio ?? '')
+  const [fin, setFin] = useState(inicial?.fechaFin ?? '')
+  const [firma, setFirma] = useState(inicial?.fechaFirma ?? '')
   const [g, setG] = useState(false)
+  const editando = !!inicial
   async function guardar() {
     setG(true)
-    const res = await agregarProrroga({ contratoId, fechaInicio: ini, fechaFin: fin, fechaFirma: firma })
+    const datos = { fechaInicio: ini, fechaFin: fin, fechaFirma: firma }
+    const res = guardarExterno ? await guardarExterno(datos) : await agregarProrroga({ contratoId: contratoId!, ...datos })
     setG(false)
-    if (res.ok) { toast.success('Prórroga registrada.'); onDone() } else toast.error(res.error)
+    if (res.ok) {
+      toast.success(editando ? 'Prórroga actualizada.' : 'Prórroga registrada.')
+      if (onDone) onDone(); else { onClose(); router.refresh() }
+    } else toast.error(res.error, { duration: 8000 })
   }
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Registrar prórroga</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{editando ? 'Editar prórroga' : 'Registrar prórroga'}</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-1.5"><Label>Fecha de inicio</Label><Input type="date" value={ini} onChange={(e) => setIni(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Fecha de fin</Label><Input type="date" value={fin} onChange={(e) => setFin(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Fecha de firma</Label><Input type="date" value={firma} onChange={(e) => setFirma(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="pr-ini">Fecha de inicio <span className="text-destructive">*</span></Label><Input id="pr-ini" type="date" value={ini} onChange={(e) => setIni(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="pr-fin">Fecha de fin <span className="text-destructive">*</span></Label><Input id="pr-fin" type="date" value={fin} onChange={(e) => setFin(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="pr-firma">Fecha de firma</Label><Input id="pr-firma" type="date" value={firma} onChange={(e) => setFirma(e.target.value)} /></div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
@@ -363,24 +381,39 @@ function DialogOtrosi({ contratoId, cargos, sedes, onClose, onDone }: { contrato
   )
 }
 
-function DialogSuspension({ contratoId, onClose, onDone }: { contratoId: string; onClose: () => void; onDone: () => void }) {
-  const [ini, setIni] = useState('')
-  const [fin, setFin] = useState('')
-  const [causa, setCausa] = useState('LICENCIA_NO_REMUNERADA')
-  const [desc, setDesc] = useState('')
+type DatosSuspension = { fechaInicio: string; fechaFin: string; causa: string; descripcion: string }
+
+/** Suspender el contrato o, con `inicial` y `guardar`, corregir una suspensión registrada. */
+export function DialogSuspension({ contratoId, inicial, guardar: guardarExterno, onClose, onDone }: {
+  contratoId?: string
+  inicial?: DatosSuspension
+  guardar?: (d: { fechaInicio: string; fechaFin: string; causa: 'OTRO'; descripcion: string }) => Promise<{ ok: boolean; error?: string }>
+  onClose: () => void
+  onDone?: () => void
+}) {
+  const router = useRouter()
+  const [ini, setIni] = useState(inicial?.fechaInicio ?? '')
+  const [fin, setFin] = useState(inicial?.fechaFin ?? '')
+  const [causa, setCausa] = useState(inicial?.causa ?? 'LICENCIA_NO_REMUNERADA')
+  const [desc, setDesc] = useState(inicial?.descripcion ?? '')
   const [g, setG] = useState(false)
+  const editando = !!inicial
   async function guardar() {
     setG(true)
-    const res = await registrarSuspension({ contratoId, fechaInicio: ini, fechaFin: fin, causa: causa as 'OTRO', descripcion: desc })
+    const datos = { fechaInicio: ini, fechaFin: fin, causa: causa as 'OTRO', descripcion: desc }
+    const res = guardarExterno ? await guardarExterno(datos) : await registrarSuspension({ contratoId: contratoId!, ...datos })
     setG(false)
-    if (res.ok) { toast.success('Suspensión registrada.'); onDone() } else toast.error(res.error)
+    if (res.ok) {
+      toast.success(editando ? 'Suspensión actualizada.' : 'Suspensión registrada.')
+      if (onDone) onDone(); else { onClose(); router.refresh() }
+    } else toast.error(res.error, { duration: 8000 })
   }
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Suspender contrato</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{editando ? 'Editar suspensión' : 'Suspender contrato'}</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-1.5"><Label>Causa</Label>
+          <div className="space-y-1.5"><Label>Causa <span className="text-destructive">*</span></Label>
             <Select value={causa} onValueChange={setCausa}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="SANCION_DISCIPLINARIA">Sanción disciplinaria</SelectItem>
@@ -389,13 +422,13 @@ function DialogSuspension({ contratoId, onClose, onDone }: { contratoId: string;
                 <SelectItem value="OTRO">Otro</SelectItem>
               </SelectContent></Select>
           </div>
-          <div className="space-y-1.5"><Label>Fecha de inicio</Label><Input type="date" value={ini} onChange={(e) => setIni(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Fecha de fin (opcional)</Label><Input type="date" value={fin} onChange={(e) => setFin(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Descripción</Label><Textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} /></div>
+          <div className="space-y-1.5"><Label htmlFor="su-ini">Fecha de inicio <span className="text-destructive">*</span></Label><Input id="su-ini" type="date" value={ini} onChange={(e) => setIni(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="su-fin">Fecha de fin</Label><Input id="su-fin" type="date" value={fin} onChange={(e) => setFin(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="su-desc">Descripción</Label><Textarea id="su-desc" value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} /></div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={guardar} disabled={g || !ini}>{g && <Spinner />}Suspender</Button>
+          <Button onClick={guardar} disabled={g || !ini}>{g && <Spinner />}{editando ? 'Guardar' : 'Suspender'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -4,14 +4,15 @@ import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
-import { dbAuditado } from '@/lib/auditoria'
+import { dbAuditado, auditar } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { parseFechaISO, hoyBogota } from '@/lib/fechas'
-import { subirArchivo } from '@/server/storage'
+import { subirArchivo, eliminarArchivo } from '@/server/storage'
+import { eliminarDocumento } from '@/server/documentos'
 import { renderActaActivo } from '@/server/pdf/acta-activo'
 import { generarRecibidoDotacion } from '@/server/dotacion'
 import { avisar, avisarPorRol, usuarioDeColaborador } from '@/server/notificaciones/avisar'
-import { nombreCorto } from '@/lib/notificaciones/texto'
+import { nombreCorto, fechaBreve } from '@/lib/notificaciones/texto'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
 
@@ -23,7 +24,10 @@ const activoSchema = z.object({
   serie: z.string().trim().max(60).optional(),
   valor: z.coerce.number().min(0).optional(),
   sedeId: z.union([z.uuid(), z.literal('')]).optional(),
+  observaciones: z.string().trim().max(300).optional(),
 })
+
+const motivoSchema = z.string().trim().min(5, 'Explica por qué se anula.').max(300)
 
 /**
  * Alta de uno o varios activos de golpe (un computador, un mouse, un teclado…).
@@ -52,7 +56,7 @@ export const crearActivos = accion(
         dbAuditado.activo.create({
           data: {
             codigo: a.codigo, nombre: a.nombre, tipo: a.tipo, marca: v(a.marca), serie: v(a.serie),
-            valor: a.valor ?? null, sedeId: v(a.sedeId), estado: 'DISPONIBLE',
+            valor: a.valor ?? null, sedeId: v(a.sedeId), estado: 'DISPONIBLE', observaciones: v(a.observaciones),
           },
           select: { id: true, codigo: true },
         }),
@@ -259,5 +263,176 @@ export const firmarRecibidoDotacion = accion(
     revalidatePath('/autoservicio/dotacion')
     revalidatePath('/activos')
     return { docId }
+  },
+)
+
+/** Corregir los datos de un activo (código, nombre, tipo, marca, serie, valor, sede, observaciones). */
+export const editarActivo = accion(
+  { modulo: 'activos', accion: 'EDITAR', schema: activoSchema.extend({ id: z.uuid() }) },
+  async (d) => {
+    const actual = await prisma.activo.findUniqueOrThrow({ where: { id: d.id } })
+    if (d.codigo !== actual.codigo) {
+      const repetido = await prisma.activo.findUnique({ where: { codigo: d.codigo }, select: { id: true } })
+      if (repetido) throw new ErrorNegocio(`Ya existe otro activo con el código ${d.codigo}.`)
+    }
+    await dbAuditado.activo.update({
+      where: { id: d.id },
+      data: {
+        codigo: d.codigo, nombre: d.nombre, tipo: d.tipo, marca: v(d.marca), serie: v(d.serie),
+        valor: d.valor ?? null, sedeId: v(d.sedeId), observaciones: v(d.observaciones),
+      },
+    })
+    revalidatePath('/activos')
+    return { ok: true }
+  },
+)
+
+/**
+ * Dar de baja un activo (se dañó, se perdió, se vendió): queda en el inventario
+ * con estado DADO_DE_BAJA y el motivo en sus observaciones. No se puede si
+ * está entregado a alguien: primero se devuelve o se anula la entrega.
+ */
+export const darDeBajaActivo = accion(
+  { modulo: 'activos', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: motivoSchema }) },
+  async (d) => {
+    const a = await prisma.activo.findUniqueOrThrow({ where: { id: d.id }, include: { asignaciones: { where: { fechaDevolucion: null }, select: { id: true } } } })
+    if (a.estado === 'DADO_DE_BAJA') throw new ErrorNegocio('Este activo ya está dado de baja.')
+    if (a.asignaciones.length > 0) throw new ErrorNegocio('El activo está entregado a un colaborador: devuélvelo o anula la entrega antes de darlo de baja.')
+    const nota = `Dado de baja el ${fechaBreve(hoyBogota())}: ${d.motivo}`
+    await dbAuditado.activo.update({
+      where: { id: d.id },
+      data: { estado: 'DADO_DE_BAJA', observaciones: a.observaciones ? `${a.observaciones}\n${nota}` : nota },
+    })
+    await auditar('ELIMINAR', 'Activo', { registroId: d.id, descripcion: `Dado de baja: ${d.motivo}` })
+    revalidatePath('/activos')
+    return { ok: true }
+  },
+)
+
+/**
+ * Borrar un activo creado por error. Solo si nunca se entregó a nadie: si ya
+ * tuvo actas, se da de baja para conservar el historial.
+ */
+export const eliminarActivo = accion(
+  { modulo: 'activos', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: motivoSchema }) },
+  async (d) => {
+    const a = await prisma.activo.findUniqueOrThrow({ where: { id: d.id }, include: { _count: { select: { asignaciones: true } } } })
+    if (a._count.asignaciones > 0) throw new ErrorNegocio('Este activo ya fue entregado alguna vez: dalo de baja en vez de borrarlo, para conservar las actas.')
+    await dbAuditado.activo.delete({ where: { id: d.id } })
+    if (a.fotoPath) await eliminarArchivo(a.fotoPath).catch(() => {})
+    await auditar('ELIMINAR', 'Activo', { registroId: d.id, descripcion: `Anulado: ${d.motivo}` })
+    revalidatePath('/activos')
+    return { ok: true }
+  },
+)
+
+/** Corregir la fecha u observaciones de una entrega, mientras el colaborador no haya firmado el acta. */
+export const editarAsignacionActivo = accion(
+  {
+    modulo: 'activos',
+    accion: 'EDITAR',
+    schema: z.object({ asignacionId: z.uuid(), fechaEntrega: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), observaciones: z.string().trim().max(300).optional() }),
+  },
+  async (d) => {
+    const asig = await prisma.asignacionActivo.findUniqueOrThrow({ where: { id: d.asignacionId } })
+    if (asig.firmaEntregaEn) throw new ErrorNegocio('El acta de entrega ya está firmada por el colaborador: no se puede cambiar. Si hace falta, devuelve el activo y entrégalo de nuevo.')
+    if (asig.fechaDevolucion) throw new ErrorNegocio('Esta entrega ya se cerró con la devolución del activo.')
+    await dbAuditado.asignacionActivo.update({
+      where: { id: d.asignacionId },
+      data: { fechaEntrega: parseFechaISO(d.fechaEntrega)!, observaciones: v(d.observaciones) },
+    })
+    revalidatePath('/activos')
+    return { ok: true }
+  },
+)
+
+/**
+ * Anular una entrega hecha por error (a la persona equivocada, el activo que no
+ * era). Distinto de devolver: no hay acta de devolución, la entrega desaparece
+ * y el activo vuelve a estar disponible. Solo mientras el colaborador no haya
+ * firmado el acta. Si el acta cubría varios activos del mismo lote, se rehace
+ * con los que quedan.
+ */
+export const anularAsignacionActivo = accion(
+  { modulo: 'activos', accion: 'ELIMINAR', schema: z.object({ asignacionId: z.uuid(), motivo: motivoSchema }) },
+  async (d, usuario) => {
+    const asig = await prisma.asignacionActivo.findUniqueOrThrow({ where: { id: d.asignacionId }, include: { activo: { select: { nombre: true, codigo: true } } } })
+    if (asig.firmaEntregaEn) throw new ErrorNegocio('El acta de entrega ya está firmada por el colaborador: no se puede anular. Usa «Devolver» para cerrar la entrega con su acta.')
+    if (asig.fechaDevolucion) throw new ErrorNegocio('Esta entrega ya se cerró con la devolución del activo: no hay nada que anular.')
+
+    const hermanas = asig.loteId
+      ? await prisma.asignacionActivo.findMany({ where: { loteId: asig.loteId, id: { not: asig.id }, fechaDevolucion: null }, orderBy: { creadoEn: 'asc' } })
+      : []
+
+    await dbAuditado.asignacionActivo.delete({ where: { id: asig.id } })
+    await dbAuditado.activo.update({ where: { id: asig.activoId }, data: { estado: 'DISPONIBLE' } })
+    if (asig.actaEntregaDocId) await eliminarDocumento(asig.actaEntregaDocId).catch(() => {})
+    // Las demás entregas del lote se quedaron sin acta: se les genera una nueva.
+    if (hermanas.length > 0) {
+      const actaId = await generarActa('entrega', hermanas.map((h) => h.activoId), asig.colaboradorId, usuario.id)
+      await dbAuditado.asignacionActivo.updateMany({ where: { id: { in: hermanas.map((h) => h.id) } }, data: { actaEntregaDocId: actaId } })
+    }
+    await auditar('ELIMINAR', 'AsignacionActivo', { registroId: asig.id, descripcion: `Anulado: ${d.motivo}` })
+
+    const usuarioColab = await usuarioDeColaborador(asig.colaboradorId)
+    if (usuarioColab) {
+      await avisar(usuarioColab, {
+        titulo: `Talento Humano anuló la entrega de "${asig.activo.nombre}"`,
+        mensaje: `${asig.activo.codigo} · Motivo: ${d.motivo}. El activo ya no está a tu cargo y el acta se retiró.`,
+        enlace: '/autoservicio/dotacion', evento: 'activo_asignado',
+      }).catch(() => {})
+    }
+    revalidatePath('/activos')
+    revalidatePath('/autoservicio/dotacion')
+    return { ok: true }
+  },
+)
+
+/**
+ * Corregir una entrega de dotación (corte, año, prendas, fecha) mientras el
+ * trabajador no haya firmado el recibido. El PDF del recibido se rehace.
+ */
+export const editarEntregaDotacion = accion(
+  {
+    modulo: 'activos',
+    accion: 'EDITAR',
+    schema: z.object({ id: z.uuid(), anio: z.coerce.number().int(), corte: z.enum(['Abril', 'Agosto', 'Diciembre']), items: z.string().min(3).max(500), fechaEntrega: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
+  },
+  async (d, usuario) => {
+    const entrega = await prisma.entregaDotacion.findUniqueOrThrow({ where: { id: d.id } })
+    if (entrega.firmadoEn) throw new ErrorNegocio('El trabajador ya firmó el recibido de esta dotación: no se puede cambiar. Registra una entrega nueva si hace falta.')
+    await dbAuditado.entregaDotacion.update({
+      where: { id: d.id },
+      data: { anio: d.anio, corte: d.corte, items: d.items, fechaEntrega: parseFechaISO(d.fechaEntrega)! },
+    })
+    // El recibido describe las prendas y la fecha: se reemplaza por uno al día.
+    if (entrega.recibidoDocId) await eliminarDocumento(entrega.recibidoDocId).catch(() => {})
+    await generarRecibidoDotacion(d.id, usuario.id)
+    revalidatePath('/activos')
+    revalidatePath('/autoservicio/dotacion')
+    return { ok: true }
+  },
+)
+
+/** Anular una entrega de dotación registrada por error, mientras no esté firmada. Se borra el recibido y se le avisa al trabajador. */
+export const anularEntregaDotacion = accion(
+  { modulo: 'activos', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: motivoSchema }) },
+  async (d) => {
+    const entrega = await prisma.entregaDotacion.findUniqueOrThrow({ where: { id: d.id } })
+    if (entrega.firmadoEn) throw new ErrorNegocio('El trabajador ya firmó el recibido de esta dotación: no se puede anular.')
+    await dbAuditado.entregaDotacion.delete({ where: { id: d.id } })
+    if (entrega.recibidoDocId) await eliminarDocumento(entrega.recibidoDocId).catch(() => {})
+    await auditar('ELIMINAR', 'EntregaDotacion', { registroId: d.id, descripcion: `Anulado: ${d.motivo}` })
+    const usuarioColab = await usuarioDeColaborador(entrega.colaboradorId)
+    if (usuarioColab) {
+      await avisar(usuarioColab, {
+        titulo: 'Talento Humano anuló una entrega de dotación',
+        mensaje: `${entrega.corte} ${entrega.anio} · ${entrega.items} · Motivo: ${d.motivo}`,
+        enlace: '/autoservicio/dotacion', evento: 'dotacion_entregada',
+      }).catch(() => {})
+    }
+    revalidatePath('/activos')
+    revalidatePath('/autoservicio/dotacion')
+    return { ok: true }
   },
 )

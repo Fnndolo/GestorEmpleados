@@ -11,6 +11,7 @@ export default async function JuridicaPage({ searchParams }: { searchParams: Pro
   const { tab = 'documentos' } = await searchParams
   const puedeCrear = tienePermiso(usuario, 'juridica', 'CREAR')
   const puedeEditar = tienePermiso(usuario, 'juridica', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'juridica', 'ELIMINAR')
 
   const [documentos, disciplinarios, denuncias, consultas] = await Promise.all([
     prisma.documentoLegal.findMany({
@@ -30,8 +31,9 @@ export default async function JuridicaPage({ searchParams }: { searchParams: Pro
         tab={tab}
         puedeCrear={puedeCrear}
         puedeEditar={puedeEditar}
+        puedeEliminar={puedeEliminar}
         documentos={documentos.map((d) => ({
-          id: d.id, categoria: d.categoria, titulo: d.titulo,
+          id: d.id, categoria: d.categoria, titulo: d.titulo, descripcion: d.descripcion,
           vigenciaFin: d.vigenciaFin ? formatFechaISO(d.vigenciaFin) : null,
           documentoId: d.documentoId,
           versiones: d.versiones.map((ver) => ({
@@ -49,6 +51,7 @@ export default async function JuridicaPage({ searchParams }: { searchParams: Pro
         denuncias={denuncias.map((d) => ({ id: d.id, codigo: d.codigo, tipo: d.tipo, asunto: d.asunto, anonima: d.anonima, estado: d.estado, fecha: formatFechaISO(d.creadoEn) }))}
         consultas={consultas.map((c) => ({
           id: c.id, tipo: c.tipo, titular: c.titular, estado: c.estado, descripcion: c.descripcion,
+          desdeAutoservicio: !!c.colaboradorId,
           fechaRadicacion: formatFechaISO(c.fechaRadicacion),
           fechaLimite: c.fechaLimite ? formatFechaISO(c.fechaLimite) : null,
           respuesta: c.respuesta, respondidaEn: c.respondidaEn ? formatFechaISO(c.respondidaEn) : null,

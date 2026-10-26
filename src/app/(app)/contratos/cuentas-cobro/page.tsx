@@ -13,6 +13,7 @@ export default async function CuentasCobroPage() {
   const puedeAprobar = tienePermiso(usuario, 'contratos', 'APROBAR')
   const puedeCrear = tienePermiso(usuario, 'contratos', 'CREAR')
   const puedeEditar = tienePermiso(usuario, 'contratos', 'EDITAR')
+  const puedeEliminar = tienePermiso(usuario, 'contratos', 'ELIMINAR')
 
   const cuentas = await prisma.cuentaCobroOps.findMany({
     orderBy: { creadoEn: 'desc' },
@@ -48,6 +49,7 @@ export default async function CuentasCobroPage() {
         <CuentasRevision
           puedeAprobar={puedeAprobar}
           puedeEditar={puedeEditar}
+          puedeEliminar={puedeEliminar}
           cuentas={cuentas.map((c) => ({
             id: c.id,
             numero: c.numero,
@@ -57,6 +59,7 @@ export default async function CuentasCobroPage() {
             estado: c.estado,
             fechaRadicacion: formatFechaISO(c.fechaRadicacion),
             documentoId: c.documentoId,
+            creadaPorContratista: c.creadaPorContratista,
             colaborador: c.colaborador
               ? `${c.colaborador.nombres} ${c.colaborador.apellidos}`
               : c.contratoOps?.colaborador ? `${c.contratoOps.colaborador.nombres} ${c.contratoOps.colaborador.apellidos}` : '—',

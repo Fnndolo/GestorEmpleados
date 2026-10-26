@@ -3,15 +3,27 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
-import { dbAuditado } from '@/lib/auditoria'
+import { dbAuditado, auditar } from '@/lib/auditoria'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { parseFechaISO, formatFechaISO, hoyBogota } from '@/lib/fechas'
-import { publicarVencimiento } from '@/server/vencimientos/servicio'
+import { publicarVencimiento, cancelarVencimiento } from '@/server/vencimientos/servicio'
+import { eliminarDocumento } from '@/server/documentos'
 import { avisar, avisarPorRol, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { nombreCorto } from '@/lib/notificaciones/texto'
 import { sumarDiasHabiles, festivosDeRango } from '@/lib/dias-habiles'
 
 const v = (s: string | undefined | null) => (s && s !== '' ? s : null)
+
+const motivoAnulacion = z.string().trim().min(5, 'Explica por qué se anula.').max(300)
+const FECHA_ISO = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const CATEGORIA_DOC = z.enum(['REGLAMENTO_INTERNO', 'POLITICA', 'CONVENIO_FINANCIERA', 'POLIZA', 'ARRIENDO', 'MARCA', 'DOMINIO_WEB', 'LICENCIA_SOFTWARE', 'ACUERDO_TRANSMISION_DATOS', 'PERMISO_ESTABLECIMIENTO', 'OTRO'])
+
+/** Plazo legal de habeas data en días HÁBILES (Ley 1581): consulta 10, reclamo 15. */
+function plazoHabeasData(fechaRad: Date, tipo: 'CONSULTA' | 'RECLAMO'): Date {
+  const anio = fechaRad.getUTCFullYear()
+  const festivos = festivosDeRango(anio, anio + 1)
+  return sumarDiasHabiles(fechaRad, tipo === 'CONSULTA' ? 10 : 15, festivos)
+}
 
 /** Plazo de 5 días HÁBILES desde mañana (excluye domingos y festivos nacionales). */
 function limite5DiasHabiles(): Date {
@@ -31,10 +43,10 @@ export const crearDocumentoLegal = accion(
     modulo: 'juridica',
     accion: 'CREAR',
     schema: z.object({
-      categoria: z.enum(['REGLAMENTO_INTERNO', 'POLITICA', 'CONVENIO_FINANCIERA', 'POLIZA', 'ARRIENDO', 'MARCA', 'DOMINIO_WEB', 'LICENCIA_SOFTWARE', 'ACUERDO_TRANSMISION_DATOS', 'PERMISO_ESTABLECIMIENTO', 'OTRO']),
+      categoria: CATEGORIA_DOC,
       titulo: z.string().trim().min(2).max(200),
       descripcion: z.string().max(1000).optional(),
-      vigenciaFin: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
+      vigenciaFin: FECHA_ISO.optional().or(z.literal('')),
     }),
   },
   async (d) => {
@@ -54,6 +66,73 @@ export const crearDocumentoLegal = accion(
     }
     revalidatePath('/juridica')
     return { id: doc.id }
+  },
+)
+
+/**
+ * Corrige los datos de un documento legal (categoría, título, descripción,
+ * vigencia). Las versiones y sus archivos no se tocan. Si cambia la vigencia o
+ * la categoría, la alerta de vencimiento se rehace para que avise en la fecha
+ * nueva (o deje de avisar si ya no tiene vigencia).
+ */
+export const editarDocumentoLegal = accion(
+  {
+    modulo: 'juridica',
+    accion: 'EDITAR',
+    schema: z.object({
+      id: z.uuid(),
+      categoria: CATEGORIA_DOC,
+      titulo: z.string().trim().min(2).max(200),
+      descripcion: z.string().max(1000).optional(),
+      vigenciaFin: FECHA_ISO.optional().or(z.literal('')),
+    }),
+  },
+  async (d) => {
+    await prisma.documentoLegal.findUniqueOrThrow({ where: { id: d.id }, select: { id: true } })
+    const vigenciaFin = parseFechaISO(d.vigenciaFin || null)
+    await dbAuditado.documentoLegal.update({
+      where: { id: d.id },
+      data: { categoria: d.categoria, titulo: d.titulo, descripcion: v(d.descripcion), vigenciaFin },
+    })
+    // El origen del vencimiento depende de la categoría: se cancela el anterior y,
+    // si aplica, se publica el nuevo (upsert por entidad + origen).
+    await cancelarVencimiento('DocumentoLegal', d.id)
+    if (vigenciaFin && DOC_ORIGEN[d.categoria]) {
+      await publicarVencimiento({
+        origen: DOC_ORIGEN[d.categoria],
+        entidadTipo: 'DocumentoLegal',
+        entidadId: d.id,
+        titulo: `Vence: ${d.titulo}`,
+        fechaVencimientoISO: d.vigenciaFin as string,
+        responsables: [{ rol: 'Jurídica' }],
+      })
+    }
+    revalidatePath('/juridica')
+    return { ok: true }
+  },
+)
+
+/**
+ * Elimina un documento legal registrado por error, con el motivo (queda en
+ * auditoría). Se van con él sus versiones, los archivos de cada versión y su
+ * alerta de vencimiento.
+ */
+export const eliminarDocumentoLegal = accion(
+  { modulo: 'juridica', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: motivoAnulacion }) },
+  async (d) => {
+    const doc = await prisma.documentoLegal.findUniqueOrThrow({ where: { id: d.id }, include: { versiones: { select: { archivoDocId: true } } } })
+    const archivos = await prisma.documento.findMany({ where: { entidadTipo: 'DocumentoLegal', entidadId: d.id }, select: { id: true } })
+    const docIds = new Set<string>(archivos.map((a) => a.id))
+    for (const ver of doc.versiones) if (ver.archivoDocId) docIds.add(ver.archivoDocId)
+    if (doc.documentoId) docIds.add(doc.documentoId)
+
+    await auditar('ELIMINAR', 'DocumentoLegal', { registroId: d.id, descripcion: `Anulado: ${d.motivo} · "${doc.titulo}" (${doc.categoria}, ${doc.versiones.length} versión(es))` })
+    await cancelarVencimiento('DocumentoLegal', d.id)
+    // Las versiones caen en cascada (onDelete: Cascade).
+    await dbAuditado.documentoLegal.delete({ where: { id: d.id } })
+    for (const id of docIds) await eliminarDocumento(id).catch(() => {})
+    revalidatePath('/juridica')
+    return { ok: true }
   },
 )
 
@@ -144,6 +223,110 @@ export const crearProcesoDisciplinario = accion(
     }
     revalidatePath('/juridica')
     return { id: p.id, etapaId: etapaCitacion.id }
+  },
+)
+
+/**
+ * Corrige el asunto, la descripción o la fecha de apertura de un proceso o
+ * llamado de atención mientras siga abierto. La etapa de apertura toma la
+ * fecha nueva, porque es la misma actuación. Cerrado ya es expediente: no se toca.
+ */
+export const editarProcesoDisciplinario = accion(
+  {
+    modulo: 'juridica',
+    accion: 'EDITAR',
+    schema: z.object({
+      procesoId: z.uuid(),
+      asunto: z.string().trim().min(3).max(200),
+      descripcion: z.string().max(1000).optional(),
+      fechaApertura: FECHA_ISO,
+    }),
+  },
+  async (d) => {
+    const proceso = await prisma.procesoDisciplinario.findUniqueOrThrow({
+      where: { id: d.procesoId },
+      include: { etapas: { where: { etapa: 'CITACION_DESCARGOS' }, orderBy: { creadoEn: 'asc' }, take: 1, select: { id: true } } },
+    })
+    if (proceso.cerrado) throw new ErrorNegocio('El proceso ya está cerrado: su expediente no se modifica. Si se registró por error, anúlalo.')
+    const fechaApertura = parseFechaISO(d.fechaApertura)!
+    await dbAuditado.procesoDisciplinario.update({
+      where: { id: d.procesoId },
+      data: { asunto: d.asunto, descripcion: v(d.descripcion), fechaApertura },
+    })
+    const apertura = proceso.etapas[0]
+    if (apertura && proceso.fechaApertura.getTime() !== fechaApertura.getTime()) {
+      await dbAuditado.etapaProceso.update({ where: { id: apertura.id }, data: { fecha: fechaApertura } })
+    }
+    revalidatePath('/juridica')
+    revalidatePath(`/juridica/disciplinarios/${d.procesoId}`)
+    revalidatePath(`/colaboradores/${proceso.colaboradorId}`)
+    revalidatePath('/autoservicio/disciplinarios')
+    return { ok: true }
+  },
+)
+
+/**
+ * Anula un proceso disciplinario o un llamado de atención abierto por error,
+ * con el motivo (queda en auditoría). Se van con él sus etapas, los soportes de
+ * cada etapa, el acta y las notificaciones que apuntaban a él; al colaborador se
+ * le avisa, porque lo tenía como antecedente en su historial.
+ *
+ * No se anula si ya sustenta una terminación (justa causa): borrar el proceso
+ * dejaría la terminación sin debido proceso. Primero se anula la terminación.
+ */
+export const anularProcesoDisciplinario = accion(
+  { modulo: 'juridica', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: motivoAnulacion }) },
+  async (d) => {
+    const proceso = await prisma.procesoDisciplinario.findUniqueOrThrow({
+      where: { id: d.id },
+      include: { etapas: { select: { id: true } }, terminaciones: { select: { id: true, estado: true } } },
+    })
+    if (proceso.terminaciones.length > 0) {
+      const sancion = proceso.cerrado && proceso.decision
+      throw new ErrorNegocio(
+        sancion
+          ? 'Este proceso ya está cerrado con decisión sancionatoria y sustenta una terminación con justa causa: no se puede anular. Anula primero la terminación si fue un error.'
+          : 'Este proceso está ligado a una terminación: anula primero la terminación.',
+      )
+    }
+    const esLlamado = proceso.clase === 'LLAMADO_ATENCION'
+    const etapaIds = proceso.etapas.map((e) => e.id)
+    const docs = await prisma.documento.findMany({
+      where: {
+        OR: [
+          { entidadTipo: 'ProcesoDisciplinario', entidadId: d.id },
+          ...(etapaIds.length ? [{ entidadTipo: 'EtapaProceso', entidadId: { in: etapaIds } }] : []),
+        ],
+      },
+      select: { id: true },
+    })
+    const docIds = new Set<string>(docs.map((x) => x.id))
+    if (proceso.documentoActaId) docIds.add(proceso.documentoActaId)
+
+    await auditar('ELIMINAR', 'ProcesoDisciplinario', {
+      registroId: d.id,
+      descripcion: `Anulado: ${d.motivo} · ${esLlamado ? 'Llamado de atención' : 'Proceso'} "${proceso.asunto}" (${proceso.etapa}${proceso.cerrado ? ', cerrado' : ''})`,
+    })
+    // Las notificaciones de RR.HH. enlazan al expediente por su id; sin él quedarían rotas.
+    await dbAuditado.notificacion.deleteMany({ where: { enlace: { contains: d.id } } })
+    // Las etapas caen en cascada (onDelete: Cascade).
+    await dbAuditado.procesoDisciplinario.delete({ where: { id: d.id } })
+    for (const id of docIds) await eliminarDocumento(id).catch(() => {})
+
+    const userId = await usuarioDeColaborador(proceso.colaboradorId)
+    if (userId) {
+      await avisar(userId, {
+        evento: 'disciplinario_cerrado',
+        titulo: `Talento Humano anuló el ${esLlamado ? 'llamado de atención' : 'proceso disciplinario'} "${proceso.asunto}"`,
+        mensaje: `Motivo: ${d.motivo} · Ya no aparece en tu historial.`,
+        enlace: '/autoservicio/disciplinarios',
+        llamadoAccion: 'Ver mi historial',
+      }).catch(() => {})
+    }
+    revalidatePath('/juridica')
+    revalidatePath(`/colaboradores/${proceso.colaboradorId}`)
+    revalidatePath('/autoservicio/disciplinarios')
+    return { ok: true }
   },
 )
 
@@ -358,6 +541,30 @@ export const archivarDenuncia = accion(
   },
 )
 
+/**
+ * Elimina un reporte de la línea ética que entró por error (una prueba, un
+ * duplicado), con el motivo en auditoría. Se borran sus evidencias y el acuerdo.
+ * Una denuncia RESUELTA es expediente del Comité de Convivencia: no se elimina.
+ * Una archivada sí (archivar es justamente "no procede").
+ */
+export const eliminarDenuncia = accion(
+  { modulo: 'juridica', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: motivoAnulacion }) },
+  async (d) => {
+    const den = await prisma.denunciaAcoso.findUniqueOrThrow({ where: { id: d.id }, select: { codigo: true, estado: true, tipo: true, documentoResolucionId: true } })
+    if (den.estado === 'RESUELTA') throw new ErrorNegocio('La denuncia ya está resuelta: su resolución es expediente del Comité de Convivencia y no se elimina.')
+    const docs = await prisma.documento.findMany({ where: { entidadTipo: 'DenunciaAcoso', entidadId: d.id }, select: { id: true } })
+    const docIds = new Set<string>(docs.map((x) => x.id))
+    if (den.documentoResolucionId) docIds.add(den.documentoResolucionId)
+
+    await auditar('ELIMINAR', 'DenunciaAcoso', { registroId: d.id, descripcion: `Anulado: ${d.motivo} · Reporte ${den.codigo} (${den.tipo}, ${den.estado})` })
+    await dbAuditado.notificacion.deleteMany({ where: { enlace: { contains: d.id } } })
+    await dbAuditado.denunciaAcoso.delete({ where: { id: d.id } })
+    for (const id of docIds) await eliminarDocumento(id).catch(() => {})
+    revalidatePath('/juridica')
+    return { ok: true }
+  },
+)
+
 /** Enlaza el acuerdo/resolución final (Documento ya subido) a la denuncia. */
 export const vincularResolucionDenuncia = accion(
   { modulo: 'juridica', accion: 'EDITAR', schema: z.object({ id: z.uuid(), documentoId: z.uuid() }) },
@@ -383,15 +590,63 @@ export const crearConsultaReclamo = accion(
     schema: z.object({ tipo: z.enum(['CONSULTA', 'RECLAMO']), titular: z.string().trim().min(2).max(150), descripcion: z.string().trim().min(5).max(1000), fechaRadicacion: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
   },
   async (d) => {
-    // Plazo legal en días HÁBILES (Ley 1581): consulta 10, reclamo 15.
     const fechaRad = parseFechaISO(d.fechaRadicacion)!
-    const anio = fechaRad.getUTCFullYear()
-    const festivos = festivosDeRango(anio, anio + 1)
-    const fechaLimite = sumarDiasHabiles(fechaRad, d.tipo === 'CONSULTA' ? 10 : 15, festivos)
     await dbAuditado.consultaReclamoDatos.create({
-      data: { tipo: d.tipo, titular: d.titular, descripcion: d.descripcion, fechaRadicacion: fechaRad, fechaLimite, estado: 'ABIERTO' },
+      data: { tipo: d.tipo, titular: d.titular, descripcion: d.descripcion, fechaRadicacion: fechaRad, fechaLimite: plazoHabeasData(fechaRad, d.tipo), estado: 'ABIERTO' },
     })
     revalidatePath('/juridica')
+  },
+)
+
+/**
+ * Corrige una consulta o reclamo (tipo, titular, descripción, fecha de
+ * radicación). El plazo legal se recalcula con la fecha y el tipo nuevos. Una
+ * vez respondida ya no se edita: la respuesta y su fecha son la prueba del plazo.
+ */
+export const editarConsultaReclamo = accion(
+  {
+    modulo: 'juridica',
+    accion: 'EDITAR',
+    schema: z.object({ id: z.uuid(), tipo: z.enum(['CONSULTA', 'RECLAMO']), titular: z.string().trim().min(2).max(150), descripcion: z.string().trim().min(5).max(1000), fechaRadicacion: FECHA_ISO }),
+  },
+  async (d) => {
+    const c = await prisma.consultaReclamoDatos.findUniqueOrThrow({ where: { id: d.id }, select: { estado: true } })
+    if (c.estado === 'RESUELTO') throw new ErrorNegocio('Esta solicitud ya fue respondida: no se modifica. Si hay un error, anúlala y regístrala de nuevo.')
+    const fechaRad = parseFechaISO(d.fechaRadicacion)!
+    await dbAuditado.consultaReclamoDatos.update({
+      where: { id: d.id },
+      data: { tipo: d.tipo, titular: d.titular, descripcion: d.descripcion, fechaRadicacion: fechaRad, fechaLimite: plazoHabeasData(fechaRad, d.tipo) },
+    })
+    revalidatePath('/juridica')
+    revalidatePath('/autoservicio/juridica')
+    return { ok: true }
+  },
+)
+
+/**
+ * Elimina una consulta o reclamo registrado por error, con el motivo en
+ * auditoría. Si la radicó un colaborador desde su autoservicio, se le avisa.
+ */
+export const eliminarConsultaReclamo = accion(
+  { modulo: 'juridica', accion: 'ELIMINAR', schema: z.object({ id: z.uuid(), motivo: motivoAnulacion }) },
+  async (d) => {
+    const c = await prisma.consultaReclamoDatos.findUniqueOrThrow({ where: { id: d.id } })
+    await auditar('ELIMINAR', 'ConsultaReclamoDatos', { registroId: d.id, descripcion: `Anulado: ${d.motivo} · ${c.tipo} de ${c.titular} (${c.estado})` })
+    await dbAuditado.consultaReclamoDatos.delete({ where: { id: d.id } })
+    if (c.colaboradorId) {
+      const uid = await usuarioDeColaborador(c.colaboradorId)
+      if (uid) {
+        await avisar(uid, {
+          evento: 'habeas_data_respuesta',
+          titulo: `Talento Humano anuló tu ${c.tipo === 'CONSULTA' ? 'consulta' : 'reclamo'} de habeas data`,
+          mensaje: `Motivo: ${d.motivo}`,
+          enlace: '/autoservicio/juridica?vista=habeas-data',
+        }).catch(() => {})
+      }
+    }
+    revalidatePath('/juridica')
+    revalidatePath('/autoservicio/juridica')
+    return { ok: true }
   },
 )
 

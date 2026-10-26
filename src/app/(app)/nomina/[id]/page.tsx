@@ -12,7 +12,7 @@ import { Pill, Stat, AvatarColaborador, type PillTone } from '@/components/ui-ki
 import { urlFoto } from '@/lib/foto'
 import { fmtCOP } from '@/lib/moneda'
 import { TIPO_CUENTA } from '@/lib/etiquetas'
-import { formatFechaCorta, hoyBogotaISO } from '@/lib/fechas'
+import { formatFechaCorta, formatFechaISO, hoyBogotaISO } from '@/lib/fechas'
 import { PagarPersona } from './pagar-persona'
 import { CONTRATOS_DE_NOMINA, vinculoDeContrato } from '@/lib/vinculo-contrato'
 import { AvisoFuera } from './aviso-fuera'
@@ -29,6 +29,7 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
   const puedeOperar = tienePermiso(usuario, 'nomina', 'CREAR')
   const puedeAprobar = tienePermiso(usuario, 'nomina', 'APROBAR')
   const puedeExportar = tienePermiso(usuario, 'nomina', 'EXPORTAR')
+  const puedeEditar = tienePermiso(usuario, 'nomina', 'EDITAR')
 
   const periodo = await prisma.periodoNomina.findUnique({
     where: { id },
@@ -126,6 +127,8 @@ export default async function PeriodoNominaPage({ params }: { params: Promise<{ 
               puedeOperar={puedeOperar}
               puedeAprobar={puedeAprobar}
               puedeExportar={puedeExportar}
+              puedeEditar={puedeEditar}
+              datos={{ nombre: periodo.nombre, fechaInicio: formatFechaISO(periodo.fechaInicio), fechaFin: formatFechaISO(periodo.fechaFin) }}
             />
           </div>
         }
@@ -262,12 +265,14 @@ function EstadoPago({ l, puedePagar, periodo, hoy }: { l: Fila; puedePagar: bool
   return (
     <div className="flex flex-wrap items-center justify-end gap-1 sm:justify-start">
       <Pill tone="ok">Pagado · {l.pagadoEn}</Pill>
-      {l.comprobanteId && (
+      {l.comprobanteId ? (
         <VisorPdf documentoId={l.comprobanteId} titulo={`Comprobante de pago · ${l.nombre}`} className={buttonVariants({ variant: 'ghost', size: 'icon' }) + ' size-7'}>
           <FileCheck2 className="size-4" /><span className="sr-only">Ver comprobante</span>
         </VisorPdf>
+      ) : (
+        <Pill tone="warn">Sin comprobante</Pill>
       )}
-      {puedePagar && <PagarPersona liquidacionId={l.id} nombre={l.nombre} neto={fmtCOP(l.neto)} periodo={periodo} hoy={hoy} pagadoEn={l.pagadoISO} />}
+      {puedePagar && <PagarPersona liquidacionId={l.id} nombre={l.nombre} neto={fmtCOP(l.neto)} periodo={periodo} hoy={hoy} pagadoEn={l.pagadoISO} conComprobante={!!l.comprobanteId} />}
     </div>
   )
 }

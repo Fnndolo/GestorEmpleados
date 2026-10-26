@@ -11,11 +11,11 @@ import { liquidacionDefinitiva } from '@/server/nomina/liquidacion-definitiva'
 import { basesDesdeHistorial, ErrorBasesLiquidacion, type AjustesBases } from '@/server/nomina/bases-liquidacion'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { devolverAccesoNormal } from '@/server/rol-consulta'
-import { enviarDocumentoAFirma, retirarEnvioDocumento, registrarPagoLiquidacion, idDocumentoTerminacion } from '@/server/terminacion-documentos'
-import { generarOrdenExamenEgreso, registrarExamenEgreso, cargarSoporteSeguridadSocial } from '@/server/terminacion-pasos'
+import { enviarDocumentoAFirma, retirarEnvioDocumento, registrarPagoLiquidacion, idDocumentoTerminacion, adjuntarComprobanteLiquidacion as adjuntarComprobanteLiquidacionServidor } from '@/server/terminacion-documentos'
+import { generarOrdenExamenEgreso, registrarExamenEgreso, cargarSoporteSeguridadSocial, adjuntarCertificadoExamenEgreso } from '@/server/terminacion-pasos'
 import { crearItemsPazYSalvo, marcarAreaPazYSalvo } from '@/server/paz-y-salvo-areas'
 import { vincularRenuncia, devolverRenuncia as devolverRenunciaServidor } from '@/server/renuncias'
-import { CARTA_PRINCIPAL } from '@/lib/terminaciones/cartas'
+import { CARTA_PRINCIPAL, NOMBRE_CARTA } from '@/lib/terminaciones/cartas'
 import { aplicarRetiro, ultimoDiaPasado } from '@/server/terminaciones-retiro'
 import { generarYEnviarCodigoFirma, verificarCodigoFirma } from '@/server/firma/codigo-firma'
 import { eliminarDocumento } from '@/server/documentos'
@@ -208,7 +208,97 @@ function limpiarAjustes(d: Record<string, unknown>): AjustesBases {
   return salida
 }
 
-/** Procesos disciplinarios CERRADOS de un colaborador (para sustentar una justa causa). */
+const TIPO_TERMINACION = z.enum(['RENUNCIA_VOLUNTARIA', 'SIN_JUSTA_CAUSA', 'CON_JUSTA_CAUSA', 'TERMINACION_ANTICIPADA', 'MUTUO_ACUERDO', 'VENCIMIENTO_PLAZO', 'PERIODO_PRUEBA', 'FIN_OPS'])
+
+/**
+ * Corrige los datos del registro de una terminación (tipo, fecha de retiro,
+ * preaviso, motivo) mientras no esté cerrada.
+ *
+ * Las cifras de la liquidación NO se rehacen aquí: la pantalla avisa que hay
+ * que «Rehacer el cálculo» cuando cambia la fecha o el tipo. La fecha no se
+ * cambia si el retiro ya se aplicó (contrato terminado) ni si la liquidación ya
+ * se envió a firmar con ella; el tipo no se cambia si la carta de ese tipo ya
+ * salió a firma.
+ */
+export const editarTerminacion = accion(
+  {
+    modulo: 'terminaciones',
+    accion: 'EDITAR',
+    schema: z.object({
+      id: z.uuid(),
+      tipo: TIPO_TERMINACION,
+      fechaRetiro: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      preavisoDias: z.coerce.number().int().min(0).optional(),
+      motivo: z.string().max(1000).optional(),
+      procesoDisciplinarioId: z.uuid().optional(),
+    }),
+  },
+  async (d, usuario) => {
+    const t = await prisma.terminacion.findUniqueOrThrow({
+      where: { id: d.id },
+      include: { liquidacion: { select: { enviadoFirmaEn: true } }, cartas: true },
+    })
+    if (t.estado === 'CERRADA') throw new ErrorNegocio('La terminación ya está cerrada: no se modifica. Si hay un error, corrígelo por nota contable.')
+
+    const fechaRetiro = parseFechaISO(d.fechaRetiro)!
+    const cambiaFecha = fechaRetiro.getTime() !== t.fechaRetiro.getTime()
+    const cambiaTipo = d.tipo !== t.tipo
+    if (cambiaFecha) {
+      if (t.retiroAplicadoEn) throw new ErrorNegocio('El retiro ya se aplicó (contrato terminado, acceso de consulta): la fecha no se cambia. Si fue un error, anula la terminación y regístrala de nuevo.')
+      if (t.liquidacion?.enviadoFirmaEn) throw new ErrorNegocio('La liquidación ya se envió a firmar con esta fecha de retiro. Retira el envío antes de cambiarla.')
+    }
+    if (cambiaTipo) {
+      const renuncia = await prisma.renuncia.findUnique({ where: { terminacionId: d.id }, select: { id: true } })
+      if (renuncia) throw new ErrorNegocio('Esta terminación viene de una renuncia presentada en la app: su tipo es renuncia voluntaria y no se cambia.')
+    }
+
+    // Justa causa: sigue exigiendo el proceso disciplinario cerrado que la sustenta.
+    let procesoDisciplinarioId: string | null = null
+    if (d.tipo === 'CON_JUSTA_CAUSA') {
+      procesoDisciplinarioId = d.procesoDisciplinarioId ?? t.procesoDisciplinarioId
+      if (!procesoDisciplinarioId) {
+        throw new ErrorNegocio('Una terminación con justa causa requiere el proceso disciplinario que la sustenta (RIT arts. 71-73). Selecciónalo, o adelanta primero el proceso.')
+      }
+      const proceso = await prisma.procesoDisciplinario.findUnique({ where: { id: procesoDisciplinarioId } })
+      if (!proceso || proceso.colaboradorId !== t.colaboradorId) throw new ErrorNegocio('El proceso disciplinario no corresponde a este colaborador.')
+      if (!proceso.cerrado) throw new ErrorNegocio('El proceso disciplinario aún está abierto: debe cerrarse con decisión antes de terminar con justa causa (debido proceso, RIT art. 73).')
+    }
+
+    // La carta obligatoria depende del tipo: si cambia, la anterior sin enviar se
+    // reemplaza; una ya enviada a firma no se toca.
+    const cartaVieja = CARTA_PRINCIPAL[t.tipo] ?? 'CARTA_TERMINACION'
+    const cartaNueva = CARTA_PRINCIPAL[d.tipo] ?? 'CARTA_TERMINACION'
+    if (cartaVieja !== cartaNueva) {
+      const carta = t.cartas.find((c) => c.tipo === cartaVieja)
+      if (carta?.enviadoFirmaEn) {
+        throw new ErrorNegocio(`La ${NOMBRE_CARTA[cartaVieja].toLowerCase()} ya se envió a firmar: retira el envío antes de cambiar el tipo de terminación.`)
+      }
+      if (carta) {
+        await dbAuditado.cartaTerminacion.delete({ where: { id: carta.id } })
+        if (carta.documentoId) await eliminarDocumento(carta.documentoId).catch(() => {})
+      }
+      if (!t.cartas.some((c) => c.tipo === cartaNueva)) {
+        await dbAuditado.cartaTerminacion.create({ data: { terminacionId: d.id, tipo: cartaNueva } })
+      }
+    }
+
+    await dbAuditado.terminacion.update({
+      where: { id: d.id },
+      data: { tipo: d.tipo, fechaRetiro, preavisoDias: d.preavisoDias ?? null, motivo: d.motivo?.trim() ? d.motivo.trim() : null, procesoDisciplinarioId },
+    })
+    if (cambiaFecha) {
+      // La ficha lleva la misma fecha (es lo que lo saca de la nómina del periodo).
+      await dbAuditado.colaborador.update({ where: { id: t.colaboradorId }, data: { fechaRetiro } })
+      if (ultimoDiaPasado(fechaRetiro)) await aplicarRetiro(d.id, usuario.id)
+    }
+
+    revalidatePath('/terminaciones')
+    revalidatePath(`/terminaciones/${d.id}`)
+    revalidatePath(`/colaboradores/${t.colaboradorId}`)
+    return { rehacerLiquidacion: cambiaFecha || cambiaTipo }
+  },
+)
+
 /** Devuelve la renuncia al trabajador para que la corrija y la presente de nuevo. */
 export const devolverRenuncia = accion(
   {
@@ -289,22 +379,28 @@ export const retirarDocumentoTerminacion = accion(
   },
 )
 
-/** Pago de la liquidación: exige el recibido firmado y el comprobante. */
+/** Pago de la liquidación: exige el recibido firmado; el comprobante es un soporte que se puede adjuntar después. */
 export const pagarLiquidacion = accion(
   {
     modulo: 'terminaciones',
     accion: 'EDITAR',
     schema: z.object({
       id: z.uuid(),
-      fechaPago: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      comprobante: z.string().startsWith('data:', 'Adjunta el comprobante del pago.'),
-      nombreArchivo: z.string().max(200),
+      fechaPago: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Indica la fecha del pago.'),
+      comprobante: z.string().startsWith('data:', 'El comprobante no es un archivo válido.').optional(),
     }),
   },
   async (d, usuario) => {
-    await registrarPagoLiquidacion({
-      terminacionId: d.id, fechaPago: parseFechaISO(d.fechaPago)!, comprobanteDataUri: d.comprobante, nombreArchivo: d.nombreArchivo, usuarioId: usuario.id,
-    })
+    await registrarPagoLiquidacion({ terminacionId: d.id, fechaPago: parseFechaISO(d.fechaPago)!, comprobanteDataUri: d.comprobante ?? null, usuarioId: usuario.id })
+    revalidatePath(`/terminaciones/${d.id}`)
+  },
+)
+
+/** Adjunta o reemplaza el comprobante de un pago de liquidación ya registrado, sin tocar la fecha. */
+export const adjuntarComprobanteLiquidacion = accion(
+  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ id: z.uuid(), comprobante: z.string().startsWith('data:', 'El comprobante no es un archivo válido.') }) },
+  async (d, usuario) => {
+    await adjuntarComprobanteLiquidacionServidor({ terminacionId: d.id, comprobanteDataUri: d.comprobante, usuarioId: usuario.id })
     revalidatePath(`/terminaciones/${d.id}`)
   },
 )
@@ -326,7 +422,7 @@ export const registrarExamen = accion(
       realizado: z.boolean(),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       concepto: z.enum(['APTO', 'APTO_CON_RECOMENDACIONES', 'NO_APTO', 'APLAZADO']).optional(),
-      certificado: z.string().startsWith('data:').optional(),
+      certificado: z.string().startsWith('data:', 'El certificado no es un archivo válido.').optional(),
     }),
   },
   async (d, usuario) => {
@@ -334,6 +430,15 @@ export const registrarExamen = accion(
       terminacionId: d.id, realizado: d.realizado, fecha: parseFechaISO(d.fecha)!, concepto: d.concepto,
       certificadoDataUri: d.certificado ?? null, usuarioId: usuario.id,
     })
+    revalidatePath(`/terminaciones/${d.id}`)
+  },
+)
+
+/** Adjunta o reemplaza el certificado de un examen de egreso ya registrado como realizado. */
+export const adjuntarCertificadoExamen = accion(
+  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ id: z.uuid(), certificado: z.string().startsWith('data:', 'El certificado no es un archivo válido.') }) },
+  async (d, usuario) => {
+    await adjuntarCertificadoExamenEgreso({ terminacionId: d.id, certificadoDataUri: d.certificado, usuarioId: usuario.id })
     revalidatePath(`/terminaciones/${d.id}`)
   },
 )
