@@ -16,8 +16,8 @@ import { miFichaSchema } from '@/lib/validaciones/colaborador'
 import { TIPOS_LICENCIA, defLicencia, esDerecho } from '@/lib/licencias'
 import { ESTADOS_CANCELABLES } from '@/lib/solicitudes-texto'
 import { evaluarSolicitudVacaciones } from '@/server/vacaciones-reglas'
-import { calcularLimitesHorasExtra, fechaMinimaHorasExtra } from '@/server/horas-extra-autorizacion'
-import { horasEntreHoras, DIAS_HABILES_POSTERIOR, SOPORTE_HORAS_EXTRA_OBLIGATORIO } from '@/lib/horas-extra-solicitud'
+import { calcularLimitesHorasExtra } from '@/server/horas-extra-autorizacion'
+import { horasEntreHoras, SOPORTE_HORAS_EXTRA_OBLIGATORIO } from '@/lib/horas-extra-solicitud'
 import { saldoVisibleEnAutoservicio, textoAutorizacionAnticipadas } from '@/lib/vacaciones-config'
 import { liquidarVacaciones, desgloseHtml } from '@/server/vacaciones-liquidacion'
 import { usuarioDeColaborador } from '@/server/notificaciones/avisar'
@@ -184,7 +184,7 @@ export const crearSolicitud = accion(
 
     // Horas extra: un día, desde–hasta, motivo y soporte (por ahora opcional; se
     // adjunta justo después de crear la solicitud). Se puede pedir
-    // antes o hasta 3 días hábiles después; el límite legal no bloquea: queda
+    // antes o después de hacerlas, sin límite de fecha; el límite legal no bloquea: queda
     // calculado para que el aprobador vea la alerta.
     if (d.tipo === 'HORAS_EXTRA') {
       if (!d.fechaInicio || !d.horaInicio || !d.horaFin) throw new ErrorNegocio('Indica el día y el horario de las horas extra.')
@@ -193,12 +193,6 @@ export const crearSolicitud = accion(
       if (horas <= 0) throw new ErrorNegocio('La hora de fin debe ser después de la de inicio.')
       const fecha = parseFechaISO(d.fechaInicio)!
       const posterior = fecha < hoyBogota()
-      if (posterior) {
-        const minima = await fechaMinimaHorasExtra()
-        if (fecha < minima) {
-          throw new ErrorNegocio(`Las horas extra ya hechas se piden hasta ${DIAS_HABILES_POSTERIOR} días hábiles después: la fecha más antigua es el ${fechaBreve(minima)}.`)
-        }
-      }
       const calculoHorasExtra = await calcularLimitesHorasExtra(colaboradorId, d.fechaInicio, horas)
       datosSolicitud = { ...d, horas, posterior, calculoHorasExtra }
     }

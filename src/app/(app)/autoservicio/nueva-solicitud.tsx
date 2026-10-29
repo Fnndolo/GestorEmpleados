@@ -22,7 +22,7 @@ import { festivosDeRango, esDiaHabil } from '@/lib/dias-habiles'
 import { parseFechaISO } from '@/lib/fechas'
 import { crearSolicitud, editarMiPermiso } from './acciones'
 import { textoAutorizacionAnticipadas } from '@/lib/vacaciones-config'
-import { horasEntreHoras, DIAS_HABILES_POSTERIOR, LIMITE_HORAS_EXTRA_DIA, SOPORTE_HORAS_EXTRA_OBLIGATORIO } from '@/lib/horas-extra-solicitud'
+import { horasEntreHoras, LIMITE_HORAS_EXTRA_DIA, SOPORTE_HORAS_EXTRA_OBLIGATORIO } from '@/lib/horas-extra-solicitud'
 
 /** Lo que hace falta para abrir el diálogo con un permiso ya pedido y corregirlo. */
 export type EdicionPermiso = {
@@ -141,15 +141,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
   const [heIni, setHeIni] = useState('18:00')
   const [heFin, setHeFin] = useState('20:00')
   const horasHe = horasEntreHoras(heIni, heFin)
-  // Se pueden pedir antes o hasta 3 días hábiles después (el servidor lo exige igual).
-  const minimaHe = useMemo(() => {
-    const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
-    const festivos = festivosDeRango(hoy.getFullYear() - 1, hoy.getFullYear())
-    const d = new Date(Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()))
-    let n = DIAS_HABILES_POSTERIOR
-    while (n > 0) { d.setUTCDate(d.getUTCDate() - 1); if (esDiaHabil(d, festivos)) n-- }
-    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
-  }, [])
+  // Se pueden pedir antes o después de hacerlas, sin límite de fecha.
   const heDespues = !!permFecha && permFecha < new Date(new Date().setHours(0, 0, 0, 0))
   const [permIni, setPermIni] = useState(edicion?.horaInicio ?? '08:00')
   const [permFin, setPermFin] = useState(edicion?.horaFin ?? '12:00')
@@ -424,7 +416,6 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
                         mode="single"
                         locale={es}
                         selected={permFecha}
-                        disabled={{ before: minimaHe }}
                         onSelect={(d) => { setPermFecha(d); if (d) setPermCalAbierto(false) }}
                       />
                     </PopoverContent>
