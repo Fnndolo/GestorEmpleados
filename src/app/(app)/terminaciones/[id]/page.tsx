@@ -131,7 +131,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
       id: 'carta',
       titulo: NOMBRE_CARTA[tipoCarta],
       corto: 'Carta',
-      detalle: carta?.firmadoEn ? 'Firmada' : carta?.enviadoFirmaEn ? 'Esperando firma del trabajador' : 'Por firmar y enviar',
+      detalle: carta?.firmadoEn ? 'Firmada' : carta?.enviadoFirmaEn ? 'Esperando firma del trabajador' : carta?.documentoId ? 'Generada · falta subirla firmada' : 'Por subir firmada',
       estado: carta?.firmadoEn ? 'hecho' : 'pendiente',
     },
   ]
@@ -142,7 +142,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
       detalle: pys.firmadoEn ? 'Firmado' : pys.enviadoFirmaEn ? 'Esperando firma del trabajador' : `${areasOk} de ${areasTotal} áreas verificadas`,
       // Opcional: hay retiros con plazos tan cortos que no alcanza, y el pago de
       // la liquidación no puede quedar sujeto a él (art. 65 CST).
-      estado: pys.firmadoEn ? 'hecho' : 'opcional',
+      estado: pys.firmadoEn || (areasTotal > 0 && areasOk === areasTotal) ? 'hecho' : 'opcional',
       opcional: true,
     })
   }
@@ -161,7 +161,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
     pasos.push({
       id: 'liquidacion',
       titulo: 'Liquidación',
-      detalle: liq.pagadoEn ? `Pagada · ${fmtCOP(Number(liq.total))}` : liq.firmadoEn ? 'Firmada · falta el pago' : liq.enviadoFirmaEn ? 'Esperando firma del trabajador' : `${fmtCOP(Number(liq.total))} · por firmar`,
+      detalle: liq.pagadoEn ? `Pagada · ${fmtCOP(Number(liq.total))}` : liq.firmadoEn ? 'Firmada · falta el pago' : liq.enviadoFirmaEn ? 'Esperando firma del trabajador' : `${fmtCOP(Number(liq.total))} · por subir firmada`,
       estado: liq.pagadoEn && liq.firmadoEn ? 'hecho' : 'pendiente',
     })
   }
@@ -176,10 +176,10 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   pasos.push({ id: 'soportes', titulo: 'Soportes', detalle: documentos.length ? `${documentos.length} documento${documentos.length === 1 ? '' : 's'}` : 'Opcional', estado: 'opcional', opcional: true })
 
   const requisitos = [
-    { texto: `${NOMBRE_CARTA[tipoCarta]} firmada por el trabajador`, ok: !!carta?.firmadoEn },
+    { texto: `${NOMBRE_CARTA[tipoCarta]} firmada (documento subido)`, ok: !!carta?.firmadoEn },
     ...(!liq && llevaLiquidacion ? [{ texto: 'Liquidación definitiva calculada', ok: false }] : []),
     ...(liq ? [
-      { texto: 'Recibido de la liquidación firmado', ok: !!liq.firmadoEn },
+      { texto: 'Liquidación firmada (documento subido)', ok: !!liq.firmadoEn },
       { texto: 'Pago de la liquidación con comprobante', ok: !!liq.pagadoEn },
     ] : []),
   ]
@@ -310,7 +310,6 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
         <PagoLiquidacion
           terminacionId={t.id}
           total={fmtCOP(Number(liq.total))}
-          firmada={!!liq.firmadoEn}
           pagadaEn={fecha(liq.pagadoEn)}
           pagadaISO={liq.pagadoEn ? formatFechaISO(liq.pagadoEn) : null}
           comprobanteDocId={liq.comprobanteDocId}

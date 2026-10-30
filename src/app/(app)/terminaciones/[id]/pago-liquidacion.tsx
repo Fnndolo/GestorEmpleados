@@ -17,14 +17,13 @@ import { pagarLiquidacion, adjuntarComprobanteLiquidacion } from '../acciones'
 type Archivo = { nombre: string; dataUri: string }
 
 /**
- * Pago de la liquidación: se registra con la fecha, después del recibido
- * firmado. El comprobante es un soporte: se adjunta en el momento o después
+ * Pago de la liquidación: se registra con la fecha (no espera el recibido
+ * firmado). El comprobante es un soporte: se adjunta en el momento o después
  * ("Adjuntar comprobante"), y se puede reemplazar ("Cambiar").
  */
-export function PagoLiquidacion({ terminacionId, total, firmada, pagadaEn, pagadaISO, comprobanteDocId, hoy, puedeEditar, cerrada }: {
+export function PagoLiquidacion({ terminacionId, total, pagadaEn, pagadaISO, comprobanteDocId, hoy, puedeEditar, cerrada }: {
   terminacionId: string
   total: string
-  firmada: boolean
   /** Fecha del pago ya registrado, en texto largo; null si falta. */
   pagadaEn: string | null
   /** La misma fecha en yyyy-mm-dd, para precargar el diálogo. */
@@ -92,7 +91,7 @@ export function PagoLiquidacion({ terminacionId, total, firmada, pagadaEn, pagad
     <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
       <Banknote className="size-4 shrink-0 text-muted-foreground" />
       <span className="text-sm font-medium">Pago</span>
-      {pagadaEn ? <Pill tone="ok">Pagada · {pagadaEn}</Pill> : <Pill tone="muted">{firmada ? 'Por pagar' : 'Después del recibido'}</Pill>}
+      {pagadaEn ? <Pill tone="ok">Pagada · {pagadaEn}</Pill> : <Pill tone="muted">Por pagar</Pill>}
       {pagadaEn && !comprobanteDocId && <Pill tone="warn">Sin comprobante</Pill>}
       <span className="flex-1" />
       <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -107,7 +106,7 @@ export function PagoLiquidacion({ terminacionId, total, firmada, pagadaEn, pagad
           </Button>
         )}
         {editable && (
-          <Button size="sm" variant={pagadaEn ? 'ghost' : 'default'} onClick={() => setAbierto('pago')} disabled={!firmada} title={firmada ? undefined : 'Primero el trabajador firma el recibido'}>
+          <Button size="sm" variant={pagadaEn ? 'ghost' : 'default'} onClick={() => setAbierto('pago')}>
             <Banknote className="size-4" /> {pagadaEn ? 'Corregir fecha' : 'Registrar pago'}
           </Button>
         )}

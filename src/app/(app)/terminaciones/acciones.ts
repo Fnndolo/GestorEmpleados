@@ -11,7 +11,7 @@ import { liquidacionDefinitiva } from '@/server/nomina/liquidacion-definitiva'
 import { basesDesdeHistorial, ErrorBasesLiquidacion, type AjustesBases } from '@/server/nomina/bases-liquidacion'
 import { saldoVacaciones } from '@/server/vacaciones'
 import { devolverAccesoNormal } from '@/server/rol-consulta'
-import { enviarDocumentoAFirma, retirarEnvioDocumento, registrarPagoLiquidacion, idDocumentoTerminacion, adjuntarComprobanteLiquidacion as adjuntarComprobanteLiquidacionServidor } from '@/server/terminacion-documentos'
+import { enviarDocumentoAFirma, retirarEnvioDocumento, generarDocumentoSinFirmas, subirDocumentoFirmado as subirDocumentoFirmadoServidor, quitarDocumentoFirmado as quitarDocumentoFirmadoServidor, registrarPagoLiquidacion, idDocumentoTerminacion, adjuntarComprobanteLiquidacion as adjuntarComprobanteLiquidacionServidor } from '@/server/terminacion-documentos'
 import { generarOrdenExamenEgreso, registrarExamenEgreso, cargarSoporteSeguridadSocial, adjuntarCertificadoExamenEgreso } from '@/server/terminacion-pasos'
 import { crearItemsPazYSalvo, marcarAreaPazYSalvo } from '@/server/paz-y-salvo-areas'
 import { vincularRenuncia, devolverRenuncia as devolverRenunciaServidor } from '@/server/renuncias'
@@ -379,7 +379,38 @@ export const retirarDocumentoTerminacion = accion(
   },
 )
 
-/** Pago de la liquidación: exige el recibido firmado; el comprobante es un soporte que se puede adjuntar después. */
+/** La plataforma genera el PDF sin firmas, para imprimirlo y firmarlo a mano. */
+export const generarDocumentoTerminacion = accion(
+  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ id: z.uuid(), tipo: TIPO_DOC }) },
+  async (d, usuario) => {
+    await generarDocumentoSinFirmas(d.tipo, d.id, usuario.id)
+    revalidatePath(`/terminaciones/${d.id}`)
+  },
+)
+
+/** Sube el documento ya firmado (PDF o foto): el paso queda firmado sin pedir firma en la app. */
+export const subirDocumentoFirmadoTerminacion = accion(
+  {
+    modulo: 'terminaciones',
+    accion: 'EDITAR',
+    schema: z.object({ id: z.uuid(), tipo: TIPO_DOC, archivo: z.string().startsWith('data:', 'El archivo no es válido.') }),
+  },
+  async (d, usuario) => {
+    await subirDocumentoFirmadoServidor({ tipo: d.tipo, terminacionId: d.id, dataUri: d.archivo, usuarioId: usuario.id })
+    revalidatePath(`/terminaciones/${d.id}`)
+  },
+)
+
+/** Quita un documento firmado subido por error. */
+export const quitarDocumentoFirmadoTerminacion = accion(
+  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ id: z.uuid(), tipo: TIPO_DOC }) },
+  async (d) => {
+    await quitarDocumentoFirmadoServidor(d.tipo, d.id)
+    revalidatePath(`/terminaciones/${d.id}`)
+  },
+)
+
+/** Pago de la liquidación: no exige el recibido firmado; el comprobante es un soporte que se puede adjuntar después. */
 export const pagarLiquidacion = accion(
   {
     modulo: 'terminaciones',

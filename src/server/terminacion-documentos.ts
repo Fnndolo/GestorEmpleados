@@ -309,6 +309,58 @@ export async function retirarEnvioDocumento(tipo: TipoDocTerminacion, terminacio
   if (r.documentoId) await eliminarDocumento(r.documentoId).catch(() => {})
 }
 
+/**
+ * Por ahora la carta y la liquidación no se envían a firmar en la app (decisión
+ * de empresa, 2026-10-30): la plataforma genera el PDF sin firmas para
+ * imprimirlo, y Talento Humano sube el documento firmado como soporte.
+ */
+export async function generarDocumentoSinFirmas(tipo: TipoDocTerminacion, terminacionId: string, usuarioId: string): Promise<void> {
+  const t = await prisma.terminacion.findUniqueOrThrow({ where: { id: terminacionId }, select: { estado: true, colaboradorId: true } })
+  if (t.estado === 'CERRADA') throw new ErrorNegocio('La terminación ya está cerrada.')
+  if (tipo === 'CARTA') await asegurarCarta(terminacionId)
+  const r = await leerRegistro(tipo, terminacionId)
+  if (!r) throw new ErrorNegocio(tipo === 'PAZ_Y_SALVO' ? 'Esta terminación no tiene paz y salvo.' : 'Esta terminación no tiene liquidación.')
+  if (r.enviadoFirmaEn || r.firmadoEn) throw new ErrorNegocio('Este documento ya está firmado o enviado: quítalo primero para generarlo de nuevo.')
+
+  const pdf = await renderizar(tipo, terminacionId, { empresa: null, firmante: null, trabajador: null })
+  const { documentoId } = await guardarDocumentoColaborador({
+    colaboradorId: t.colaboradorId, carpeta: ARCHIVO_DOC[tipo], archivo: `${ARCHIVO_DOC[tipo]}-${r.id}-sin-firmas.pdf`,
+    nombre: `${await nombreDocumento(tipo, terminacionId)} (para imprimir)`, contenido: pdf, mime: 'application/pdf', usuarioId,
+  })
+  await actualizar(tipo, r.id, { documentoId })
+  if (r.documentoId && r.documentoId !== documentoId) await eliminarDocumento(r.documentoId).catch(() => {})
+}
+
+/** Talento Humano sube el documento ya firmado (escaneado o foto): queda como firmado, sin firma en la app. */
+export async function subirDocumentoFirmado(opts: { tipo: TipoDocTerminacion; terminacionId: string; dataUri: string; usuarioId: string }): Promise<void> {
+  const { tipo, terminacionId } = opts
+  const t = await prisma.terminacion.findUniqueOrThrow({ where: { id: terminacionId }, select: { estado: true, colaboradorId: true } })
+  if (t.estado === 'CERRADA') throw new ErrorNegocio('La terminación ya está cerrada.')
+  if (tipo === 'CARTA') await asegurarCarta(terminacionId)
+  const r = await leerRegistro(tipo, terminacionId)
+  if (!r) throw new ErrorNegocio(tipo === 'PAZ_Y_SALVO' ? 'Esta terminación no tiene paz y salvo.' : 'Esta terminación no tiene liquidación.')
+  if (r.enviadoFirmaEn && !r.firmadoEn) throw new ErrorNegocio('Está enviado al trabajador para firmar en la app: retira el envío primero.')
+
+  const archivo = leerArchivoSubido(opts.dataUri)
+  const { documentoId } = await guardarDocumentoColaborador({
+    colaboradorId: t.colaboradorId, carpeta: ARCHIVO_DOC[tipo], archivo: `${ARCHIVO_DOC[tipo]}-${r.id}-firmado.${archivo.ext}`,
+    nombre: `${await nombreDocumento(tipo, terminacionId)} (firmado)`, contenido: archivo.contenido, mime: archivo.mime, usuarioId: opts.usuarioId,
+  })
+  await actualizar(tipo, r.id, { documentoId, firmadoEn: new Date(), firmadoPorId: opts.usuarioId })
+  if (r.documentoId && r.documentoId !== documentoId) await eliminarDocumento(r.documentoId).catch(() => {})
+}
+
+/** Deshace un documento firmado que se subió por error: vuelve a quedar pendiente. */
+export async function quitarDocumentoFirmado(tipo: TipoDocTerminacion, terminacionId: string): Promise<void> {
+  const t = await prisma.terminacion.findUniqueOrThrow({ where: { id: terminacionId }, select: { estado: true } })
+  if (t.estado === 'CERRADA') throw new ErrorNegocio('La terminación ya está cerrada.')
+  const r = await leerRegistro(tipo, terminacionId)
+  if (!r?.firmadoEn) throw new ErrorNegocio('No hay un documento firmado que quitar.')
+  if (r.firmaPath) throw new ErrorNegocio('Lo firmó el trabajador en la app: no se puede quitar.')
+  await actualizar(tipo, r.id, { documentoId: null, firmadoEn: null, firmadoPorId: null, enviadoFirmaEn: null })
+  if (r.documentoId) await eliminarDocumento(r.documentoId).catch(() => {})
+}
+
 /** El trabajador firma: se re-arma el PDF con las dos firmas y queda la evidencia. */
 export async function firmarDocumentoTrabajador(opts: {
   tipo: TipoDocTerminacion
@@ -377,7 +429,6 @@ export async function registrarPagoLiquidacion(opts: {
   const liq = await prisma.liquidacionDefinitiva.findUnique({ where: { terminacionId: opts.terminacionId }, include: { terminacion: true } })
   if (!liq) throw new ErrorNegocio('Esta terminación no tiene liquidación.')
   if (liq.terminacion.estado === 'CERRADA') throw new ErrorNegocio('La terminación ya está cerrada.')
-  if (!liq.firmadoEn) throw new ErrorNegocio('Primero el trabajador debe firmar el recibido de la liquidación.')
 
   const comprobanteDocId = opts.comprobanteDataUri
     ? await guardarComprobanteLiquidacion(liq.id, liq.terminacion.colaboradorId, opts.comprobanteDataUri, opts.usuarioId)

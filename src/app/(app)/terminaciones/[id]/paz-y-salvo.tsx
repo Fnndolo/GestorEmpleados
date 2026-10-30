@@ -5,11 +5,11 @@ import { toast } from 'sonner'
 import { UserRound } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { verificarItemPazSalvo } from '../acciones'
-import { DocumentoFirma, type EstadoDocumento } from './documento-firma'
+import { DocumentoFirma, ENVIO_A_FIRMA_EN_APP, type EstadoDocumento } from './documento-firma'
 
 type Item = { id: string; area: string; concepto: string; cumplido: boolean; observacion: string | null; responsable: string | null; verificadoPor: string | null }
 
-/** Paso "Paz y salvo": las áreas verifican la entrega y, con todo listo, el acta se firma y se envía. */
+/** Paso "Paz y salvo": las áreas verifican la entrega. Por ahora no hay acta que firmar ni enviar. */
 export function PazYSalvoChecklist({ items, acta, terminacionId, cerrada, puedeEditar }: {
   items: Item[]; acta: EstadoDocumento; terminacionId: string; cerrada: boolean; puedeEditar: boolean
 }) {
@@ -44,16 +44,18 @@ export function PazYSalvoChecklist({ items, acta, terminacionId, cerrada, puedeE
           </li>
         ))}
       </ul>
-      <DocumentoFirma
-        terminacionId={terminacionId}
-        tipo="PAZ_Y_SALVO"
-        titulo="Acta de paz y salvo"
-        estado={acta}
-        listo={completo}
-        faltante="Faltan áreas"
-        puedeEditar={puedeEditar}
-        cerrada={cerrada}
-      />
+      {ENVIO_A_FIRMA_EN_APP && (
+        <DocumentoFirma
+          terminacionId={terminacionId}
+          tipo="PAZ_Y_SALVO"
+          titulo="Acta de paz y salvo"
+          estado={acta}
+          listo={completo}
+          faltante="Faltan áreas"
+          puedeEditar={puedeEditar}
+          cerrada={cerrada}
+        />
+      )}
     </div>
   )
 }
