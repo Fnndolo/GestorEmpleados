@@ -33,13 +33,17 @@ export async function aplicarRetiro(terminacionId: string, usuarioId: string | n
   const t = await prisma.terminacion.findUniqueOrThrow({ where: { id: terminacionId } })
   if (t.retiroAplicadoEn) return
 
-  await dbAuditado.colaborador.update({ where: { id: t.colaboradorId }, data: { fechaRetiro: t.fechaRetiro } })
-  const contrato = await prisma.contrato.findFirst({ where: { colaboradorId: t.colaboradorId, estado: 'ACTIVO' }, orderBy: { fechaInicio: 'desc' } })
-  if (contrato) await dbAuditado.contrato.update({ where: { id: contrato.id }, data: { estado: 'TERMINADO' } })
+  // Un contrato que empieza DESPUÉS del retiro es un reingreso: ni se termina
+  // ni deja la ficha como retirada (la persona sigue trabajando con él).
+  const reingreso = await prisma.contrato.count({ where: { colaboradorId: t.colaboradorId, estado: { in: ['ACTIVO', 'BORRADOR', 'SUSPENDIDO'] }, fechaInicio: { gt: t.fechaRetiro } } })
+    + await prisma.contratoOps.count({ where: { colaboradorId: t.colaboradorId, estado: { in: ['ACTIVO', 'FIRMADO'] }, fechaInicio: { gt: t.fechaRetiro } } })
+  if (!reingreso) await dbAuditado.colaborador.update({ where: { id: t.colaboradorId }, data: { fechaRetiro: t.fechaRetiro } })
+  const contratos = await prisma.contrato.findMany({ where: { colaboradorId: t.colaboradorId, estado: 'ACTIVO', fechaInicio: { lte: t.fechaRetiro } }, select: { id: true } })
+  for (const c of contratos) await dbAuditado.contrato.update({ where: { id: c.id }, data: { estado: 'TERMINADO' } })
 
   // Los OPS vigentes también se cierran: quien se retira no sigue prestando servicios.
   const opsVigentes = await prisma.contratoOps.findMany({
-    where: { colaboradorId: t.colaboradorId, estado: { in: ['ACTIVO', 'FIRMADO'] } },
+    where: { colaboradorId: t.colaboradorId, estado: { in: ['ACTIVO', 'FIRMADO'] }, fechaInicio: { lte: t.fechaRetiro } },
     select: { id: true },
   })
   for (const o of opsVigentes) {

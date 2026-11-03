@@ -14,6 +14,7 @@ import { PazSalvoBoton } from './paz-salvo-boton'
 import { AcuerdoDescuento } from './acuerdo-descuento'
 import { CuotasDescuento } from './cuotas-descuento'
 import { AccionesPrestamo } from './acciones-prestamo'
+import { DocumentosDescuento } from './documentos-descuento'
 import { mesLargo } from '@/lib/descuentos'
 
 export const metadata = { title: 'Detalle de descuento · Smart Gadgets RH' }
@@ -30,6 +31,7 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
     include: {
       colaborador: { select: { id: true, nombres: true, apellidos: true } },
       cuotas: { orderBy: { numero: 'asc' } },
+      documentos: { orderBy: { creadoEn: 'asc' } },
     },
   })
   if (!prestamo) notFound()
@@ -94,6 +96,17 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
           fechaFirma={prestamo.firmaEmpleadoFecha ? formatFechaLarga(prestamo.firmaEmpleadoFecha) : null}
           puedeEditar={puedeEditar}
         />
+        <DocumentosDescuento
+          prestamoId={prestamo.id}
+          puedeEditar={puedeEditar}
+          documentos={prestamo.documentos.map((d) => ({
+            id: d.id,
+            nombre: d.nombre,
+            verId: d.firmadoDocId ?? d.documentoId,
+            requiereFirma: d.requiereFirma,
+            fechaFirma: d.firmaEmpleadoFecha ? formatFechaLarga(d.firmaEmpleadoFecha) : null,
+          }))}
+        />
         {prestamo.estado === 'PAGADO' && (
           <div className="flex items-center gap-2 pt-1">
             {pazSalvo ? (
@@ -118,6 +131,9 @@ export default async function PrestamoDetallePage({ params }: { params: Promise<
           pagada: c.pagada,
           fechaPago: c.fechaPago ? formatFechaCorta(c.fechaPago) : null,
           ajustada: c.valorAcordado != null && Number(c.valorAcordado) !== Number(prestamo.valorCuota),
+          // Pagada a mano (sin nómina): se puede deshacer desde aquí.
+          manual: c.pagada && !c.periodoId,
+          descuentaDe: c.descuentaDe,
         }))}
       />
     </div>

@@ -10,6 +10,7 @@ import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subid
 import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
 import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
+import { reactivarSiEstabaRetirado } from '@/server/reingreso'
 import { borrarPdfTemporal, extensionDe, obtenerArchivoAdjunto, obtenerPdfAdjunto } from '@/server/archivos-temporales'
 import { esComprimido } from '@/lib/archivos'
 import { pdfAdjuntoCampos } from '@/lib/validaciones/pdf-adjunto'
@@ -20,7 +21,7 @@ import { eliminarDocumento } from '@/server/documentos'
 import { vinculoDeContrato, type TipoContratoLaboral, type TipoVinculo } from '@/lib/vinculo-contrato'
 import { construirDatosPdfContratoOps, construirDatosAutorizacion, generarPdfContratoOps, generarPdfAutorizacionDatos, leerFirmaComoDataUri, type SnapshotContratoOps } from '@/server/contratos-ops-pdf'
 import { fechaLarga } from '@/lib/numero-letras'
-import { aplicarFirmaContratoOps, corregirPosicionFirmaContratoOps as corregirPosicionFirmaOpsServidor } from '@/server/contratos-ops-firma'
+import { aplicarFirmaContratoOps, marcarContratanteFirmoEnPdf, corregirPosicionFirmaContratoOps as corregirPosicionFirmaOpsServidor } from '@/server/contratos-ops-firma'
 import { leerDatosFirmaSubido } from '@/server/contratos-ops-estampar'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { fechaBreve } from '@/lib/notificaciones/texto'
@@ -120,6 +121,8 @@ export const crearContratoOps = accion(
         estado: 'ACTIVO',
       },
     })
+    // Recontratación: la ficha vuelve a quedar activa (ver reactivarSiEstabaRetirado).
+    if (c.colaboradorId) await reactivarSiEstabaRetirado(c.colaboradorId, c.fechaInicio)
 
     if (d.entregables && d.entregables.length > 0) {
       await dbAuditado.entregableOps.createMany({
@@ -280,6 +283,8 @@ export const subirContratoOpsExistente = accion(
         origenPdf: 'SUBIDO',
       },
     })
+    // Recontratación: la ficha vuelve a quedar activa (ver reactivarSiEstabaRetirado).
+    if (c.colaboradorId) await reactivarSiEstabaRetirado(c.colaboradorId, c.fechaInicio)
 
     // Subir el archivo aportado y registrarlo como Documento del contrato.
     const sha256 = createHash('sha256').update(pdf).digest('hex')
@@ -802,6 +807,8 @@ export const subirContratoOpsParaFirma = accion(
         firmaContratanteEnPdf: contratanteFirmoEnPdf,
       },
     })
+    // Recontratación: la ficha vuelve a quedar activa (ver reactivarSiEstabaRetirado).
+    if (c.colaboradorId) await reactivarSiEstabaRetirado(c.colaboradorId, c.fechaInicio)
 
     if (d.entregables && d.entregables.length > 0) {
       await dbAuditado.entregableOps.createMany({
@@ -1194,9 +1201,9 @@ export const cerrarContratoOps = accion(
 /**
  * Borra un contrato OPS que se registró por error (el PDF a la persona
  * equivocada, un duplicado, datos mal puestos antes de mandarlo a firmar).
- * Solo para eso: un contrato con historia —firmado por el contratista en la
- * app, o con cuentas de cobro— no se borra; se cierra desde el propio contrato
- * o se registra el retiro en Terminaciones.
+ * Se puede aunque ya esté firmado por las dos partes (decisión de empresa,
+ * 2026-11-03). Uno con cuentas de cobro no se borra: se cierra desde el propio
+ * contrato o se registra el retiro en Terminaciones.
  *
  * Se lleva su PDF y su autorización de datos, su alerta de vencimiento, sus
  * entregables y sus evidencias de firma. Deja la ficha con el vínculo que le
@@ -1210,9 +1217,6 @@ export const eliminarContratoOps = accion(
       where: { id },
       include: { _count: { select: { cuentasCobro: true } } },
     })
-    if (c.firmaContratistaPath) {
-      throw new ErrorNegocio('Este contrato ya lo firmó el contratista en la app: no se borra, se cierra desde el propio contrato.')
-    }
     if (c._count.cuentasCobro > 0) {
       throw new ErrorNegocio('Este contrato tiene cuentas de cobro radicadas: no se borra, se cierra desde el propio contrato.')
     }
@@ -1432,5 +1436,16 @@ export const eliminarSoporteSs = accion(
     revalidatePath('/contratos/cuentas-cobro')
     if (cuenta.contratoOpsId) revalidatePath(`/contratos/ops/${cuenta.contratoOpsId}`)
     return { ok: true }
+  },
+)
+
+/** Marca que el PDF subido ya traía la firma del contratante (se olvidó al subirlo). */
+export const marcarEmpresaFirmoContratoOps = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: z.object({ contratoId: z.uuid() }) },
+  async (d, usuario) => {
+    const r = await marcarContratanteFirmoEnPdf({ contratoId: d.contratoId, usuarioId: usuario.id })
+    revalidatePath(`/contratos/ops/${d.contratoId}`)
+    revalidatePath('/autoservicio/contratos')
+    return { ok: true, firmado: r.firmado }
   },
 )

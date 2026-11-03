@@ -90,6 +90,19 @@ export function ordinalEnPeriodo(
 }
 
 /**
+ * Fin del vínculo de un contrato: el primer retiro que cae en o después de su
+ * inicio. Un retiro ANTERIOR al contrato es de un vínculo pasado (la persona se
+ * recontrató) y no lo corta. Null si ningún retiro lo alcanza.
+ */
+export function finDelVinculo(inicioContrato: Date, retiros: (Date | null | undefined)[]): Date | null {
+  let fin: Date | null = null
+  for (const r of retiros) {
+    if (r && r >= inicioContrato && (!fin || r < fin)) fin = r
+  }
+  return fin
+}
+
+/**
  * Días del periodo en que la persona NO tuvo vínculo vigente: los anteriores a
  * su ingreso y los posteriores a su retiro. Se descuentan como una ausencia más.
  *

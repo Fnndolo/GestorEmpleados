@@ -18,13 +18,12 @@ import { eliminarContratoOps } from '../../ops-acciones'
  * para terminar un contrato real; eso es «Cerrar contrato».
  *
  * Por eso vive abajo, separado del resto, con confirmación y diciendo qué se
- * lleva. El servidor no deja borrar uno ya firmado por el contratista ni con
- * cuentas de cobro radicadas.
+ * lleva. El servidor no deja borrar uno con cuentas de cobro radicadas.
  */
 export function EliminarContratoOps({ contratoId, numero, firmado, abierto: abiertoControlado, onAbiertoChange }: {
   contratoId: string
   numero: string
-  /** Ya lo firmó el contratista: solo se explica por qué no se puede borrar. */
+  /** Ya lo firmó el contratista: la confirmación avisa que se borra el PDF firmado. */
   firmado: boolean
   /** Abierto desde afuera (el menú de acciones del contrato): solo la confirmación. */
   abierto?: boolean
@@ -47,14 +46,6 @@ export function EliminarContratoOps({ contratoId, numero, firmado, abierto: abie
     })
   }
 
-  if (firmado) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        Este contrato ya lo firmó el contratista: no se puede eliminar. Si terminó, ciérralo; si la persona se retira, regístralo en Terminaciones.
-      </p>
-    )
-  }
-
   return (
     <>
       {!controlado && (
@@ -63,7 +54,7 @@ export function EliminarContratoOps({ contratoId, numero, firmado, abierto: abie
             {borrando ? <Spinner /> : <Trash2 className="size-4" />} Eliminar contrato
           </Button>
           <p className="mt-1 text-xs text-muted-foreground">
-            Solo si se registró por error y todavía nadie lo ha firmado. Un contrato real se cierra, no se borra.
+            Solo si se registró por error. Un contrato real se cierra, no se borra.
           </p>
         </>
       )}
@@ -73,7 +64,7 @@ export function EliminarContratoOps({ contratoId, numero, firmado, abierto: abie
           <AlertDialogHeader>
             <AlertDialogTitle>Eliminar el contrato {numero}</AlertDialogTitle>
             <AlertDialogDescription>
-              Solo si se registró por error: un contrato real se cierra, no se borra. Se borran el registro, su PDF y su
+              Solo si se registró por error: un contrato real se cierra, no se borra.{firmado ? ' Ya está firmado: también se borra el PDF firmado.' : ''} Se borran el registro, su PDF y su
               autorización de datos, sus entregables y su alerta de vencimiento.
               La ficha del contratista vuelve al vínculo de los contratos que le queden. No se puede deshacer.
             </AlertDialogDescription>

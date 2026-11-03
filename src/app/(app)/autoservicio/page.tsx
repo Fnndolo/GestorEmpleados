@@ -160,7 +160,14 @@ export default async function AutoservicioPage() {
     // Descuentos de nómina, y los acuerdos de pago que debe firmar.
     prisma.prestamo.count({ where: { colaboradorId: usuario.colaboradorId } }),
     prisma.prestamo.count({
-      where: { colaboradorId: usuario.colaboradorId, requiereFirma: true, acuerdoDocId: { not: null }, firmaEmpleadoFecha: null },
+      where: {
+        colaboradorId: usuario.colaboradorId,
+        OR: [
+          { requiereFirma: true, acuerdoDocId: { not: null }, firmaEmpleadoFecha: null },
+          // O tiene otro documento del descuento esperando su firma.
+          { documentos: { some: { requiereFirma: true, firmaEmpleadoFecha: null } } },
+        ],
+      },
     }),
   ])
   // Documentos por firmar: contratos OPS y otrosíes (la tarjeta los muestra juntos).

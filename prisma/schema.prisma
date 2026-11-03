@@ -2237,6 +2237,13 @@ enum EstadoPrestamo {
   @@map("estado_prestamo")
 }
 
+enum DescuentaDe {
+  NOMINA
+  LIQUIDACION
+
+  @@map("descuenta_de")
+}
+
 model Prestamo {
   id            String         @id @default(uuid(7)) @db.Uuid
   colaboradorId String         @map("colaborador_id") @db.Uuid
@@ -2264,6 +2271,7 @@ model Prestamo {
   firmaEmpleadoPath   String?   @map("firma_empleado_path")
 
   cuotas          CuotaPrestamo[]
+  documentos      DocumentoDescuento[]
   evidenciasFirma EvidenciaFirmaContrato[]
 
   @@index([colaboradorId, estado])
@@ -2283,9 +2291,34 @@ model CuotaPrestamo {
   pagada     Boolean   @default(false)
   periodoId  String?   @map("periodo_id") @db.Uuid
   fechaPago  DateTime? @map("fecha_pago") @db.Date
+  // De dónde sale esta cuota: la nómina del mes o la liquidación final.
+  descuentaDe DescuentaDe @default(NOMINA) @map("descuenta_de")
 
   @@index([prestamoId])
   @@map("cuota_prestamo")
+}
+
+/**
+ * Documentos del descuento aparte del acuerdo de pago (otrosíes, compromisos,
+ * soportes). Cada uno se sube ya firmado o para que el colaborador lo firme en
+ * su autoservicio, igual que el acuerdo: la firma se dibuja donde se marcó y se
+ * agrega una hoja de constancia.
+ */
+model DocumentoDescuento {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  prestamoId         String    @map("prestamo_id") @db.Uuid
+  prestamo           Prestamo  @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
+  nombre             String
+  documentoId        String    @map("documento_id") @db.Uuid
+  requiereFirma      Boolean   @default(false) @map("requiere_firma")
+  posicionFirma      Json?     @map("posicion_firma")
+  firmadoDocId       String?   @map("firmado_doc_id") @db.Uuid
+  firmaEmpleadoFecha DateTime? @map("firma_empleado_fecha")
+  firmaEmpleadoPath  String?   @map("firma_empleado_path")
+  creadoEn           DateTime  @default(now()) @map("creado_en")
+
+  @@index([prestamoId])
+  @@map("documento_descuento")
 }
 
 // Planilla PILA mensual (registro del pago y su vencimiento)

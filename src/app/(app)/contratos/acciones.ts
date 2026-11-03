@@ -10,6 +10,7 @@ import { guardarAutorizacionSubida } from '@/server/contratos-autorizacion-subid
 import { datosAutorizacionDeColaborador } from '@/server/contratos-autorizacion-datos'
 import { alinearCargoFicha } from '@/server/colaborador-cargo'
 import { accion, ErrorNegocio } from '@/server/accion'
+import { reactivarSiEstabaRetirado } from '@/server/reingreso'
 import { borrarPdfTemporal, extensionDe, obtenerArchivoAdjunto, obtenerPdfAdjunto } from '@/server/archivos-temporales'
 import { esComprimido } from '@/lib/archivos'
 import {
@@ -30,7 +31,7 @@ import { eliminarDocumento } from '@/server/documentos'
 import { valorParametroVigente } from '@/server/nomina/parametros'
 import { construirDatosPdfContratoLaboral, generarPdfContratoLaboral, generarPdfAutorizacionDatosLaboral } from '@/server/contratos-laboral-pdf'
 import { construirDatosAutorizacion, leerFirmaComoDataUri } from '@/server/contratos-ops-pdf'
-import { aplicarFirmaContratoLaboral, corregirPosicionFirmaLaboral as corregirPosicionFirmaLaboralServidor } from '@/server/contratos-laboral-firma'
+import { aplicarFirmaContratoLaboral, marcarEmpleadorFirmoEnPdf, corregirPosicionFirmaLaboral as corregirPosicionFirmaLaboralServidor } from '@/server/contratos-laboral-firma'
 import { leerDatosFirmaSubidoLaboral } from '@/server/contratos-laboral-estampar'
 import { avisar, usuarioDeColaborador } from '@/server/notificaciones/avisar'
 import { ubicarFirmasEnPdf, contarPaginas } from '@/server/pdf/firma-en-pdf'
@@ -38,7 +39,6 @@ import { resumenOtrosi, type ValoresOtrosi } from '@/lib/otrosi'
 import { documentosFaltantesDe } from '@/server/expediente'
 import type { FuncionesCargo } from '@/lib/contrato-variables'
 import { vinculoDeContrato, vinculoCoincide, type TipoContratoLaboral, type TipoVinculo } from '@/lib/vinculo-contrato'
-import { devolverAccesoNormal } from '@/server/rol-consulta'
 
 /**
  * Serie CT-<año>-####: consecutivo sobre el MAYOR número ya usado en el año,
@@ -171,7 +171,7 @@ export const crearContrato = accion(
 
     const vinculoAjustado = await alinearVinculoFicha(d.colaboradorId, d.tipo)
     await alinearCargoFicha(d.colaboradorId, v(d.cargoId))
-    const reactivado = await reactivarSiEstabaRetirado(d.colaboradorId)
+    const reactivado = await reactivarSiEstabaRetirado(d.colaboradorId, contrato.fechaInicio)
 
     revalidatePath('/contratos')
     return { id: contrato.id, vinculoAjustado, reactivado }
@@ -205,37 +205,6 @@ async function alinearVinculoFicha(
   return { antes, ahora }
 }
 
-/**
- * Devuelve a la vida la ficha de quien se está recontratando.
- *
- * Terminar hace tres cosas —marca la ficha como retirada, cierra el contrato y
- * baja el acceso a solo consulta— y crear el contrato nuevo solo deshacía la
- * segunda. La persona quedaba con contrato vigente pero marcada como retirada,
- * viendo en su autoservicio «tu vínculo laboral no está activo» y sin poder
- * pedir vacaciones ni firmar el contrato que se le acababa de hacer.
- *
- * Devuelve qué se reactivó, o null si la ficha ya estaba activa.
- */
-async function reactivarSiEstabaRetirado(
-  colaboradorId: string,
-): Promise<{ accesoDevuelto: boolean } | null> {
-  const colab = await prisma.colaborador.findUnique({
-    where: { id: colaboradorId },
-    select: { estado: true },
-  })
-  if (!colab || colab.estado === 'ACTIVO') return null
-
-  await dbAuditado.colaborador.update({
-    where: { id: colaboradorId },
-    // La fecha de retiro se limpia: dejarla haría que la antigüedad y las
-    // liquidaciones siguieran contando contra un retiro que ya no existe.
-    data: { estado: 'ACTIVO', fechaRetiro: null },
-  })
-  const accesoDevuelto = await devolverAccesoNormal(colaboradorId)
-  revalidatePath(`/colaboradores/${colaboradorId}`)
-  revalidatePath('/autoservicio')
-  return { accesoDevuelto }
-}
 
 /**
  * Alta de un contrato laboral cuyo PDF viene de fuera, compartida por los dos
@@ -354,11 +323,11 @@ async function avisarExpedientePendiente(colaboradorId: string) {
 }
 
 /** Lo que sigue a cualquier alta de contrato laboral: alertas y ficha del colaborador. */
-async function cerrarAltaContrato(contratoId: string, colaboradorId: string, tipo: TipoContratoLaboral, cargoId: string | null) {
+async function cerrarAltaContrato(contratoId: string, colaboradorId: string, tipo: TipoContratoLaboral, cargoId: string | null, fechaInicio: Date) {
   await publicarVencimientosContrato(contratoId)
   const vinculoAjustado = await alinearVinculoFicha(colaboradorId, tipo)
   await alinearCargoFicha(colaboradorId, cargoId)
-  const reactivado = await reactivarSiEstabaRetirado(colaboradorId)
+  const reactivado = await reactivarSiEstabaRetirado(colaboradorId, fechaInicio)
   await avisarExpedientePendiente(colaboradorId)
   revalidatePath('/contratos')
   return { vinculoAjustado, reactivado }
@@ -381,7 +350,7 @@ export const subirContratoExistente = accion(
     })
     await Promise.all([borrarPdfTemporal(d.pdfRef), borrarPdfTemporal(d.autorizacionRef)])
 
-    const cierre = await cerrarAltaContrato(contrato.id, d.colaboradorId, d.tipo, v(d.cargoId))
+    const cierre = await cerrarAltaContrato(contrato.id, d.colaboradorId, d.tipo, v(d.cargoId), contrato.fechaInicio)
     return { id: contrato.id, ...cierre }
   },
 )
@@ -451,7 +420,7 @@ export const subirContratoParaFirma = accion(
       llamadoAccion: 'Revisar y firmar el contrato',
     }).catch(() => {})
 
-    const cierre = await cerrarAltaContrato(contrato.id, d.colaboradorId, d.tipo, v(d.cargoId))
+    const cierre = await cerrarAltaContrato(contrato.id, d.colaboradorId, d.tipo, v(d.cargoId), contrato.fechaInicio)
     await borrarPdfTemporal(d.pdfRef)
     revalidatePath(`/contratos/${contrato.id}`)
     return { id: contrato.id, documentoId, ...cierre }
@@ -1047,9 +1016,9 @@ export const registrarSuspension = accion(
 
 /**
  * Borra un contrato laboral que se registró por error (p. ej. se subió el PDF
- * a la persona equivocada o por duplicado). Solo para eso: un contrato con
- * historia —firmado por el trabajador en la app, con prórrogas, otrosíes o
- * suspensiones— no se borra, se termina por el módulo de Terminaciones.
+ * a la persona equivocada o por duplicado), aunque ya esté firmado por las dos
+ * partes (decisión de empresa, 2026-11-03). Uno con prórrogas, otrosíes o
+ * suspensiones no se borra: se termina por el módulo de Terminaciones.
  *
  * Se lleva su PDF y su autorización de datos, sus alertas de vencimiento y sus
  * evidencias de firma, y deja la ficha con el vínculo que le corresponde por
@@ -1062,9 +1031,6 @@ export const eliminarContratoLaboral = accion(
       where: { id },
       include: { _count: { select: { prorrogas: true, otrosis: true, suspensiones: true } } },
     })
-    if (c.firmaEmpleadoPath) {
-      throw new ErrorNegocio('Este contrato ya lo firmó el trabajador en la app: no se borra, se termina desde Terminaciones.')
-    }
     const historia = c._count.prorrogas + c._count.otrosis + c._count.suspensiones
     if (historia > 0) {
       throw new ErrorNegocio('Este contrato tiene prórrogas, otrosíes o suspensiones: no se borra, se termina desde Terminaciones.')
@@ -1476,5 +1442,16 @@ export const eliminarVariacionSalarial = accion(
     revalidatePath(`/colaboradores/${vs.colaboradorId}`)
     revalidatePath('/contratos')
     return { ok: true }
+  },
+)
+
+/** Marca que el PDF subido ya traía la firma del empleador (se olvidó al subirlo). */
+export const marcarEmpresaFirmoContratoLaboral = accion(
+  { modulo: 'contratos', accion: 'EDITAR', schema: z.object({ contratoId: z.uuid() }) },
+  async (d, usuario) => {
+    const r = await marcarEmpleadorFirmoEnPdf({ contratoId: d.contratoId, usuarioId: usuario.id })
+    revalidatePath(`/contratos/${d.contratoId}`)
+    revalidatePath('/autoservicio/contratos')
+    return { ok: true, firmado: r.firmado }
   },
 )

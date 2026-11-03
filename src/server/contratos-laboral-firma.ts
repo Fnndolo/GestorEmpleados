@@ -236,3 +236,36 @@ export async function corregirPosicionFirmaLaboral(opts: {
   return { reestampado: true, numero: c.numero }
 }
 
+
+/**
+ * Corrige un contrato laboral subido para firmar en la app cuando, al subirlo,
+ * se olvidó marcar que el PDF ya traía la firma del empleador. Espejo de
+ * `marcarContratanteFirmoEnPdf` (OPS).
+ */
+export async function marcarEmpleadorFirmoEnPdf(opts: { contratoId: string; usuarioId: string }): Promise<{ firmado: boolean; numero: string }> {
+  const c = await prisma.contrato.findUniqueOrThrow({ where: { id: opts.contratoId } })
+  if (c.origenPdf !== 'SUBIDO_PARA_FIRMA') {
+    throw new ErrorNegocio('Esta opción es solo para contratos cuyo PDF se subió para firmarse en la app.')
+  }
+  if (c.firmaEmpleadorEnPdf) throw new ErrorNegocio('Ya está marcado que la empresa firmó en el documento.')
+  if (c.firmaEmpleadorPath) throw new ErrorNegocio('La empresa ya firmó este contrato en la app.')
+  const previo = leerDatosFirmaSubidoLaboral(c.posicionFirmas)
+  const datos: DatosFirmaSubidoLaboral = { ...previo, empleador: null }
+  await dbAuditado.contrato.update({
+    where: { id: c.id },
+    data: { firmaEmpleadorEnPdf: true, posicionFirmas: datos as object },
+  })
+  if (!c.firmaEmpleadoPath) return { firmado: false, numero: c.numero }
+
+  await generarPdfContratoLaboralEstampado({
+    contratoId: c.id,
+    numero: c.numero,
+    sedeId: c.sedeId,
+    usuarioId: opts.usuarioId,
+    datos,
+    firmaEmpleadoImg: await leerFirmaComoDataUri(c.firmaEmpleadoPath),
+    firmaEmpleadorImg: null,
+    nombreDocumento: `Contrato laboral ${c.numero} (firmado)`,
+  })
+  return { firmado: true, numero: c.numero }
+}

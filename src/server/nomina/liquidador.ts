@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { dbAuditado } from '@/lib/auditoria'
 import { cargarParametros } from './parametros'
 import { liquidar } from './motor'
-import { diasFueraDelVinculo, diasSuperpuestos, pagoIncapacidad } from './ausencias'
+import { diasFueraDelVinculo, finDelVinculo, diasSuperpuestos, pagoIncapacidad } from './ausencias'
 import { horasMesJornada } from './horas'
 import { CONTRATOS_DE_NOMINA } from '@/lib/vinculo-contrato'
 import { regenerarNovedadesAsistencia } from '@/server/asistencia/horas-asistencia'
@@ -94,14 +94,17 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
   // Del periodo en que cae el retiro sí queda por fuera: esos días se le pagan en
   // su liquidación definitiva junto con las prestaciones, como en la colilla que
   // emite el software contable. Incluirlo en ambos le pagaría el mes dos veces.
+  //
+  // El retiro que cuenta es el que alcanza al contrato (finDelVinculo): a quien
+  // se recontrata con un contrato que empieza después de su retiro se le paga
+  // desde ese inicio, aunque la terminación anterior siga abierta.
   const contratosCrudos = await prisma.contrato.findMany({
     where: {
       estado: { in: ['ACTIVO', 'TERMINADO'] },
       tipo: { in: [...CONTRATOS_DE_NOMINA] },
       fechaInicio: { lte: periodo.fechaFin },
-      colaborador: { OR: [{ fechaRetiro: null }, { fechaRetiro: { gt: periodo.fechaFin } }] },
     },
-    include: { colaborador: true },
+    include: { colaborador: { include: { terminaciones: { select: { fechaRetiro: true } } } } },
     orderBy: { fechaInicio: 'desc' },
   })
 
@@ -109,6 +112,8 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
   // contratos vigentes por un traslape de renovación, manda el más reciente:
   // es el que fija el salario con que se le paga.
   const contratos = [...new Map(contratosCrudos.map((c) => [c.colaboradorId, c])).values()]
+    .map((c) => ({ ...c, finVinculo: finDelVinculo(c.fechaInicio, [c.colaborador.fechaRetiro, ...c.colaborador.terminaciones.map((t) => t.fechaRetiro)]) }))
+    .filter((c) => !c.finVinculo || c.finVinculo > periodo.fechaFin)
 
   // Lock por periodo para evitar liquidaciones concurrentes
   await prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${periodoId}))`
@@ -180,7 +185,7 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
     // Días sin vínculo: los previos al ingreso y los posteriores al retiro. Se
     // cuentan como ausencia para que el salario y el auxilio salgan proporcionales
     // (el motor ya prorratea por diasTrabajados).
-    const diasSinVinculo = diasFueraDelVinculo(contrato.fechaInicio, contrato.colaborador.fechaRetiro, periodo)
+    const diasSinVinculo = diasFueraDelVinculo(contrato.fechaInicio, contrato.finVinculo, periodo)
 
     // Ni un día de vínculo en todo el periodo: no le corresponde nada y no debe
     // salir en la nómina. Pasa con un contrato que empieza después del cierre, o
@@ -282,10 +287,14 @@ export async function liquidarPeriodo(periodoId: string): Promise<{ liquidados: 
     for (const p of prestamos) {
       // Se paga la siguiente cuota del plan (las crea el registro del préstamo:
       // 1, 2, 3…). Solo un préstamo viejo sin plan recibe una cuota nueva.
+      // Cada cuota dice de dónde sale: las de LIQUIDACION se cobran en la
+      // liquidación final, así que la nómina toma la próxima de NOMINA.
       const siguiente = await prisma.cuotaPrestamo.findFirst({
-        where: { prestamoId: p.id, pagada: false },
+        where: { prestamoId: p.id, pagada: false, descuentaDe: 'NOMINA' },
         orderBy: { numero: 'asc' },
       })
+      // Quedan cuotas pendientes, pero todas van a la liquidación: este mes no se descuenta.
+      if (!siguiente && await prisma.cuotaPrestamo.count({ where: { prestamoId: p.id, pagada: false } }) > 0) continue
       // Lo acordado con la persona para esta cuota manda sobre el plan: puede
       // ser más, menos, o 0 (ese mes no se descuenta: la cuota queda en cero y
       // el saldo sigue igual, con una cuota más al final).

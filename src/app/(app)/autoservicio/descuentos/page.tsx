@@ -26,6 +26,7 @@ export default async function MisDescuentosPage() {
     where: { colaboradorId: usuario.colaboradorId },
     orderBy: { creadoEn: 'desc' },
     take: 30,
+    include: { documentos: { orderBy: { creadoEn: 'asc' } } },
   })
 
   const items: DescuentoItem[] = prestamos.map((p) => ({
@@ -39,6 +40,13 @@ export default async function MisDescuentosPage() {
     acuerdoDocId: p.acuerdoFirmadoDocId ?? p.acuerdoDocId,
     porFirmar: p.requiereFirma && !!p.acuerdoDocId && !p.firmaEmpleadoFecha,
     fechaFirma: p.firmaEmpleadoFecha ? formatFechaLarga(p.firmaEmpleadoFecha) : null,
+    documentos: p.documentos.map((d) => ({
+      id: d.id,
+      nombre: d.nombre,
+      verId: d.firmadoDocId ?? d.documentoId,
+      porFirmar: d.requiereFirma && !d.firmaEmpleadoFecha,
+      fechaFirma: d.firmaEmpleadoFecha ? formatFechaLarga(d.firmaEmpleadoFecha) : null,
+    })),
   }))
 
   return (

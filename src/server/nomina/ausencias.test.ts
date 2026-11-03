@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { diasFueraDelVinculo, diasSuperpuestos, pagoIncapacidad } from './ausencias'
+import { diasFueraDelVinculo, diasSuperpuestos, finDelVinculo, pagoIncapacidad } from './ausencias'
 
 const D = (m: number, d: number) => new Date(Date.UTC(2026, m - 1, d))
 
@@ -47,6 +47,24 @@ describe('pagoIncapacidad', () => {
 
   it('0 días = 0', () => {
     expect(pagoIncapacidad(0, 3_000_000, SMMLV)).toBe(0)
+  })
+})
+
+describe('finDelVinculo', () => {
+  it('sin retiros: vínculo abierto', () => {
+    expect(finDelVinculo(D(8, 15), [])).toBeNull()
+  })
+
+  it('retiro posterior al inicio: lo corta', () => {
+    expect(finDelVinculo(D(8, 15), [D(9, 22)])).toEqual(D(9, 22))
+  })
+
+  it('recontratado: el retiro anterior al contrato nuevo no lo corta', () => {
+    expect(finDelVinculo(D(11, 1), [D(10, 15), null])).toBeNull()
+  })
+
+  it('varios retiros: manda el primero desde el inicio', () => {
+    expect(finDelVinculo(D(1, 10), [D(12, 1), D(3, 5), D(1, 2)])).toEqual(D(3, 5))
   })
 })
 

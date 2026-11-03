@@ -245,3 +245,39 @@ export async function corregirPosicionFirmaContratoOps(opts: {
 
   return { reestampado: true, numero: c.numero }
 }
+
+/**
+ * Corrige un contrato OPS subido para firmar en la app cuando, al subirlo, se
+ * olvidó marcar que el PDF ya traía la firma del contratante. Marca la firma en
+ * el documento y, si el contratista ya firmó, estampa su firma y deja el PDF
+ * "(firmado)". No se le estampa nada a la empresa: su firma está en el papel.
+ */
+export async function marcarContratanteFirmoEnPdf(opts: { contratoId: string; usuarioId: string }): Promise<{ firmado: boolean; numero: string }> {
+  const c = await prisma.contratoOps.findUniqueOrThrow({ where: { id: opts.contratoId } })
+  if (c.origenPdf !== 'SUBIDO_PARA_FIRMA') {
+    throw new ErrorNegocio('Esta opción es solo para contratos cuyo PDF se subió para firmarse en la app.')
+  }
+  if (c.firmaContratanteEnPdf) throw new ErrorNegocio('Ya está marcado que la empresa firmó en el documento.')
+  if (c.firmaContratantePath) throw new ErrorNegocio('La empresa ya firmó este contrato en la app.')
+  const previo = leerDatosFirmaSubido(c.posicionFirmas)
+  const datos: DatosFirmaSubido = { ...previo, contratante: null }
+  await dbAuditado.contratoOps.update({
+    where: { id: c.id },
+    data: { firmaContratanteEnPdf: true, posicionFirmas: datos as object },
+  })
+  if (!c.firmaContratistaPath) return { firmado: false, numero: c.numero }
+
+  await generarPdfContratoOpsEstampado({
+    contratoId: c.id,
+    numero: c.numero,
+    sedeId: c.sedeId,
+    usuarioId: opts.usuarioId,
+    datos,
+    firmaContratistaImg: await leerFirmaComoDataUri(c.firmaContratistaPath),
+    firmaContratanteImg: null,
+    nombreDocumento: `Contrato OPS ${c.numero} (firmado)`,
+  })
+  // Solo pasa a FIRMADO si no había arrancado: uno ACTIVO o TERMINADO conserva su estado.
+  if (c.estado === 'BORRADOR') await dbAuditado.contratoOps.update({ where: { id: c.id }, data: { estado: 'FIRMADO' } })
+  return { firmado: true, numero: c.numero }
+}

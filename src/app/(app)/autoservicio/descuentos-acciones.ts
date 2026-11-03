@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { accion } from '@/server/accion'
-import { acuerdoPorFirmar, firmarAcuerdo } from '@/server/descuentos-acuerdo'
+import { acuerdoPorFirmar, firmarAcuerdo, documentoPorFirmar, firmarDocumentoDescuento } from '@/server/descuentos-acuerdo'
 import { generarYEnviarCodigoFirma, verificarCodigoFirma } from '@/server/firma/codigo-firma'
 
 /**
@@ -33,6 +33,35 @@ export const firmarMiAcuerdoDescuento = accion(
     await acuerdoPorFirmar(d.prestamoId, usuario.colaboradorId)
     await verificarCodigoFirma({ proposito: 'FIRMA_ACUERDO_DESCUENTO', referenciaId: d.prestamoId, userId: usuario.id, codigo: d.codigo })
     const r = await firmarAcuerdo({ prestamoId: d.prestamoId, firmaDataUri: d.firmaDataUri, usuarioId: usuario.id, metodoAuth: 'CODIGO_EMAIL' })
+    revalidatePath('/autoservicio/descuentos')
+    revalidatePath('/autoservicio')
+    return r
+  },
+)
+
+/** Código para firmar un documento adicional de MI descuento. */
+export const solicitarCodigoFirmaDocDescuento = accion(
+  { modulo: 'autoservicio', accion: 'CREAR', schema: z.object({ documentoId: z.uuid() }) },
+  async (d, usuario) => {
+    await documentoPorFirmar(d.documentoId, usuario.colaboradorId)
+    return generarYEnviarCodigoFirma({ proposito: 'FIRMA_ACUERDO_DESCUENTO', referenciaId: d.documentoId, userId: usuario.id, email: usuario.email })
+  },
+)
+
+export const firmarMiDocumentoDescuento = accion(
+  {
+    modulo: 'autoservicio',
+    accion: 'CREAR',
+    schema: z.object({
+      documentoId: z.uuid(),
+      firmaDataUri: z.string().min(1).startsWith('data:image/', 'Firma inválida'),
+      codigo: z.string().regex(/^\d{6}$/, 'El código debe tener 6 dígitos.'),
+    }),
+  },
+  async (d, usuario) => {
+    await documentoPorFirmar(d.documentoId, usuario.colaboradorId)
+    await verificarCodigoFirma({ proposito: 'FIRMA_ACUERDO_DESCUENTO', referenciaId: d.documentoId, userId: usuario.id, codigo: d.codigo })
+    const r = await firmarDocumentoDescuento({ documentoDescuentoId: d.documentoId, firmaDataUri: d.firmaDataUri, usuarioId: usuario.id, metodoAuth: 'CODIGO_EMAIL' })
     revalidatePath('/autoservicio/descuentos')
     revalidatePath('/autoservicio')
     return r

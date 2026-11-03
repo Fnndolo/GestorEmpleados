@@ -44,7 +44,7 @@ export function AccionesOps({ contratoId, numero, sedeId, vigente, vencido, fech
         <DropdownMenuContent align="end" className="w-52">
           {vigente && <DropdownMenuItem onSelect={() => setDialogo('cerrar')}><CircleX className="size-4" /> Cerrar contrato</DropdownMenuItem>}
           <DropdownMenuItem onSelect={() => setDialogo('adjuntar')}><Paperclip className="size-4" /> Adjuntar documento</DropdownMenuItem>
-          {puedeEliminar && !firmado && (
+          {puedeEliminar && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onSelect={() => setDialogo('eliminar')}><Trash2 className="size-4" /> Eliminar contrato</DropdownMenuItem>
@@ -59,7 +59,7 @@ export function AccionesOps({ contratoId, numero, sedeId, vigente, vencido, fech
           abierto={dialogo === 'cerrar'} onAbiertoChange={(v) => setDialogo(v ? 'cerrar' : null)}
         />
       )}
-      {puedeEliminar && !firmado && (
+      {puedeEliminar && (
         <EliminarContratoOps
           contratoId={contratoId} numero={numero} firmado={firmado}
           abierto={dialogo === 'eliminar'} onAbiertoChange={(v) => setDialogo(v ? 'eliminar' : null)}

@@ -224,7 +224,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
                   tono={estadoContrato.tono}
                   partes={estadoContrato.partes}
                   versiones={versionesContrato}
-                  acciones={c.origenPdf !== 'SUBIDO' && puedeEditar && !contratanteOk && <FirmarEmpresa contratoId={c.id} vinculo="OPS" nombre={nombreContratante} />}
+                  acciones={c.origenPdf !== 'SUBIDO' && puedeEditar && !contratanteOk && <FirmarEmpresa contratoId={c.id} vinculo="OPS" nombre={nombreContratante} subidoParaFirma={c.origenPdf === 'SUBIDO_PARA_FIRMA'} />}
                 />
               )}
               {versionesAutorizacion.length > 0 && (

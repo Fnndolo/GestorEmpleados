@@ -34,7 +34,12 @@ const ETIQUETAS = { contratista: 'Firma del colaborador', contratante: '' }
  * leerlo; si el colaborador debe firmarlo, se ve el documento con el recuadro
  * de su firma —propuesto leyendo el PDF— para dejarlo donde va.
  */
-export function CampoAcuerdo({ valor, onCambio }: { valor: EstadoAcuerdo; onCambio: (v: EstadoAcuerdo) => void }) {
+export function CampoAcuerdo({ valor, onCambio, etiqueta }: {
+  valor: EstadoAcuerdo
+  onCambio: (v: EstadoAcuerdo) => void
+  /** Para otro documento del descuento (no el acuerdo): su etiqueta, con asterisco de obligatorio. */
+  etiqueta?: string
+}) {
   const input = useRef<HTMLInputElement>(null)
   const [archivo, setArchivo] = useState<File | null>(null)
   const [pdf, setPdf] = usePdfLocal()
@@ -62,7 +67,7 @@ export function CampoAcuerdo({ valor, onCambio }: { valor: EstadoAcuerdo; onCamb
   return (
     <div className="space-y-2">
       <Label className="flex items-center gap-1.5">
-        Acuerdo de pago
+        {etiqueta ? <>{etiqueta} <span className="text-destructive">*</span></> : 'Acuerdo de pago'}
         <Ayuda texto="El soporte del descuento en PDF. La ley exige la autorización escrita del trabajador para descontarle de la nómina (CST art. 149). Si debe firmarlo, le llega a su autoservicio y el descuento no entra en la nómina hasta que lo firme." />
       </Label>
       <input ref={input} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => { void elegir(e.target.files?.[0] ?? null); e.target.value = '' }} />

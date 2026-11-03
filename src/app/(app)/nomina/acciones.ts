@@ -12,7 +12,7 @@ import { ENTIDAD_COMPROBANTE_CUENTA } from '@/server/cuentas-cobro'
 import { liquidarPeriodo, revertirEfectosPeriodo } from '@/server/nomina/liquidador'
 import { generarDesprendibles } from '@/server/nomina/desprendibles'
 import { generarPazSalvoPrestamo } from '@/server/prestamos'
-import { guardarAcuerdo } from '@/server/descuentos-acuerdo'
+import { guardarAcuerdo, guardarDocumentoDescuento } from '@/server/descuentos-acuerdo'
 import { contarPaginas } from '@/server/pdf/firma-en-pdf'
 
 /** Dónde firma el colaborador en el PDF subido (puntos PDF, página en base 1). */
@@ -317,7 +317,7 @@ export const editarPrestamo = accion(
   },
   async (d) => {
     const p = await exigirPrestamoSinPagos(d.prestamoId)
-    if (p.firmaEmpleadoFecha) throw new ErrorNegocio('El acuerdo de pago ya está firmado por el colaborador: no se puede cambiar ni anular el descuento.')
+    if (p.firmaEmpleadoFecha) throw new ErrorNegocio('El acuerdo de pago ya está firmado por el colaborador: no se puede cambiar ni anular el descuento. Si cambian las condiciones, súbelo como otro documento para firmar.')
     const plan = planDeCuotas(d.valorTotal, d.numeroCuotas)
     await dbAuditado.prestamo.update({
       where: { id: p.id },
@@ -344,7 +344,7 @@ export const anularPrestamo = accion(
   { modulo: 'nomina', accion: 'ELIMINAR', schema: z.object({ prestamoId: z.uuid(), motivo: motivoSchema }) },
   async (d) => {
     const p = await exigirPrestamoSinPagos(d.prestamoId)
-    if (p.firmaEmpleadoFecha) throw new ErrorNegocio('El acuerdo de pago ya está firmado por el colaborador: no se puede cambiar ni anular el descuento.')
+    if (p.firmaEmpleadoFecha) throw new ErrorNegocio('El acuerdo de pago ya está firmado por el colaborador: no se puede cambiar ni anular el descuento. Si cambian las condiciones, súbelo como otro documento para firmar.')
     const porFirmar = p.requiereFirma && !!p.acuerdoDocId
     const docs = await prisma.documento.findMany({ where: { entidadTipo: ENTIDAD_ACUERDO, entidadId: p.id }, select: { id: true } })
     // Las cuotas se van en cascada con el descuento.
@@ -401,6 +401,7 @@ export const ajustarCuotaDescuento = accion(
       prestamoId: z.uuid(),
       cuotaId: z.uuid().nullish(),
       valor: z.coerce.number().min(0, 'El valor no puede ser negativo.'),
+      descuentaDe: z.enum(['NOMINA', 'LIQUIDACION']).optional(),
     }),
   },
   async (d) => {
@@ -420,7 +421,7 @@ export const ajustarCuotaDescuento = accion(
       if (d.valor > disponible) {
         throw new ErrorNegocio(`Con las cuotas anteriores, esta puede ser de máximo ${fmtCOP(Math.max(0, disponible))}.`)
       }
-      await dbAuditado.cuotaPrestamo.update({ where: { id: c.id }, data: { valorAcordado: d.valor } })
+      await dbAuditado.cuotaPrestamo.update({ where: { id: c.id }, data: { valorAcordado: d.valor, ...(d.descuentaDe ? { descuentaDe: d.descuentaDe } : {}) } })
 
       const resto = Math.round((disponible - d.valor) * 100) / 100
       if (resto <= 0) {
@@ -435,7 +436,7 @@ export const ajustarCuotaDescuento = accion(
       }
     } else {
       await dbAuditado.cuotaPrestamo.create({
-        data: { prestamoId: p.id, numero: p._count.cuotas + 1, valor: p.valorCuota, valorAcordado: d.valor },
+        data: { prestamoId: p.id, numero: p._count.cuotas + 1, valor: p.valorCuota, valorAcordado: d.valor, descuentaDe: d.descuentaDe ?? 'NOMINA' },
       })
     }
     revalidatePath(`/nomina/prestamos/${p.id}`)
@@ -455,12 +456,107 @@ export const adjuntarAcuerdoDescuento = accion(
   },
   async (d, usuario) => {
     const p = await prisma.prestamo.findUniqueOrThrow({ where: { id: d.prestamoId } })
-    if (p.firmaEmpleadoFecha) throw new ErrorNegocio('El colaborador ya firmó el acuerdo: no se puede reemplazar.')
+    if (p.firmaEmpleadoFecha) throw new ErrorNegocio('El colaborador ya firmó el acuerdo: no se puede reemplazar. Si cambian las condiciones, súbelo como otro documento para firmar.')
     const pdf = await obtenerPdfAdjunto({ pdfRef: d.acuerdoRef }, usuario.id, 'El acuerdo de pago está vacío.')
     await guardarAcuerdo({ prestamoId: p.id, colaboradorId: p.colaboradorId, pdf, asunto: p.descripcion ?? 'Descuento', requiereFirma: d.requiereFirma, posicionFirma: d.posicionFirma ?? null, usuarioId: usuario.id })
     await borrarPdfTemporal(d.acuerdoRef, usuario.id)
     revalidatePath('/nomina/prestamos')
     revalidatePath(`/nomina/prestamos/${p.id}`)
+    return { ok: true }
+  },
+)
+
+/**
+ * Marcar a mano una cuota como pagada (la persona pagó por fuera de la nómina,
+ * o se descontó en la liquidación). Baja el saldo y, si queda en cero, el
+ * descuento pasa a pagado. No lleva periodo: recalcular una nómina no la toca.
+ */
+export const marcarCuotaPagada = accion(
+  {
+    modulo: 'nomina',
+    accion: 'EDITAR',
+    schema: z.object({
+      prestamoId: z.uuid(),
+      cuotaId: z.uuid().nullish(),
+      valor: z.coerce.number().positive('El valor pagado debe ser mayor que cero.'),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Elige la fecha del pago.'),
+      descuentaDe: z.enum(['NOMINA', 'LIQUIDACION']).optional(),
+    }),
+  },
+  async (d) => {
+    const p = await prisma.prestamo.findUniqueOrThrow({ where: { id: d.prestamoId }, include: { _count: { select: { cuotas: true } } } })
+    if (p.estado !== 'ACTIVO') throw new ErrorNegocio('Este descuento ya está pagado.')
+    if (d.valor > Number(p.saldo)) throw new ErrorNegocio(`No puede ser mayor que el saldo (${fmtCOP(Number(p.saldo))}).`)
+    const fecha = parseFechaISO(d.fecha)!
+    if (d.cuotaId) {
+      const c = await prisma.cuotaPrestamo.findUniqueOrThrow({ where: { id: d.cuotaId } })
+      if (c.prestamoId !== p.id) throw new ErrorNegocio('La cuota no es de este descuento.')
+      if (c.pagada) throw new ErrorNegocio('Esa cuota ya está pagada.')
+      await dbAuditado.cuotaPrestamo.update({ where: { id: c.id }, data: { valor: d.valor, pagada: true, fechaPago: fecha, periodoId: null, ...(d.descuentaDe ? { descuentaDe: d.descuentaDe } : {}) } })
+    } else {
+      await dbAuditado.cuotaPrestamo.create({ data: { prestamoId: p.id, numero: p._count.cuotas + 1, valor: d.valor, pagada: true, fechaPago: fecha, descuentaDe: d.descuentaDe ?? 'NOMINA' } })
+    }
+    const saldo = Math.round((Number(p.saldo) - d.valor) * 100) / 100
+    await dbAuditado.prestamo.update({ where: { id: p.id }, data: { saldo, estado: saldo <= 0 ? 'PAGADO' : 'ACTIVO' } })
+    // Ya pagado del todo: las cuotas pendientes sobran.
+    if (saldo <= 0) await prisma.cuotaPrestamo.deleteMany({ where: { prestamoId: p.id, pagada: false } })
+    revalidatePath('/nomina/prestamos')
+    revalidatePath(`/nomina/prestamos/${p.id}`)
+    return { ok: true, pagado: saldo <= 0 }
+  },
+)
+
+/** Deshacer una cuota marcada a mano como pagada (las que pagó la nómina se deshacen recalculándola). */
+export const desmarcarCuotaPagada = accion(
+  { modulo: 'nomina', accion: 'EDITAR', schema: z.object({ cuotaId: z.uuid() }) },
+  async (d) => {
+    const c = await prisma.cuotaPrestamo.findUniqueOrThrow({ where: { id: d.cuotaId }, include: { prestamo: true } })
+    if (!c.pagada) throw new ErrorNegocio('Esa cuota no está pagada.')
+    if (c.periodoId) throw new ErrorNegocio('Esa cuota la descontó una nómina: se deshace recalculando esa nómina.')
+    await dbAuditado.cuotaPrestamo.update({ where: { id: c.id }, data: { pagada: false, fechaPago: null, valor: c.prestamo.valorCuota } })
+    const saldo = Math.round((Number(c.prestamo.saldo) + Number(c.valor)) * 100) / 100
+    await dbAuditado.prestamo.update({ where: { id: c.prestamoId }, data: { saldo, estado: 'ACTIVO' } })
+    revalidatePath('/nomina/prestamos')
+    revalidatePath(`/nomina/prestamos/${c.prestamoId}`)
+    return { ok: true }
+  },
+)
+
+/** Subir otro documento del descuento (aparte del acuerdo), ya firmado o para que lo firme el colaborador. */
+export const agregarDocumentoDescuento = accion(
+  {
+    modulo: 'nomina',
+    accion: 'EDITAR',
+    schema: z.object({
+      prestamoId: z.uuid(),
+      nombre: z.string().trim().min(3, 'Escribe el nombre del documento.').max(120),
+      pdfRef: z.string().min(16).max(2000),
+      requiereFirma: z.boolean(),
+      posicionFirma: posicionFirmaSchema.nullish(),
+    }),
+  },
+  async (d, usuario) => {
+    const pdf = await obtenerPdfAdjunto({ pdfRef: d.pdfRef }, usuario.id, 'El documento está vacío.')
+    await guardarDocumentoDescuento({ prestamoId: d.prestamoId, nombre: d.nombre, pdf, requiereFirma: d.requiereFirma, posicionFirma: d.posicionFirma ?? null, usuarioId: usuario.id })
+    await borrarPdfTemporal(d.pdfRef, usuario.id)
+    revalidatePath(`/nomina/prestamos/${d.prestamoId}`)
+    revalidatePath('/autoservicio/descuentos')
+    revalidatePath('/autoservicio')
+    return { ok: true }
+  },
+)
+
+/** Quitar un documento adicional mientras el colaborador no lo haya firmado en la app. */
+export const quitarDocumentoDescuento = accion(
+  { modulo: 'nomina', accion: 'EDITAR', schema: z.object({ id: z.uuid() }) },
+  async (d) => {
+    const doc = await prisma.documentoDescuento.findUniqueOrThrow({ where: { id: d.id } })
+    if (doc.firmaEmpleadoFecha) throw new ErrorNegocio('El colaborador ya firmó este documento: no se quita.')
+    await dbAuditado.documentoDescuento.delete({ where: { id: doc.id } })
+    await eliminarDocumento(doc.documentoId).catch(() => {})
+    revalidatePath(`/nomina/prestamos/${doc.prestamoId}`)
+    revalidatePath('/autoservicio/descuentos')
+    revalidatePath('/autoservicio')
     return { ok: true }
   },
 )

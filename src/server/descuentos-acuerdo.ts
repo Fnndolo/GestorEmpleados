@@ -200,3 +200,138 @@ async function agregarConstancia(pdfOriginal: Buffer, d: {
   linea('Firmado en la plataforma de Gestión Humana de KUPOCELL S.A.S. (Ley 527 de 1999).', { t: 8, c: gris })
   return Buffer.from(await doc.save())
 }
+
+
+/** Entidad de los documentos adicionales del descuento (otrosíes, compromisos, soportes). */
+export const ENTIDAD_DOC_DESCUENTO = 'DocumentoDescuento'
+
+/** Guarda un documento adicional del descuento, ya firmado o para que lo firme el colaborador. */
+export async function guardarDocumentoDescuento(opts: {
+  prestamoId: string
+  nombre: string
+  pdf: Buffer
+  requiereFirma: boolean
+  posicionFirma: PosicionFirma | null
+  usuarioId: string
+}): Promise<string> {
+  const p = await prisma.prestamo.findUniqueOrThrow({ where: { id: opts.prestamoId } })
+  const asunto = p.descripcion ?? 'Descuento'
+  const archivo = await subirArchivo(`colaboradores/${p.colaboradorId}/descuentos`, `documento-${p.id}-${Date.now()}.pdf`, opts.pdf, 'application/pdf')
+  const doc = await dbAuditado.documento.create({
+    data: {
+      entidadTipo: ENTIDAD_DOC_DESCUENTO,
+      entidadId: p.id,
+      nombre: `${opts.nombre} · ${asunto}${opts.requiereFirma ? '' : ' (firmado en físico)'}`,
+      bucket: archivo.bucket,
+      storagePath: archivo.storagePath,
+      mimeType: 'application/pdf',
+      tamanoBytes: archivo.tamanoBytes,
+      sha256: createHash('sha256').update(opts.pdf).digest('hex'),
+      nivelAcceso: 'GENERAL',
+      subidoPorId: opts.usuarioId,
+    },
+  })
+  const fila = await dbAuditado.documentoDescuento.create({
+    data: {
+      prestamoId: p.id,
+      nombre: opts.nombre,
+      documentoId: doc.id,
+      requiereFirma: opts.requiereFirma,
+      posicionFirma: opts.requiereFirma && opts.posicionFirma ? opts.posicionFirma : Prisma.DbNull,
+    },
+  })
+  if (opts.requiereFirma) {
+    const uid = await usuarioDeColaborador(p.colaboradorId)
+    if (uid) {
+      await avisar(uid, {
+        evento: 'contrato_por_firmar',
+        titulo: `Firma el documento «${opts.nombre}» de tu descuento: ${asunto}`,
+        mensaje: 'Talento Humano agregó un documento a tu descuento. Revísalo y fírmalo en tu autoservicio.',
+        enlace: '/autoservicio/descuentos',
+        llamadoAccion: 'Revisar y firmar',
+        colaboradorId: p.colaboradorId,
+      }).catch(() => {})
+    }
+  }
+  return fila.id
+}
+
+/** El documento es de un descuento del colaborador y está esperando su firma. */
+export async function documentoPorFirmar(documentoDescuentoId: string, colaboradorId: string | null) {
+  if (!colaboradorId) throw new ErrorNegocio('Tu usuario no está vinculado a una ficha de colaborador.')
+  const d = await prisma.documentoDescuento.findUnique({ where: { id: documentoDescuentoId }, include: { prestamo: { select: { colaboradorId: true } } } })
+  if (!d || d.prestamo.colaboradorId !== colaboradorId) throw new ErrorNegocio('Este documento no está a tu nombre.')
+  if (!d.requiereFirma) throw new ErrorNegocio('Este documento no necesita tu firma.')
+  if (d.firmaEmpleadoFecha) throw new ErrorNegocio('Ya firmaste este documento.')
+  return d
+}
+
+/** Firma del colaborador en un documento adicional: misma forma que el acuerdo (firma + constancia). */
+export async function firmarDocumentoDescuento(opts: { documentoDescuentoId: string; firmaDataUri: string; usuarioId: string; metodoAuth: string }) {
+  const d = await prisma.documentoDescuento.findUniqueOrThrow({
+    where: { id: opts.documentoDescuentoId },
+    include: { prestamo: { include: { colaborador: { select: { nombres: true, apellidos: true, numeroDocumento: true } } } } },
+  })
+  if (d.firmaEmpleadoFecha) throw new ErrorNegocio('Este documento ya está firmado.')
+  const p = d.prestamo
+  const png = Buffer.from(opts.firmaDataUri.split(',')[1] ?? '', 'base64')
+  if (png.byteLength === 0) throw new ErrorNegocio('La firma está vacía.')
+  const archivoFirma = await subirArchivo(`colaboradores/${p.colaboradorId}/descuentos/firmas`, `firma-${d.id}.png`, png, 'image/png')
+
+  const original = await prisma.documento.findUniqueOrThrow({ where: { id: d.documentoId } })
+  const pdfOriginal = await leerArchivo(original.storagePath)
+  const ahora = new Date()
+  const ctx = contextoActual()
+  const nombre = `${p.colaborador.nombres} ${p.colaborador.apellidos}`
+  const posicion = d.posicionFirma as PosicionFirma | null
+  const conFirma = posicion
+    ? await estamparFirmasEnPdf({ pdfOriginal, firmas: [{ posicion, imagenDataUri: opts.firmaDataUri }] })
+    : pdfOriginal
+  const pdf = await agregarConstancia(conFirma, {
+    png, nombre, documento: p.colaborador.numeroDocumento, fecha: ahora,
+    asunto: `${d.nombre} · ${p.descripcion ?? 'Descuento de nómina'}`,
+    detalle: `Documento del descuento de ${fmtCOP(Number(p.valorTotal))}`,
+    ip: ctx.ip, correo: ctx.userEmail, huellaOriginal: original.sha256 ?? createHash('sha256').update(pdfOriginal).digest('hex'),
+  })
+  const sha256 = createHash('sha256').update(pdf).digest('hex')
+  const archivo = await subirArchivo(`colaboradores/${p.colaboradorId}/descuentos`, `documento-${d.id}-firmado.pdf`, pdf, 'application/pdf')
+  const doc = await dbAuditado.documento.create({
+    data: {
+      entidadTipo: ENTIDAD_DOC_DESCUENTO,
+      entidadId: p.id,
+      nombre: `${d.nombre} (firmado) · ${p.descripcion ?? 'Descuento'}`,
+      bucket: archivo.bucket,
+      storagePath: archivo.storagePath,
+      mimeType: 'application/pdf',
+      tamanoBytes: archivo.tamanoBytes,
+      sha256,
+      nivelAcceso: 'GENERAL',
+      subidoPorId: opts.usuarioId,
+    },
+  })
+  await dbAuditado.documentoDescuento.update({
+    where: { id: d.id },
+    data: { firmadoDocId: doc.id, firmaEmpleadoFecha: ahora, firmaEmpleadoPath: archivoFirma.storagePath },
+  })
+  await prisma.evidenciaFirmaContrato.create({
+    data: {
+      prestamoId: p.id,
+      rol: 'EMPLEADO',
+      userId: opts.usuarioId,
+      userEmail: ctx.userEmail,
+      ip: ctx.ip,
+      userAgent: (await headers()).get('user-agent') ?? null,
+      metodoAuth: opts.metodoAuth,
+      documentos: [{ tipo: 'DOCUMENTO_DESCUENTO', documentoId: doc.id, sha256 }],
+      firmadoEn: ahora,
+    },
+  })
+  await avisarPorRol(['Administrador', 'Recursos Humanos'], {
+    evento: 'contrato_firmado',
+    titulo: `${nombreCorto(p.colaborador.nombres, p.colaborador.apellidos)} firmó «${d.nombre}»`,
+    mensaje: `Documento del descuento ${p.descripcion ?? 'Descuento'}.`,
+    colaboradorId: p.colaboradorId,
+    enlace: `/nomina/prestamos/${p.id}`,
+  }).catch(() => {})
+  return { documentoId: doc.id }
+}

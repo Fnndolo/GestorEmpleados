@@ -218,7 +218,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
               acciones={
                 <>
                   {editable && <EdicionContrato contratoId={c.id} tieneDocumento={tieneDocumento} />}
-                  {!subido && tieneDocumento && puedeEditar && !empleadorOk && <FirmarEmpresa contratoId={c.id} vinculo="LABORAL" nombre={nombreEmpleador} />}
+                  {!subido && tieneDocumento && puedeEditar && !empleadorOk && <FirmarEmpresa contratoId={c.id} vinculo="LABORAL" nombre={nombreEmpleador} subidoParaFirma={c.origenPdf === 'SUBIDO_PARA_FIRMA'} />}
                 </>
               }
             />
