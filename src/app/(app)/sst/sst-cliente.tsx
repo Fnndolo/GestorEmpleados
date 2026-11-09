@@ -45,6 +45,7 @@ import {
   eliminarAutoevaluacion, editarAccionMejora, eliminarIndicadorSst,
 } from './acciones'
 import { DialogEliminar, BotonEditar, BotonEliminar, type Eliminacion } from './dialogo-eliminar'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 
 const TITULO_TAB: Record<string, string> = {
   tablero: 'Tablero',
@@ -812,7 +813,7 @@ function DialogExamen({ verSalud, inicial, onClose }: { verSalud: boolean; inici
         fd.append('entidadTipo', 'ExamenMedico')
         fd.append('entidadId', examenId)
         fd.append('nombre', `Certificado examen ${f.tipo.toLowerCase()}`)
-        const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        const up = await subirDocumentoForm(fd)
         if (up.ok) {
           const { id: documentoId } = await up.json()
           await vincularSoporteExamen({ examenId, documentoId })
@@ -898,7 +899,7 @@ function DialogSeguimientoAccidente({ accidente, onEditar, onEliminar, onClose }
         fd.append('entidadTipo', 'AccidenteTrabajo')
         fd.append('entidadId', accidente.id)
         fd.append('nombre', archivo.name)
-        const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        const up = await subirDocumentoForm(fd)
         if (!up.ok) toast.warning('El seguimiento se guardó, pero el soporte no se pudo adjuntar.')
       } catch { toast.warning('El seguimiento se guardó, pero el soporte no se pudo adjuntar.') }
     }
@@ -996,7 +997,7 @@ function DialogComiteDetalle({ comite, puedeEditar, puedeEliminar, onEditar, onE
         fd.append('entidadTipo', 'ReunionComite')
         fd.append('entidadId', reunionId)
         fd.append('nombre', `Acta ${TIPO_COMITE[comite.tipo]} ${fechaReunion}`)
-        const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        const up = await subirDocumentoForm(fd)
         if (up.ok) {
           const { id: documentoId } = await up.json()
           await vincularActaReunion({ reunionId, documentoId })
@@ -1247,7 +1248,7 @@ function DialogSeguimientoInspeccion({ inspeccion, onEditar, onEliminar, onClose
       fd.append('entidadTipo', 'InspeccionSst')
       fd.append('entidadId', inspeccion.id)
       fd.append('nombre', `Inspección ${inspeccion.tipo} ${inspeccion.fecha}`)
-      const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+      const up = await subirDocumentoForm(fd)
       if (up.ok) { const { id: documentoId } = await up.json(); await vincularDocumentoInspeccion({ inspeccionId: inspeccion.id, documentoId }); toast.success('Soporte adjuntado.'); router.refresh() }
       else toast.error('No se pudo adjuntar el soporte.')
     } catch { toast.error('No se pudo adjuntar el soporte.') }
@@ -1373,7 +1374,7 @@ function ListaPlanes({ planes, puedeCrear, puedeEditar, puedeEliminar, onEditar,
     fd.append('entidadTipo', 'PlanEmergencia')
     fd.append('entidadId', planId)
     fd.append('nombre', 'Plan de emergencias')
-    const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+    const up = await subirDocumentoForm(fd)
     if (up.ok) { const { id: documentoId } = await up.json(); await vincularDocumentoPlanEmergencia({ planId, documentoId }); toast.success('Documento adjuntado.'); router.refresh() }
     else toast.error('No se pudo adjuntar.')
     setSubiendo(null)
@@ -1561,7 +1562,7 @@ function DialogSimulacro({ sedes, inicial, onClose }: { sedes: SedeOpcion[]; ini
         fd.append('entidadTipo', 'Simulacro')
         fd.append('entidadId', simulacroId)
         fd.append('nombre', `Acta simulacro ${f.tipo}`)
-        const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        const up = await subirDocumentoForm(fd)
         if (up.ok) { const { id: documentoId } = await up.json(); await vincularDocumentoSimulacro({ simulacroId, documentoId }) }
         else toast.warning('El simulacro se guardó, pero el acta no se pudo adjuntar.')
       } catch { toast.warning('El simulacro se guardó, pero el acta no se pudo adjuntar.') }
@@ -1660,7 +1661,7 @@ async function subirDoc(archivo: File, entidadTipo: string, entidadId: string, n
     fd.append('entidadTipo', entidadTipo)
     fd.append('entidadId', entidadId)
     fd.append('nombre', nombre)
-    const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+    const up = await subirDocumentoForm(fd)
     if (!up.ok) return null
     const { id } = await up.json()
     return id as string

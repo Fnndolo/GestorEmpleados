@@ -22,6 +22,7 @@ import {
   consultarHorasAsistencia, traerHorasAsistencia, previsualizarOrdenPago, generarOrdenPago, enviarOrdenAFirma, marcarPagoPagado, marcarPagoPendiente,
   verResumenHoy, type ResumenPantalla, type FilaAsistencia,
 } from './asistencia-acciones'
+import { subirArchivoTemporal, tipoDeArchivo } from '@/lib/archivos'
 
 /**
  * Las horas extra del período tal como las calcula AsistencIA (control de
@@ -386,14 +387,18 @@ function AccionesPago({ colaboradorId, mes, quincena, nombre, pagoLocal, sinHora
     if (!pagoLocal) return
     setOcupado('pagar')
     let pdfBase64: string | undefined
+    let pdfRef: string | undefined
     if (comprobante) {
       try {
-        pdfBase64 = await leerArchivo(comprobante)
-      } catch {
-        setOcupado(null); toast.error('No se pudo leer el archivo.'); return
+        // Un PDF va por el depósito temporal: en base64 no cabe en la acción si pasa de ~3 MB.
+        if (tipoDeArchivo(comprobante) === 'application/pdf') pdfRef = await subirArchivoTemporal(comprobante, 'firma')
+        else if (comprobante.size > 3 * 1024 * 1024) { setOcupado(null); toast.error('La imagen pesa más de 3 MB: súbela en PDF o más liviana.'); return }
+        else pdfBase64 = await leerArchivo(comprobante)
+      } catch (e) {
+        setOcupado(null); toast.error(e instanceof Error ? e.message : 'No se pudo leer el archivo.'); return
       }
     }
-    const res = await marcarPagoPagado({ pagoId: pagoLocal.id, pdfBase64, nombreArchivo: comprobante?.name })
+    const res = await marcarPagoPagado({ pagoId: pagoLocal.id, pdfBase64, pdfRef, nombreArchivo: comprobante?.name })
     setOcupado(null)
     if (!res.ok) { toast.error(res.error); return }
     toast.success('Marcado como pagado.')

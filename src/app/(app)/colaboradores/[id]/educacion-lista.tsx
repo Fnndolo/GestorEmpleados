@@ -20,6 +20,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 
 type Educacion = {
   id: string; nivel: string; titulo: string; institucion: string
@@ -120,7 +121,7 @@ function DialogEducacion({
         fd.append('entidadTipo', 'EducacionColaborador')
         fd.append('entidadId', estudioId)
         fd.append('nombre', `Certificado — ${d.titulo}`)
-        await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        await subirDocumentoForm(fd)
       } catch { /* el certificado es opcional */ }
     }
     setGuardando(false)

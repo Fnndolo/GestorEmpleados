@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { obtenerSesion, tienePermiso } from '@/server/sesion'
 import { prisma } from '@/lib/db'
 import { subirArchivo } from '@/server/storage'
+import { obtenerArchivoAdjunto, borrarPdfTemporal } from '@/server/archivos-temporales'
 
 export const runtime = 'nodejs'
 const MAX_BYTES = 25 * 1024 * 1024 // 25 MB
@@ -23,8 +24,10 @@ export async function POST(req: NextRequest) {
   const form = await req.formData()
   const archivo = form.get('archivo')
   const codigo = String(form.get('codigo') ?? '').trim().toUpperCase()
-  if (!(archivo instanceof File)) return NextResponse.json({ error: 'Falta el archivo' }, { status: 400 })
-  if (archivo.size > MAX_BYTES) return NextResponse.json({ error: 'El archivo supera 25 MB' }, { status: 413 })
+  // Más de 4 MB no cabe en el cuerpo de la función: llega la referencia al depósito temporal.
+  const archivoRef = String(form.get('archivoRef') ?? '')
+  if (!(archivo instanceof File) && !archivoRef) return NextResponse.json({ error: 'Falta el archivo' }, { status: 400 })
+  if (archivo instanceof File && archivo.size > MAX_BYTES) return NextResponse.json({ error: 'El archivo supera 25 MB' }, { status: 413 })
   if (!/^DA-[0-9A-F]{8}$/.test(codigo)) return NextResponse.json({ error: 'Código no válido' }, { status: 400 })
 
   const denuncia = await prisma.denunciaAcoso.findUnique({ where: { codigo }, select: { id: true, estado: true } })
@@ -34,14 +37,21 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const contenido = Buffer.from(await archivo.arrayBuffer())
-    const subido = await subirArchivo(`denunciaacoso/${denuncia.id}`, archivo.name, contenido, archivo.type || 'application/octet-stream')
+    let nombre: string, mimeType: string, contenido: Buffer
+    if (archivo instanceof File) {
+      nombre = archivo.name; mimeType = archivo.type || 'application/octet-stream'; contenido = Buffer.from(await archivo.arrayBuffer())
+    } else {
+      const a = await obtenerArchivoAdjunto({ pdfRef: archivoRef }, usuario.id)
+      nombre = String(form.get('archivoNombre') ?? '') || a.nombre || 'evidencia'; mimeType = a.mimeType; contenido = a.contenido
+      await borrarPdfTemporal(archivoRef, usuario.id).catch(() => {})
+    }
+    const subido = await subirArchivo(`denunciaacoso/${denuncia.id}`, nombre, contenido, mimeType)
     // prisma (sin auditar) y sin subidoPorId: nada apunta a quién lo aportó.
     const doc = await prisma.documento.create({
       data: {
         entidadTipo: 'DenunciaAcoso',
         entidadId: denuncia.id,
-        nombre: `Evidencia — ${archivo.name}`,
+        nombre: `Evidencia — ${nombre}`,
         bucket: subido.bucket,
         storagePath: subido.storagePath,
         mimeType: subido.mimeType,

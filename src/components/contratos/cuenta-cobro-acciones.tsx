@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DialogAnular, BotonAnular, BotonEditar } from '@/components/contratos/dialog-anular'
 import { editarCuentaCobro, anularCuentaCobro, reemplazarSoporteSs, eliminarSoporteSs } from '@/app/(app)/contratos/ops-acciones'
 import { fmtCOP } from '@/lib/moneda'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 
 export type CuentaEditable = {
   id: string
@@ -163,7 +164,7 @@ function DialogReemplazarSoporte({ cuenta, soporte, onClose }: {
       fd.append('entidadTipo', 'CuentaCobroOps')
       fd.append('entidadId', cuenta.id)
       fd.append('nombre', `Planilla PILA — ${periodo}`)
-      const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+      const up = await subirDocumentoForm(fd)
       if (!up.ok) toast.warning('El soporte se reemplazó, pero el archivo no se pudo subir. Intenta adjuntarlo de nuevo.')
     } catch {
       toast.warning('El soporte se reemplazó, pero el archivo no se pudo subir. Intenta adjuntarlo de nuevo.')

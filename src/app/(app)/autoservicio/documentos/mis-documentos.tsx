@@ -20,6 +20,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 
 type DocItem = {
   id: string; nombre: string; tipo: string | null; categoria: string; fecha: string
@@ -260,7 +261,7 @@ function DialogSubir({ colaboradorId, tipos, tipoInicial, onClose, onDone }: {
       fd.append('nombre', nombre.trim() || tipo?.nombre || archivo.name)
       if (tipoId) fd.append('tipoDocumentoId', tipoId)
       if (vencimiento) fd.append('fechaVencimiento', vencimiento)
-      const res = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+      const res = await subirDocumentoForm(fd)
       if (!res.ok) {
         const { error } = await res.json().catch(() => ({ error: 'No se pudo subir el documento.' }))
         toast.error(error ?? 'No se pudo subir el documento.')
@@ -352,7 +353,7 @@ function DialogEditar({ doc, colaboradorId, tipos, onClose, onDone }: {
         if (tipoId) fd.append('tipoDocumentoId', tipoId)
         if (descripcion.trim()) fd.append('descripcion', descripcion.trim())
         if (vencimiento) fd.append('fechaVencimiento', vencimiento)
-        const res = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        const res = await subirDocumentoForm(fd)
         if (!res.ok) {
           const { error } = await res.json().catch(() => ({ error: null }))
           toast.error(error ?? 'No se pudo subir el archivo nuevo.')

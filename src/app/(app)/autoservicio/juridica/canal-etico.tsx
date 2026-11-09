@@ -1,6 +1,7 @@
 'use client'
 
 import { reducirImagen } from '@/lib/reducir-imagen'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -27,7 +28,7 @@ async function subirEvidencias(codigo: string, archivos: File[]): Promise<number
       const fd = new FormData()
       fd.append('archivo', await reducirImagen(archivo))
       fd.append('codigo', codigo)
-      const up = await fetch('/api/linea-etica/soporte', { method: 'POST', body: fd })
+      const up = await subirDocumentoForm(fd, '/api/linea-etica/soporte')
       if (!up.ok) fallidos++
     } catch {
       fallidos++

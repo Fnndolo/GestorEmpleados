@@ -19,6 +19,7 @@ import { Pill, type PillTone } from '@/components/ui-kit'
 import type { SituacionComprobante } from '@/lib/comprobante-permiso'
 import { responderContrapropuesta, corregirMiSoporte, entregarComprobantePermiso, cancelarSolicitud } from './acciones'
 import { NuevaSolicitud, type EdicionPermiso } from './nueva-solicitud'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 
 /** El estado se lee de un vistazo por color, no solo por texto. */
 const TONO_ESTADO: Record<string, PillTone> = {
@@ -175,7 +176,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
         fd.append('entidadTipo', 'Permiso')
         fd.append('entidadId', permisoId)
         fd.append('nombre', `Comprobante de asistencia — ${file.name}`)
-        const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        const up = await subirDocumentoForm(fd)
         if (!up.ok) throw new Error(`No se pudo subir ${file.name}.`)
       }
       const res = await entregarComprobantePermiso({ permisoId })
@@ -203,7 +204,7 @@ export function MisSolicitudes({ solicitudes }: { solicitudes: SolicitudItem[] }
         fd.append('entidadTipo', 'Solicitud')
         fd.append('entidadId', solicitudId)
         fd.append('nombre', `${corregido ? 'Soporte corregido' : 'Soporte solicitud'} — ${file.name}`)
-        const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        const up = await subirDocumentoForm(fd)
         if (!up.ok) throw new Error(`No se pudo subir ${file.name}.`)
       }
       const res = await corregirMiSoporte({ solicitudId })

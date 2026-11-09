@@ -25,6 +25,7 @@ import {
 import { formatFechaCorta } from '@/lib/fechas'
 import { cn } from '@/lib/utils'
 import { borrarDocumento } from '@/app/(app)/colaboradores/documentos-acciones'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 
 type Doc = {
   id: string; nombre: string; tipoDocumentoNombre: string | null; mimeType: string
@@ -311,7 +312,7 @@ export function DialogSubir({
       if (sedeId) fd.append('sedeId', sedeId)
       if (!visible) fd.append('ocultoAutoservicio', '1')
 
-      const resp = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+      const resp = await subirDocumentoForm(fd)
       const json = await resp.json()
       if (!resp.ok) throw new Error(json.error ?? 'Error')
       toast.success('Documento subido.')

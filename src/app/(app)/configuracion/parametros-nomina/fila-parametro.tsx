@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { fmtValor } from './formato'
 import { crearParametro, eliminarParametro, eliminarVigenciaParametro, actualizarParametroNomina } from './acciones'
 import type { ParametroItem, VigenciaItem } from './form'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 
 /**
  * Una clave con su valor vigente y, al desplegar, todas sus vigencias.
@@ -243,7 +244,7 @@ function SubirSoporteVigencia({ vigenciaId, onSubido }: { vigenciaId: string; on
     fd.set('entidadTipo', 'VigenciaParametro')
     fd.set('entidadId', vigenciaId)
     fd.set('nombre', file.name.replace(/\.[^.]+$/, ''))
-    const resp = await fetch('/api/documentos/subir', { method: 'POST', body: fd }).catch(() => null)
+    const resp = await subirDocumentoForm(fd).catch(() => null)
     setSubiendo(false)
     if (resp?.ok) { toast.success('Soporte adjuntado.'); onSubido() }
     else toast.error('No se pudo adjuntar el soporte.')

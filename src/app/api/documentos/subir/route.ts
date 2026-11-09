@@ -7,6 +7,8 @@ import { ejecutarConContexto } from '@/server/contexto'
 import { prisma } from '@/lib/db'
 import { avisarPorRol } from '@/server/notificaciones/avisar'
 import { nombreCorto } from '@/lib/notificaciones/texto'
+import { obtenerArchivoAdjunto, borrarPdfTemporal } from '@/server/archivos-temporales'
+import { ErrorNegocio } from '@/server/accion'
 
 export const runtime = 'nodejs'
 const MAX_BYTES = 25 * 1024 * 1024 // 25 MB
@@ -17,10 +19,13 @@ export async function POST(req: NextRequest) {
 
   const form = await req.formData()
   const archivo = form.get('archivo')
-  if (!(archivo instanceof File)) {
+  // Lo que pasa de 4 MB no cabe en el cuerpo de una función de Vercel: el
+  // navegador lo deja antes en el depósito temporal y aquí llega su referencia.
+  const archivoRef = String(form.get('archivoRef') ?? '')
+  if (!(archivo instanceof File) && !archivoRef) {
     return NextResponse.json({ error: 'Falta el archivo' }, { status: 400 })
   }
-  if (archivo.size > MAX_BYTES) {
+  if (archivo instanceof File && archivo.size > MAX_BYTES) {
     return NextResponse.json({ error: 'El archivo supera 25 MB' }, { status: 413 })
   }
 
@@ -81,7 +86,17 @@ export async function POST(req: NextRequest) {
   }
   if (!permitido) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
 
-  const contenido = Buffer.from(await archivo.arrayBuffer())
+  let datosArchivo: { nombre: string; mimeType: string; contenido: Buffer }
+  if (archivo instanceof File) {
+    datosArchivo = { nombre: archivo.name, mimeType: archivo.type || 'application/octet-stream', contenido: Buffer.from(await archivo.arrayBuffer()) }
+  } else {
+    try {
+      const a = await obtenerArchivoAdjunto({ pdfRef: archivoRef }, usuario.id)
+      datosArchivo = { nombre: String(form.get('archivoNombre') ?? '') || a.nombre || 'documento', mimeType: a.mimeType, contenido: a.contenido }
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof ErrorNegocio ? e.message : 'No se pudo leer el archivo subido.' }, { status: 400 })
+    }
+  }
   const hdrs = await headers()
   const ip = hdrs.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
 
@@ -95,18 +110,19 @@ export async function POST(req: NextRequest) {
             entidadTipo,
             entidadId,
             tipoDocumentoId: (form.get('tipoDocumentoId') as string) || null,
-            nombre: (form.get('nombre') as string) || archivo.name,
+            nombre: (form.get('nombre') as string) || datosArchivo.nombre,
             descripcion: (form.get('descripcion') as string) || null,
             fechaVencimiento: (form.get('fechaVencimiento') as string) || null,
             sedeId: (form.get('sedeId') as string) || null,
             // Solo Talento Humano lo oculta: lo que aporta el propio colaborador es suyo y lo ve.
             ocultoAutoservicio: !esAporteDelColaborador && form.get('ocultoAutoservicio') === '1',
           },
-          { nombre: archivo.name, mimeType: archivo.type || 'application/octet-stream', contenido },
+          datosArchivo,
         ),
     )
     // Documento aportado por el propio colaborador a su ficha: avisar a Talento
     // Humano para que lo revise y clasifique (queda auditado quién lo subió).
+    if (archivoRef) await borrarPdfTemporal(archivoRef, usuario.id).catch(() => {})
     if (esAporteDelColaborador) {
       const colab = await prisma.colaborador.findUnique({ where: { id: entidadId }, select: { nombres: true, apellidos: true } })
       await avisarPorRol(['Recursos Humanos', 'Administrador'], {

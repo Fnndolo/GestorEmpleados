@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { adjuntarMiSoporteSs } from '../cuentas-acciones'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 
 /**
  * Adjuntar (o corregir) la planilla PILA de una cuenta de cobro ligada a
@@ -50,7 +51,7 @@ export function PlanillaPila({
         fd.append('entidadTipo', 'CuentaCobroOps')
         fd.append('entidadId', cuentaId)
         fd.append('nombre', `Planilla PILA — ${periodo}`)
-        const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        const up = await subirDocumentoForm(fd)
         if (!up.ok) toast.warning('El soporte quedó registrado, pero el archivo no se pudo subir. Intenta adjuntarlo de nuevo.')
       } catch {
         toast.warning('El soporte quedó registrado, pero el archivo no se pudo subir. Intenta adjuntarlo de nuevo.')

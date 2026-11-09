@@ -1,6 +1,7 @@
 'use server'
 
 import { z } from 'zod'
+import { obtenerArchivoAdjunto, borrarPdfTemporal } from '@/server/archivos-temporales'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db'
 import { auditar } from '@/lib/auditoria'
@@ -208,10 +209,17 @@ export const marcarPagoPagado = accion(
     accion: 'EDITAR',
     schema: pagoIdSchema.extend({
       pdfBase64: z.string().optional(),
+      // El PDF grande va antes al depósito temporal: aquí llega solo su referencia.
+      pdfRef: z.string().min(16).max(2000).optional(),
       nombreArchivo: z.string().trim().max(200).optional().or(z.literal('')),
     }),
   },
   async (d, usuario) => {
+    if (d.pdfRef) {
+      const a = await obtenerArchivoAdjunto({ pdfRef: d.pdfRef }, usuario.id)
+      d.pdfBase64 = `data:${a.mimeType};base64,${a.contenido.toString('base64')}`
+      await borrarPdfTemporal(d.pdfRef, usuario.id).catch(() => {})
+    }
     const r = await marcarPagoHorasExtraPagado({
       pagoId: d.pagoId, pdfBase64: d.pdfBase64 || null, nombreArchivo: d.nombreArchivo, usuarioId: usuario.id,
     })

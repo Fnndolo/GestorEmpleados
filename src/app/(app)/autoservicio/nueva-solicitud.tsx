@@ -23,6 +23,7 @@ import { parseFechaISO } from '@/lib/fechas'
 import { crearSolicitud, editarMiPermiso } from './acciones'
 import { textoAutorizacionAnticipadas } from '@/lib/vacaciones-config'
 import { horasEntreHoras, LIMITE_HORAS_EXTRA_DIA, SOPORTE_HORAS_EXTRA_OBLIGATORIO } from '@/lib/horas-extra-solicitud'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 
 /** Lo que hace falta para abrir el diálogo con un permiso ya pedido y corregirlo. */
 export type EdicionPermiso = {
@@ -248,7 +249,7 @@ export function NuevaSolicitud({ tipoInicial, saldoVacaciones, mostrarSaldo = fa
           fd.append('entidadTipo', 'Solicitud')
           fd.append('entidadId', solicitudId)
           fd.append('nombre', `Soporte solicitud — ${archivo.name}`)
-          const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+          const up = await subirDocumentoForm(fd)
           if (!up.ok) fallidos++
         } catch {
           fallidos++

@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FirmaCaptura } from '@/components/firma/firma-captura'
 import { resolverPaso, emitirCertificacion, previsualizarCertificacion, proponerFechas } from '../acciones'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 
 type Solicitud = {
   id: string; pasoId: string; tipo: string; esPasoJefe: boolean; colaborador: string; colaboradorId: string; sede: string
@@ -449,7 +450,7 @@ function DialogCertificacion({ solicitud, onClose, onDone }: { solicitud: Solici
         fd.append('entidadTipo', 'Colaborador')
         fd.append('entidadId', solicitud.colaboradorId)
         fd.append('nombre', 'Certificación laboral')
-        const up = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        const up = await subirDocumentoForm(fd)
         if (!up.ok) { toast.error('No se pudo subir el certificado.'); setG(false); return }
         const { id: documentoId } = await up.json()
         const res = await emitirCertificacion({ pasoId: solicitud.pasoId, modo: 'SUBIR', documentoId })

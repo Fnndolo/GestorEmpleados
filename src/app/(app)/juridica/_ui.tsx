@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { cn } from '@/lib/utils'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 
 /**
  * Anular o eliminar un registro con el motivo obligatorio (queda en auditoría).
@@ -97,7 +98,7 @@ export async function subirArchivoEntidad(entidadTipo: string, entidadId: string
   fd.append('entidadTipo', entidadTipo)
   fd.append('entidadId', entidadId)
   fd.append('nombre', nombre)
-  const resp = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+  const resp = await subirDocumentoForm(fd)
   const json = await resp.json()
   if (!resp.ok) throw new Error(json.error ?? 'No se pudo subir el archivo')
   return json.id as string

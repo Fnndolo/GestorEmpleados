@@ -26,6 +26,7 @@ import {
   crearConsultaReclamo, editarConsultaReclamo, eliminarConsultaReclamo, responderConsultaReclamo,
 } from './acciones'
 import { ZonaArchivos, DialogAnular, BotonAnular } from './_ui'
+import { subirDocumentoForm } from '@/lib/subir-documento'
 
 /** Sube un archivo asociado a una entidad usando el endpoint existente y devuelve el id del Documento. */
 async function subirArchivoEntidad(entidadTipo: string, entidadId: string, file: File, nombre: string): Promise<string> {
@@ -34,7 +35,7 @@ async function subirArchivoEntidad(entidadTipo: string, entidadId: string, file:
   fd.append('entidadTipo', entidadTipo)
   fd.append('entidadId', entidadId)
   fd.append('nombre', nombre)
-  const resp = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+  const resp = await subirDocumentoForm(fd)
   const json = await resp.json()
   if (!resp.ok) throw new Error(json.error ?? 'No se pudo subir el archivo')
   return json.id as string
