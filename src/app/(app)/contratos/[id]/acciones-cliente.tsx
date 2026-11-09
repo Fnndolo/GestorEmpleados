@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
 import { usePdfLocal } from '@/lib/use-pdf-local'
-import { CalendarPlus, FilePen, CirclePause, CirclePlay, UserMinus, Paperclip, Trash2, Ellipsis } from 'lucide-react'
+import { CalendarPlus, FilePen, CirclePause, CirclePlay, UserMinus, Paperclip, Trash2, Ellipsis, BellRing } from 'lucide-react'
+import { DialogPreaviso } from '@/components/contratos/preaviso'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { DialogSubir } from '@/components/documentos/gestor-documentos'
 import {
@@ -37,7 +38,7 @@ export function AccionesContrato({
   contratoId, colaboradorId, tipo, estado, numero, sedeId, puedeEliminar, cargos, sedes,
 }: { contratoId: string; colaboradorId: string; tipo: string; estado: string; numero: string; sedeId: string | null; puedeEliminar: boolean } & Cat) {
   const router = useRouter()
-  const [dialogo, setDialogo] = useState<'prorroga' | 'otrosi' | 'suspension' | 'adjuntar' | null>(null)
+  const [dialogo, setDialogo] = useState<'prorroga' | 'otrosi' | 'suspension' | 'adjuntar' | 'preaviso' | null>(null)
   const [cargando, setCargando] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [confirmarBorrado, setConfirmarBorrado] = useState(false)
@@ -88,6 +89,7 @@ export function AccionesContrato({
               <Link href={`/terminaciones?colaborador=${colaboradorId}`}><UserMinus className="size-4" /> Terminar contrato</Link>
             </DropdownMenuItem>
           )}
+          {!terminado && <DropdownMenuItem onSelect={() => setDialogo('preaviso')}><BellRing className="size-4" /> Enviar preaviso</DropdownMenuItem>}
           <DropdownMenuItem onSelect={() => setDialogo('adjuntar')}><Paperclip className="size-4" /> Adjuntar documento</DropdownMenuItem>
           {puedeEliminar && (
             <>
@@ -116,6 +118,7 @@ export function AccionesContrato({
 
       {dialogo === 'prorroga' && <DialogProrroga contratoId={contratoId} onClose={() => setDialogo(null)} onDone={() => { setDialogo(null); router.refresh() }} />}
       {dialogo === 'otrosi' && <DialogOtrosi contratoId={contratoId} cargos={cargos} sedes={sedes} onClose={() => setDialogo(null)} onDone={() => { setDialogo(null); router.refresh() }} />}
+      {dialogo === 'preaviso' && <DialogPreaviso contratoId={contratoId} onClose={() => setDialogo(null)} onDone={() => { setDialogo(null); router.refresh() }} />}
       {dialogo === 'suspension' && <DialogSuspension contratoId={contratoId} onClose={() => setDialogo(null)} onDone={() => { setDialogo(null); router.refresh() }} />}
       {/* Anexos (soportes escaneados, prórrogas firmadas en papel…): entidad propia
           para no mezclarse con el PDF del contrato, que no se borra desde aquí. */}

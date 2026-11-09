@@ -9,6 +9,8 @@ import { fmtCOP } from '@/lib/moneda'
 import { resumenOtrosi, type ValoresOtrosi } from '@/lib/otrosi'
 import { TIPO_LABORAL_CORTO, firmaContratoLaboral, firmaContratoOps } from '@/lib/contratos/tarjeta'
 import { MisContratos } from './mis-contratos'
+import { MiPreaviso } from '@/components/contratos/preaviso'
+import { listarPreavisos } from '@/server/preavisos'
 
 export const metadata = { title: 'Mis contratos · Smart Gadgets RH' }
 
@@ -137,6 +139,9 @@ export default async function MisContratosPage() {
       tieneDocumento: !!c.contenidoPdf || c.origenPdf === 'SUBIDO_PARA_FIRMA',
     })),
   ]
+  // Preavisos que Talento Humano envió para descargar, firmar por fuera y devolver.
+  const preavisos = await listarPreavisos({ colaboradorId: usuario.colaboradorId })
+
   // Por fecha, el más reciente primero, sin importar si es laboral u OPS: quien
   // pasó de prestación de servicios a laboral ve arriba el contrato vigente.
   items.sort((a, b) => b.fechaInicioMs - a.fechaInicioMs || b.creadoMs - a.creadoMs)
@@ -144,6 +149,12 @@ export default async function MisContratosPage() {
   return (
     <div className="max-w-5xl">
       <Encabezado volver enLinea titulo="Mis contratos" />
+      {preavisos.length > 0 && (
+        <Card className="mb-4 py-0"><CardContent className="space-y-2 p-4">
+          <h2 className="text-sm font-semibold">Documentos por devolver</h2>
+          {preavisos.map((p) => <MiPreaviso key={p.id} p={p} />)}
+        </CardContent></Card>
+      )}
       {items.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground"><FilePenLine className="size-8" /><p>No tienes contratos registrados.</p></CardContent></Card>
       ) : (

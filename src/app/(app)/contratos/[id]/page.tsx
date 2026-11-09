@@ -11,6 +11,8 @@ import { FileText, ShieldCheck, TriangleAlert, UserRound, CalendarPlus, FilePen,
 import { formatFechaCorta, formatFechaISO, duracionContrato, hoyBogota } from '@/lib/fechas'
 import { FilaDocumento, VerDocumento } from '@/components/contratos/fila-documento'
 import { FilaAnexo } from '@/components/contratos/fila-anexo'
+import { FilaPreaviso } from '@/components/contratos/preaviso'
+import { listarPreavisos } from '@/server/preavisos'
 import { fmtCOP } from '@/lib/moneda'
 import { MODALIDAD_TRABAJO } from '@/lib/etiquetas'
 import { AccionesContrato } from './acciones-cliente'
@@ -54,7 +56,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
   })
   if (!c) notFound()
 
-  const [cargos, sedes, documentos, empresaCfg, evidencias, anexos, variaciones] = await Promise.all([
+  const [cargos, sedes, documentos, empresaCfg, evidencias, anexos, variaciones, preavisos] = await Promise.all([
     prisma.cargo.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
     prisma.sede.findMany({ where: { activa: true }, include: { ciudad: true }, orderBy: { nombre: 'asc' } }),
     prisma.documento.findMany({
@@ -73,6 +75,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
     }),
     // Historial salarial del colaborador: cada otrosí de salario deja una variación.
     prisma.variacionSalarial.findMany({ where: { colaboradorId: c.colaboradorId }, orderBy: [{ fechaVigencia: 'desc' }, { creadoEn: 'desc' }] }),
+    listarPreavisos({ contratoId: id }),
   ])
   const catalogos = {
     cargos: cargos.map((x) => ({ id: x.id, nombre: x.nombre })),
@@ -235,6 +238,7 @@ export default async function ContratoDetallePage({ params }: { params: Promise<
           {anexos.map((d) => (
             <FilaAnexo key={d.id} id={d.id} contratoId={c.id} nombre={d.nombre} fecha={formatFechaCorta(d.creadoEn)} puedeEditar={puedeEditar} />
           ))}
+          {preavisos.map((p) => <FilaPreaviso key={p.id} p={p} puedeEditar={puedeEditar} />)}
         </ul>
 
         {/* Firma estampada donde no era: se mueve sin volver a firmar. */}

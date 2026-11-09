@@ -1162,6 +1162,7 @@ model Contrato {
   otrosis         OtrosiContrato[]
   suspensiones    SuspensionContrato[]
   evidenciasFirma EvidenciaFirmaContrato[]
+  preavisos       PreavisoContrato[]
 
   @@index([colaboradorId, estado])
   @@index([tipo, estado, fechaFin])
@@ -3710,4 +3711,27 @@ model CronogramaDominical {
 
   @@unique([sedeId, mes])
   @@map("cronograma_dominical")
+}
+
+/**
+ * Preaviso de un contrato laboral. Talento Humano envía el documento; la
+ * persona lo descarga en su autoservicio, lo firma o llena por fuera y sube el
+ * PDF de vuelta.
+ */
+model PreavisoContrato {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  colaboradorId  String       @map("colaborador_id") @db.Uuid
+  contratoId     String       @map("contrato_id") @db.Uuid
+  contrato       Contrato     @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  nombre         String
+  mensaje        String?
+  documentoId    String       @map("documento_id") @db.Uuid
+  respuestaDocId String?      @map("respuesta_doc_id") @db.Uuid
+  respondidoEn   DateTime?    @map("respondido_en")
+  enviadoPorId   String?      @map("enviado_por_id") @db.Uuid
+  creadoEn       DateTime     @default(now()) @map("creado_en")
+
+  @@index([colaboradorId])
+  @@index([contratoId])
+  @@map("preaviso_contrato")
 }
