@@ -42,14 +42,11 @@ export const crearTerminacion = accion(
 
     // Debido proceso: el proceso disciplinario que sustenta una justa causa es
     // opcional (la empresa decide), pero si se indica debe ser de este
-    // colaborador y estar CERRADO (RIT arts. 71-73).
+    // colaborador (abierto o cerrado).
     if (d.tipo === 'CON_JUSTA_CAUSA' && d.procesoDisciplinarioId) {
       const proceso = await prisma.procesoDisciplinario.findUnique({ where: { id: d.procesoDisciplinarioId } })
       if (!proceso || proceso.colaboradorId !== d.colaboradorId) {
         throw new ErrorNegocio('El proceso disciplinario no corresponde a este colaborador.')
-      }
-      if (!proceso.cerrado) {
-        throw new ErrorNegocio('El proceso disciplinario aún está abierto: debe cerrarse con decisión antes de terminar con justa causa (debido proceso, RIT art. 73).')
       }
     }
 
@@ -250,7 +247,7 @@ export const editarTerminacion = accion(
     }
 
     // Justa causa: el proceso disciplinario es opcional; null lo quita, sin
-    // enviarlo se conserva el que tenía. Si hay uno, debe estar cerrado.
+    // enviarlo se conserva el que tenía. Si hay uno, debe ser del colaborador.
     let procesoDisciplinarioId: string | null = null
     if (d.tipo === 'CON_JUSTA_CAUSA') {
       procesoDisciplinarioId = d.procesoDisciplinarioId === undefined ? t.procesoDisciplinarioId : d.procesoDisciplinarioId
@@ -258,7 +255,6 @@ export const editarTerminacion = accion(
     if (procesoDisciplinarioId) {
       const proceso = await prisma.procesoDisciplinario.findUnique({ where: { id: procesoDisciplinarioId } })
       if (!proceso || proceso.colaboradorId !== t.colaboradorId) throw new ErrorNegocio('El proceso disciplinario no corresponde a este colaborador.')
-      if (!proceso.cerrado) throw new ErrorNegocio('El proceso disciplinario aún está abierto: debe cerrarse con decisión antes de terminar con justa causa (debido proceso, RIT art. 73).')
     }
 
     // La carta obligatoria depende del tipo: si cambia, la anterior sin enviar se
@@ -313,16 +309,16 @@ export const listarProcesosCerrados = accion(
   { modulo: 'terminaciones', accion: 'CREAR', schema: z.object({ colaboradorId: z.uuid() }) },
   async ({ colaboradorId }) => {
     const procesos = await prisma.procesoDisciplinario.findMany({
-      where: { colaboradorId, cerrado: true },
+      where: { colaboradorId },
       orderBy: { fechaApertura: 'desc' },
-      select: { id: true, asunto: true, fechaApertura: true, decision: true },
+      select: { id: true, asunto: true, fechaApertura: true, decision: true, cerrado: true },
     })
     return {
       procesos: procesos.map((p) => ({
         id: p.id,
         asunto: p.asunto,
         fecha: p.fechaApertura.toISOString().slice(0, 10),
-        decision: p.decision,
+        decision: p.cerrado ? p.decision : 'Abierto',
       })),
     }
   },

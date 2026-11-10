@@ -173,16 +173,14 @@ export function NuevaTerminacion({ colaboradorInicial, renuncia, inicial }: {
             </div>
 
             {tipo === 'CON_JUSTA_CAUSA' && (
-              <div className="space-y-1.5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
-                <Label>Proceso disciplinario que la sustenta (debido proceso)</Label>
+              <div className="space-y-1.5">
+                <Label>Asignar proceso disciplinario</Label>
                 {!colaboradorId ? (
                   <p className="text-xs text-muted-foreground">Selecciona primero el colaborador.</p>
                 ) : procesos === null ? (
                   <p className="text-xs text-muted-foreground">Cargando procesos…</p>
                 ) : procesos.length === 0 ? (
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
-                    Este colaborador no tiene procesos disciplinarios cerrados. Puedes registrar la terminación igual; ten presente que sin debido proceso la justa causa es más fácil de demandar.
-                  </p>
+                  <p className="text-xs text-muted-foreground">Este colaborador no tiene procesos disciplinarios registrados.</p>
                 ) : (
                   <Select value={procesoId} onValueChange={setProcesoId}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Sin proceso disciplinario" /></SelectTrigger>
