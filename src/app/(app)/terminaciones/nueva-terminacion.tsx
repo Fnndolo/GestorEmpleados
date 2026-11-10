@@ -51,6 +51,10 @@ const TIPOS = [
  *   una terminación ya creada (tipo, fecha de retiro, preaviso, motivo). El
  *   botón pasa a ser un lápiz y `colaboradorInicial` debe traer a la persona.
  */
+
+/** Opción del selector para registrar la justa causa sin proceso disciplinario. */
+const SIN_PROCESO = 'ninguno'
+
 export function NuevaTerminacion({ colaboradorInicial, renuncia, inicial }: {
   colaboradorInicial?: string
   renuncia?: { id: string; colaboradorId: string; nombre: string; fechaRetiro: string; motivo: string } | null
@@ -91,17 +95,13 @@ export function NuevaTerminacion({ colaboradorInicial, renuncia, inicial }: {
 
   async function crear() {
     if (!colaboradorId) { toast.error('Selecciona un colaborador.'); return }
-    if (tipo === 'CON_JUSTA_CAUSA' && !procesoId) {
-      toast.error('Selecciona el proceso disciplinario cerrado que sustenta la justa causa (debido proceso).')
-      return
-    }
     if (!fechaRetiro) { toast.error('Indica la fecha de retiro.'); return }
     setG(true)
     if (inicial) {
       const res = await editarTerminacion({
         id: inicial.id, tipo: tipo as 'RENUNCIA_VOLUNTARIA', fechaRetiro,
         preavisoDias: preavisoDias ? Number(preavisoDias) : undefined, motivo,
-        procesoDisciplinarioId: tipo === 'CON_JUSTA_CAUSA' ? procesoId : undefined,
+        procesoDisciplinarioId: tipo === 'CON_JUSTA_CAUSA' && procesoId && procesoId !== SIN_PROCESO ? procesoId : null,
       })
       setG(false)
       if (res.ok) {
@@ -116,7 +116,7 @@ export function NuevaTerminacion({ colaboradorInicial, renuncia, inicial }: {
     const res = await crearTerminacion({
       colaboradorId, tipo: tipo as 'RENUNCIA_VOLUNTARIA', fechaRetiro,
       preavisoDias: preavisoDias ? Number(preavisoDias) : undefined, motivo,
-      procesoDisciplinarioId: tipo === 'CON_JUSTA_CAUSA' ? procesoId : undefined,
+      procesoDisciplinarioId: tipo === 'CON_JUSTA_CAUSA' && procesoId && procesoId !== SIN_PROCESO ? procesoId : null,
       renunciaId: renuncia?.id,
     })
     setG(false)
@@ -180,13 +180,14 @@ export function NuevaTerminacion({ colaboradorInicial, renuncia, inicial }: {
                 ) : procesos === null ? (
                   <p className="text-xs text-muted-foreground">Cargando procesos…</p>
                 ) : procesos.length === 0 ? (
-                  <p className="text-xs text-destructive">
-                    Este colaborador no tiene procesos disciplinarios cerrados. Sin debido proceso, la justa causa es demandable: adelanta primero el proceso en Jurídica → Disciplinarios.
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Este colaborador no tiene procesos disciplinarios cerrados. Puedes registrar la terminación igual; ten presente que sin debido proceso la justa causa es más fácil de demandar.
                   </p>
                 ) : (
                   <Select value={procesoId} onValueChange={setProcesoId}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona el proceso cerrado…" /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Sin proceso disciplinario" /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value={SIN_PROCESO}>Sin proceso disciplinario</SelectItem>
                       {procesos.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.asunto} · {p.fecha}{p.decision ? ` · ${p.decision.slice(0, 40)}` : ''}</SelectItem>
                       ))}

@@ -207,7 +207,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
                 </Link>
               } />
             ) : (
-              <p className="text-sm text-destructive">⚠ Terminación con justa causa sin proceso disciplinario vinculado.</p>
+              <Dato k="Proceso disciplinario" v="Sin proceso disciplinario" />
             )}
           </div>
         )}

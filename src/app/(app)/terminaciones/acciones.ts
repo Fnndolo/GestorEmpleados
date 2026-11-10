@@ -30,7 +30,7 @@ export const crearTerminacion = accion(
       fechaRetiro: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       preavisoDias: z.coerce.number().int().min(0).optional(),
       motivo: z.string().max(1000).optional(),
-      procesoDisciplinarioId: z.uuid().optional(),
+      procesoDisciplinarioId: z.uuid().nullish(),
       // Cuando se registra desde una renuncia presentada en la app.
       renunciaId: z.uuid().optional(),
     }),
@@ -40,13 +40,10 @@ export const crearTerminacion = accion(
     const existe = await prisma.terminacion.findFirst({ where: { colaboradorId: d.colaboradorId, estado: { not: 'CERRADA' } } })
     if (existe) throw new ErrorNegocio('Ya hay una terminación en proceso para este colaborador.')
 
-    // Debido proceso: una terminación CON JUSTA CAUSA debe sustentarse en un
-    // proceso disciplinario CERRADO del mismo colaborador (RIT arts. 71-73 y 85:
-    // la terminación por justa causa es una sanción y exige el procedimiento).
-    if (d.tipo === 'CON_JUSTA_CAUSA') {
-      if (!d.procesoDisciplinarioId) {
-        throw new ErrorNegocio('Una terminación con justa causa requiere el proceso disciplinario que la sustenta (RIT arts. 71-73). Selecciónalo, o adelanta primero el proceso.')
-      }
+    // Debido proceso: el proceso disciplinario que sustenta una justa causa es
+    // opcional (la empresa decide), pero si se indica debe ser de este
+    // colaborador y estar CERRADO (RIT arts. 71-73).
+    if (d.tipo === 'CON_JUSTA_CAUSA' && d.procesoDisciplinarioId) {
       const proceso = await prisma.procesoDisciplinario.findUnique({ where: { id: d.procesoDisciplinarioId } })
       if (!proceso || proceso.colaboradorId !== d.colaboradorId) {
         throw new ErrorNegocio('El proceso disciplinario no corresponde a este colaborador.')
@@ -75,7 +72,7 @@ export const crearTerminacion = accion(
       data: {
         colaboradorId: d.colaboradorId, tipo: d.tipo, fechaRetiro,
         preavisoDias: d.preavisoDias ?? null,
-        procesoDisciplinarioId: d.tipo === 'CON_JUSTA_CAUSA' ? d.procesoDisciplinarioId : null,
+        procesoDisciplinarioId: d.tipo === 'CON_JUSTA_CAUSA' ? (d.procesoDisciplinarioId ?? null) : null,
         indemnizacion: liq?.indemnizacion ?? null,
         motivo: d.motivo, estado: liq ? 'LIQUIDADA' : 'EN_PROCESO',
       },
@@ -230,7 +227,7 @@ export const editarTerminacion = accion(
       fechaRetiro: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       preavisoDias: z.coerce.number().int().min(0).optional(),
       motivo: z.string().max(1000).optional(),
-      procesoDisciplinarioId: z.uuid().optional(),
+      procesoDisciplinarioId: z.uuid().nullish(),
     }),
   },
   async (d, usuario) => {
@@ -252,13 +249,13 @@ export const editarTerminacion = accion(
       if (renuncia) throw new ErrorNegocio('Esta terminación viene de una renuncia presentada en la app: su tipo es renuncia voluntaria y no se cambia.')
     }
 
-    // Justa causa: sigue exigiendo el proceso disciplinario cerrado que la sustenta.
+    // Justa causa: el proceso disciplinario es opcional; null lo quita, sin
+    // enviarlo se conserva el que tenía. Si hay uno, debe estar cerrado.
     let procesoDisciplinarioId: string | null = null
     if (d.tipo === 'CON_JUSTA_CAUSA') {
-      procesoDisciplinarioId = d.procesoDisciplinarioId ?? t.procesoDisciplinarioId
-      if (!procesoDisciplinarioId) {
-        throw new ErrorNegocio('Una terminación con justa causa requiere el proceso disciplinario que la sustenta (RIT arts. 71-73). Selecciónalo, o adelanta primero el proceso.')
-      }
+      procesoDisciplinarioId = d.procesoDisciplinarioId === undefined ? t.procesoDisciplinarioId : d.procesoDisciplinarioId
+    }
+    if (procesoDisciplinarioId) {
       const proceso = await prisma.procesoDisciplinario.findUnique({ where: { id: procesoDisciplinarioId } })
       if (!proceso || proceso.colaboradorId !== t.colaboradorId) throw new ErrorNegocio('El proceso disciplinario no corresponde a este colaborador.')
       if (!proceso.cerrado) throw new ErrorNegocio('El proceso disciplinario aún está abierto: debe cerrarse con decisión antes de terminar con justa causa (debido proceso, RIT art. 73).')
