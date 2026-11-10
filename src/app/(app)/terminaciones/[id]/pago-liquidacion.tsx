@@ -1,6 +1,7 @@
 'use client'
 
 import { reducirImagen } from '@/lib/reducir-imagen'
+import { subirPdfTemporal } from '@/lib/archivos'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -14,7 +15,7 @@ import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { Pill } from '@/components/ui-kit'
 import { pagarLiquidacion, adjuntarComprobanteLiquidacion } from '../acciones'
 
-type Archivo = { nombre: string; dataUri: string }
+type Archivo = { nombre: string; dataUri?: string; pdfRef?: string }
 
 /**
  * Pago de la liquidación: se registra con la fecha (no espera el recibido
@@ -37,6 +38,7 @@ export function PagoLiquidacion({ terminacionId, total, pagadaEn, pagadaISO, com
   const [abierto, setAbierto] = useState<'pago' | 'comprobante' | null>(null)
   const [fecha, setFecha] = useState(pagadaISO ?? hoy)
   const [archivo, setArchivo] = useState<Archivo | null>(null)
+  const [cargando, setCargando] = useState(false)
   const [g, setG] = useState(false)
   const editable = puedeEditar && !cerrada
 
@@ -44,10 +46,18 @@ export function PagoLiquidacion({ terminacionId, total, pagadaEn, pagadaISO, com
     const elegido = e.target.files?.[0]
     e.target.value = ''
     if (!elegido) return
-    // Viaja dentro de la acción (tope de 4 MB, y en base64 pesa un tercio más): las fotos
-    // se achican antes; un PDF de más de 3 MB no cabría.
+    // Las fotos se achican y viajan dentro de la acción (tope de 4 MB). Un PDF
+    // pesado se sube antes al depósito temporal y la acción lleva su referencia.
     const f = await reducirImagen(elegido)
-    if (f.size > 3 * 1024 * 1024) { toast.error('El archivo pesa más de 3 MB. Toma una foto o expórtalo más liviano.'); return }
+    const esPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
+    if (esPdf && f.size > 3 * 1024 * 1024) {
+      setCargando(true)
+      try { setArchivo({ nombre: f.name, pdfRef: await subirPdfTemporal(f) }) }
+      catch (err) { toast.error(err instanceof Error ? err.message : 'No se pudo subir el PDF.') }
+      finally { setCargando(false) }
+      return
+    }
+    if (f.size > 3 * 1024 * 1024) { toast.error('La foto pesa más de 3 MB. Tómala de nuevo o súbela en PDF.'); return }
     const lector = new FileReader()
     lector.onload = () => setArchivo({ nombre: f.name, dataUri: String(lector.result) })
     lector.readAsDataURL(f)
@@ -58,7 +68,7 @@ export function PagoLiquidacion({ terminacionId, total, pagadaEn, pagadaISO, com
   async function registrar() {
     if (!fecha) return
     setG(true)
-    const res = await pagarLiquidacion({ id: terminacionId, fechaPago: fecha, comprobante: archivo?.dataUri })
+    const res = await pagarLiquidacion({ id: terminacionId, fechaPago: fecha, comprobante: archivo?.dataUri, pdfRef: archivo?.pdfRef })
     setG(false)
     if (!res.ok) { toast.error(res.error); return }
     toast.success(pagadaEn ? 'Pago actualizado.' : archivo ? 'Pago registrado.' : 'Pago registrado. El comprobante se puede adjuntar después.')
@@ -69,7 +79,7 @@ export function PagoLiquidacion({ terminacionId, total, pagadaEn, pagadaISO, com
   async function adjuntar() {
     if (!archivo) return
     setG(true)
-    const res = await adjuntarComprobanteLiquidacion({ id: terminacionId, comprobante: archivo.dataUri })
+    const res = await adjuntarComprobanteLiquidacion({ id: terminacionId, comprobante: archivo.dataUri, pdfRef: archivo.pdfRef })
     setG(false)
     if (!res.ok) { toast.error(res.error); return }
     toast.success('Comprobante guardado.')
@@ -81,7 +91,7 @@ export function PagoLiquidacion({ terminacionId, total, pagadaEn, pagadaISO, com
     <>
       <label htmlFor={id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground hover:bg-accent/50">
         <Paperclip className="size-4 shrink-0" />
-        <span className="min-w-0 truncate">{archivo ? archivo.nombre : 'Elegir PDF o imagen'}</span>
+        <span className="min-w-0 truncate">{cargando ? 'Subiendo PDF…' : archivo ? archivo.nombre : 'Elegir PDF o imagen'}</span>
       </label>
       <input id={id} type="file" accept="application/pdf,image/*" className="sr-only" onChange={elegir} />
     </>
@@ -131,7 +141,7 @@ export function PagoLiquidacion({ terminacionId, total, pagadaEn, pagadaISO, com
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={cerrar} disabled={g}>Cancelar</Button>
-            <Button onClick={registrar} disabled={g || !fecha || (!!pagadaEn && fecha === pagadaISO)}>{g && <Spinner />}{pagadaEn ? 'Guardar' : 'Registrar pago'}</Button>
+            <Button onClick={registrar} disabled={g || cargando || !fecha || (!!pagadaEn && fecha === pagadaISO)}>{g && <Spinner />}{pagadaEn ? 'Guardar' : 'Registrar pago'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -147,7 +157,7 @@ export function PagoLiquidacion({ terminacionId, total, pagadaEn, pagadaISO, com
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={cerrar} disabled={g}>Cancelar</Button>
-            <Button onClick={adjuntar} disabled={g || !archivo}>{g && <Spinner />}Guardar</Button>
+            <Button onClick={adjuntar} disabled={g || cargando || !archivo}>{g && <Spinner />}Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

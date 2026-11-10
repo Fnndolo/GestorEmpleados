@@ -19,6 +19,17 @@ import { CARTA_PRINCIPAL, NOMBRE_CARTA } from '@/lib/terminaciones/cartas'
 import { aplicarRetiro, ultimoDiaPasado } from '@/server/terminaciones-retiro'
 import { generarYEnviarCodigoFirma, verificarCodigoFirma } from '@/server/firma/codigo-firma'
 import { eliminarDocumento } from '@/server/documentos'
+import { obtenerPdfAdjunto, borrarPdfTemporal } from '@/server/archivos-temporales'
+
+/**
+ * Un PDF pesado no cabe dentro de la acción (tope de 4 MB): el navegador lo
+ * sube antes al depósito temporal y aquí llega solo su referencia.
+ */
+async function archivoComoDataUri(dataUri: string | undefined, pdfRef: string | undefined, usuarioId: string): Promise<string | undefined> {
+  if (!pdfRef) return dataUri
+  const pdf = await obtenerPdfAdjunto({ pdfRef }, usuarioId)
+  return `data:application/pdf;base64,${pdf.toString('base64')}`
+}
 
 export const crearTerminacion = accion(
   {
@@ -386,10 +397,13 @@ export const subirDocumentoFirmadoTerminacion = accion(
   {
     modulo: 'terminaciones',
     accion: 'EDITAR',
-    schema: z.object({ id: z.uuid(), tipo: TIPO_DOC, archivo: z.string().startsWith('data:', 'El archivo no es válido.') }),
+    schema: z.object({ id: z.uuid(), tipo: TIPO_DOC, archivo: z.string().startsWith('data:', 'El archivo no es válido.').optional(), pdfRef: z.string().min(1).optional() }),
   },
   async (d, usuario) => {
-    await subirDocumentoFirmadoServidor({ tipo: d.tipo, terminacionId: d.id, dataUri: d.archivo, usuarioId: usuario.id })
+    const dataUri = await archivoComoDataUri(d.archivo, d.pdfRef, usuario.id)
+    if (!dataUri) throw new ErrorNegocio('Elige el documento firmado.')
+    await subirDocumentoFirmadoServidor({ tipo: d.tipo, terminacionId: d.id, dataUri, usuarioId: usuario.id })
+    await borrarPdfTemporal(d.pdfRef, usuario.id)
     revalidatePath(`/terminaciones/${d.id}`)
   },
 )
@@ -412,19 +426,25 @@ export const pagarLiquidacion = accion(
       id: z.uuid(),
       fechaPago: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Indica la fecha del pago.'),
       comprobante: z.string().startsWith('data:', 'El comprobante no es un archivo válido.').optional(),
+      pdfRef: z.string().min(1).optional(),
     }),
   },
   async (d, usuario) => {
-    await registrarPagoLiquidacion({ terminacionId: d.id, fechaPago: parseFechaISO(d.fechaPago)!, comprobanteDataUri: d.comprobante ?? null, usuarioId: usuario.id })
+    const comprobante = await archivoComoDataUri(d.comprobante, d.pdfRef, usuario.id)
+    await registrarPagoLiquidacion({ terminacionId: d.id, fechaPago: parseFechaISO(d.fechaPago)!, comprobanteDataUri: comprobante ?? null, usuarioId: usuario.id })
+    await borrarPdfTemporal(d.pdfRef, usuario.id)
     revalidatePath(`/terminaciones/${d.id}`)
   },
 )
 
 /** Adjunta o reemplaza el comprobante de un pago de liquidación ya registrado, sin tocar la fecha. */
 export const adjuntarComprobanteLiquidacion = accion(
-  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ id: z.uuid(), comprobante: z.string().startsWith('data:', 'El comprobante no es un archivo válido.') }) },
+  { modulo: 'terminaciones', accion: 'EDITAR', schema: z.object({ id: z.uuid(), comprobante: z.string().startsWith('data:', 'El comprobante no es un archivo válido.').optional(), pdfRef: z.string().min(1).optional() }) },
   async (d, usuario) => {
-    await adjuntarComprobanteLiquidacionServidor({ terminacionId: d.id, comprobanteDataUri: d.comprobante, usuarioId: usuario.id })
+    const comprobante = await archivoComoDataUri(d.comprobante, d.pdfRef, usuario.id)
+    if (!comprobante) throw new ErrorNegocio('Elige el comprobante.')
+    await adjuntarComprobanteLiquidacionServidor({ terminacionId: d.id, comprobanteDataUri: comprobante, usuarioId: usuario.id })
+    await borrarPdfTemporal(d.pdfRef, usuario.id)
     revalidatePath(`/terminaciones/${d.id}`)
   },
 )

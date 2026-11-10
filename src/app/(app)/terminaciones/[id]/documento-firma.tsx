@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Send, FileText, Undo2, Upload, FilePlus2, Paperclip } from 'lucide-react'
 import { reducirImagen } from '@/lib/reducir-imagen'
+import { subirPdfTemporal } from '@/lib/archivos'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
@@ -30,7 +31,7 @@ export type EstadoDocumento = { documentoId: string | null; enviadaEn: string | 
  */
 export const ENVIO_A_FIRMA_EN_APP = false
 
-type Archivo = { nombre: string; dataUri: string }
+type Archivo = { nombre: string; dataUri?: string; pdfRef?: string }
 
 /**
  * Fila de un documento de la terminación: su estado, verlo, generarlo sin
@@ -56,6 +57,7 @@ export function DocumentoFirma({ terminacionId, tipo, titulo, estado, listo, fal
   const [quitando, setQuitando] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [archivo, setArchivo] = useState<Archivo | null>(null)
+  const [cargando, setCargando] = useState(false)
   const [g, setG] = useState(false)
   const editable = puedeEditar && !cerrada
   const pendiente = !estado.enviadaEn && !estado.firmadaEn
@@ -86,9 +88,18 @@ export function DocumentoFirma({ terminacionId, tipo, titulo, estado, listo, fal
     const elegido = e.target.files?.[0]
     e.target.value = ''
     if (!elegido) return
-    // Viaja dentro de la acción (tope de 4 MB, y en base64 pesa un tercio más).
+    // Las fotos se achican y viajan dentro de la acción (tope de 4 MB). Un PDF
+    // pesado se sube antes al depósito temporal y la acción lleva su referencia.
     const f = await reducirImagen(elegido)
-    if (f.size > 3 * 1024 * 1024) { toast.error('El archivo pesa más de 3 MB. Toma una foto o expórtalo más liviano.'); return }
+    const esPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
+    if (esPdf && f.size > 3 * 1024 * 1024) {
+      setCargando(true)
+      try { setArchivo({ nombre: f.name, pdfRef: await subirPdfTemporal(f) }) }
+      catch (err) { toast.error(err instanceof Error ? err.message : 'No se pudo subir el PDF.') }
+      finally { setCargando(false) }
+      return
+    }
+    if (f.size > 3 * 1024 * 1024) { toast.error('La foto pesa más de 3 MB. Tómala de nuevo o súbela en PDF.'); return }
     const lector = new FileReader()
     lector.onload = () => setArchivo({ nombre: f.name, dataUri: String(lector.result) })
     lector.readAsDataURL(f)
@@ -99,7 +110,7 @@ export function DocumentoFirma({ terminacionId, tipo, titulo, estado, listo, fal
   async function subir() {
     if (!archivo) return
     setG(true)
-    const res = await subirDocumentoFirmadoTerminacion({ id: terminacionId, tipo, archivo: archivo.dataUri })
+    const res = await subirDocumentoFirmadoTerminacion({ id: terminacionId, tipo, archivo: archivo.dataUri, pdfRef: archivo.pdfRef })
     setG(false)
     if (!res.ok) { toast.error(res.error); return }
     toast.success('Documento firmado guardado.')
@@ -165,14 +176,14 @@ export function DocumentoFirma({ terminacionId, tipo, titulo, estado, listo, fal
             <Label htmlFor={idArchivo}>Documento firmado (PDF o foto) <span className="text-destructive">*</span></Label>
             <label htmlFor={idArchivo} className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground hover:bg-accent/50">
               <Paperclip className="size-4 shrink-0" />
-              <span className="min-w-0 truncate">{archivo ? archivo.nombre : 'Elegir PDF o imagen'}</span>
+              <span className="min-w-0 truncate">{cargando ? 'Subiendo PDF…' : archivo ? archivo.nombre : 'Elegir PDF o imagen'}</span>
             </label>
             <input id={idArchivo} type="file" accept="application/pdf,image/*" className="sr-only" onChange={elegir} />
             <p className="text-[11px] text-muted-foreground">El paso queda como firmado; no se le pide firma al trabajador en la app.</p>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={cerrarSubir} disabled={g}>Cancelar</Button>
-            <Button onClick={subir} disabled={g || !archivo}>{g && <Spinner />}Guardar</Button>
+            <Button onClick={subir} disabled={g || cargando || !archivo}>{g && <Spinner />}Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
