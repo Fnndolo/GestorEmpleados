@@ -59,8 +59,10 @@ export function validarDias(v: unknown): { dias: DiasHorario } | { error: string
     if (entrada === salida) return { error: `${dia}: la entrada y la salida no pueden ser la misma hora.` }
 
     const hora = (x: unknown) => (x == null || x === '' ? null : String(x))
-    const desde = hora(franja.almuerzo_desde)
-    const hasta = hora(franja.almuerzo_hasta)
+    let desde = hora(franja.almuerzo_desde)
+    let hasta = hora(franja.almuerzo_hasta)
+    // El almuerzo es opcional: la misma hora de inicio y fin es "sin almuerzo".
+    if (desde !== null && desde === hasta) { desde = null; hasta = null }
     if ((desde !== null && !HHMM.test(desde)) || (hasta !== null && !HHMM.test(hasta))) {
       return { error: `${dia}: el almuerzo debe ir de una hora válida a otra.` }
     }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, TriangleAlert } from 'lucide-react'
+import { Copy, TriangleAlert, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
@@ -106,6 +106,11 @@ export function EditorDias({ inicial, onChange, deshabilitado = false }: {
                       <Input type="time" aria-label={`Inicio del almuerzo del ${NOMBRE_DIA[d].toLowerCase()}`} className={HORA} value={f.almuerzoDesde} disabled={deshabilitado} onChange={(e) => ponerHora(d, { almuerzoDesde: e.target.value })} />
                       –
                       <Input type="time" aria-label={`Fin del almuerzo del ${NOMBRE_DIA[d].toLowerCase()}`} className={HORA} value={f.almuerzoHasta} disabled={deshabilitado} onChange={(e) => ponerHora(d, { almuerzoHasta: e.target.value })} />
+                      {(f.almuerzoDesde || f.almuerzoHasta) ? (
+                        <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0" disabled={deshabilitado} aria-label={`Quitar el almuerzo del ${NOMBRE_DIA[d].toLowerCase()}`} title="Sin almuerzo" onClick={() => ponerHora(d, { almuerzoDesde: '', almuerzoHasta: '' })}>
+                          <X className="size-4" />
+                        </Button>
+                      ) : <span className="shrink-0 pl-1">Sin almuerzo</span>}
                     </span>
                   </span>
                 </div>
