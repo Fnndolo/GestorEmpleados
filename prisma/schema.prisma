@@ -2392,6 +2392,7 @@ model Terminacion {
   liquidacion LiquidacionDefinitiva?
   pazYSalvo   PazYSalvo?
   cartas      CartaTerminacion[]
+  documentosPorFirmar PreavisoContrato[]
 
   @@index([colaboradorId])
   @@map("terminacion")
@@ -3723,6 +3724,9 @@ model PreavisoContrato {
   colaboradorId  String       @map("colaborador_id") @db.Uuid
   contratoId     String       @map("contrato_id") @db.Uuid
   contrato       Contrato     @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  /// Si se envió desde una terminación, queda también en ella.
+  terminacionId  String?      @map("terminacion_id") @db.Uuid
+  terminacion    Terminacion? @relation(fields: [terminacionId], references: [id], onDelete: Cascade)
   nombre         String
   mensaje        String?
   documentoId    String       @map("documento_id") @db.Uuid
@@ -3733,5 +3737,6 @@ model PreavisoContrato {
 
   @@index([colaboradorId])
   @@index([contratoId])
+  @@index([terminacionId])
   @@map("preaviso_contrato")
 }

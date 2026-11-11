@@ -20,6 +20,7 @@ import { aplicarRetiro, ultimoDiaPasado } from '@/server/terminaciones-retiro'
 import { generarYEnviarCodigoFirma, verificarCodigoFirma } from '@/server/firma/codigo-firma'
 import { eliminarDocumento } from '@/server/documentos'
 import { obtenerPdfAdjunto, borrarPdfTemporal } from '@/server/archivos-temporales'
+import { enviarPreaviso } from '@/server/preavisos'
 
 /**
  * Un PDF pesado no cabe dentro de la acción (tope de 4 MB): el navegador lo
@@ -29,6 +30,19 @@ async function archivoComoDataUri(dataUri: string | undefined, pdfRef: string | 
   if (!pdfRef) return dataUri
   const pdf = await obtenerPdfAdjunto({ pdfRef }, usuarioId)
   return `data:application/pdf;base64,${pdf.toString('base64')}`
+}
+
+const DOC_FIRMA = z.object({
+  nombre: z.string().trim().min(3, 'Escribe el nombre del documento.').max(120),
+  mensaje: z.string().max(500).optional(),
+  pdfRef: z.string().min(1),
+})
+
+/** El documento para firmar queda guardado en el contrato: el vigente o, si ya no hay, el último. */
+async function ultimoContrato(colaboradorId: string) {
+  const c = await prisma.contrato.findFirst({ where: { colaboradorId }, orderBy: [{ fechaInicio: 'desc' }] })
+  if (!c) throw new ErrorNegocio('La persona no tiene ningún contrato registrado: súbelo en su ficha antes de enviarle el documento para firmar.')
+  return c
 }
 
 export const crearTerminacion = accion(
@@ -44,6 +58,8 @@ export const crearTerminacion = accion(
       procesoDisciplinarioId: z.uuid().nullish(),
       // Cuando se registra desde una renuncia presentada en la app.
       renunciaId: z.uuid().optional(),
+      // Documento que se envía a la persona para que lo firme y lo devuelva.
+      docFirma: DOC_FIRMA.optional(),
     }),
   },
   async (d, usuario) => {
@@ -62,6 +78,8 @@ export const crearTerminacion = accion(
     }
 
     const contrato = await prisma.contrato.findFirst({ where: { colaboradorId: d.colaboradorId, estado: 'ACTIVO' }, orderBy: { fechaInicio: 'desc' } })
+    const contratoFirma = d.docFirma ? contrato ?? await ultimoContrato(d.colaboradorId) : null
+    const pdfFirma = d.docFirma ? await obtenerPdfAdjunto({ pdfRef: d.docFirma.pdfRef }, usuario.id) : null
     const fechaRetiro = parseFechaISO(d.fechaRetiro)!
 
     // Cálculo de la liquidación definitiva (borrador para revisión del área contable)
@@ -110,8 +128,27 @@ export const crearTerminacion = accion(
     await dbAuditado.colaborador.update({ where: { id: d.colaboradorId }, data: { fechaRetiro } })
     if (ultimoDiaPasado(fechaRetiro)) await aplicarRetiro(terminacion.id, usuario.id)
 
+    if (d.docFirma && pdfFirma && contratoFirma) {
+      await enviarPreaviso({ contratoId: contratoFirma.id, terminacionId: terminacion.id, nombre: d.docFirma.nombre.trim(), mensaje: d.docFirma.mensaje?.trim() || null, pdf: pdfFirma, usuarioId: usuario.id })
+      await borrarPdfTemporal(d.docFirma.pdfRef, usuario.id)
+    }
+
     revalidatePath('/terminaciones')
     return { id: terminacion.id, liquidacionPendiente: !!contrato && !liquidacionData }
+  },
+)
+
+/** Enviar a la persona, desde su terminación, otro documento para firmar. */
+export const enviarDocumentoFirmaTerminacion = accion(
+  { modulo: 'terminaciones', accion: 'EDITAR', schema: DOC_FIRMA.extend({ terminacionId: z.uuid() }) },
+  async (d, usuario) => {
+    const t = await prisma.terminacion.findUnique({ where: { id: d.terminacionId }, select: { colaboradorId: true } })
+    if (!t) throw new ErrorNegocio('La terminación ya no existe.')
+    const contrato = await ultimoContrato(t.colaboradorId)
+    const pdf = await obtenerPdfAdjunto({ pdfRef: d.pdfRef }, usuario.id)
+    await enviarPreaviso({ contratoId: contrato.id, terminacionId: d.terminacionId, nombre: d.nombre.trim(), mensaje: d.mensaje?.trim() || null, pdf, usuarioId: usuario.id })
+    await borrarPdfTemporal(d.pdfRef, usuario.id)
+    revalidatePath(`/terminaciones/${d.terminacionId}`)
   },
 )
 

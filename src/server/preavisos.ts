@@ -40,6 +40,7 @@ async function guardarPdf(preavisoId: string, colaboradorId: string, nombre: str
 
 export async function enviarPreaviso(opts: {
   contratoId: string
+  terminacionId?: string
   nombre: string
   mensaje: string | null
   pdf: Buffer
@@ -56,6 +57,7 @@ export async function enviarPreaviso(opts: {
       id,
       colaboradorId,
       contratoId: opts.contratoId,
+      terminacionId: opts.terminacionId ?? null,
       nombre: opts.nombre,
       mensaje: opts.mensaje,
       documentoId: doc.id,

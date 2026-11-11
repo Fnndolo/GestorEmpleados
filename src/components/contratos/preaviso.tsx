@@ -18,6 +18,7 @@ import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivo
 import { FilaDocumento, VerDocumento } from '@/components/contratos/fila-documento'
 import { enviarPreavisoContrato, eliminarPreavisoContrato, editarPreavisoContrato } from '@/app/(app)/contratos/preaviso-acciones'
 import { subirMiPreavisoFirmado } from '@/app/(app)/autoservicio/preaviso-acciones'
+import { enviarDocumentoFirmaTerminacion } from '@/app/(app)/terminaciones/acciones'
 
 export type PreavisoItem = {
   id: string
@@ -37,10 +38,10 @@ function pdfValido(archivo: File): boolean {
 }
 
 /** Contratos → Acciones → Enviar preaviso; con `editar`, corregir uno ya enviado. */
-export function DialogPreaviso({ contratoId, editar, onClose, onDone }: {
-  contratoId?: string; editar?: PreavisoItem; onClose: () => void; onDone: () => void
+export function DialogPreaviso({ contratoId, terminacionId, editar, onClose, onDone }: {
+  contratoId?: string; terminacionId?: string; editar?: PreavisoItem; onClose: () => void; onDone: () => void
 }) {
-  const [nombre, setNombre] = useState(editar?.nombre ?? 'Preaviso')
+  const [nombre, setNombre] = useState(editar?.nombre ?? (terminacionId ? 'Carta de terminación' : 'Preaviso'))
   const [mensaje, setMensaje] = useState(editar?.mensaje ?? '')
   const [pdfRef, setPdfRef] = useState<string | null>(null)
   const [subiendo, setSubiendo] = useState(false)
@@ -60,16 +61,18 @@ export function DialogPreaviso({ contratoId, editar, onClose, onDone }: {
     setG(true)
     const res = editar
       ? await editarPreavisoContrato({ id: editar.id, nombre: nombre.trim(), mensaje: mensaje.trim(), pdfRef })
+      : terminacionId
+      ? await enviarDocumentoFirmaTerminacion({ terminacionId, nombre: nombre.trim(), mensaje: mensaje.trim(), pdfRef: pdfRef! })
       : await enviarPreavisoContrato({ contratoId: contratoId!, nombre: nombre.trim(), mensaje: mensaje.trim(), pdfRef: pdfRef! })
     setG(false)
-    if (res.ok) { toast.success(editar ? 'Preaviso actualizado.' : 'Preaviso enviado al autoservicio de la persona.'); onDone() } else toast.error(res.error)
+    if (res.ok) { toast.success(editar ? 'Documento actualizado.' : 'Enviado al autoservicio de la persona.'); onDone() } else toast.error(res.error)
   }
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o && !g) onClose() }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{editar ? 'Editar preaviso' : 'Enviar preaviso'}</DialogTitle>
+          <DialogTitle>{editar ? 'Editar documento' : terminacionId ? 'Enviar documento para firmar' : 'Enviar preaviso'}</DialogTitle>
           <DialogDescription>La persona lo descarga en su autoservicio, lo firma o lo llena por fuera y vuelve a subir el PDF.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -93,6 +96,18 @@ export function DialogPreaviso({ contratoId, editar, onClose, onDone }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Botón de la terminación: enviar a la persona un documento para que lo firme. */
+export function EnviarParaFirmar({ terminacionId }: { terminacionId: string }) {
+  const router = useRouter()
+  const [abierto, setAbierto] = useState(false)
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setAbierto(true)}><BellRing className="size-4" /> Enviar documento para firmar</Button>
+      {abierto && <DialogPreaviso terminacionId={terminacionId} onClose={() => setAbierto(false)} onDone={() => { setAbierto(false); router.refresh() }} />}
+    </>
   )
 }
 

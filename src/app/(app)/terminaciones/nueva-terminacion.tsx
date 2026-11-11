@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SelectorColaborador } from '@/components/colaboradores/selector-colaborador'
 import { crearTerminacion, editarTerminacion, listarProcesosCerrados } from './acciones'
+import { subirPdfTemporal } from '@/lib/archivos'
 
 /** Lo que se precarga al editar el registro de una terminación. */
 export type TerminacionInicial = {
@@ -71,6 +72,20 @@ export function NuevaTerminacion({ colaboradorInicial, renuncia, inicial }: {
   // Justa causa: proceso disciplinario cerrado que la sustenta (debido proceso)
   const [procesos, setProcesos] = useState<{ id: string; asunto: string; fecha: string; decision: string | null }[] | null>(null)
   const [procesoId, setProcesoId] = useState(inicial?.procesoDisciplinarioId ?? '')
+  // Documento opcional que se envía a la persona para que lo firme y lo devuelva.
+  const [docNombre, setDocNombre] = useState('Carta de terminación')
+  const [docRef, setDocRef] = useState<string | null>(null)
+  const [docSubiendo, setDocSubiendo] = useState(false)
+
+  async function elegirDoc(archivo: File | undefined) {
+    setDocRef(null)
+    if (!archivo) return
+    if (archivo.type !== 'application/pdf' && !archivo.name.toLowerCase().endsWith('.pdf')) { toast.error('El documento para firmar debe ser PDF.'); return }
+    setDocSubiendo(true)
+    try { setDocRef(await subirPdfTemporal(archivo)) }
+    catch (e) { toast.error(e instanceof Error ? e.message : 'No se pudo subir el PDF.') }
+    finally { setDocSubiendo(false) }
+  }
 
   async function cargarProcesos(colabId: string) {
     setProcesos(null); setProcesoId('')
@@ -118,6 +133,7 @@ export function NuevaTerminacion({ colaboradorInicial, renuncia, inicial }: {
       preavisoDias: preavisoDias ? Number(preavisoDias) : undefined, motivo,
       procesoDisciplinarioId: tipo === 'CON_JUSTA_CAUSA' && procesoId && procesoId !== SIN_PROCESO ? procesoId : null,
       renunciaId: renuncia?.id,
+      docFirma: docRef ? { nombre: docNombre.trim() || 'Documento para firmar', pdfRef: docRef } : undefined,
     })
     setG(false)
     if (res.ok) {
@@ -199,10 +215,21 @@ export function NuevaTerminacion({ colaboradorInicial, renuncia, inicial }: {
               <div className="space-y-1.5"><Label>Preaviso (días)</Label><Input type="number" min={0} value={preavisoDias} onChange={(e) => setPreavisoDias(e.target.value)} /></div>
             </div>
             <div className="space-y-1.5"><Label>Motivo / observaciones</Label><Textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} /></div>
+            {!inicial && (
+              <div className="space-y-1.5">
+                <Label htmlFor="doc-firma">Documento para que la persona firme</Label>
+                <Input id="doc-firma" type="file" accept="application/pdf,.pdf" disabled={docSubiendo || g} onChange={(e) => elegirDoc(e.target.files?.[0])} />
+                {docSubiendo && <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Spinner /> Subiendo…</p>}
+                {docRef && (
+                  <Input aria-label="Nombre del documento" value={docNombre} maxLength={120} onChange={(e) => setDocNombre(e.target.value)} placeholder="Nombre del documento" />
+                )}
+                <p className="text-xs text-muted-foreground">Le llega a su autoservicio: lo descarga, lo firma y sube el PDF firmado. También puedes enviarlo después, en el paso «Soportes».</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAbierto(false)}>Cancelar</Button>
-            <Button onClick={crear} disabled={g}>{g && <Spinner />}{inicial ? 'Guardar cambios' : 'Registrar'}</Button>
+            <Button onClick={crear} disabled={g || docSubiendo}>{g && <Spinner />}{inicial ? 'Guardar cambios' : 'Registrar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

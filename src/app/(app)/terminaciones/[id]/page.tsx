@@ -27,6 +27,8 @@ import { VisorPdf } from '@/components/documentos/visor-pdf'
 import { buttonVariants } from '@/components/ui/button'
 import { FileText } from 'lucide-react'
 import { NuevaTerminacion } from '../nueva-terminacion'
+import { listarPreavisos } from '@/server/preavisos'
+import { EnviarParaFirmar, FilaPreaviso } from '@/components/contratos/preaviso'
 
 export const metadata = { title: 'Terminación · Smart Gadgets RH' }
 
@@ -96,13 +98,14 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   }
 
   // Soportes de la terminación: lo que se haga por fuera (examen de egreso, etc.).
-  const [documentos, tiposDocumento] = await Promise.all([
+  const [documentos, tiposDocumento, porFirmar] = await Promise.all([
     prisma.documento.findMany({
       where: { entidadTipo: 'Terminacion', entidadId: id },
       include: { tipoDocumento: { select: { nombre: true } } },
       orderBy: { creadoEn: 'desc' },
     }),
     prisma.tipoDocumento.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
+    listarPreavisos({ terminacionId: id }),
   ])
 
   // Nombres de quienes responden por cada área y de quienes ya verificaron.
@@ -320,6 +323,16 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
       </div>
     ),
     soportes: (
+      <div className="space-y-4">
+      <div className="space-y-2 rounded-lg border p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="flex-1 text-sm font-medium">Documentos para que la persona firme</p>
+          {puedeEditar && !cerrada && <EnviarParaFirmar terminacionId={t.id} />}
+        </div>
+        {porFirmar.length === 0
+          ? <p className="text-xs text-muted-foreground">Le llegan a su autoservicio: los descarga, los firma y sube el PDF firmado.</p>
+          : porFirmar.map((p) => <FilaPreaviso key={p.id} p={p} puedeEditar={puedeEditar && !cerrada} />)}
+      </div>
       <GestorDocumentos
         entidadTipo="Terminacion"
         entidadId={t.id}
@@ -333,6 +346,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
         semaforo={[]}
         puedeEditar={puedeEditar}
       />
+      </div>
     ),
     cierre: <CierreTerminacion terminacionId={t.id} requisitos={requisitos} cerrada={cerrada} puedeAprobar={puedeAprobar} />,
   }
