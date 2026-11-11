@@ -540,17 +540,8 @@ export const cerrarTerminacion = accion(
     // calculada, firmada y pagada NO bloquean el cierre: hay retiros que se
     // resuelven por fuera de la app. La pantalla los muestra como pendientes y
     // pide confirmar antes de cerrar con alguno sin hacer.
-    // No cerrar mientras el colaborador tenga liquidaciones en un periodo de
-    // nómina abierto: podría recalcularse y cambiar lo que se le debe.
-    const nominaAbierta = await prisma.liquidacionNomina.findFirst({
-      where: { colaboradorId: t.colaboradorId, periodo: { estado: { notIn: ['CERRADA', 'PAGADA'] } } },
-      include: { periodo: { select: { nombre: true } } },
-    })
-    if (nominaAbierta) {
-      throw new ErrorNegocio(
-        `El colaborador tiene liquidación en el periodo de nómina abierto "${nominaAbierta.periodo.nombre}". Cierra o paga ese periodo antes de cerrar la terminación.`,
-      )
-    }
+    // La nómina abierta del colaborador tampoco bloquea (2026-11-11: la nómina
+    // aún no está en uso): la pantalla la muestra como pendiente al confirmar.
     await dbAuditado.terminacion.update({ where: { id }, data: { estado: 'CERRADA' } })
     revalidatePath('/terminaciones')
   },

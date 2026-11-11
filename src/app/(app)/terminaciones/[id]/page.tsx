@@ -178,6 +178,11 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
   })
   pasos.push({ id: 'soportes', titulo: 'Soportes', detalle: documentos.length ? `${documentos.length} documento${documentos.length === 1 ? '' : 's'}` : 'Opcional', estado: 'opcional', opcional: true })
 
+  // Nómina del colaborador en un periodo sin cerrar: no bloquea, se avisa al cerrar.
+  const nominasAbiertas = cerrada ? [] : await prisma.liquidacionNomina.findMany({
+    where: { colaboradorId: t.colaboradorId, periodo: { estado: { notIn: ['CERRADA', 'PAGADA'] } } },
+    select: { periodo: { select: { nombre: true } } },
+  })
   const requisitos = [
     { texto: `${NOMBRE_CARTA[tipoCarta]} firmada (documento subido)`, ok: !!carta?.firmadoEn },
     ...(!liq && llevaLiquidacion ? [{ texto: 'Liquidación definitiva calculada', ok: false }] : []),
@@ -185,6 +190,7 @@ export default async function TerminacionPage({ params }: { params: Promise<{ id
       { texto: 'Liquidación firmada (documento subido)', ok: !!liq.firmadoEn },
       { texto: 'Pago de la liquidación con comprobante', ok: !!liq.pagadoEn },
     ] : []),
+    ...(nominasAbiertas.length ? [{ texto: `Nómina sin cerrar: ${nominasAbiertas.map((n) => n.periodo.nombre).join(', ')}`, ok: false }] : []),
   ]
   pasos.push({ id: 'cierre', titulo: 'Cierre', detalle: cerrada ? 'Cerrada' : requisitos.every((r) => r.ok) ? 'Lista para cerrar' : 'Faltan pasos', estado: cerrada ? 'hecho' : 'pendiente' })
 
