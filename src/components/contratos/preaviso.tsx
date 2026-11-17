@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { BellRing, Download, FileUp, Pencil, Trash2 } from 'lucide-react'
+import { BellRing, Download, FileText, FileUp, PenLine, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,7 +17,8 @@ import {
 import { MAX_PDF_BYTES, mensajePdfPesado, subirPdfTemporal } from '@/lib/archivos'
 import { FilaDocumento, VerDocumento } from '@/components/contratos/fila-documento'
 import { enviarPreavisoContrato, eliminarPreavisoContrato, editarPreavisoContrato } from '@/app/(app)/contratos/preaviso-acciones'
-import { subirMiPreavisoFirmado } from '@/app/(app)/autoservicio/preaviso-acciones'
+import { subirMiPreavisoFirmado, solicitarCodigoFirmaPreaviso, firmarMiPreaviso } from '@/app/(app)/autoservicio/preaviso-acciones'
+import { PasosFirma } from '@/components/firma/pasos-firma'
 import { enviarDocumentoFirmaTerminacion } from '@/app/(app)/terminaciones/acciones'
 
 export type PreavisoItem = {
@@ -28,6 +29,8 @@ export type PreavisoItem = {
   respuestaDocId: string | null
   enviado: string
   respondido: string | null
+  /** Se firma dentro de la app (no se descarga ni se sube). */
+  firmaEnApp: boolean
 }
 
 /** Valida que sea un PDF de tamaño admitido; avisa y devuelve false si no. */
@@ -127,15 +130,19 @@ export function FilaPreaviso({ p, puedeEditar }: { p: PreavisoItem; puedeEditar:
     <>
       <FilaDocumento
         icono={BellRing} titulo={p.nombre} tono={p.respondido ? 'ok' : 'pendiente'}
-        sub={p.respondido ? `Enviado el ${p.enviado} · devuelto firmado el ${p.respondido}` : `Enviado el ${p.enviado} · esperando el PDF firmado`}
+        sub={p.respondido
+          ? `Enviado el ${p.enviado} · ${p.firmaEnApp ? 'firmado' : 'devuelto firmado'} el ${p.respondido}`
+          : `Enviado el ${p.enviado} · ${p.firmaEnApp ? 'esperando la firma' : 'esperando el PDF firmado'}`}
       >
         <VerDocumento documentoId={p.respuestaDocId ?? p.documentoId} titulo={p.nombre} />
         {p.respuestaDocId && <VerDocumento documentoId={p.documentoId} titulo={`${p.nombre} (enviado)`} />}
         {puedeEditar && (
           <>
-            <Button size="icon" variant="ghost" className="size-8 text-muted-foreground" onClick={() => setEditando(true)} aria-label={`Editar ${p.nombre}`}>
-              <Pencil className="size-4" />
-            </Button>
+            {!p.firmaEnApp && (
+              <Button size="icon" variant="ghost" className="size-8 text-muted-foreground" onClick={() => setEditando(true)} aria-label={`Editar ${p.nombre}`}>
+                <Pencil className="size-4" />
+              </Button>
+            )}
             <Button size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-destructive" onClick={() => setBorrar(true)} aria-label={`Eliminar ${p.nombre}`}>
               <Trash2 className="size-4" />
             </Button>
@@ -159,8 +166,81 @@ export function FilaPreaviso({ p, puedeEditar }: { p: PreavisoItem; puedeEditar:
   )
 }
 
-/** El preaviso en el autoservicio: descargarlo y devolverlo firmado. */
+/** Documento que se firma en la app: verlo y firmarlo (código al correo y firma dibujada). */
+function MiDocumentoFirmaApp({ p }: { p: PreavisoItem }) {
+  const router = useRouter()
+  const [abierto, setAbierto] = useState(false)
+  const [firma, setFirma] = useState<string | null>(null)
+  const [codigo, setCodigo] = useState('')
+  const [correoEnviado, setCorreoEnviado] = useState<string | null>(null)
+  const [enviando, setEnviando] = useState(false)
+  const [g, setG] = useState(false)
+  const codigoCompleto = /^\d{6}$/.test(codigo)
+
+  function reiniciar() { setAbierto(false); setFirma(null); setCodigo(''); setCorreoEnviado(null) }
+
+  async function enviarCodigo() {
+    setEnviando(true)
+    const res = await solicitarCodigoFirmaPreaviso({ preavisoId: p.id })
+    setEnviando(false)
+    if (res.ok) {
+      setCorreoEnviado(res.datos.email)
+      toast.success(`Te enviamos un código a ${res.datos.email}. Vence en ${res.datos.vigenciaMin} minutos.`)
+    } else toast.error(res.error)
+  }
+
+  async function firmar() {
+    if (!firma || !codigoCompleto) return
+    setG(true)
+    const res = await firmarMiPreaviso({ preavisoId: p.id, firmaDataUri: firma, codigo })
+    setG(false)
+    if (res.ok) { toast.success('Documento firmado.'); reiniciar(); router.refresh() } else toast.error(res.error)
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <FileText className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 truncate text-sm font-medium">{p.nombre}</span>
+        <span className={p.respondido ? 'text-xs text-emerald-600 dark:text-emerald-400' : 'text-xs text-amber-600 dark:text-amber-400'}>
+          {p.respondido ? `Firmado el ${p.respondido}` : 'Por firmar'}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <VerDocumento documentoId={p.respuestaDocId ?? p.documentoId} titulo={p.nombre} />
+        {!p.respondido && <Button size="sm" onClick={() => setAbierto(true)}><PenLine className="size-4" /> Revisar y firmar</Button>}
+      </div>
+      <Dialog open={abierto} onOpenChange={(ab) => (ab ? setAbierto(true) : reiniciar())}>
+        <DialogContent className="max-h-[88vh] overflow-y-auto" aria-describedby={undefined}>
+          <DialogHeader><DialogTitle>Firmar {p.nombre}</DialogTitle></DialogHeader>
+          <PasosFirma
+            documentos={[{ id: p.documentoId, titulo: p.nombre, etiqueta: p.nombre, icono: FileText }]}
+            correoEnviado={correoEnviado}
+            enviando={enviando}
+            onEnviarCodigo={enviarCodigo}
+            codigo={codigo}
+            onCodigo={setCodigo}
+            onFirma={setFirma}
+            idCodigo={`codigo-preaviso-${p.id}`}
+          />
+          <p className="text-[11px] leading-snug text-muted-foreground">Al firmar aceptas el contenido de este documento (firma electrónica, Ley 527 de 1999).</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={reiniciar}>Cancelar</Button>
+            <Button onClick={firmar} disabled={g || !firma || !codigoCompleto}>{g && <Spinner />}Firmar documento</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+/** El preaviso en el autoservicio: descargarlo y devolverlo firmado (o firmarlo aquí). */
 export function MiPreaviso({ p }: { p: PreavisoItem }) {
+  if (p.firmaEnApp) return <MiDocumentoFirmaApp p={p} />
+  return <MiPreavisoFuera p={p} />
+}
+
+function MiPreavisoFuera({ p }: { p: PreavisoItem }) {
   const router = useRouter()
   const input = useRef<HTMLInputElement>(null)
   const [g, setG] = useState(false)

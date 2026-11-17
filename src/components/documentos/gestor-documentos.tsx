@@ -26,6 +26,9 @@ import { formatFechaCorta } from '@/lib/fechas'
 import { cn } from '@/lib/utils'
 import { borrarDocumento } from '@/app/(app)/colaboradores/documentos-acciones'
 import { subirDocumentoForm } from '@/lib/subir-documento'
+import { subirPdfTemporal } from '@/lib/archivos'
+import { usePdfLocal } from '@/lib/use-pdf-local'
+import { SelectorFirmasPdf, type Posicion } from '@/components/contratos/selector-firmas-pdf'
 
 type Doc = {
   id: string; nombre: string; tipoDocumentoNombre: string | null; mimeType: string
@@ -269,7 +272,7 @@ function IconoEstado({ estado }: { estado: ItemSemaforo['estado'] }) {
 }
 
 export function DialogSubir({
-  entidadTipo, entidadId, sedeId, tipoInicial, subiendo, setSubiendo, onClose, onSubido, puedeOcultar = false,
+  entidadTipo, entidadId, sedeId, tipoInicial, subiendo, setSubiendo, onClose, onSubido, puedeOcultar = false, firma,
 }: {
   entidadTipo: string; entidadId: string; sedeId: string | null
   /** Tipo ya elegido cuando se abre desde la fila del semáforo. */
@@ -277,8 +280,44 @@ export function DialogSubir({
   subiendo: boolean; setSubiendo: (b: boolean) => void; onClose: () => void; onSubido: () => void
   /** Mostrar la pregunta «¿El colaborador puede verlo?» (si no, no aparece en su autoservicio). */
   puedeOcultar?: boolean
+  /**
+   * Ofrecer «pedir la firma»: en vez de guardarlo sin más, el PDF se envía al
+   * autoservicio de la persona para que lo firme en la app, en el lugar marcado.
+   */
+  firma?: {
+    etiqueta: string
+    /** Sube el PDF y dice cuántas páginas tiene (para ubicar la firma). */
+    analizar: (pdfRef: string) => Promise<{ ok: true; paginas: number } | { ok: false; error: string }>
+    enviar: (d: { pdfRef: string; nombre: string; posicionFirma: Posicion }) => Promise<{ ok: true } | { ok: false; error: string }>
+  }
 }) {
   const [visible, setVisible] = useState(true)
+  const [pedirFirma, setPedirFirma] = useState(false)
+  // PDF ya subido y leído para ubicar la firma.
+  const [pdfFirma, setPdfFirma] = useState<{ ref: string; paginas: number } | null>(null)
+  const [preparando, setPreparando] = useState(false)
+  const [posicion, setPosicion] = useState<Posicion | null>(null)
+  const [vista, setVista] = usePdfLocal()
+
+  /** Al pedir la firma: subir el PDF y proponer el recuadro abajo a la derecha de la última página. */
+  async function prepararFirma(f: File | null, pedir: boolean) {
+    setPdfFirma(null); setPosicion(null); setVista(null)
+    if (!firma || !pedir || !f) return
+    if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) { toast.error('Para pedir la firma, el documento debe ser PDF.'); return }
+    setPreparando(true)
+    try {
+      const ref = await subirPdfTemporal(f)
+      const res = await firma.analizar(ref)
+      if (!res.ok) throw new Error(res.error)
+      setVista(f)
+      setPdfFirma({ ref, paginas: res.paginas })
+      setPosicion({ pagina: res.paginas, x: 330, y: 120, ancho: 150, alto: 45 })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo leer el PDF.')
+    } finally {
+      setPreparando(false)
+    }
+  }
   const inputRef = useRef<HTMLInputElement>(null)
   const [archivo, setArchivo] = useState<File | null>(null)
   const [nombre, setNombre] = useState(tipoInicial?.nombre ?? '')
@@ -292,10 +331,27 @@ export function DialogSubir({
     if (!f) return
     setArchivo(f)
     if (!nombre) setNombre(f.name.replace(/\.[^.]+$/, ''))
+    void prepararFirma(f, pedirFirma)
   }
 
   async function subir() {
     if (!archivo) { toast.error('Selecciona un archivo.'); return }
+    if (firma && pedirFirma) {
+      if (!pdfFirma || !posicion) { toast.error('Para pedir la firma, el documento debe ser PDF.'); return }
+      if ((nombre || archivo.name).trim().length < 3) { toast.error('Escribe el nombre del documento.'); return }
+      setSubiendo(true)
+      try {
+        const res = await firma.enviar({ pdfRef: pdfFirma.ref, nombre: (nombre || archivo.name).trim(), posicionFirma: posicion })
+        if (!res.ok) throw new Error(res.error)
+        toast.success('Enviado a su autoservicio para que lo firme.')
+        onSubido()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'No se pudo enviar.')
+      } finally {
+        setSubiendo(false)
+      }
+      return
+    }
     setSubiendo(true)
     try {
       let aSubir: File = archivo
@@ -326,7 +382,7 @@ export function DialogSubir({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent className={firma && pedirFirma ? 'max-h-[90vh] overflow-y-auto sm:max-w-2xl' : undefined}>
         <DialogHeader>
           <DialogTitle>{tipoInicial ? `Subir: ${tipoInicial.nombre}` : 'Subir documento'}</DialogTitle>
           <DialogDescription>PDF o imagen (máx. 25 MB). Las fotos se comprimen automáticamente.</DialogDescription>
@@ -349,6 +405,25 @@ export function DialogSubir({
             <Label>Nombre del documento</Label>
             <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Carta de recomendación" />
           </div>
+          {firma && (
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox className="mt-0.5" checked={pedirFirma} onCheckedChange={(v) => { setPedirFirma(v === true); void prepararFirma(archivo, v === true) }} />
+                <span>{firma.etiqueta}</span>
+              </label>
+              {pedirFirma && preparando && <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Spinner /> Leyendo el PDF…</p>}
+              {pedirFirma && vista && pdfFirma && posicion && (
+                <SelectorFirmasPdf
+                  pdfDataUri={vista}
+                  paginas={pdfFirma.paginas}
+                  valor={{ contratista: posicion, contratante: posicion }}
+                  onChange={(v) => setPosicion(v.contratista)}
+                  partes={['contratista']}
+                  etiquetas={{ contratista: 'Firma del contratista', contratante: '' }}
+                />
+              )}
+            </div>
+          )}
           {puedeOcultar && (
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={visible} onCheckedChange={(v) => setVisible(v === true)} />
@@ -365,8 +440,8 @@ export function DialogSubir({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={subir} disabled={subiendo || !archivo}>
-            {subiendo ? <Spinner /> : <Upload className="size-4" />} Subir
+          <Button onClick={subir} disabled={subiendo || preparando || !archivo || (!!firma && pedirFirma && !pdfFirma)}>
+            {subiendo ? <Spinner /> : <Upload className="size-4" />} {firma && pedirFirma ? 'Enviar para firmar' : 'Subir'}
           </Button>
         </DialogFooter>
       </DialogContent>

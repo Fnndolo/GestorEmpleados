@@ -22,6 +22,8 @@ import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 import { HabilitarFirma } from './habilitar-firma'
 import { CorregirPosicionFirma } from '@/components/contratos/corregir-posicion-firma'
 import { EditarContratoOps } from './editar-contrato-ops'
+import { listarPreavisos } from '@/server/preavisos'
+import { FilaPreaviso } from '@/components/contratos/preaviso'
 
 export const metadata = { title: 'Contrato OPS · Smart Gadgets RH' }
 
@@ -47,7 +49,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
     ? `${c.colaborador.nombres} ${c.colaborador.apellidos}`
     : snap?.encabezado?.contratistaNombre || snap?.firmaContratistaNombre || 'Contratista sin ficha'
 
-  const [documentos, anexos, sedes, cargos] = await Promise.all([
+  const [documentos, anexos, sedes, cargos, porFirmar] = await Promise.all([
     prisma.documento.findMany({
       where: { entidadTipo: 'ContratoOps', entidadId: id },
       orderBy: { creadoEn: 'desc' },
@@ -62,6 +64,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
     }),
     prisma.sede.findMany({ where: { activa: true }, include: { ciudad: true }, orderBy: { nombre: 'asc' } }),
     prisma.cargo.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' }, select: { id: true, nombre: true } }),
+    listarPreavisos({ contratoOpsId: id }),
   ])
   // Por qué no se pueden corregir los datos del contrato (el lápiz se ve igual y lo explica).
   const bloqueoEdicion = c.firmaContratistaPath
@@ -238,6 +241,7 @@ export default async function OpsDetallePage({ params }: { params: Promise<{ id:
               )}
             </>
           )}
+          {porFirmar.map((p) => <FilaPreaviso key={p.id} p={p} puedeEditar={puedeEditar} />)}
           {anexos.map((d) => (
             <FilaAnexo key={d.id} id={d.id} contratoId={c.id} nombre={d.nombre} fecha={formatFechaCorta(d.creadoEn)} puedeEditar={puedeEditar} />
           ))}

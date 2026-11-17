@@ -6,6 +6,7 @@ import { CircleX, Ellipsis, Paperclip, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { DialogSubir } from '@/components/documentos/gestor-documentos'
+import { enviarDocumentoFirmaOps, analizarPdfParaFirma } from '@/app/(app)/contratos/preaviso-acciones'
 import { CerrarContratoOps } from './cerrar-contrato'
 import { EliminarContratoOps } from './eliminar-contrato'
 
@@ -70,6 +71,17 @@ export function AccionesOps({ contratoId, numero, sedeId, vigente, vencido, fech
         <DialogSubir
           entidadTipo="ContratoOpsAnexo" entidadId={contratoId} sedeId={sedeId}
           subiendo={subiendo} setSubiendo={setSubiendo}
+          firma={{
+            etiqueta: 'Pedirle al contratista que lo firme',
+            analizar: async (pdfRef) => {
+              const res = await analizarPdfParaFirma({ pdfRef })
+              return res.ok ? { ok: true, paginas: res.datos.paginas } : { ok: false, error: res.error }
+            },
+            enviar: async (d) => {
+              const res = await enviarDocumentoFirmaOps({ contratoOpsId: contratoId, ...d })
+              return res.ok ? { ok: true } : { ok: false, error: res.error }
+            },
+          }}
           onClose={() => setDialogo(null)} onSubido={() => { setDialogo(null); router.refresh() }}
         />
       )}

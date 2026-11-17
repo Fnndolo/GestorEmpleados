@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { accion, ErrorNegocio } from '@/server/accion'
 import { obtenerPdfAdjunto, borrarPdfTemporal } from '@/server/archivos-temporales'
-import { responderPreaviso } from '@/server/preavisos'
+import { responderPreaviso, preavisoPorFirmar, firmarPreavisoEnApp } from '@/server/preavisos'
+import { generarYEnviarCodigoFirma, verificarCodigoFirma } from '@/server/firma/codigo-firma'
 
 /** La persona sube el preaviso ya firmado o diligenciado. */
 export const subirMiPreavisoFirmado = accion(
@@ -17,5 +18,35 @@ export const subirMiPreavisoFirmado = accion(
     revalidatePath('/autoservicio/contratos')
     revalidatePath('/autoservicio')
     return { ok: true }
+  },
+)
+
+/** Código al correo para firmar en la app un documento del contrato. */
+export const solicitarCodigoFirmaPreaviso = accion(
+  { modulo: 'autoservicio', accion: 'CREAR', schema: z.object({ preavisoId: z.uuid() }) },
+  async (d, usuario) => {
+    await preavisoPorFirmar(d.preavisoId, usuario.colaboradorId)
+    return generarYEnviarCodigoFirma({ proposito: 'FIRMA_CONTRATO_OPS', referenciaId: d.preavisoId, userId: usuario.id, email: usuario.email })
+  },
+)
+
+/** Firmar en la app un documento del contrato (firma dibujada + código). */
+export const firmarMiPreaviso = accion(
+  {
+    modulo: 'autoservicio',
+    accion: 'CREAR',
+    schema: z.object({
+      preavisoId: z.uuid(),
+      firmaDataUri: z.string().min(1).startsWith('data:image/', 'Firma inválida'),
+      codigo: z.string().regex(/^\d{6}$/, 'El código debe tener 6 dígitos.'),
+    }),
+  },
+  async (d, usuario) => {
+    await preavisoPorFirmar(d.preavisoId, usuario.colaboradorId)
+    await verificarCodigoFirma({ proposito: 'FIRMA_CONTRATO_OPS', referenciaId: d.preavisoId, userId: usuario.id, codigo: d.codigo })
+    const r = await firmarPreavisoEnApp({ preavisoId: d.preavisoId, firmaDataUri: d.firmaDataUri, usuarioId: usuario.id, metodoAuth: 'CODIGO_EMAIL' })
+    revalidatePath('/autoservicio/contratos')
+    revalidatePath('/autoservicio')
+    return r
   },
 )

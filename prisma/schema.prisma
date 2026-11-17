@@ -1423,6 +1423,7 @@ model ContratoOps {
 
   entregables     EntregableOps[]
   cuentasCobro    CuentaCobroOps[]
+  documentosPorFirmar PreavisoContrato[]
   evidenciasFirma EvidenciaFirmaContrato[]
 
   @@index([colaboradorId, estado])
@@ -3722,8 +3723,11 @@ model CronogramaDominical {
 model PreavisoContrato {
   id             String       @id @default(uuid(7)) @db.Uuid
   colaboradorId  String       @map("colaborador_id") @db.Uuid
-  contratoId     String       @map("contrato_id") @db.Uuid
-  contrato       Contrato     @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  /// Contrato laboral, o bien contrato OPS (uno de los dos).
+  contratoId     String?      @map("contrato_id") @db.Uuid
+  contrato       Contrato?    @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  contratoOpsId  String?      @map("contrato_ops_id") @db.Uuid
+  contratoOps    ContratoOps? @relation(fields: [contratoOpsId], references: [id], onDelete: Cascade)
   /// Si se envió desde una terminación, queda también en ella.
   terminacionId  String?      @map("terminacion_id") @db.Uuid
   terminacion    Terminacion? @relation(fields: [terminacionId], references: [id], onDelete: Cascade)
@@ -3732,11 +3736,17 @@ model PreavisoContrato {
   documentoId    String       @map("documento_id") @db.Uuid
   respuestaDocId String?      @map("respuesta_doc_id") @db.Uuid
   respondidoEn   DateTime?    @map("respondido_en")
+  /// Se firma dentro de la app (firma dibujada + código al correo), no por fuera.
+  firmaEnApp     Boolean      @default(false) @map("firma_en_app")
+  /// Dónde va la firma en el PDF (puntos PDF, página en base 1).
+  posicionFirma  Json?        @map("posicion_firma")
+  firmaPath      String?      @map("firma_path")
   enviadoPorId   String?      @map("enviado_por_id") @db.Uuid
   creadoEn       DateTime     @default(now()) @map("creado_en")
 
   @@index([colaboradorId])
   @@index([contratoId])
   @@index([terminacionId])
+  @@index([contratoOpsId])
   @@map("preaviso_contrato")
 }

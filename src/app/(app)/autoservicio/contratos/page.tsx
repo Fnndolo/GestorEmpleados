@@ -151,7 +151,7 @@ export default async function MisContratosPage() {
       <Encabezado volver enLinea titulo="Mis contratos" />
       {preavisos.length > 0 && (
         <Card className="mb-4 py-0"><CardContent className="space-y-2 p-4">
-          <h2 className="text-sm font-semibold">Documentos por devolver</h2>
+          <h2 className="text-sm font-semibold">Documentos por firmar</h2>
           {preavisos.map((p) => <MiPreaviso key={p.id} p={p} />)}
         </CardContent></Card>
       )}

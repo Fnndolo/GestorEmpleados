@@ -162,9 +162,11 @@ export async function firmarAcuerdo(opts: { prestamoId: string; firmaDataUri: st
 }
 
 /** Hoja final con la firma y los datos que prueban quién, cuándo y sobre qué documento. */
-async function agregarConstancia(pdfOriginal: Buffer, d: {
+export async function agregarConstancia(pdfOriginal: Buffer, d: {
   png: Buffer; nombre: string; documento: string | null; fecha: Date; asunto: string; detalle: string
   ip: string | null; correo: string | null; huellaOriginal: string
+  /** Subtítulo de la hoja; por defecto, el del acuerdo de descuento. */
+  subtitulo?: string
 }): Promise<Buffer> {
   const doc = await PDFDocument.load(pdfOriginal, { ignoreEncryption: true })
   const pagina = doc.addPage([612, 792])
@@ -177,7 +179,7 @@ async function agregarConstancia(pdfOriginal: Buffer, d: {
     y -= (opciones.t ?? 10) + 8
   }
   linea('CONSTANCIA DE FIRMA ELECTRÓNICA', { f: negrita, t: 14 })
-  linea('Acuerdo de pago · autorización de descuento de nómina (CST art. 149)', { c: gris })
+  linea(d.subtitulo ?? 'Acuerdo de pago · autorización de descuento de nómina (CST art. 149)', { c: gris })
   y -= 10
   linea(`Asunto: ${d.asunto}`)
   linea(`Condiciones: ${d.detalle}`)
