@@ -21,7 +21,21 @@ export type Correo = {
 
 const FROM_DEFECTO = 'Smart Gadgets <onboarding@resend.dev>'
 
+/**
+ * Envía el correo; si falla, avisa a los administradores en la campana y
+ * relanza el error para que quien llamó decida (reintentar, mostrarlo, etc.).
+ */
 export async function enviarCorreo(correo: Correo): Promise<void> {
+  try {
+    await enviarSinAviso(correo)
+  } catch (e) {
+    const { avisarFalloCorreo } = await import('@/server/notificaciones/fallo-correo')
+    await avisarFalloCorreo(correo.para, correo.asunto, e)
+    throw e
+  }
+}
+
+async function enviarSinAviso(correo: Correo): Promise<void> {
   const driver = process.env.EMAIL_DRIVER
 
   // ── SMTP (Gmail u otro) ──────────────────────────────────────────────────

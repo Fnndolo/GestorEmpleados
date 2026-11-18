@@ -1,6 +1,6 @@
 import {
   Building2, Users, ShieldCheck, MapPin, Bell, BellRing, FileStack, Layers,
-  Receipt, Briefcase, Coins, Landmark, Network, FileImage, FileSignature, Cable, ClipboardCheck, CalendarDays, type LucideIcon,
+  Receipt, Briefcase, Coins, Landmark, Network, FileImage, MailWarning, FileSignature, Cable, ClipboardCheck, CalendarDays, type LucideIcon,
 } from 'lucide-react'
 import { GENERAR_CONTRATOS_DESDE_PLANTILLA } from '@/lib/contratos-config'
 
@@ -64,6 +64,7 @@ export const GRUPOS: { titulo: string; secciones: SeccionConfig[] }[] = [
       { titulo: 'Tipos de documento', desc: 'El catálogo del expediente y cuáles son obligatorios por vínculo.', href: '/configuracion/tipos-documento', icono: FileStack, modulo: 'configuracion', contador: 'tiposDocumento' },
       { titulo: 'Reglas de alerta', desc: 'Con cuánta anticipación avisa cada tipo de vencimiento.', href: '/configuracion/alertas', icono: Bell, modulo: 'configuracion', contador: 'reglasAlerta' },
       { titulo: 'Notificaciones', desc: 'Qué eventos muestran un aviso emergente además de la campana y el correo.', href: '/configuracion/notificaciones', icono: BellRing, modulo: 'configuracion' },
+      { titulo: 'Correos no enviados', desc: 'Correos que no han podido salir: por qué fallaron y reintentarlos.', href: '/configuracion/correos', icono: MailWarning, modulo: 'configuracion' },
       { titulo: 'Paz y salvo', desc: 'Áreas que verifican la entrega de quien se retira, y el responsable de cada una.', href: '/configuracion/paz-y-salvo', icono: ClipboardCheck, modulo: 'configuracion', contador: 'areasPazYSalvo' },
     ],
   },

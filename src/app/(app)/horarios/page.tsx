@@ -21,10 +21,11 @@ import { PlantillasCliente } from './plantillas-cliente'
 import { ImportarAsistencia } from './importar-asistencia'
 import { BotonAgregar } from '@/components/ui-kit/boton-agregar'
 import { CronogramaCliente } from './cronograma-cliente'
+import { CambioMensualCliente } from './cambio-mensual-cliente'
 
 export const metadata = { title: 'Horarios · Smart Gadgets RH' }
 
-const VISTAS = { personas: 'Personas', plantillas: 'Horarios', cronograma: 'Turnos dominicales' } as const
+const VISTAS = { personas: 'Personas', mensual: 'Cambio mensual', plantillas: 'Horarios', cronograma: 'Turnos dominicales' } as const
 type Vista = keyof typeof VISTAS
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -94,6 +95,10 @@ export default async function HorariosPage({ searchParams }: { searchParams: Pro
           sedes={sedes} sedeId={sedeId} enlace={enlace} plantillas={plantillas}
           puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} conAsistencia={conAsistencia} hoyISO={hoyISO}
         />
+      )}
+
+      {vista === 'mensual' && (
+        <CambioMensual sedes={sedes} sedeId={sedeId} mesPedido={sp.mes} hoyISO={hoyISO} plantillas={plantillas} puedeEditar={puedeEditar} />
       )}
 
       {vista === 'plantillas' && (
@@ -225,6 +230,78 @@ async function Personas({ sedes, sedeId, enlace, plantillas, puedeEditar, puedeE
         </CardContent></Card>
       )}
     </>
+  )
+}
+
+/**
+ * Pestaña Cambio mensual: para quien rota de horario cada mes. Se elige el mes
+ * (por defecto el siguiente) y el horario de cada persona; al aplicar, rige
+ * desde el día 1 y a cada uno le llega su comunicación.
+ */
+async function CambioMensual({ sedes, sedeId, mesPedido, hoyISO, plantillas, puedeEditar }: {
+  sedes: { id: string; nombre: string }[]
+  sedeId: string | null
+  mesPedido?: string
+  hoyISO: string
+  plantillas: PlantillaHorario[]
+  puedeEditar: boolean
+}) {
+  const mesActual = hoyISO.slice(0, 7)
+  const mes = mesPedido && /^\d{4}-\d{2}$/.test(mesPedido) && mesPedido > mesActual ? mesPedido : mesesVecinos(mesActual).siguiente
+  const { anterior, siguiente } = mesesVecinos(mes)
+  const inicio = new Date(`${mes}-01T00:00:00Z`)
+  const colabs = await prisma.colaborador.findMany({
+    where: { estado: 'ACTIVO', tipoVinculo: { notIn: [...VINCULOS_SIN_HORARIO] }, ...(sedeId ? { sedeId } : {}) },
+    select: {
+      id: true, nombres: true, apellidos: true, fotoPath: true, rotaHorarioMensual: true, cargo: { select: { nombre: true } },
+      asignacionesHorario: { orderBy: { desde: 'asc' }, select: { desde: true, hasta: true, horarioId: true, dias: true, horario: { select: { nombre: true } } } },
+    },
+    orderBy: [{ nombres: 'asc' }, { apellidos: 'asc' }],
+  })
+  const personas = colabs.map((c) => {
+    // El horario que tendría el día 1 de ese mes, y si ya hay un cambio desde ese mismo día.
+    const delMes = c.asignacionesHorario.filter((a) => a.desde <= inicio && (!a.hasta || a.hasta >= inicio)).at(-1) ?? null
+    const ultima = c.asignacionesHorario.at(-1) ?? null
+    return {
+      id: c.id,
+      nombre: `${c.nombres} ${c.apellidos}`,
+      cargo: c.cargo?.nombre ?? null,
+      fotoUrl: urlFoto(c.id, c.fotoPath, true),
+      rota: c.rotaHorarioMensual,
+      horarioId: delMes?.horarioId ?? null,
+      horario: delMes ? (delMes.horario?.nombre ?? 'Horario propio') : null,
+      resumen: delMes ? resumenHorario(delMes.dias as DiasHorario) : null,
+      yaCambiado: !!delMes && delMes.desde.getTime() === inicio.getTime(),
+      // Un cambio que empieza después del día 1 impide aplicar desde el 1.
+      bloqueo: ultima && ultima.desde > inicio ? `Ya tiene un cambio desde el ${fechaBreve(ultima.desde)}.` : null,
+    }
+  })
+  const q = (m: string, s: string | null = sedeId) => `/horarios?ver=mensual${s ? `&sede=${s}` : ''}&mes=${m}`
+  const corto = (nombre: string) => (sedes.length > 1 ? nombre.slice(prefijoComun(sedes.map((x) => x.nombre)).length) : nombre) || nombre
+  return (
+    <CambioMensualCliente
+      key={`${sedeId ?? 'todas'}-${mes}`}
+      filtros={<>
+        <div className="flex items-center rounded-lg border">
+          {anterior > mesActual
+            ? <Link href={q(anterior)} className="grid size-8 place-items-center hover:bg-accent" aria-label="Mes anterior"><ChevronLeft className="size-4" /></Link>
+            : <span className="grid size-8 place-items-center text-muted-foreground/40"><ChevronLeft className="size-4" /></span>}
+          <span className="min-w-36 px-2 text-center text-sm font-medium">{nombreMes(mes)}</span>
+          <Link href={q(siguiente)} className="grid size-8 place-items-center hover:bg-accent" aria-label="Mes siguiente"><ChevronRight className="size-4" /></Link>
+        </div>
+        <div className="flex min-w-0 max-w-full gap-1.5 overflow-x-auto">
+          <Link href={q(mes, null)} className={cn('shrink-0 rounded-full border px-2.5 py-0.5 text-xs', !sedeId ? 'border-foreground bg-foreground text-background' : 'hover:bg-accent')}>Todas</Link>
+          {sedes.map((s) => (
+            <Link key={s.id} href={q(mes, s.id)} title={s.nombre} className={cn('shrink-0 rounded-full border px-2.5 py-0.5 text-xs', sedeId === s.id ? 'border-foreground bg-foreground text-background' : 'hover:bg-accent')}>{corto(s.nombre)}</Link>
+          ))}
+        </div>
+      </>}
+      mes={mes}
+      nombreMes={nombreMes(mes)}
+      personas={personas}
+      plantillas={plantillas.map((p) => ({ id: p.id, nombre: p.nombre, resumen: resumenHorario(p.dias) }))}
+      editable={puedeEditar}
+    />
   )
 }
 

@@ -681,6 +681,8 @@ model Colaborador {
   entregasEpp              EntregaEpp[]
   membresiasComite         MiembroComite[]
   asignacionesHorario      AsignacionHorario[]
+  /// Rota de horario cada mes: aparece en Horarios → Cambio mensual.
+  rotaHorarioMensual       Boolean                 @default(false) @map("rota_horario_mensual")
   turnosDominicales        TurnoDominical[]
   brigadas                 Brigadista[]
   designacionesSgsst       ResponsableSgsst[]

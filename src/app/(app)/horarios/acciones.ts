@@ -146,6 +146,55 @@ export const asignarHorarioColaborador = accion(
   },
 )
 
+/**
+ * Cambio mensual: aplica de una vez el horario de varias personas desde el día 1
+ * de un mes, cada una con su comunicación si se pide. Lo que falla con una
+ * persona no detiene a las demás: se devuelve para mostrarlo.
+ */
+export const aplicarHorariosMes = accion(
+  {
+    modulo: 'horarios',
+    accion: 'EDITAR',
+    schema: z.object({
+      mes: z.string().regex(/^\d{4}-\d{2}$/, 'Mes inválido'),
+      cambios: z.array(z.object({ colaboradorId: z.uuid(), horarioId: z.uuid() })).min(1, 'No hay cambios.').max(300),
+      enviarComunicacion: z.boolean(),
+    }),
+  },
+  async (d, usuario) => {
+    if (d.mes <= hoyBogota().toISOString().slice(0, 7)) throw new ErrorNegocio('Solo se programan meses que aún no empiezan.')
+    const desde = parseFechaISO(`${d.mes}-01`)!
+    const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+    const motivo = `Horario de ${MESES[Number(d.mes.slice(5, 7)) - 1]} de ${d.mes.slice(0, 4)}`
+    let aplicados = 0
+    const errores: { colaboradorId: string; error: string }[] = []
+    for (const c of d.cambios) {
+      try {
+        await asignarHorario({ colaboradorId: c.colaboradorId, horarioId: c.horarioId, desde, motivo, enviarComunicacion: d.enviarComunicacion, usuarioId: usuario.id })
+        aplicados++
+      } catch (e) {
+        errores.push({ colaboradorId: c.colaboradorId, error: e instanceof Error ? e.message : 'No se pudo aplicar.' })
+      }
+    }
+    refrescar()
+    return { aplicados, errores }
+  },
+)
+
+/** Agrega o quita personas de la lista de quienes rotan de horario cada mes. */
+export const marcarRotacionMensual = accion(
+  {
+    modulo: 'horarios',
+    accion: 'EDITAR',
+    schema: z.object({ colaboradorIds: z.array(z.uuid()).min(1).max(500), rota: z.boolean() }),
+  },
+  async (d) => {
+    await dbAuditado.colaborador.updateMany({ where: { id: { in: d.colaboradorIds } }, data: { rotaHorarioMensual: d.rota } })
+    refrescar()
+    return { ok: true }
+  },
+)
+
 /** Deshace un cambio de horario que todavía no empieza. */
 export const cancelarCambioHorario = accion(
   { modulo: 'horarios', accion: 'EDITAR', schema: z.object({ asignacionId: z.uuid() }) },

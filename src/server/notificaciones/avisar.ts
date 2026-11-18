@@ -108,8 +108,11 @@ export async function avisar(userId: string, opts: Aviso): Promise<void> {
     try {
       await enviarCorreo({ para: usuario.email, asunto: `[Smart Gadgets] ${opts.titulo}`, html: cuerpo })
       await prisma.mensajeSaliente.update({ where: { id: msg.id }, data: { estado: 'ENVIADO', enviadoEn: new Date(), intentos: 1 } })
-    } catch {
-      /* queda EN_COLA para el cron */
+    } catch (e) {
+      // Queda EN_COLA para el cron, con el motivo a la vista en Configuración → Correos.
+      await prisma.mensajeSaliente
+        .update({ where: { id: msg.id }, data: { intentos: 1, error: e instanceof Error ? e.message : 'error' } })
+        .catch(() => {})
     }
   } catch {
     /* dedupe duplicado */
